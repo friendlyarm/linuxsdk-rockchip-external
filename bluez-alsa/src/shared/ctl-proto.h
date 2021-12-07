@@ -20,6 +20,8 @@
 
 /* Location where the control socket and pipes are stored. */
 #define BLUEALSA_RUN_STATE_DIR RUN_STATE_DIR "/bluealsa"
+/* Version of the controller communication protocol. */
+#define BLUEALSA_CRL_PROTO_VERSION 0x0300
 
 enum ba_command {
 	BA_COMMAND_PING,
@@ -27,6 +29,7 @@ enum ba_command {
 	BA_COMMAND_LIST_DEVICES,
 	BA_COMMAND_LIST_TRANSPORTS,
 	BA_COMMAND_TRANSPORT_GET,
+	BA_COMMAND_TRANSPORT_SET_DELAY,
 	BA_COMMAND_TRANSPORT_SET_VOLUME,
 	BA_COMMAND_PCM_OPEN,
 	BA_COMMAND_PCM_CLOSE,
@@ -41,6 +44,7 @@ enum ba_status_code {
 	BA_STATUS_CODE_SUCCESS = 0,
 	BA_STATUS_CODE_ERROR_UNKNOWN,
 	BA_STATUS_CODE_DEVICE_NOT_FOUND,
+	BA_STATUS_CODE_STREAM_NOT_FOUND,
 	BA_STATUS_CODE_DEVICE_BUSY,
 	BA_STATUS_CODE_FORBIDDEN,
 	BA_STATUS_CODE_PONG,
@@ -81,17 +85,30 @@ struct __attribute__ ((packed)) ba_request {
 	enum ba_pcm_type type;
 	enum ba_pcm_stream stream;
 
-	/* bit-mask with event subscriptions */
-	enum ba_event events;
+	union {
 
-	/* fields used by the TRANSPORT_SET_VOLUME command */
-	uint8_t ch1_muted:1;
-	uint8_t ch1_volume:7;
-	uint8_t ch2_muted:1;
-	uint8_t ch2_volume:7;
+		/* bit-mask with event subscriptions
+		 * used by BA_COMMAND_SUBSCRIBE */
+		enum ba_event events;
 
-	/* RFCOMM command string to send */
-	char rfcomm_command[32];
+		/* transport delay
+		 * used by BA_COMMAND_TRANSPORT_SET_DELAY */
+		uint16_t delay;
+
+		/* transport volume fields
+		 * used by BA_COMMAND_TRANSPORT_SET_VOLUME */
+		struct {
+			uint8_t ch1_muted:1;
+			uint8_t ch1_volume:7;
+			uint8_t ch2_muted:1;
+			uint8_t ch2_volume:7;
+		};
+
+		/* RFCOMM command string to send
+		 * used by BA_COMMAND_RFCOMM_SEND */
+		char rfcomm_command[32];
+
+	};
 
 };
 
@@ -135,7 +152,7 @@ struct __attribute__ ((packed)) ba_msg_transport {
 	/* number of audio channels */
 	uint8_t channels;
 	/* used sampling frequency */
-	uint16_t sampling;
+	uint32_t sampling;
 
 	/* Levels for channel 1 (left) and 2 (right). These fields are also
 	 * used for SCO. In such a case channel 1 and 2 is responsible for

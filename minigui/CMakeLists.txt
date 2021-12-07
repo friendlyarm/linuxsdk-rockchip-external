@@ -161,6 +161,7 @@ mg_declare_option_and_set_value (_MGCONSOLE_MS        ial_consolems       BOOL  
 mg_declare_option_and_set_value (_MGCONSOLE_MS3       ial_consolems3      BOOL   ON   "build the console engine subdirver for MS3 mouse")
 mg_declare_option_and_set_value (_MGCONSOLE_GPM       ial_consolegpm      BOOL   OFF  "build the console engine subdirver for GPM daemon")
 mg_declare_option_and_set_value (_MGCONSOLE_TEXTMODE  ial_consoletextmode BOOL   ON   "Linux system have console (text mode) on FrameBuffer")
+mg_declare_option_and_set_value (_MGCONSOLE_USB       ial_consoleusb        BOOL   ON   "build the console engine subdriver for usb mouse")
 
 ############## FONT ################
 mg_declare_option_and_set_value (_MGFONT_BMPF     font_bmpfsupport     BOOL   ON   "build support for Bitmap Font (bmpf)")

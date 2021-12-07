@@ -1,6 +1,6 @@
 /*
  * BlueALSA - utils.c
- * Copyright (c) 2016-2017 Arkadiusz Bokowy
+ * Copyright (c) 2016-2018 Arkadiusz Bokowy
  *
  * This file is a part of bluez-alsa.
  *
@@ -17,6 +17,10 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci_lib.h>
 #include <bluetooth/sco.h>
+
+#if ENABLE_LDAC
+# include "ldacBT.h"
+#endif
 
 #include "a2dp-codecs.h"
 #include "bluez.h"
@@ -134,6 +138,42 @@ fail:
 	return -1;
 }
 
+int hci_submit_cmd_wait(uint16_t ogf, uint16_t ocf, uint8_t *params,
+			uint8_t plen)
+{
+	int fd;
+	uint16_t index = 0;
+	uint8_t status;
+	int ret;
+	struct hci_request rq;
+
+	fd = hci_open_dev(index);
+	if (fd < 0) {
+		error("Couldn't open device: %s(%d)\n", strerror(errno), errno);
+		return -1;
+	}
+
+	memset(&rq, 0, sizeof(rq));
+	rq.ogf = ogf;
+	rq.ocf = ocf;
+	rq.cparam = params;
+	rq.clen = plen;
+	rq.rparam = &status;
+	rq.rlen = 1;
+
+	ret = hci_send_req(fd, &rq, 1000);
+	if (status || ret < 0) {
+		error("Can't send cmd for hci%d: %s (%d)\n", index,
+				strerror(errno), errno);
+		hci_close_dev(fd);
+		return -1;
+	}
+
+	hci_close_dev(fd);
+
+	return 0;
+}
+
 /**
  * Get BlueZ D-Bus object path for given profile and codec.
  *
@@ -146,7 +186,7 @@ const char *g_dbus_get_profile_object_path(enum bluetooth_profile profile, uint1
 		switch (codec) {
 		case A2DP_CODEC_SBC:
 			return "/A2DP/SBC/Source";
-#if ENABLE_MP3
+#if ENABLE_MPEG
 		case A2DP_CODEC_MPEG12:
 			return "/A2DP/MPEG12/Source";
 #endif
@@ -158,6 +198,10 @@ const char *g_dbus_get_profile_object_path(enum bluetooth_profile profile, uint1
 		case A2DP_CODEC_VENDOR_APTX:
 			return "/A2DP/APTX/Source";
 #endif
+#if ENABLE_LDAC
+		case A2DP_CODEC_VENDOR_LDAC:
+			return "/A2DP/LDAC/Source";
+#endif
 		default:
 			warn("Unsupported A2DP codec: %#x", codec);
 			return "/A2DP/Source";
@@ -166,7 +210,7 @@ const char *g_dbus_get_profile_object_path(enum bluetooth_profile profile, uint1
 		switch (codec) {
 		case A2DP_CODEC_SBC:
 			return "/A2DP/SBC/Sink";
-#if ENABLE_MP3
+#if ENABLE_MPEG
 		case A2DP_CODEC_MPEG12:
 			return "/A2DP/MPEG12/Sink";
 #endif
@@ -177,6 +221,10 @@ const char *g_dbus_get_profile_object_path(enum bluetooth_profile profile, uint1
 #if ENABLE_APTX
 		case A2DP_CODEC_VENDOR_APTX:
 			return "/A2DP/APTX/Sink";
+#endif
+#if ENABLE_LDAC
+		case A2DP_CODEC_VENDOR_LDAC:
+			return "/A2DP/LDAC/Sink";
 #endif
 		default:
 			warn("Unsupported A2DP codec: %#x", codec);
@@ -222,33 +270,6 @@ enum bluetooth_profile g_dbus_object_path_to_profile(const char *path) {
 			return BLUETOOTH_PROFILE_HFP_AG;
 	}
 	return BLUETOOTH_PROFILE_NULL;
-}
-
-/**
- * Convert BlueZ D-Bus object path into a A2DP codec.
- *
- * Prior to the usage, make sure, that the path is for the A2DP profile.
- * To do so, use the g_dbus_object_path_to_profile() function.
- *
- * @param path BlueZ D-Bus object path.
- * @return On success this function returns Bluetooth audio codec. If object
- *   path cannot be recognize, vendor codec is returned. */
-uint16_t g_dbus_object_path_to_a2dp_codec(const char *path) {
-	if (strncmp(path + 5, "/SBC", 4) == 0)
-		return A2DP_CODEC_SBC;
-#if ENABLE_MP3
-	if (strncmp(path + 5, "/MPEG12", 7) == 0)
-		return A2DP_CODEC_MPEG12;
-#endif
-#if ENABLE_AAC
-	if (strncmp(path + 5, "/MPEG24", 7) == 0)
-		return A2DP_CODEC_MPEG24;
-#endif
-#if ENABLE_APTX
-	if (strncmp(path + 5, "/APTX", 5) == 0)
-		return A2DP_CODEC_VENDOR_APTX;
-#endif
-	return A2DP_CODEC_VENDOR;
 }
 
 /**
@@ -372,47 +393,14 @@ fail:
  * Convert Bluetooth profile into a human-readable string.
  *
  * @param profile Bluetooth profile.
- * @param codec Bluetooth profile audio codec.
  * @return Human-readable string. */
-const char *bluetooth_profile_to_string(enum bluetooth_profile profile, uint16_t codec) {
+const char *bluetooth_profile_to_string(enum bluetooth_profile profile) {
 	switch (profile) {
 	case BLUETOOTH_PROFILE_NULL:
 		return "N/A";
 	case BLUETOOTH_PROFILE_A2DP_SOURCE:
-		switch (codec) {
-		case A2DP_CODEC_SBC:
-			return "A2DP Source (SBC)";
-#if ENABLE_MP3
-		case A2DP_CODEC_MPEG12:
-			return "A2DP Source (MP3)";
-#endif
-#if ENABLE_AAC
-		case A2DP_CODEC_MPEG24:
-			return "A2DP Source (AAC)";
-#endif
-#if ENABLE_APTX
-		case A2DP_CODEC_VENDOR_APTX:
-			return "A2DP Source (APT-X)";
-#endif
-		}
 		return "A2DP Source";
 	case BLUETOOTH_PROFILE_A2DP_SINK:
-		switch (codec) {
-		case A2DP_CODEC_SBC:
-			return "A2DP Sink (SBC)";
-#if ENABLE_MP3
-		case A2DP_CODEC_MPEG12:
-			return "A2DP Sink (MP3)";
-#endif
-#if ENABLE_AAC
-		case A2DP_CODEC_MPEG24:
-			return "A2DP Sink (AAC)";
-#endif
-#if ENABLE_APTX
-		case A2DP_CODEC_VENDOR_APTX:
-			return "A2DP Sink (APT-X)";
-#endif
-		}
 		return "A2DP Sink";
 	case BLUETOOTH_PROFILE_HSP_HS:
 		return "HSP Headset";
@@ -422,6 +410,39 @@ const char *bluetooth_profile_to_string(enum bluetooth_profile profile, uint16_t
 		return "HFP Hands-Free";
 	case BLUETOOTH_PROFILE_HFP_AG:
 		return "HFP Audio Gateway";
+	}
+	return "N/A";
+}
+
+/**
+ * Convert Bluetooth A2DP codec into a human-readable string.
+ *
+ * @param codec Bluetooth A2DP audio codec.
+ * @return Human-readable string. */
+const char *bluetooth_a2dp_codec_to_string(uint16_t codec) {
+	switch (codec) {
+	case A2DP_CODEC_SBC:
+		return "SBC";
+#if ENABLE_MPEG
+	case A2DP_CODEC_MPEG12:
+		return "MPEG";
+#endif
+#if ENABLE_AAC
+	case A2DP_CODEC_MPEG24:
+		return "AAC";
+#endif
+#if ENABLE_APTX
+	case A2DP_CODEC_VENDOR_APTX:
+		return "APT-X";
+#endif
+#if ENABLE_APTX_HD
+	case A2DP_CODEC_VENDOR_APTX_HD:
+		return "APT-X HD";
+#endif
+#if ENABLE_LDAC
+	case A2DP_CODEC_VENDOR_LDAC:
+		return "LDAC";
+#endif
 	}
 	return "N/A";
 }
@@ -585,6 +606,50 @@ const char *aacenc_strerror(AACENC_ERROR err) {
 		return "Encoding error";
 	case AACENC_ENCODE_EOF:
 		return "End of file";
+	default:
+		debug("Unknown error code: %#x", err);
+		return "Unknown error";
+	}
+}
+#endif
+
+#if ENABLE_LDAC
+/**
+ * Get string representation of the LDAC error code.
+ *
+ * @param error LDAC error code.
+ * @return Human-readable string. */
+const char *ldacBT_strerror(int err) {
+	switch (LDACBT_API_ERR(err)) {
+	case LDACBT_ERR_NONE:
+		return "Success";
+	case LDACBT_ERR_ASSERT_SAMPLING_FREQ:
+	case LDACBT_ERR_ASSERT_SUP_SAMPLING_FREQ:
+	case LDACBT_ERR_CHECK_SAMPLING_FREQ:
+		return "Invalid sample rate";
+	case LDACBT_ERR_ASSERT_CHANNEL_CONFIG:
+	case LDACBT_ERR_CHECK_CHANNEL_CONFIG:
+		return "Invalid channel config";
+	case LDACBT_ERR_ASSERT_FRAME_LENGTH:
+	case LDACBT_ERR_ASSERT_SUP_FRAME_LENGTH:
+	case LDACBT_ERR_ASSERT_FRAME_STATUS:
+		return "Invalid frame status";
+	case LDACBT_ERR_ASSERT_NSHIFT:
+		return "Invalid N-shift";
+	case LDACBT_ERR_ASSERT_CHANNEL_MODE:
+		return "Invalid channel mode";
+	case LDACBT_ERR_ALTER_EQMID_LIMITED:
+		return "EQMID limited";
+	case LDACBT_ERR_HANDLE_NOT_INIT:
+		return "Invalid handle";
+	case LDACBT_ERR_ILL_EQMID:
+		return "Unsupported EQMID";
+	case LDACBT_ERR_ILL_SAMPLING_FREQ:
+		return "Unsupported sample rate";
+	case LDACBT_ERR_ILL_NUM_CHANNEL:
+		return "Unsupported channels";
+	case LDACBT_ERR_ILL_MTU_SIZE:
+		return "Unsupported MTU";
 	default:
 		debug("Unknown error code: %#x", err);
 		return "Unknown error";

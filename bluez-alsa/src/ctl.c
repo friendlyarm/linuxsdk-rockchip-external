@@ -31,6 +31,7 @@
 #include "hfp.h"
 #include "transport.h"
 #include "utils.h"
+#include "shared/defs.h"
 #include "shared/log.h"
 
 
@@ -46,11 +47,13 @@
  * @param type Looked up PCM type.
  * @param stream Looked up PCM stream direction.
  * @param t Address, where the transport structure pointer should be stored.
- * @return If the lookup succeeded, this function returns 0. Otherwise, -1 is
- *   returned and value of transport pointer is undefined. */
+ * @return If the lookup succeeded, this function returns 0. Otherwise, -1 or
+ *   -2 is returned respectively for not found device and not found stream.
+ *   Upon error value of the transport pointer is undefined. */
 static int _transport_lookup(GHashTable *devices, const bdaddr_t *addr,
 		enum ba_pcm_type type, enum ba_pcm_stream stream, struct ba_transport **t) {
 
+	bool device_found = false;
 	GHashTableIter iter_d, iter_t;
 	struct ba_device *d;
 
@@ -59,6 +62,8 @@ static int _transport_lookup(GHashTable *devices, const bdaddr_t *addr,
 
 		if (bacmp(&d->addr, addr) != 0)
 			continue;
+
+		device_found = true;
 
 		for (g_hash_table_iter_init(&iter_t, d->transports);
 				g_hash_table_iter_next(&iter_t, NULL, (gpointer)t); ) {
@@ -96,7 +101,7 @@ static int _transport_lookup(GHashTable *devices, const bdaddr_t *addr,
 
 	}
 
-	return -1;
+	return device_found ? -2 : -1;
 }
 
 static int _transport_lookup_rfcomm(GHashTable *devices, const bdaddr_t *addr,
@@ -153,18 +158,7 @@ static struct ba_pcm *_transport_get_pcm(struct ba_transport *t, enum ba_pcm_str
 
 /**
  * Release transport resources acquired by the controller module. */
-static void _transport_release(struct ba_transport *t, int client) {
-
-	/* For a source profile (where the stream is read from the PCM) an IO thread
-	 * terminates when the PCM is closed. However, it is asynchronous, so if the
-	 * client closes the connection, and then quickly tries to open it again, we
-	 * might try to acquire not yet released transport. To prevent this, we have
-	 * to make sure, that the transport is released (thread is terminated). */
-	if (t->profile == BLUETOOTH_PROFILE_A2DP_SOURCE) {
-		pthread_cancel(t->thread);
-		pthread_join(t->thread, NULL);
-	}
-
+static void _transport_release_pcm(struct ba_transport *t, int client) {
 	switch (t->type) {
 	case TRANSPORT_TYPE_A2DP:
 		transport_release_pcm(&t->a2dp.pcm);
@@ -182,7 +176,6 @@ static void _transport_release(struct ba_transport *t, int client) {
 			t->sco.mic_pcm.client = -1;
 		}
 	}
-
 }
 
 static void _ctl_transport(const struct ba_transport *t, struct ba_msg_transport *transport) {
@@ -300,8 +293,12 @@ static void ctl_thread_cmd_transport_get(const struct ba_request *req, int fd) {
 
 	pthread_mutex_lock(&config.devices_mutex);
 
-	if (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t) != 0) {
+	switch (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t)) {
+	case -1:
 		status.code = BA_STATUS_CODE_DEVICE_NOT_FOUND;
+		goto fail;
+	case -2:
+		status.code = BA_STATUS_CODE_STREAM_NOT_FOUND;
 		goto fail;
 	}
 
@@ -320,8 +317,12 @@ static void ctl_thread_cmd_transport_set_volume(const struct ba_request *req, in
 
 	pthread_mutex_lock(&config.devices_mutex);
 
-	if (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t) != 0) {
+	switch (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t)) {
+	case -1:
 		status.code = BA_STATUS_CODE_DEVICE_NOT_FOUND;
+		goto fail;
+	case -2:
+		status.code = BA_STATUS_CODE_STREAM_NOT_FOUND;
 		goto fail;
 	}
 
@@ -343,10 +344,16 @@ static void ctl_thread_cmd_pcm_open(const struct ba_request *req, int fd) {
 
 	pthread_mutex_lock(&config.devices_mutex);
 
-	if (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t) != 0) {
+	switch (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t)) {
+	case -1:
 		status.code = BA_STATUS_CODE_DEVICE_NOT_FOUND;
-		goto final;
+		goto fail_lookup;
+	case -2:
+		status.code = BA_STATUS_CODE_STREAM_NOT_FOUND;
+		goto fail_lookup;
 	}
+
+	pthread_mutex_lock(&t->mutex);
 
 	if ((t_pcm = _transport_get_pcm(t, req->stream)) == NULL) {
 		status.code = BA_STATUS_CODE_ERROR_UNKNOWN;
@@ -398,10 +405,8 @@ static void ctl_thread_cmd_pcm_open(const struct ba_request *req, int fd) {
 		goto fail;
 	}
 
-	/* XXX: This change will notify our sink (and SCO) IO thread, that the FIFO
-	 *      has just been created. Source IO thread should not be started before
-	 *      the PCM open request has been made, so this "notification" mechanism
-	 *      does not apply. */
+	/* Notify our IO thread, that the FIFO has just been created - it may be
+	 * used for poll() right away. */
 	transport_send_signal(t, TRANSPORT_PCM_OPEN);
 
 	/* A2DP source profile should be initialized (acquired) only if the audio
@@ -427,6 +432,8 @@ fail:
 	t_pcm->fd = -1;
 
 final:
+	pthread_mutex_unlock(&t->mutex);
+fail_lookup:
 	pthread_mutex_unlock(&config.devices_mutex);
 	send(fd, &status, sizeof(status), MSG_NOSIGNAL);
 }
@@ -441,23 +448,33 @@ static void ctl_thread_cmd_pcm_close(const struct ba_request *req, int fd) {
 
 	pthread_mutex_lock(&config.devices_mutex);
 
-	if (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t) != 0) {
+	switch (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t)) {
+	case -1:
 		status.code = BA_STATUS_CODE_DEVICE_NOT_FOUND;
-		goto fail;
+		goto fail_lookup;
+	case -2:
+		status.code = BA_STATUS_CODE_STREAM_NOT_FOUND;
+		goto fail_lookup;
 	}
+
+	pthread_mutex_lock(&t->mutex);
+
 	if ((t_pcm = _transport_get_pcm(t, req->stream)) == NULL) {
 		status.code = BA_STATUS_CODE_ERROR_UNKNOWN;
 		goto fail;
 	}
+
 	if (t_pcm->client != fd) {
 		status.code = BA_STATUS_CODE_FORBIDDEN;
 		goto fail;
 	}
 
-	_transport_release(t, fd);
+	_transport_release_pcm(t, fd);
 	transport_send_signal(t, TRANSPORT_PCM_CLOSE);
 
 fail:
+	pthread_mutex_unlock(&t->mutex);
+fail_lookup:
 	pthread_mutex_unlock(&config.devices_mutex);
 	send(fd, &status, sizeof(status), MSG_NOSIGNAL);
 }
@@ -470,8 +487,12 @@ static void ctl_thread_cmd_pcm_control(const struct ba_request *req, int fd) {
 
 	pthread_mutex_lock(&config.devices_mutex);
 
-	if (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t) != 0) {
+	switch (_transport_lookup(config.devices, &req->addr, req->type, req->stream, &t)) {
+	case -1:
 		status.code = BA_STATUS_CODE_DEVICE_NOT_FOUND;
+		goto fail;
+	case -2:
+		status.code = BA_STATUS_CODE_STREAM_NOT_FOUND;
 		goto fail;
 	}
 	if ((t_pcm = _transport_get_pcm(t, req->stream)) == NULL) {
@@ -548,7 +569,9 @@ static void *ctl_thread(void *arg) {
 	debug("Starting controller loop");
 	while (config.ctl.thread_created) {
 
-		if (poll(config.ctl.pfds, sizeof(config.ctl.pfds) / sizeof(*config.ctl.pfds), -1) == -1) {
+		if (poll(config.ctl.pfds, ARRAYSIZE(config.ctl.pfds), -1) == -1) {
+			if (errno == EINTR)
+				continue;
 			error("Controller poll error: %s", strerror(errno));
 			break;
 		}
@@ -583,7 +606,7 @@ static void *ctl_thread(void *arg) {
 
 					struct ba_transport *t;
 					if ((t = transport_lookup_pcm_client(config.devices, fd)) != NULL) {
-						_transport_release(t, fd);
+						_transport_release_pcm(t, fd);
 						transport_send_signal(t, TRANSPORT_PCM_CLOSE);
 					}
 
@@ -605,8 +628,28 @@ static void *ctl_thread(void *arg) {
 
 		/* process new connections to our controller */
 		if (config.ctl.pfds[CTL_IDX_SRV].revents & POLLIN && pfd != NULL) {
-			pfd->fd = accept(config.ctl.pfds[CTL_IDX_SRV].fd, NULL, NULL);
-			debug("New client accepted: %d", pfd->fd);
+
+			struct pollfd fd = { -1, POLLIN, 0 };
+			uint16_t ver = 0;
+
+			fd.fd = accept(config.ctl.pfds[CTL_IDX_SRV].fd, NULL, NULL);
+			debug("Received new connection: %d", fd.fd);
+
+			errno = ETIMEDOUT;
+			if (poll(&fd, 1, 500) <= 0 ||
+					recv(fd.fd, &ver, sizeof(ver), MSG_DONTWAIT) != sizeof(ver)) {
+				warn("Couldn't receive protocol version: %s", strerror(errno));
+				close(fd.fd);
+			}
+			else if (ver != BLUEALSA_CRL_PROTO_VERSION) {
+				warn("Invalid protocol version: %#06x != %#06x", ver, BLUEALSA_CRL_PROTO_VERSION);
+				close(fd.fd);
+			}
+			else {
+				debug("New client accepted: %d", fd.fd);
+				pfd->fd = fd.fd;
+			}
+
 		}
 
 		/* generate notifications for subscribed clients */
@@ -644,7 +687,7 @@ int bluealsa_ctl_thread_init(void) {
 
 	{ /* initialize (mark as closed) all sockets */
 		size_t i;
-		for (i = 0; i < sizeof(config.ctl.pfds) / sizeof(*config.ctl.pfds); i++) {
+		for (i = 0; i < ARRAYSIZE(config.ctl.pfds); i++) {
 			config.ctl.pfds[i].events = POLLIN;
 			config.ctl.pfds[i].fd = -1;
 		}
@@ -654,26 +697,38 @@ int bluealsa_ctl_thread_init(void) {
 	snprintf(saddr.sun_path, sizeof(saddr.sun_path) - 1,
 			BLUEALSA_RUN_STATE_DIR "/%s", config.hci_dev.name);
 
-	if (mkdir(BLUEALSA_RUN_STATE_DIR, 0755) == -1 && errno != EEXIST)
+	if (mkdir(BLUEALSA_RUN_STATE_DIR, 0755) == -1 && errno != EEXIST) {
+		error("Couldn't create run-state directory: %s", strerror(errno));
 		goto fail;
-	if ((config.ctl.pfds[CTL_IDX_SRV].fd = socket(PF_UNIX, SOCK_SEQPACKET, 0)) == -1)
+	}
+	if ((config.ctl.pfds[CTL_IDX_SRV].fd = socket(PF_UNIX, SOCK_SEQPACKET, 0)) == -1) {
+		error("Couldn't create controller socket: %s", strerror(errno));
 		goto fail;
-	if (bind(config.ctl.pfds[CTL_IDX_SRV].fd, (struct sockaddr *)(&saddr), sizeof(saddr)) == -1)
+	}
+	if (bind(config.ctl.pfds[CTL_IDX_SRV].fd, (struct sockaddr *)(&saddr), sizeof(saddr)) == -1) {
+		error("Couldn't bind controller socket: %s", strerror(errno));
 		goto fail;
+	}
 	config.ctl.socket_created = true;
-	if (chmod(saddr.sun_path, 0660) == -1)
+	if (chmod(saddr.sun_path, 0660) == -1 ||
+			chown(saddr.sun_path, -1, config.gid_audio) == -1) {
+		error("Couldn't set permission for controller socket: %s", strerror(errno));
 		goto fail;
-	if (chown(saddr.sun_path, -1, config.gid_audio) == -1)
+	}
+	if (listen(config.ctl.pfds[CTL_IDX_SRV].fd, 2) == -1) {
+		error("Couldn't listen on controller socket: %s", strerror(errno));
 		goto fail;
-	if (listen(config.ctl.pfds[CTL_IDX_SRV].fd, 2) == -1)
-		goto fail;
+	}
 
-	if (pipe(config.ctl.evt) == -1)
+	if (pipe(config.ctl.evt) == -1) {
+		error("Couldn't create controller event PIPE: %s", strerror(errno));
 		goto fail;
+	}
 	config.ctl.pfds[CTL_IDX_EVT].fd = config.ctl.evt[0];
 
 	config.ctl.thread_created = true;
 	if ((errno = pthread_create(&config.ctl.thread, NULL, ctl_thread, NULL)) != 0) {
+		error("Couldn't create controller thread: %s", strerror(errno));
 		config.ctl.thread_created = false;
 		goto fail;
 	}
@@ -695,11 +750,13 @@ void bluealsa_ctl_free(void) {
 
 	config.ctl.thread_created = false;
 
-	close(config.ctl.evt[0]);
-	close(config.ctl.evt[1]);
-	config.ctl.pfds[CTL_IDX_EVT].fd = -1;
+	if (config.ctl.evt[0] != -1)
+		close(config.ctl.evt[0]);
+	if (config.ctl.evt[1] != -1)
+		close(config.ctl.evt[1]);
 
-	for (i = 0; i < sizeof(config.ctl.pfds) / sizeof(*config.ctl.pfds); i++)
+	config.ctl.pfds[CTL_IDX_EVT].fd = -1;
+	for (i = 0; i < ARRAYSIZE(config.ctl.pfds); i++)
 		if (config.ctl.pfds[i].fd != -1)
 			close(config.ctl.pfds[i].fd);
 

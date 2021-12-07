@@ -4,18 +4,22 @@ include_directories(include)
 
 # h264 encoder api
 set(H264E_API
+    h264e_api_v2.c
     )
 set(H264E_COMMON
     )
 
 # h264 encoder header
 set(H264E_HDR
-    include/h264e_codec.h
     )
 
 # h264 encoder sourse
 set(H264E_SRC
-    src/h264e_api.c
+    h264e_sps.c
+    h264e_pps.c
+    h264e_sei.c
+    h264e_dpb.c
+    h264e_slice.c
     )
 
 
@@ -26,5 +30,5 @@ add_library(${CODEC_H264E} STATIC
     ${H264E_SRC}
     )
 
-target_link_libraries(${CODEC_H264E} mpp_rc mpp_base)
+target_link_libraries(${CODEC_H264E} mpp_rc enc_rc mpp_base)
 set_target_properties(${CODEC_H264E} PROPERTIES FOLDER "mpp/codec")

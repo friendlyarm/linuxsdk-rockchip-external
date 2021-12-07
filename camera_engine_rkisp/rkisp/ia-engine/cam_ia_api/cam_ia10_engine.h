@@ -43,16 +43,18 @@ class CamIA10Engine: public CamIA10EngineItf {
 
   virtual RESULT runAWB(HAL_AwbCfg* config = NULL);
   virtual RESULT getAWBResults(CamIA10_AWB_Result_t* result);
-
+  virtual void   tuningToolConfigAwbParams(AwbConfig_t* awbParams);
   virtual RESULT runADPF();
   virtual RESULT getADPFResults(AdpfResult_t* result);
-
+  virtual void   tuningToolForceConfigDpf();
   virtual RESULT runAF(HAL_AfcCfg* config = NULL);
   virtual RESULT getAFResults(XCam3aResultFocus* result);
 
   virtual RESULT runAWDR();
   virtual RESULT getAWDRResults(AwdrResult_t* result);
-
+  virtual RESULT getCalibdbHandle(CamCalibDbHandle_t *handle);
+  virtual uint32_t getCalibdbMagicVerCode();
+  virtual RESULT clearStatic();
   /* manual ISP configs*/
   virtual RESULT runManISP(struct HAL_ISP_cfg_s* manCfg, struct CamIA10_Results* result);
   virtual void mapSensorExpToHal(
@@ -98,6 +100,7 @@ class CamIA10Engine: public CamIA10EngineItf {
 
   int mFrameId = 0;
   CamCalibDbHandle_t  hCamCalibDb;
+  uint32_t magicVerCode;
   bool mInitDynamic;
   struct CamIA10_DyCfg  dCfg;
   struct CamIA10_DyCfg  dCfgShd;
@@ -135,6 +138,7 @@ class CamIA10Engine: public CamIA10EngineItf {
   CamIA10_AWB_Result_t curAwbResult;
   AecResult_t      lastAecResult;
   AecResult_t      curAecResult;
+  XCam3aResultFocus lastAfResult;
   bool_t mStatisticsUpdated;
 
   bool_t  mWdrEnabledState;
@@ -148,10 +152,17 @@ class CamIA10Engine: public CamIA10EngineItf {
   RESULT runManIspForBW(struct CamIA10_Results* result);
   RESULT runManIspForPreIsp(struct CamIA10_Results* result);
   RESULT runManIspForOTP(struct CamIA10_Results* result);
+  RESULT runManIspForFlash(struct CamIA10_Results* result);
   const char* mSensorEntityName;
   int mIspVer;
   int mXMLIspOutputType;
   CamOTPGlobal_t* mOTPInfo;
+  int mLock3AForStillCap;
+  // ae algo converged result may be different from the
+  // reported to upper layer, for flash still capture usecase
+  // we should report ae converged statet after both ae and awb
+  // converged
+  bool mAeAlgoConvRst;
 };
 
 #endif

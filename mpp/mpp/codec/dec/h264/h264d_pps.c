@@ -140,7 +140,12 @@ MPP_RET process_pps(H264_SLICE_t *currSlice)
     FUN_CHECK(ret = parser_pps(p_bitctx, &p_Cur->sps, cur_pps));
     //!< MakePPSavailable
     ASSERT(cur_pps->Valid == 1);
-    memcpy(&currSlice->p_Vid->ppsSet[cur_pps->pic_parameter_set_id], cur_pps, sizeof(H264_PPS_t));
+    if (!currSlice->p_Vid->ppsSet[cur_pps->pic_parameter_set_id]) {
+        currSlice->p_Vid->ppsSet[cur_pps->pic_parameter_set_id] = mpp_malloc(H264_PPS_t, 1);
+    }
+
+    memcpy(currSlice->p_Vid->ppsSet[cur_pps->pic_parameter_set_id], cur_pps, sizeof(H264_PPS_t));
+    p_Cur->p_Vid->spspps_update = 1;
 
     return ret = MPP_OK;
 __FAILED:
@@ -170,4 +175,34 @@ __RETURN:
     return ret = MPP_OK;
 __FAILED:
     return ret;
+}
+
+/*!
+***********************************************************************
+* \brief
+*    parser nal prefix
+***********************************************************************
+*/
+//extern "C"
+MPP_RET process_prefix(H264_SLICE_t *currSlice)
+{
+    MPP_RET ret = MPP_ERR_UNKNOW;
+
+    H264dCurCtx_t *p_Cur = currSlice->p_Cur;
+    BitReadCtx_t *p_bitctx = &p_Cur->bitctx;
+    H264_PREFIX_t *cur_prefix = &p_Cur->prefix;
+
+    if (currSlice->nal_reference_idc) {
+        READ_ONEBIT(p_bitctx, &cur_prefix->store_ref_base_pic_flag);
+
+        if ((currSlice->svcExt.use_ref_base_pic_flag ||
+             cur_prefix->store_ref_base_pic_flag) &&
+            !currSlice->svcExt.idr_flag) {
+            H264D_LOG("read dec_ref_base_pic_marking\n");
+        }
+    }
+
+    return ret = MPP_OK;
+__BITREAD_ERR:
+    return p_bitctx->ret;
 }

@@ -10,9 +10,4 @@ libvideo_drmcon_la_LDFLAGS = $(PIXMAN_LIBS)
 
 DRMCON_SRCS = \
     fbvideo.c fbvideo.h \
-    fb3dfx.c fb3dfx.h 3dfx_mmio.h 3dfx_regs.h \
-    fbmatrox.c fbmatrox.h matrox_mmio.h matrox_regs.h \
-    fbneomagic.c fbneomagic.h neomagic_mmio.h \
-	pcivideo.c pcivideo.h pciinfo.h compiler.h \
-	pci_smi.c pci_smi.h \
-	drm_display.c drm_display.h libdrm_macros.h
+    drm_display.c drm_display.h libdrm_macros.h

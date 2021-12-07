@@ -86,7 +86,7 @@ static void set_sps_scanlist_matrix(H264_SPS_t *sps, H264dVideoCtx_t *p_Vid)
         }
     }
 
-    for (i = 6; i < ((sps->chroma_format_idc != YUV444) ? 8 : 12); ++i) {
+    for (i = 6; i < ((sps->chroma_format_idc != H264_CHROMA_444) ? 8 : 12); ++i) {
         if (!sps->seq_scaling_list_present_flag[i]) { // fall-back rule A
             if (i == 6) {
                 p_Vid->qmatrix[i] = Default8x8Intra;
@@ -131,7 +131,7 @@ static void set_pps_scanlist_matrix(H264_SPS_t *sps, H264_PPS_t *pps, H264dVideo
             }
         }
     }
-    for (i = 6; i < ((sps->chroma_format_idc != YUV444) ? 8 : 12); ++i) {
+    for (i = 6; i < ((sps->chroma_format_idc != H264_CHROMA_444) ? 8 : 12); ++i) {
         if (!pps->pic_scaling_list_present_flag[i]) { // fall-back rule B
             if (i == 6) {
                 if (!sps->seq_scaling_matrix_present_flag) {
@@ -270,6 +270,15 @@ MPP_RET get_max_dec_frame_buf_size(H264_SPS_t *sps)
     case 52:
         size = 70778880;
         break;
+    case 60:
+        size = 267386880;
+        break;
+    case 61:
+        size = 267386880;
+        break;
+    case 62:
+        size = 267386880;
+        break;
     default:
         ASSERT(0);  // undefined level
         return ret = MPP_NOK;
@@ -305,7 +314,7 @@ MPP_RET parse_sps_scalinglists(BitReadCtx_t *p_bitctx, H264_SPS_t *sps)
         }
     }
     // Parse scaling_list8x8.
-    for (i = 0; i < ((sps->chroma_format_idc != YUV444) ? 2 : 6); ++i) {
+    for (i = 0; i < ((sps->chroma_format_idc != H264_CHROMA_444) ? 2 : 6); ++i) {
         READ_ONEBIT(p_bitctx, &sps->seq_scaling_list_present_flag[6 + i]);
         if (sps->seq_scaling_list_present_flag[6 + i]) {
             FUN_CHECK(ret = parse_scalingList(p_bitctx, H264ScalingList8x8Length,

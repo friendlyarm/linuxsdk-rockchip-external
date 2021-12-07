@@ -41,6 +41,7 @@
 #include "encryptedfs_provisioning.h"
 #include "rktools.h"
 #include "sdboot.h"
+#include "mtdutils/mtdutils.h"
 
 static const struct option OPTIONS[] = {
   { "send_intent", required_argument, NULL, 's' },
@@ -49,6 +50,7 @@ static const struct option OPTIONS[] = {
   { "wipe_all", no_argument, NULL, 'a' },
   { "set_encrypted_filesystems", required_argument, NULL, 'e' },
   { "show_text", no_argument, NULL, 't' },
+  { "factory_pcba_test", no_argument, NULL, 'f' },
   { NULL, 0, NULL, 0 },
 };
 
@@ -60,7 +62,7 @@ static const char *SDCARD_ROOT = "/sdcard";
 static const char *TEMPORARY_LOG_FILE = "/tmp/recovery.log";
 static const char *SIDELOAD_TEMP_DIR = "/tmp/sideload";
 static const char *coldboot_done = "/dev/.coldboot_done";
-char systemFlag[256];
+char systemFlag[252];
 bool bSDBootUpdate = false;
 
 /*
@@ -297,6 +299,8 @@ finish_recovery(const char *send_intent) {
             check_and_fclose(fp, INTENT_FILE);
         }
     }
+
+    printf("finish_recovery Enter.....\n");
 
     // Copy logs to cache so the system can find out what happened.
     copy_log_file(LOG_FILE, true);
@@ -724,7 +728,10 @@ main(int argc, char **argv) {
         freopen(TEMPORARY_LOG_FILE, "a", stdout); setbuf(stdout, NULL);
         freopen(TEMPORARY_LOG_FILE, "a", stderr); setbuf(stderr, NULL);
     } else {
-	    printf("start debug recovery...\n");
+        printf("\n\n");
+        printf("*********************************************************\n");
+        printf("            ROCKCHIP recovery system                     \n");
+        printf("*********************************************************\n");
     }
     printf("Starting recovery on %s\n", ctime(&start));
 
@@ -756,6 +763,7 @@ main(int argc, char **argv) {
     const char *encrypted_fs_mode = NULL;
     int wipe_data = 0;
     int wipe_all = 0;
+    int pcba_test = 0;  //chad.ma add for pcba test
     int toggle_secure_fs = 0;
     encrypted_fs_info encrypted_fs_data;
 
@@ -770,6 +778,7 @@ main(int argc, char **argv) {
         case 'a': wipe_all = 1; break;
         case 'e': encrypted_fs_mode = optarg; toggle_secure_fs = 1; break;
         case 't': ui_show_text(1); break;
+        case 'f': pcba_test = 1; break;  //chad.ma add for pcba test
         case '?':
             LOGE("Invalid command argument\n");
             continue;
@@ -783,6 +792,21 @@ main(int argc, char **argv) {
         printf(" \"%s\"", argv[arg]);
     }
     printf("\n");
+
+#if 0   //add for test fopen /userdata/* function.
+    FILE *hfile;
+    char* filename = "/userdata/test.txt";
+    char buffer[1024];
+    hfile = fopen(filename, "rb");
+    if (!hfile)
+    {
+        printf("fopen <%s> fail\n", filename);
+        return;
+    }
+
+    fread(buffer,1,sizeof(buffer),hfile);
+    printf("%s \n", buffer);
+#endif
 
     if (update_package) {
         // For backwards compatibility on the cache partition only, if
@@ -849,7 +873,7 @@ main(int argc, char **argv) {
         char text[128] ;
         memset(text, 0, sizeof(text));
 
-        fd = open(resutl_file, O_CREAT | O_WRONLY | O_TRUNC);
+        fd = open(resutl_file, O_CREAT | O_WRONLY | O_TRUNC, 0777);
         if (fd < 0) {
             LOGE("open /userdata/update_rst.txt fail, errno = %d\n", errno);
         }
@@ -871,7 +895,13 @@ main(int argc, char **argv) {
         }
         if(ret == 0) {
             printf(">>>rkflash will update from %s\n", update_package);
+            #ifdef USE_RKUPDATE
             status = do_rk_update(binary, update_package);
+            #endif
+            #ifdef USE_UPDATEENGINE
+            const char* updateEnginebin = "/usr/bin/updateEngine";
+            status = do_rk_updateEngine(updateEnginebin, update_package);
+            #endif
             if(status == INSTALL_SUCCESS){
                 strcpy(systemFlag, update_package);
 
@@ -884,7 +914,7 @@ main(int argc, char **argv) {
                         remove(update_package);
                 }
                 strlcpy(text, "update images success!", 127);
-	        } else {
+            } else {
                 strlcpy(text, "update images failed!", 127);
             }
         } else {
@@ -902,9 +932,53 @@ main(int argc, char **argv) {
         ui_show_text(0);
     }else if (sdupdate_package != NULL) {
         // update image from sdcard
+        #ifdef USE_RKUPDATE
         const char* binary = "/usr/bin/rkupdate";
         printf(">>>sdboot update will update from %s\n", sdupdate_package);
         status = do_rk_update(binary, sdupdate_package);
+        #endif
+
+        #ifdef USE_UPDATEENGINE
+#define	FACTORY_FIRMWARE_IMAGE "/mnt/sdcard/out_image.img"
+#define	CMD4RECOVERY_FILENAME "/mnt/sdcard/cmd4recovery"
+        if ((access(FACTORY_FIRMWARE_IMAGE, F_OK)) && access(CMD4RECOVERY_FILENAME, F_OK)) {
+            int tmp_fd = creat(CMD4RECOVERY_FILENAME, 0777);
+            if (tmp_fd < 0) {
+                printf("creat % error.\n", CMD4RECOVERY_FILENAME);
+                status = INSTALL_ERROR;
+            } else {
+                close(tmp_fd);
+                const char* updateEnginebin = "/usr/bin/updateEngine";
+                status = do_rk_updateEngine(updateEnginebin, sdupdate_package);
+            }
+        }
+
+        if(isMtdDevice() == 0){
+            printf("start flash write to /dev/mtd0.\n");
+            size_t total_size;
+            size_t erase_size;
+            mtd_scan_partitions();
+            const MtdPartition *part = mtd_find_partition_by_name("rk-nand");
+            if ( part == NULL ) {
+                part = mtd_find_partition_by_name("spi-nand0");
+            }
+            if (part == NULL || mtd_partition_info(part, &total_size, &erase_size, NULL)) {
+                if ((!access(FACTORY_FIRMWARE_IMAGE, F_OK)) && mtd_find_partition_by_name("sfc_nor") != NULL) {
+                    printf("Info: start flash out_image.img to spi nor.\n");
+                    system("flashcp -v " FACTORY_FIRMWARE_IMAGE " /dev/mtd0");
+                } else
+                printf("Error: Can't find rk-nand or spi-nand0.\n");
+            }else{
+                system("flash_erase /dev/mtd0 0x0 0");
+                system("sh "CMD4RECOVERY_FILENAME);
+            }
+        }else{
+            printf("Start to dd data to emmc partition.\n");
+            system("sh "CMD4RECOVERY_FILENAME);
+        }
+
+        #endif
+
         if(status == INSTALL_SUCCESS){
             printf("update.img Installation success.\n");
             ui_print("update.img Installation success.\n");
@@ -919,15 +993,23 @@ main(int argc, char **argv) {
         if (device_wipe_data()) status = INSTALL_ERROR;
         if (erase_volume("/userdata")) status = INSTALL_ERROR;
         if (status != INSTALL_SUCCESS) ui_print("Data wipe failed.\n");
-		ui_print("Data wipe done.\n");
+        ui_print("Data wipe done.\n");
         if (access("/dev/block/by-name/oem", F_OK) == 0) {
             if (resize_volume("/oem")) status = INSTALL_ERROR;
             if (status != INSTALL_SUCCESS) ui_print("resize failed.\n");
         }
 
-		ui_print("resize oem done.\n");
-		ui_show_text(0);
-    } else {
+        ui_print("resize oem done.\n");
+        ui_show_text(0);
+    }
+    else if (pcba_test)
+    {
+         //pcba test todo...
+         printf("------------------ pcba test start -------------\n");
+         exit(EXIT_SUCCESS); //exit recovery bin directly, not start pcba here, in rkLanuch.sh
+         return 0;
+    }
+    else {
         status = INSTALL_ERROR;  // No command specified
     }
 
@@ -938,29 +1020,28 @@ main(int argc, char **argv) {
 
     if (sdupdate_package != NULL && bSDBootUpdate) {
         if (status == INSTALL_SUCCESS){
-            int timeout = 60;
-            char imageFile[64] = {0};
-            strlcpy(imageFile, EX_SDCARD_ROOT, sizeof(imageFile));
-            strlcat(imageFile, "/sdupdate.img", sizeof(imageFile));
+            char *SDDdevice =
+                     strdup(get_mounted_device_from_path(EX_SDCARD_ROOT));
 
-            printf("Please remove SD CARD!!!, wait for reboot.\n");
+            ensure_ex_path_unmounted(EX_SDCARD_ROOT);
+            /* Updating is finished here, we must print this message
+             * in console, it shows user a specific message that
+             * updating is completely, remove SD CARD and reboot */
+            fflush(stdout);
+            freopen("/dev/console", "w", stdout);
+            printf("\nPlease remove SD CARD!!!, wait for reboot.\n");
             ui_print("Please remove SD CARD!!!, wait for reboot.");
 
-            while (timeout--) {
-                sleep(1);
-                if (access(imageFile, F_OK) == 0) {
-                    ui_print("Please remove SD CARD!!!, wait for reboot");
-                } else {
-                    break;
-                }
-            }
-            //ui_show_text(0);
+            while (access(SDDdevice, F_OK) == 0) { sleep(1); }
+            free(SDDdevice);
         }
     }
 
     // Otherwise, get ready to boot the main system...
     finish_recovery(send_intent);
     ui_print("Rebooting...\n");
+    printf("Reboot...\n");
+    fflush(stdout);
     sync();
     reboot(RB_AUTOBOOT);
     return EXIT_SUCCESS;

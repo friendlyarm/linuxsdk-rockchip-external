@@ -17,20 +17,26 @@
 #define  MODULE_TAG "mpp"
 
 #include <errno.h>
+#include <string.h>
+
+#include "rk_mpi.h"
+
 #include "mpp_log.h"
 #include "mpp_mem.h"
 #include "mpp_env.h"
 #include "mpp_time.h"
 #include "mpp_impl.h"
+#include "mpp_2str.h"
 
 #include "mpp.h"
-#include "mpp_dec.h"
-#include "mpp_enc.h"
 #include "mpp_hal.h"
+
 #include "mpp_task_impl.h"
 #include "mpp_buffer_impl.h"
 #include "mpp_frame_impl.h"
 #include "mpp_packet_impl.h"
+
+#include "mpp_dec_cfg_impl.h"
 
 #define MPP_TEST_FRAME_SIZE     SZ_1M
 #define MPP_TEST_PACKET_SIZE    SZ_512K
@@ -40,6 +46,18 @@ static void mpp_notify_by_buffer_group(void *arg, void *group)
     Mpp *mpp = (Mpp *)arg;
 
     mpp->notify((MppBufferGroup) group);
+}
+
+static void *list_wraper_packet(void *arg)
+{
+    mpp_packet_deinit((MppPacket *)arg);
+    return NULL;
+}
+
+static void *list_wraper_frame(void *arg)
+{
+    mpp_frame_deinit((MppFrame *)arg);
+    return NULL;
 }
 
 Mpp::Mpp()
@@ -55,36 +73,51 @@ Mpp::Mpp()
       mPacketGroup(NULL),
       mFrameGroup(NULL),
       mExternalFrameGroup(0),
-      mInputPort(NULL),
-      mOutputPort(NULL),
+      mUsrInPort(NULL),
+      mUsrOutPort(NULL),
+      mMppInPort(NULL),
+      mMppOutPort(NULL),
       mInputTaskQueue(NULL),
       mOutputTaskQueue(NULL),
-      mInputTimeout(MPP_POLL_NON_BLOCK),
-      mOutputTimeout(MPP_POLL_NON_BLOCK),
+      mInputTimeout(MPP_POLL_BUTT),
+      mOutputTimeout(MPP_POLL_BUTT),
       mInputTask(NULL),
-      mThreadCodec(NULL),
-      mThreadHal(NULL),
+      mEosTask(NULL),
       mDec(NULL),
       mEnc(NULL),
+      mEncVersion(0),
       mType(MPP_CTX_BUTT),
       mCoding(MPP_VIDEO_CodingUnused),
       mInitDone(0),
       mMultiFrame(0),
       mStatus(0),
-      mParserFastMode(0),
-      mParserNeedSplit(0),
-      mParserInternalPts(0),
       mExtraPacket(NULL),
       mDump(NULL)
 {
     mpp_env_get_u32("mpp_debug", &mpp_debug, 0);
+
+    memset(&mDecInitcfg, 0, sizeof(mDecInitcfg));
+    mpp_dec_cfg_set_default(&mDecInitcfg);
+    mDecInitcfg.base.enable_vproc = 1;
+    mDecInitcfg.base.change  |= MPP_DEC_CFG_CHANGE_ENABLE_VPROC;
+
     mpp_dump_init(&mDump);
 }
 
 MPP_RET Mpp::init(MppCtxType type, MppCodingType coding)
 {
+    MPP_RET ret = MPP_NOK;
+
+    if (!mpp_check_soc_cap(type, coding)) {
+        mpp_err("unable to create %s %s for soc %s unsupported\n",
+                strof_ctx_type(type), strof_coding_type(coding),
+                mpp_get_soc_info()->compatible);
+        return MPP_NOK;
+    }
+
     if (mpp_check_support_format(type, coding)) {
-        mpp_err("unable to create unsupported type %d coding %d\n", type, coding);
+        mpp_err("unable to create %s %s for mpp unsupported\n",
+                strof_ctx_type(type), strof_coding_type(coding));
         return MPP_NOK;
     }
 
@@ -92,92 +125,98 @@ MPP_RET Mpp::init(MppCtxType type, MppCodingType coding)
 
     mType = type;
     mCoding = coding;
+
+    mpp_task_queue_init(&mInputTaskQueue, this, "input");
+    mpp_task_queue_init(&mOutputTaskQueue, this, "output");
+
     switch (mType) {
     case MPP_CTX_DEC : {
-        mPackets    = new mpp_list((node_destructor)mpp_packet_deinit);
-        mFrames     = new mpp_list((node_destructor)mpp_frame_deinit);
-        mTimeStamps = new MppQueue((node_destructor)mpp_packet_deinit);
+        mPackets    = new mpp_list(list_wraper_packet);
+        mFrames     = new mpp_list(list_wraper_frame);
+        mTimeStamps = new mpp_list(list_wraper_packet);
 
-        MppDecCfg cfg = {
-            coding,
-            mParserFastMode,
-            mParserNeedSplit,
-            mParserInternalPts,
-            this,
-        };
-        mpp_dec_init(&mDec, &cfg);
+        if (mInputTimeout == MPP_POLL_BUTT)
+            mInputTimeout = MPP_POLL_NON_BLOCK;
+
+        if (mOutputTimeout == MPP_POLL_BUTT)
+            mOutputTimeout = MPP_POLL_NON_BLOCK;
 
         if (mCoding != MPP_VIDEO_CodingMJPEG) {
-            mThreadCodec = new MppThread(mpp_dec_parser_thread, this, "mpp_dec_parser");
-            mThreadHal  = new MppThread(mpp_dec_hal_thread, this, "mpp_dec_hal");
-
             mpp_buffer_group_get_internal(&mPacketGroup, MPP_BUFFER_TYPE_ION);
             mpp_buffer_group_limit_config(mPacketGroup, 0, 3);
 
-            mpp_task_queue_init(&mInputTaskQueue);
-            mpp_task_queue_init(&mOutputTaskQueue);
             mpp_task_queue_setup(mInputTaskQueue, 4);
             mpp_task_queue_setup(mOutputTaskQueue, 4);
         } else {
-            mThreadCodec = new MppThread(mpp_dec_advanced_thread, this, "mpp_dec_parser");
-
-            mpp_task_queue_init(&mInputTaskQueue);
-            mpp_task_queue_init(&mOutputTaskQueue);
             mpp_task_queue_setup(mInputTaskQueue, 1);
             mpp_task_queue_setup(mOutputTaskQueue, 1);
         }
+
+        mUsrInPort  = mpp_task_queue_get_port(mInputTaskQueue,  MPP_PORT_INPUT);
+        mUsrOutPort = mpp_task_queue_get_port(mOutputTaskQueue, MPP_PORT_OUTPUT);
+        mMppInPort  = mpp_task_queue_get_port(mInputTaskQueue,  MPP_PORT_OUTPUT);
+        mMppOutPort = mpp_task_queue_get_port(mOutputTaskQueue, MPP_PORT_INPUT);
+
+        MppDecInitCfg cfg = {
+            coding,
+            this,
+            &mDecInitcfg,
+        };
+
+        ret = mpp_dec_init(&mDec, &cfg);
+        if (ret)
+            break;
+        ret = mpp_dec_start(mDec);
+        if (ret)
+            break;
+        mInitDone = 1;
     } break;
     case MPP_CTX_ENC : {
-        mFrames     = new mpp_list((node_destructor)NULL);
-        mPackets    = new mpp_list((node_destructor)mpp_packet_deinit);
+        mFrames     = new mpp_list(NULL);
+        mPackets    = new mpp_list(list_wraper_packet);
 
-        mpp_enc_init(&mEnc, coding);
-        mThreadCodec = new MppThread(mpp_enc_control_thread, this, "mpp_enc_ctrl");
-        //mThreadHal  = new MppThread(mpp_enc_hal_thread, this, "mpp_enc_hal");
+        if (mInputTimeout == MPP_POLL_BUTT)
+            mInputTimeout = MPP_POLL_BLOCK;
+
+        if (mOutputTimeout == MPP_POLL_BUTT)
+            mOutputTimeout = MPP_POLL_NON_BLOCK;
 
         mpp_buffer_group_get_internal(&mPacketGroup, MPP_BUFFER_TYPE_ION);
         mpp_buffer_group_get_internal(&mFrameGroup, MPP_BUFFER_TYPE_ION);
 
-        mpp_task_queue_init(&mInputTaskQueue);
-        mpp_task_queue_init(&mOutputTaskQueue);
         mpp_task_queue_setup(mInputTaskQueue, 1);
-        mpp_task_queue_setup(mOutputTaskQueue, 1);
+        mpp_task_queue_setup(mOutputTaskQueue, 8);
+
+        mUsrInPort  = mpp_task_queue_get_port(mInputTaskQueue,  MPP_PORT_INPUT);
+        mUsrOutPort = mpp_task_queue_get_port(mOutputTaskQueue, MPP_PORT_OUTPUT);
+        mMppInPort  = mpp_task_queue_get_port(mInputTaskQueue,  MPP_PORT_OUTPUT);
+        mMppOutPort = mpp_task_queue_get_port(mOutputTaskQueue, MPP_PORT_INPUT);
+
+        MppEncInitCfg cfg = {
+            coding,
+            this,
+        };
+
+        ret = mpp_enc_init_v2(&mEnc, &cfg);
+        if (ret)
+            break;
+        ret = mpp_enc_start_v2(mEnc);
+        if (ret)
+            break;
+        mInitDone = 1;
     } break;
     default : {
         mpp_err("Mpp error type %d\n", mType);
     } break;
     }
 
-    mInputPort  = mpp_task_queue_get_port(mInputTaskQueue,  MPP_PORT_INPUT);
-    mOutputPort = mpp_task_queue_get_port(mOutputTaskQueue, MPP_PORT_OUTPUT);
 
-    if (mCoding == MPP_VIDEO_CodingMJPEG &&
-        mFrames && mPackets &&
-        (mDec) &&
-        mThreadCodec/* &&
-        mPacketGroup*/) {
-        mThreadCodec->start();
-        mInitDone = 1;
-    } else if (mFrames && mPackets &&
-               (mDec) &&
-               mThreadCodec && mThreadHal &&
-               mPacketGroup) {
-        mThreadCodec->start();
-        mThreadHal->start();
-        mInitDone = 1;
-    } else if (mFrames && mPackets &&
-               (mEnc) &&
-               mThreadCodec/* && mThreadHal */ &&
-               mPacketGroup) {
-        mThreadCodec->start();
-        //mThreadHal->start();  // TODO
-        mInitDone = 1;
-    } else {
+    if (!mInitDone) {
         mpp_err("error found on mpp initialization\n");
         clear();
     }
 
-    return MPP_OK;
+    return ret;
 }
 
 Mpp::~Mpp ()
@@ -192,39 +231,18 @@ void Mpp::clear()
         mpp_buffer_group_set_callback((MppBufferGroupImpl *)mFrameGroup,
                                       NULL, NULL);
 
-    if (mType == MPP_CTX_ENC) {
-        if (mThreadCodec)
-            mThreadCodec->set_status(MPP_THREAD_STOPPING);
-
-        /* reset dequeued input task to idle status */
-        if (mInputTask) {
-            enqueue(MPP_PORT_INPUT, mInputTask);
-            mInputTask = NULL;
+    if (mType == MPP_CTX_DEC) {
+        if (mDec) {
+            mpp_dec_stop(mDec);
+            mpp_dec_deinit(mDec);
+            mDec = NULL;
         }
-
-        /*
-         * encode thread may block in dequeue output task
-         * so send sigal to awake it
-         */
-        if (mOutputTaskQueue) {
-            MppPort port = mpp_task_queue_get_port(mOutputTaskQueue, MPP_PORT_INPUT);
-            mpp_port_awake(port);
+    } else {
+        if (mEnc) {
+            mpp_enc_stop_v2(mEnc);
+            mpp_enc_deinit_v2(mEnc);
+            mEnc = NULL;
         }
-    }
-
-    if (mThreadCodec)
-        mThreadCodec->stop();
-
-    if (mThreadHal)
-        mThreadHal->stop();
-
-    if (mThreadCodec) {
-        delete mThreadCodec;
-        mThreadCodec = NULL;
-    }
-    if (mThreadHal) {
-        delete mThreadHal;
-        mThreadHal = NULL;
     }
 
     if (mInputTaskQueue) {
@@ -236,18 +254,10 @@ void Mpp::clear()
         mOutputTaskQueue = NULL;
     }
 
-    mInputPort = NULL;
-    mOutputPort = NULL;
-
-    if (mDec || mEnc) {
-        if (mType == MPP_CTX_DEC) {
-            mpp_dec_deinit(mDec);
-            mDec = NULL;
-        } else {
-            mpp_enc_deinit(mEnc);
-            mEnc = NULL;
-        }
-    }
+    mUsrInPort  = NULL;
+    mUsrOutPort = NULL;
+    mMppInPort  = NULL;
+    mMppOutPort = NULL;
 
     if (mExtraPacket) {
         mpp_packet_deinit(&mExtraPacket);
@@ -278,37 +288,135 @@ void Mpp::clear()
     mpp_dump_deinit(&mDump);
 }
 
+MPP_RET Mpp::start()
+{
+    return MPP_OK;
+}
+
+MPP_RET Mpp::stop()
+{
+    return MPP_OK;
+}
+
+MPP_RET Mpp::pause()
+{
+    return MPP_OK;
+}
+
+MPP_RET Mpp::resume()
+{
+    return MPP_OK;
+}
+
 MPP_RET Mpp::put_packet(MppPacket packet)
 {
     if (!mInitDone)
         return MPP_ERR_INIT;
 
-    AutoMutex autoLock(mPackets->mutex());
+    MPP_RET ret = MPP_NOK;
+    MppPollType timeout = mInputTimeout;
+    MppTask task_dequeue = NULL;
+    RK_U32 pkt_copy = 0;
+
     if (mExtraPacket) {
-        mPackets->add_at_tail(&mExtraPacket, sizeof(mExtraPacket));
+        MppPacket extra = mExtraPacket;
+
         mExtraPacket = NULL;
-        mPacketPutCount++;
+        put_packet(extra);
     }
 
-    RK_U32 eos = mpp_packet_get_eos(packet);
-    if (mPackets->list_size() < 4 || eos) {
-        MppPacket pkt;
-        if (MPP_OK != mpp_packet_copy_init(&pkt, packet))
-            return MPP_NOK;
+    if (!mEosTask) {
+        /* handle eos packet on block mode */
+        ret = poll(MPP_PORT_INPUT, MPP_POLL_BLOCK);
+        if (ret < 0)
+            goto RET;
 
-        mPackets->add_at_tail(&pkt, sizeof(pkt));
-        mPacketPutCount++;
-        // dump input packet
-        mpp_ops_dec_put_pkt(mDump, packet);
+        dequeue(MPP_PORT_INPUT, &mEosTask);
+        if (NULL == mEosTask) {
+            mpp_err_f("fail to reserve eos task\n", ret);
+            ret = MPP_NOK;
+            goto RET;
+        }
+    }
 
-        // when packet has been send clear the length
+    if (mpp_packet_get_eos(packet)) {
+        mpp_assert(mEosTask);
+        task_dequeue = mEosTask;
+        mEosTask = NULL;
+    }
+
+    /* Use reserved task to send eos packet */
+    if (mInputTask && !task_dequeue) {
+        task_dequeue = mInputTask;
+        mInputTask = NULL;
+    }
+
+    if (NULL == task_dequeue) {
+        ret = poll(MPP_PORT_INPUT, timeout);
+        if (ret < 0) {
+            ret = MPP_ERR_BUFFER_FULL;
+            goto RET;
+        }
+
+        /* do not pull here to avoid block wait */
+        dequeue(MPP_PORT_INPUT, &task_dequeue);
+        if (NULL == task_dequeue) {
+            mpp_err_f("fail to get task on poll ret %d\n", ret);
+            ret = MPP_NOK;
+            goto RET;
+        }
+    }
+
+    if (NULL == mpp_packet_get_buffer(packet)) {
+        /* packet copy path */
+        MppPacket pkt_in = NULL;
+
+        mpp_packet_copy_init(&pkt_in, packet);
         mpp_packet_set_length(packet, 0);
-
-        notify(MPP_INPUT_ENQUEUE);
-        return MPP_OK;
+        pkt_copy = 1;
+        packet = pkt_in;
+        ret = MPP_OK;
+    } else {
+        /* packet zero copy path */
+        mpp_log_f("not support zero copy path\n");
+        timeout = MPP_POLL_BLOCK;
     }
 
-    return MPP_ERR_BUFFER_FULL;
+    /* setup task */
+    ret = mpp_task_meta_set_packet(task_dequeue, KEY_INPUT_PACKET, packet);
+    if (ret) {
+        mpp_err_f("set input frame to task ret %d\n", ret);
+        /* keep current task for next */
+        mInputTask = task_dequeue;
+        goto RET;
+    }
+
+    mpp_ops_dec_put_pkt(mDump, packet);
+
+    /* enqueue valid task to decoder */
+    ret = enqueue(MPP_PORT_INPUT, task_dequeue);
+    if (ret) {
+        mpp_err_f("enqueue ret %d\n", ret);
+        goto RET;
+    }
+
+    mPacketPutCount++;
+
+    if (timeout && !pkt_copy)
+        ret = poll(MPP_PORT_INPUT, timeout);
+
+RET:
+    /* wait enqueued task finished */
+    if (NULL == mInputTask) {
+        MPP_RET cnt = poll(MPP_PORT_INPUT, MPP_POLL_NON_BLOCK);
+        /* reserve one task for eos block mode */
+        if (cnt >= 0) {
+            dequeue(MPP_PORT_INPUT, &mInputTask);
+            mpp_assert(mInputTask);
+        }
+    }
+
+    return ret;
 }
 
 MPP_RET Mpp::get_frame(MppFrame *frame)
@@ -381,16 +489,27 @@ MPP_RET Mpp::put_frame(MppFrame frame)
         return MPP_ERR_INIT;
 
     MPP_RET ret = MPP_NOK;
+    MppStopwatch stopwatch = NULL;
+
+    if (mpp_debug & MPP_DBG_TIMING) {
+        mpp_frame_set_stopwatch_enable(frame, 1);
+        stopwatch = mpp_frame_get_stopwatch(frame);
+    }
+
+    mpp_stopwatch_record(stopwatch, NULL);
+    mpp_stopwatch_record(stopwatch, "put frame start");
 
     if (mInputTask == NULL) {
+        mpp_stopwatch_record(stopwatch, "input port user poll");
         /* poll input port for valid task */
         ret = poll(MPP_PORT_INPUT, mInputTimeout);
-        if (ret) {
+        if (ret < 0) {
             mpp_log_f("poll on set timeout %d ret %d\n", mInputTimeout, ret);
             goto RET;
         }
 
         /* dequeue task for setup */
+        mpp_stopwatch_record(stopwatch, "input port user dequeue");
         ret = dequeue(MPP_PORT_INPUT, &mInputTask);
         if (ret || NULL == mInputTask) {
             mpp_log_f("dequeue on set ret %d task %p\n", ret, mInputTask);
@@ -406,24 +525,43 @@ MPP_RET Mpp::put_frame(MppFrame frame)
         mpp_log_f("set input frame to task ret %d\n", ret);
         goto RET;
     }
+
+    if (mpp_frame_has_meta(frame)) {
+        MppMeta meta = mpp_frame_get_meta(frame);
+        MppPacket packet = NULL;
+
+        mpp_meta_get_packet(meta, KEY_OUTPUT_PACKET, &packet);
+        if (packet) {
+            ret = mpp_task_meta_set_packet(mInputTask, KEY_OUTPUT_PACKET, packet);
+            if (ret) {
+                mpp_log_f("set output packet to task ret %d\n", ret);
+                goto RET;
+            }
+        }
+    }
+
     // dump input
     mpp_ops_enc_put_frm(mDump, frame);
 
     /* enqueue valid task to encoder */
+    mpp_stopwatch_record(stopwatch, "input port user enqueue");
     ret = enqueue(MPP_PORT_INPUT, mInputTask);
     if (ret) {
         mpp_log_f("enqueue ret %d\n", ret);
         goto RET;
     }
 
+    mInputTask = NULL;
     /* wait enqueued task finished */
-    ret = poll(MPP_PORT_INPUT, MPP_POLL_BLOCK);
-    if (ret) {
+    mpp_stopwatch_record(stopwatch, "input port user poll");
+    ret = poll(MPP_PORT_INPUT, mInputTimeout);
+    if (ret < 0) {
         mpp_log_f("poll on get timeout %d ret %d\n", mInputTimeout, ret);
         goto RET;
     }
 
     /* get previous enqueued task back */
+    mpp_stopwatch_record(stopwatch, "input port user dequeue");
     ret = dequeue(MPP_PORT_INPUT, &mInputTask);
     if (ret) {
         mpp_log_f("dequeue on get ret %d\n", ret);
@@ -431,17 +569,16 @@ MPP_RET Mpp::put_frame(MppFrame frame)
     }
 
     mpp_assert(mInputTask);
-
-    /* clear the enqueued task back */
     if (mInputTask) {
-        ret = mpp_task_meta_get_frame(mInputTask, KEY_INPUT_FRAME, &frame);
-        if (frame) {
-            mpp_frame_deinit(&frame);
-            frame = NULL;
-        }
+        MppFrame frm_out = NULL;
+
+        mpp_task_meta_get_frame(mInputTask, KEY_INPUT_FRAME, &frm_out);
+        mpp_assert(frm_out == frame);
     }
 
 RET:
+    mpp_stopwatch_record(stopwatch, "put_frame finish");
+    mpp_frame_set_stopwatch_enable(frame, 0);
     return ret;
 }
 
@@ -454,7 +591,7 @@ MPP_RET Mpp::get_packet(MppPacket *packet)
     MppTask task = NULL;
 
     ret = poll(MPP_PORT_OUTPUT, mOutputTimeout);
-    if (ret) {
+    if (ret < 0) {
         // NOTE: Do not treat poll failure as error. Just clear output
         ret = MPP_OK;
         *packet = NULL;
@@ -477,8 +614,7 @@ MPP_RET Mpp::get_packet(MppPacket *packet)
 
     mpp_assert(*packet);
 
-    if (mpp_debug & MPP_DBG_PTS)
-        mpp_log_f("pts %lld\n", mpp_packet_get_pts(*packet));
+    mpp_dbg_pts("pts %lld\n", mpp_packet_get_pts(*packet));
 
     // dump output
     mpp_ops_enc_get_pkt(mDump, *packet);
@@ -501,10 +637,10 @@ MPP_RET Mpp::poll(MppPortType type, MppPollType timeout)
 
     switch (type) {
     case MPP_PORT_INPUT : {
-        port = mInputPort;
+        port = mUsrInPort;
     } break;
     case MPP_PORT_OUTPUT : {
-        port = mOutputPort;
+        port = mUsrOutPort;
     } break;
     default : {
     } break;
@@ -523,13 +659,16 @@ MPP_RET Mpp::dequeue(MppPortType type, MppTask *task)
 
     MPP_RET ret = MPP_NOK;
     MppTaskQueue port = NULL;
+    RK_U32 notify_flag = 0;
 
     switch (type) {
     case MPP_PORT_INPUT : {
-        port = mInputPort;
+        port = mUsrInPort;
+        notify_flag = MPP_INPUT_DEQUEUE;
     } break;
     case MPP_PORT_OUTPUT : {
-        port = mOutputPort;
+        port = mUsrOutPort;
+        notify_flag = MPP_OUTPUT_DEQUEUE;
     } break;
     default : {
     } break;
@@ -538,7 +677,7 @@ MPP_RET Mpp::dequeue(MppPortType type, MppTask *task)
     if (port) {
         ret = mpp_port_dequeue(port, task);
         if (MPP_OK == ret)
-            notify(MPP_OUTPUT_DEQUEUE);
+            notify(notify_flag);
     }
 
     return ret;
@@ -551,27 +690,26 @@ MPP_RET Mpp::enqueue(MppPortType type, MppTask task)
 
     MPP_RET ret = MPP_NOK;
     MppTaskQueue port = NULL;
+    RK_U32 notify_flag = 0;
 
     switch (type) {
     case MPP_PORT_INPUT : {
-        port = mInputPort;
+        port = mUsrInPort;
+        notify_flag = MPP_INPUT_ENQUEUE;
     } break;
     case MPP_PORT_OUTPUT : {
-        port = mOutputPort;
+        port = mUsrOutPort;
+        notify_flag = MPP_OUTPUT_ENQUEUE;
     } break;
     default : {
     } break;
     }
 
     if (port) {
-        mThreadCodec->lock();
         ret = mpp_port_enqueue(port, task);
-        if (MPP_OK == ret) {
-            // if enqueue success wait up thread
-            mThreadCodec->signal();
-            notify(MPP_INPUT_ENQUEUE);
-        }
-        mThreadCodec->unlock();
+        // if enqueue success wait up thread
+        if (MPP_OK == ret)
+            notify(notify_flag);
     }
 
     return ret;
@@ -675,7 +813,7 @@ MPP_RET Mpp::reset()
         mFrames->flush();
         mFrames->unlock();
 
-        mpp_enc_reset(mEnc);
+        mpp_enc_reset_v2(mEnc);
 
         mPackets->lock();
         mPackets->flush();
@@ -727,6 +865,20 @@ MPP_RET Mpp::control_mpp(MpiCmd cmd, MppParam param)
             mOutputTimeout = timeout;
     } break;
 
+    case MPP_START : {
+        start();
+    } break;
+    case MPP_STOP : {
+        stop();
+    } break;
+
+    case MPP_PAUSE : {
+        pause();
+    } break;
+    case MPP_RESUME : {
+        resume();
+    } break;
+
     default : {
         ret = MPP_NOK;
     } break;
@@ -768,10 +920,9 @@ MPP_RET Mpp::control_dec(MpiCmd cmd, MppParam param)
         if (param) {
             mExternalFrameGroup = 1;
 
-            if (mpp_debug & MPP_DBG_INFO)
-                mpp_log("using external buffer group %p\n", mFrameGroup);
+            mpp_dbg_info("using external buffer group %p\n", mFrameGroup);
 
-            if (mThreadCodec) {
+            if (mInitDone) {
                 ret = mpp_buffer_group_set_callback((MppBufferGroupImpl *)param,
                                                     mpp_notify_by_buffer_group,
                                                     (void *)this);
@@ -794,35 +945,57 @@ MPP_RET Mpp::control_dec(MpiCmd cmd, MppParam param)
         }
     } break;
     case MPP_DEC_SET_INFO_CHANGE_READY: {
-        if (mpp_debug & MPP_DBG_INFO)
-            mpp_log("set info change ready\n");
+        mpp_dbg_info("set info change ready\n");
 
-        ret = mpp_buf_slot_ready(mDec->frame_slots);
+        ret = mpp_dec_control(mDec, cmd, param);
         notify(MPP_DEC_NOTIFY_INFO_CHG_DONE | MPP_DEC_NOTIFY_BUFFER_MATCH);
     } break;
-    case MPP_DEC_SET_PARSER_SPLIT_MODE: {
-        RK_U32 flag = *((RK_U32 *)param);
-        mParserNeedSplit = flag;
-        ret = MPP_OK;
-    } break;
-    case MPP_DEC_SET_PARSER_FAST_MODE: {
-        RK_U32 flag = *((RK_U32 *)param);
-        mParserFastMode = flag;
-        ret = MPP_OK;
+    case MPP_DEC_SET_PRESENT_TIME_ORDER :
+    case MPP_DEC_SET_PARSER_SPLIT_MODE :
+    case MPP_DEC_SET_PARSER_FAST_MODE :
+    case MPP_DEC_SET_IMMEDIATE_OUT :
+    case MPP_DEC_SET_DISABLE_ERROR :
+    case MPP_DEC_SET_ENABLE_DEINTERLACE : {
+        /*
+         * These control may be set before mpp_init
+         * When this case happen record the config and wait for decoder init
+         */
+        if (mDec) {
+            ret = mpp_dec_control(mDec, cmd, param);
+            return ret;
+        }
+
+        ret = mpp_dec_set_cfg_by_cmd(&mDecInitcfg, cmd, param);
     } break;
     case MPP_DEC_GET_STREAM_COUNT: {
         AutoMutex autoLock(mPackets->mutex());
         *((RK_S32 *)param) = mPackets->list_size();
         ret = MPP_OK;
     } break;
-    case MPP_DEC_GET_VPUMEM_USED_COUNT:
-    case MPP_DEC_SET_OUTPUT_FORMAT:
-    case MPP_DEC_SET_DISABLE_ERROR:
-    case MPP_DEC_SET_PRESENT_TIME_ORDER:
-    case MPP_DEC_SET_IMMEDIATE_OUT:
-    case MPP_DEC_SET_ENABLE_DEINTERLACE: {
+    case MPP_DEC_GET_VPUMEM_USED_COUNT :
+    case MPP_DEC_SET_OUTPUT_FORMAT :
+    case MPP_DEC_QUERY : {
         ret = mpp_dec_control(mDec, cmd, param);
-    }
+    } break;
+    case MPP_DEC_SET_CFG : {
+        if (mDec)
+            ret = mpp_dec_control(mDec, cmd, param);
+        else if (param) {
+            MppDecCfgImpl *dec_cfg = (MppDecCfgImpl *)param;
+
+            ret = mpp_dec_set_cfg(&mDecInitcfg, &dec_cfg->cfg);
+        }
+    } break;
+    case MPP_DEC_GET_CFG : {
+        if (mDec)
+            ret = mpp_dec_control(mDec, cmd, param);
+        else if (param) {
+            MppDecCfgImpl *dec_cfg = (MppDecCfgImpl *)param;
+
+            memcpy(&dec_cfg->cfg, &mDecInitcfg, sizeof(dec_cfg->cfg));
+            ret = MPP_OK;
+        }
+    } break;
     default : {
     } break;
     }
@@ -832,7 +1005,7 @@ MPP_RET Mpp::control_dec(MpiCmd cmd, MppParam param)
 MPP_RET Mpp::control_enc(MpiCmd cmd, MppParam param)
 {
     mpp_assert(mEnc);
-    return mpp_enc_control(mEnc, cmd, param);
+    return mpp_enc_control_v2(mEnc, cmd, param);
 }
 
 MPP_RET Mpp::control_isp(MpiCmd cmd, MppParam param)
@@ -854,7 +1027,7 @@ MPP_RET Mpp::notify(RK_U32 flag)
         return mpp_dec_notify(mDec, flag);
     } break;
     case MPP_CTX_ENC : {
-        return mpp_enc_notify(mEnc, flag);
+        return mpp_enc_notify_v2(mEnc, flag);
     } break;
     default : {
         mpp_err("unsupport context type %d\n", mType);
@@ -870,7 +1043,8 @@ MPP_RET Mpp::notify(MppBufferGroup group)
     switch (mType) {
     case MPP_CTX_DEC : {
         if (group == mFrameGroup)
-            ret = notify(MPP_DEC_NOTIFY_BUFFER_VALID);
+            ret = notify(MPP_DEC_NOTIFY_BUFFER_VALID |
+                         MPP_DEC_NOTIFY_BUFFER_MATCH);
     } break;
     default : {
     } break;

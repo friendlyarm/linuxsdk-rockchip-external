@@ -11,7 +11,7 @@ struct drm_bo {
     int fb_id;
 };
 
-int drm_init(int num, int bpp);
+int drm_init(int bpp);
 int drm_deinit(void);
 char * getdrmdispbuff(void);
 int getdrmdispinfo(struct drm_bo *bo, int *w, int *h);

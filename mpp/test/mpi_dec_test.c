@@ -23,21 +23,17 @@
 #include <string.h>
 #include "rk_mpi.h"
 
-#include "mpp_log.h"
 #include "mpp_mem.h"
 #include "mpp_env.h"
 #include "mpp_time.h"
 #include "mpp_common.h"
-
+#include "mpi_dec_utils.h"
 #include "utils.h"
-
-#define MPI_DEC_LOOP_COUNT          4
-#define MPI_DEC_STREAM_SIZE         (SZ_4K)
-#define MAX_FILE_NAME_LENGTH        256
 
 typedef struct {
     MppCtx          ctx;
     MppApi          *mpi;
+    RK_U32          quiet;
 
     /* end of stream flag when set quit the loop */
     RK_U32          eos;
@@ -58,49 +54,13 @@ typedef struct {
     RK_S32          frame_count;
     RK_S32          frame_num;
     size_t          max_usage;
+    FileReader      reader;
 } MpiDecLoopData;
 
-typedef struct {
-    char            file_input[MAX_FILE_NAME_LENGTH];
-    char            file_output[MAX_FILE_NAME_LENGTH];
-    char            file_config[MAX_FILE_NAME_LENGTH];
-    MppCodingType   type;
-    MppFrameFormat  format;
-    RK_U32          width;
-    RK_U32          height;
-    RK_U32          debug;
-
-    RK_U32          have_input;
-    RK_U32          have_output;
-    RK_U32          have_config;
-
-    RK_U32          simple;
-    RK_S32          timeout;
-    RK_S32          frame_num;
-    size_t          pkt_size;
-
-    // report information
-    size_t          max_usage;
-} MpiDecTestCmd;
-
-static OptionInfo mpi_dec_cmd[] = {
-    {"i",               "input_file",           "input bitstream file"},
-    {"o",               "output_file",          "output bitstream file, "},
-    {"c",               "ops_file",             "input operation config file"},
-    {"w",               "width",                "the width of input bitstream"},
-    {"h",               "height",               "the height of input bitstream"},
-    {"t",               "type",                 "input stream coding type"},
-    {"f",               "format",               "output frame format type"},
-    {"d",               "debug",                "debug flag"},
-    {"x",               "timeout",              "output timeout interval"},
-    {"n",               "frame_number",         "max output frame number"},
-};
-
-static int decode_simple(MpiDecLoopData *data)
+static int dec_simple(MpiDecLoopData *data)
 {
     RK_U32 pkt_done = 0;
     RK_U32 pkt_eos  = 0;
-    RK_U32 err_info = 0;
     MPP_RET ret = MPP_OK;
     MppCtx ctx  = data->ctx;
     MppApi *mpi = data->mpi;
@@ -109,6 +69,8 @@ static int decode_simple(MpiDecLoopData *data)
     MppFrame  frame  = NULL;
     size_t read_size = 0;
     size_t packet_size = data->packet_size;
+    FileReader reader = data->reader;
+    RK_U32 quiet = data->quiet;
 
     do {
         if (data->fp_config) {
@@ -129,12 +91,12 @@ static int decode_simple(MpiDecLoopData *data)
 
                     // parser for reset message at the end
                     if (0 == strncmp("rst", info.cmd, 3)) {
-                        mpp_log("get reset cmd\n");
+                        mpp_log("%p get reset cmd\n", ctx);
                         packet_size = 0;
                         break;
                     }
                 } else {
-                    mpp_log("get end of cfg file\n");
+                    mpp_log("%p get end of cfg file\n", ctx);
                     packet_size = 0;
                     break;
                 }
@@ -142,32 +104,30 @@ static int decode_simple(MpiDecLoopData *data)
         }
 
         // when packet size is valid read the input binary file
-        if (packet_size)
-            read_size = fread(buf, 1, packet_size, data->fp_input);
+        if (packet_size) {
 
-        if (!packet_size || read_size != packet_size || feof(data->fp_input)) {
-            mpp_log("get error and check frame_num\n");
-            if (data->frame_num < 0) {
-                clearerr(data->fp_input);
-                rewind(data->fp_input);
-                if (data->fp_config) {
-                    clearerr(data->fp_config);
-                    rewind(data->fp_config);
+            data->eos = pkt_eos = reader_read(reader, &buf, &read_size);
+
+            if (pkt_eos) {
+                if (data->frame_num < 0) {
+                    mpp_log_q(quiet, "%p loop again\n", ctx);
+                    reader_rewind(reader);
+                    if (data->fp_config) {
+                        clearerr(data->fp_config);
+                        rewind(data->fp_config);
+                    }
+                    data->eos = pkt_eos = 0;
+                } else {
+                    mpp_log_q(quiet, "%p found last packet\n", ctx);
+                    break;
                 }
-                data->eos = pkt_eos = 0;
-                mpp_log("loop again\n");
-            } else {
-                // setup eos flag
-                data->eos = pkt_eos = 1;
-                mpp_log("found last packet\n");
-                break;
             }
         }
     } while (!read_size);
 
-    // write data to packet
-    mpp_packet_write(packet, 0, buf, read_size);
-    // reset pos and set valid length
+    mpp_packet_set_data(packet, buf);
+    if (read_size > mpp_packet_get_size(packet))
+        mpp_packet_set_size(packet, read_size);
     mpp_packet_set_pos(packet, buf);
     mpp_packet_set_length(packet, read_size);
     // setup eos flag
@@ -196,10 +156,10 @@ static int decode_simple(MpiDecLoopData *data)
                     msleep(2);
                     goto try_again;
                 }
-                mpp_err("decode_get_frame failed too much time\n");
+                mpp_err("%p decode_get_frame failed too much time\n", ctx);
             }
-            if (MPP_OK != ret) {
-                mpp_err("decode_get_frame failed ret %d\n", ret);
+            if (ret) {
+                mpp_err("%p decode_get_frame failed ret %d\n", ret, ctx);
                 break;
             }
 
@@ -211,9 +171,9 @@ static int decode_simple(MpiDecLoopData *data)
                     RK_U32 ver_stride = mpp_frame_get_ver_stride(frame);
                     RK_U32 buf_size = mpp_frame_get_buf_size(frame);
 
-                    mpp_log("decode_get_frame get info changed found\n");
-                    mpp_log("decoder require buffer w:h [%d:%d] stride [%d:%d] buf_size %d",
-                            width, height, hor_stride, ver_stride, buf_size);
+                    mpp_log_q(quiet, "%p decode_get_frame get info changed found\n", ctx);
+                    mpp_log_q(quiet, "%p decoder require buffer w:h [%d:%d] stride [%d:%d] buf_size %d",
+                              ctx, width, height, hor_stride, ver_stride, buf_size);
 
                     /*
                      * NOTE: We can choose decoder's buffer mode here.
@@ -279,21 +239,21 @@ static int decode_simple(MpiDecLoopData *data)
                         /* If buffer group is not set create one and limit it */
                         ret = mpp_buffer_group_get_internal(&data->frm_grp, MPP_BUFFER_TYPE_ION);
                         if (ret) {
-                            mpp_err("get mpp buffer group failed ret %d\n", ret);
+                            mpp_err("%p get mpp buffer group failed ret %d\n", ctx, ret);
                             break;
                         }
 
                         /* Set buffer to mpp decoder */
                         ret = mpi->control(ctx, MPP_DEC_SET_EXT_BUF_GROUP, data->frm_grp);
                         if (ret) {
-                            mpp_err("set buffer group failed ret %d\n", ret);
+                            mpp_err("%p set buffer group failed ret %d\n", ctx, ret);
                             break;
                         }
                     } else {
                         /* If old buffer group exist clear it */
                         ret = mpp_buffer_group_clear(data->frm_grp);
                         if (ret) {
-                            mpp_err("clear buffer group failed ret %d\n", ret);
+                            mpp_err("%p clear buffer group failed ret %d\n", ctx, ret);
                             break;
                         }
                     }
@@ -301,7 +261,7 @@ static int decode_simple(MpiDecLoopData *data)
                     /* Use limit config to limit buffer count to 24 with buf_size */
                     ret = mpp_buffer_group_limit_config(data->frm_grp, buf_size, 24);
                     if (ret) {
-                        mpp_err("limit buffer group failed ret %d\n", ret);
+                        mpp_err("%p limit buffer group failed ret %d\n", ctx, ret);
                         break;
                     }
 
@@ -311,17 +271,36 @@ static int decode_simple(MpiDecLoopData *data)
                      */
                     ret = mpi->control(ctx, MPP_DEC_SET_INFO_CHANGE_READY, NULL);
                     if (ret) {
-                        mpp_err("info change ready failed ret %d\n", ret);
+                        mpp_err("%p info change ready failed ret %d\n", ctx, ret);
                         break;
                     }
                 } else {
-                    err_info = mpp_frame_get_errinfo(frame) | mpp_frame_get_discard(frame);
-                    if (err_info) {
-                        mpp_log("decoder_get_frame get err info:%d discard:%d.\n",
-                                mpp_frame_get_errinfo(frame), mpp_frame_get_discard(frame));
+                    char log_buf[256];
+                    RK_S32 log_size = sizeof(log_buf) - 1;
+                    RK_S32 log_len = 0;
+                    RK_U32 err_info = mpp_frame_get_errinfo(frame);
+                    RK_U32 discard = mpp_frame_get_discard(frame);
+
+                    log_len += snprintf(log_buf + log_len, log_size - log_len,
+                                        "decode get frame %d", data->frame_count);
+
+                    if (mpp_frame_has_meta(frame)) {
+                        MppMeta meta = mpp_frame_get_meta(frame);
+                        RK_S32 temporal_id = 0;
+
+                        mpp_meta_get_s32(meta, KEY_TEMPORAL_ID, &temporal_id);
+
+                        log_len += snprintf(log_buf + log_len, log_size - log_len,
+                                            " tid %d", temporal_id);
                     }
+
+                    if (err_info || discard) {
+                        log_len += snprintf(log_buf + log_len, log_size - log_len,
+                                            " err %x discard %x", err_info, discard);
+                    }
+                    mpp_log_q(quiet, "%p %s\n", ctx, log_buf);
+
                     data->frame_count++;
-                    mpp_log("decode_get_frame get frame %d\n", data->frame_count);
                     if (data->fp_output && !err_info)
                         dump_mpp_frame_to_file(frame, data->fp_output);
                 }
@@ -345,7 +324,7 @@ static int decode_simple(MpiDecLoopData *data)
             }
 
             if (frm_eos) {
-                mpp_log("found last frame\n");
+                mpp_log_q(quiet, "%p found last packet\n", ctx);
                 break;
             }
 
@@ -361,7 +340,7 @@ static int decode_simple(MpiDecLoopData *data)
 
         if (data->frame_num > 0 && data->frame_count >= data->frame_num) {
             data->eos = 1;
-            mpp_log("reach max frame number %d\n", data->frame_count);
+            mpp_log_q(quiet, "%p reach max frame number %d\n", ctx, data->frame_count);
             break;
         }
 
@@ -381,7 +360,7 @@ static int decode_simple(MpiDecLoopData *data)
     return ret;
 }
 
-static int decode_advanced(MpiDecLoopData *data)
+static int dec_advanced(MpiDecLoopData *data)
 {
     RK_U32 pkt_eos  = 0;
     MPP_RET ret = MPP_OK;
@@ -392,12 +371,17 @@ static int decode_advanced(MpiDecLoopData *data)
     MppFrame  frame  = data->frame;
     MppTask task = NULL;
     size_t read_size = fread(buf, 1, data->packet_size, data->fp_input);
+    RK_U32 quiet = data->quiet;
 
     if (read_size != data->packet_size || feof(data->fp_input)) {
-        mpp_log("found last packet\n");
-
-        // setup eos flag
-        data->eos = pkt_eos = 1;
+        if (data->frame_num < 0) {
+            clearerr(data->fp_input);
+            rewind(data->fp_input);
+        } else {
+            mpp_log_q(quiet, "%p found last packet\n", ctx);
+            // setup eos flag
+            data->eos = pkt_eos = 1;
+        }
     }
 
     // reset pos
@@ -409,13 +393,13 @@ static int decode_advanced(MpiDecLoopData *data)
 
     ret = mpi->poll(ctx, MPP_PORT_INPUT, MPP_POLL_BLOCK);
     if (ret) {
-        mpp_err("mpp input poll failed\n");
+        mpp_err("%p mpp input poll failed\n", ctx);
         return ret;
     }
 
     ret = mpi->dequeue(ctx, MPP_PORT_INPUT, &task);  /* input queue */
     if (ret) {
-        mpp_err("mpp task input dequeue failed\n");
+        mpp_err("%p mpp task input dequeue failed\n", ctx);
         return ret;
     }
 
@@ -426,20 +410,20 @@ static int decode_advanced(MpiDecLoopData *data)
 
     ret = mpi->enqueue(ctx, MPP_PORT_INPUT, task);  /* input queue */
     if (ret) {
-        mpp_err("mpp task input enqueue failed\n");
+        mpp_err("%p mpp task input enqueue failed\n", ctx);
         return ret;
     }
 
     /* poll and wait here */
     ret = mpi->poll(ctx, MPP_PORT_OUTPUT, MPP_POLL_BLOCK);
     if (ret) {
-        mpp_err("mpp output poll failed\n");
+        mpp_err("%p mpp output poll failed\n", ctx);
         return ret;
     }
 
     ret = mpi->dequeue(ctx, MPP_PORT_OUTPUT, &task); /* output queue */
     if (ret) {
-        mpp_err("mpp task output dequeue failed\n");
+        mpp_err("%p mpp task output dequeue failed\n", ctx);
         return ret;
     }
 
@@ -455,23 +439,32 @@ static int decode_advanced(MpiDecLoopData *data)
             if (data->fp_output)
                 dump_mpp_frame_to_file(frame, data->fp_output);
 
+            mpp_log_q(quiet, "%p decoded frame %d\n", ctx, data->frame_count);
             data->frame_count++;
-            mpp_log("decoded frame %d\n", data->frame_count);
 
-            if (mpp_frame_get_eos(frame_out))
-                mpp_log("found eos frame\n");
+            if (mpp_frame_get_eos(frame_out)) {
+                mpp_log_q(quiet, "%p found eos frame\n", ctx);
+            }
+        }
+
+        if (data->frame_num > 0 && data->frame_count >= data->frame_num) {
+            data->eos = 1;
+        } else {
+            data->eos = 0;
+            clearerr(data->fp_input);
+            rewind(data->fp_input);
         }
 
         /* output queue */
         ret = mpi->enqueue(ctx, MPP_PORT_OUTPUT, task);
         if (ret)
-            mpp_err("mpp task output enqueue failed\n");
+            mpp_err("%p mpp task output enqueue failed\n", ctx);
     }
 
     return ret;
 }
 
-int mpi_dec_test_decode(MpiDecTestCmd *cmd)
+int dec_decode(MpiDecTestCmd *cmd)
 {
     MPP_RET ret         = MPP_OK;
     size_t file_size    = 0;
@@ -494,12 +487,15 @@ int mpi_dec_test_decode(MpiDecTestCmd *cmd)
     RK_U32 height       = cmd->height;
     MppCodingType type  = cmd->type;
 
+    // config for runtime mode
+    MppDecCfg cfg       = NULL;
+
     // resources
     char *buf           = NULL;
     size_t packet_size  = cmd->pkt_size;
     MppBuffer pkt_buf   = NULL;
     MppBuffer frm_buf   = NULL;
-
+    FileReader reader   = NULL;
     MpiDecLoopData data;
 
     mpp_log("mpi_dec_test start\n");
@@ -535,13 +531,8 @@ int mpi_dec_test_decode(MpiDecTestCmd *cmd)
     }
 
     if (cmd->simple) {
-        buf = mpp_malloc(char, packet_size);
-        if (NULL == buf) {
-            mpp_err("mpi_dec_test malloc input stream buffer failed\n");
-            goto MPP_TEST_OUT;
-        }
-
-        ret = mpp_packet_init(&packet, buf, packet_size);
+        reader_init(&reader, cmd->file_input, data.fp_input);
+        ret = mpp_packet_init(&packet, NULL, 0);
         if (ret) {
             mpp_err("mpp_packet_init failed\n");
             goto MPP_TEST_OUT;
@@ -563,7 +554,7 @@ int mpi_dec_test_decode(MpiDecTestCmd *cmd)
         }
 
         ret = mpp_frame_init(&frame); /* output frame */
-        if (MPP_OK != ret) {
+        if (ret) {
             mpp_err("mpp_frame_init failed\n");
             goto MPP_TEST_OUT;
         }
@@ -597,22 +588,23 @@ int mpi_dec_test_decode(MpiDecTestCmd *cmd)
         mpp_frame_set_buffer(frame, frm_buf);
     }
 
-    mpp_log("mpi_dec_test decoder test start w %d h %d type %d\n", width, height, type);
-
     // decoder demo
     ret = mpp_create(&ctx, &mpi);
 
-    if (MPP_OK != ret) {
+    if (ret) {
         mpp_err("mpp_create failed\n");
         goto MPP_TEST_OUT;
     }
+
+    mpp_log("%p mpi_dec_test decoder test start w %d h %d type %d\n",
+            ctx, width, height, type);
 
     // NOTE: decoder split mode need to be set before init
     mpi_cmd = MPP_DEC_SET_PARSER_SPLIT_MODE;
     param = &need_split;
     ret = mpi->control(ctx, mpi_cmd, param);
     if (MPP_OK != ret) {
-        mpp_err("mpi->control failed\n");
+        mpp_err("%p mpi->control failed\n", ctx);
         goto MPP_TEST_OUT;
     }
 
@@ -623,15 +615,41 @@ int mpi_dec_test_decode(MpiDecTestCmd *cmd)
     if (timeout) {
         param = &timeout;
         ret = mpi->control(ctx, MPP_SET_OUTPUT_TIMEOUT, param);
-        if (MPP_OK != ret) {
-            mpp_err("Failed to set output timeout %d ret %d\n", timeout, ret);
+        if (ret) {
+            mpp_err("%p failed to set output timeout %d ret %d\n",
+                    ctx, timeout, ret);
             goto MPP_TEST_OUT;
         }
     }
 
     ret = mpp_init(ctx, MPP_CTX_DEC, type);
-    if (MPP_OK != ret) {
-        mpp_err("mpp_init failed\n");
+    if (ret) {
+        mpp_err("%p mpp_init failed\n", ctx);
+        goto MPP_TEST_OUT;
+    }
+
+    mpp_dec_cfg_init(&cfg);
+
+    /* get default config from decoder context */
+    ret = mpi->control(ctx, MPP_DEC_GET_CFG, cfg);
+    if (ret) {
+        mpp_err("%p failed to get decoder cfg ret %d\n", ctx, ret);
+        goto MPP_TEST_OUT;
+    }
+
+    /*
+     * split_parse is to enable mpp internal frame spliter when the input
+     * packet is not aplited into frames.
+     */
+    ret = mpp_dec_cfg_set_u32(cfg, "base:split_parse", need_split);
+    if (ret) {
+        mpp_err("%p failed to set split_parse ret %d\n", ctx, ret);
+        goto MPP_TEST_OUT;
+    }
+
+    ret = mpi->control(ctx, MPP_DEC_SET_CFG, cfg);
+    if (ret) {
+        mpp_err("%p failed to set cfg %p ret %d\n", ctx, cfg, ret);
         goto MPP_TEST_OUT;
     }
 
@@ -644,33 +662,59 @@ int mpi_dec_test_decode(MpiDecTestCmd *cmd)
     data.frame          = frame;
     data.frame_count    = 0;
     data.frame_num      = cmd->frame_num;
+    data.reader         = reader;
+    data.quiet          = cmd->quiet;
 
     if (cmd->simple) {
         while (!data.eos) {
-            decode_simple(&data);
+            dec_simple(&data);
         }
     } else {
         /* NOTE: change output format before jpeg decoding */
-        if (cmd->format < MPP_FMT_BUTT)
+        if (MPP_FRAME_FMT_IS_YUV(cmd->format) || MPP_FRAME_FMT_IS_RGB(cmd->format)) {
             ret = mpi->control(ctx, MPP_DEC_SET_OUTPUT_FORMAT, &cmd->format);
+            if (ret) {
+                mpp_err("Failed to set output format %d\n", cmd->format);
+                goto MPP_TEST_OUT;
+            }
+        }
 
         while (!data.eos) {
-            decode_advanced(&data);
+            dec_advanced(&data);
         }
     }
 
     cmd->max_usage = data.max_usage;
+    {
+        MppDecQueryCfg query;
+
+        memset(&query, 0, sizeof(query));
+        query.query_flag = MPP_DEC_QUERY_ALL;
+        ret = mpi->control(ctx, MPP_DEC_QUERY, &query);
+        if (ret) {
+            mpp_err("%p mpi->control query failed\n", ctx);
+            goto MPP_TEST_OUT;
+        }
+
+        /*
+         * NOTE:
+         * 1. Output frame count included info change frame and empty eos frame.
+         * 2. Hardware run count is real decoded frame count.
+         */
+        mpp_log("%p input %d pkt output %d frm decode %d frames\n", ctx,
+                query.dec_in_pkt_cnt, query.dec_out_frm_cnt, query.dec_hw_run_cnt);
+    }
 
     ret = mpi->reset(ctx);
-    if (MPP_OK != ret) {
-        mpp_err("mpi->reset failed\n");
+    if (ret) {
+        mpp_err("%p mpi->reset failed\n", ctx);
         goto MPP_TEST_OUT;
     }
 
 MPP_TEST_OUT:
-    if (packet) {
-        mpp_packet_deinit(&packet);
-        packet = NULL;
+    if (data.packet) {
+        mpp_packet_deinit(&data.packet);
+        data.packet = NULL;
     }
 
     if (frame) {
@@ -684,10 +728,7 @@ MPP_TEST_OUT:
     }
 
     if (cmd->simple) {
-        if (buf) {
-            mpp_free(buf);
-            buf = NULL;
-        }
+        reader_deinit(&reader);
     } else {
         if (pkt_buf) {
             mpp_buffer_put(pkt_buf);
@@ -720,175 +761,12 @@ MPP_TEST_OUT:
         data.fp_input = NULL;
     }
 
+    if (cfg) {
+        mpp_dec_cfg_deinit(cfg);
+        cfg = NULL;
+    }
+
     return ret;
-}
-
-static void mpi_dec_test_help()
-{
-    mpp_log("usage: mpi_dec_test [options]\n");
-    show_options(mpi_dec_cmd);
-    mpp_show_support_format();
-}
-
-static RK_S32 mpi_dec_test_parse_options(int argc, char **argv, MpiDecTestCmd* cmd)
-{
-    const char *opt;
-    const char *next;
-    RK_S32 optindex = 1;
-    RK_S32 handleoptions = 1;
-    RK_S32 err = MPP_NOK;
-
-    if ((argc < 2) || (cmd == NULL)) {
-        err = 1;
-        return err;
-    }
-
-    /* parse options */
-    while (optindex < argc) {
-        opt  = (const char*)argv[optindex++];
-        next = (const char*)argv[optindex];
-
-        if (handleoptions && opt[0] == '-' && opt[1] != '\0') {
-            if (opt[1] == '-') {
-                if (opt[2] != '\0') {
-                    opt++;
-                } else {
-                    handleoptions = 0;
-                    continue;
-                }
-            }
-
-            opt++;
-
-            switch (*opt) {
-            case 'i':
-                if (next) {
-                    strncpy(cmd->file_input, next, MAX_FILE_NAME_LENGTH);
-                    cmd->file_input[strlen(next)] = '\0';
-                    cmd->have_input = 1;
-                } else {
-                    mpp_err("input file is invalid\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'o':
-                if (next) {
-                    strncpy(cmd->file_output, next, MAX_FILE_NAME_LENGTH);
-                    cmd->file_output[strlen(next)] = '\0';
-                    cmd->have_output = 1;
-                } else {
-                    mpp_log("output file is invalid\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'c':
-                if (next) {
-                    strncpy(cmd->file_config, next, MAX_FILE_NAME_LENGTH);
-                    cmd->file_config[strlen(next)] = '\0';
-                    cmd->have_config = 1;
-
-                    // enlarge packet buffer size for large input stream case
-                    cmd->pkt_size = SZ_1M;
-                } else {
-                    mpp_log("output file is invalid\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'd':
-                if (next) {
-                    cmd->debug = atoi(next);;
-                } else {
-                    mpp_err("invalid debug flag\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'w':
-                if (next) {
-                    cmd->width = atoi(next);
-                } else {
-                    mpp_err("invalid input width\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'h':
-                if ((*(opt + 1) != '\0') && !strncmp(opt, "help", 4)) {
-                    mpi_dec_test_help();
-                    err = 1;
-                    goto PARSE_OPINIONS_OUT;
-                } else if (next) {
-                    cmd->height = atoi(next);
-                } else {
-                    mpp_log("input height is invalid\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 't':
-                if (next) {
-                    cmd->type = (MppCodingType)atoi(next);
-                    err = mpp_check_support_format(MPP_CTX_DEC, cmd->type);
-                }
-
-                if (!next || err) {
-                    mpp_err("invalid input coding type\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'f':
-                if (next) {
-                    cmd->format = (MppFrameFormat)atoi(next);
-                }
-
-                if (!next || err) {
-                    mpp_err("invalid input coding type\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'x':
-                if (next) {
-                    cmd->timeout = atoi(next);
-                }
-
-                if (!next || cmd->timeout < 0) {
-                    mpp_err("invalid output timeout interval\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            case 'n':
-                if (next) {
-                    cmd->frame_num = atoi(next);
-                    if (cmd->frame_num < 0)
-                        mpp_log("infinite loop decoding mode\n");
-                } else {
-                    mpp_err("invalid frame number\n");
-                    goto PARSE_OPINIONS_OUT;
-                }
-                break;
-            default:
-                goto PARSE_OPINIONS_OUT;
-                break;
-            }
-
-            optindex++;
-        }
-    }
-
-    err = 0;
-
-PARSE_OPINIONS_OUT:
-    return err;
-}
-
-static void mpi_dec_test_show_options(MpiDecTestCmd* cmd)
-{
-    mpp_log("cmd parse result:\n");
-    mpp_log("input  file name: %s\n", cmd->file_input);
-    mpp_log("output file name: %s\n", cmd->file_output);
-    mpp_log("config file name: %s\n", cmd->file_config);
-    mpp_log("width      : %4d\n", cmd->width);
-    mpp_log("height     : %4d\n", cmd->height);
-    mpp_log("type       : %d\n", cmd->type);
-    mpp_log("debug flag : %x\n", cmd->debug);
-    mpp_log("max frames : %d\n", cmd->frame_num);
 }
 
 int main(int argc, char **argv)
@@ -918,7 +796,7 @@ int main(int argc, char **argv)
 
     cmd->simple = (cmd->type != MPP_VIDEO_CodingMJPEG) ? (1) : (0);
 
-    ret = mpi_dec_test_decode(cmd);
+    ret = dec_decode(cmd);
     if (MPP_OK == ret)
         mpp_log("test success max memory %.2f MB\n", cmd->max_usage / (float)(1 << 20));
     else

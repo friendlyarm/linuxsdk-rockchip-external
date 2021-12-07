@@ -230,6 +230,7 @@ protected:
 class AiqAfHandler
     : public AfHandler
 {
+    friend class RKiqCompositor;
 public:
     explicit AiqAfHandler (SmartPtr<RKiqCompositor> &aiq_compositor);
     ~AiqAfHandler () {}
@@ -262,8 +263,22 @@ public:
         return _params.color_effect;
     }
     XCamReturn processToneMapsMetaResults(CamerIcIspGocConfig_t goc, X3aResultList &output);
-    XCamReturn processMiscMetaResults(X3aResultList &output);
-
+    XCamReturn processMiscMetaResults(struct CamIA10_Results &ia10_results, X3aResultList &output, bool first = false);
+    void processTuningToolModuleInfoMetaResults(CameraMetadata* metadata);
+    void processTuningToolSensorInfoMetaResults(CameraMetadata* metadata);
+    void processTuningToolProtocolInfoMetaResults(CameraMetadata* metadata);
+    void processTuningToolBlsMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolLscMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolCcmMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolAwbMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolAwbWpMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolAwbCurvMetaResults(CameraMetadata* metadata);
+    void processTuningToolAwbRefGainMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolGocMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolCprocMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolDpfMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processTuningToolFltMetaResults(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
+    void processExifMakernote(CameraMetadata* metadata, struct CamIA10_Results &ia10_results);
 private:
     XCamReturn initTonemaps();
     XCamReturn fillTonemapCurve(CamerIcIspGocConfig_t goc, AiqInputParams* inputParams, CameraMetadata* metadata);
@@ -273,10 +288,21 @@ private:
     float   *mRGammaLut;      /*!< [(P_IN, P_OUT), (P_IN, P_OUT), ..] */
     float   *mGGammaLut;      /*!< [(P_IN, P_OUT), (P_IN, P_OUT), ..] */
     float   *mBGammaLut;      /*!< [(P_IN, P_OUT), (P_IN, P_OUT), ..] */
-
+    bool _stillcap_sync_needed;
+    typedef enum stillcap_sync_state_e {
+       STILLCAP_SYNC_STATE_IDLE,
+       STILLCAP_SYNC_STATE_WAITING_START,
+       STILLCAP_SYNC_STATE_START,
+       STILLCAP_SYNC_STATE_WAITING_END
+    } stillcap_sync_state_t;
+    stillcap_sync_state_t _stillcap_sync_state;
+    int _flash_stillcap_reg_time;
+    int _flash_stillcap_reg_gain;
 protected:
     SmartPtr<RKiqCompositor>     _aiq_compositor;
     ia_aiq_gbce_results        *_gbce_result;
+    char                       _iq_name[100];
+    CamOTPGlobal_t             _otp_info;
 };
 
 class RKiqCompositor {
@@ -288,6 +314,7 @@ public:
     void set_awb_handler (SmartPtr<AiqAwbHandler> &handler);
     void set_af_handler (SmartPtr<AiqAfHandler> &handler);
     void set_common_handler (SmartPtr<AiqCommonHandler> &handler);
+    void pre_process_3A_states();
 
     void set_frame_use (ia_aiq_frame_use value) {
         _frame_use = value;
@@ -306,11 +333,20 @@ public:
     double get_framerate () {
         return _framerate;
     }
+    void set_iq_name(char *iq_name)
+    {
+        if(iq_name)
+           strcpy(_common_handler->_iq_name, iq_name);
+    }
+    void set_otp_info(CamOTPGlobal_t &otp_info)
+    {
+        _common_handler->_otp_info = otp_info;
+    }
     bool open (ia_binary_data &cpf);
     void close ();
 
     bool init_dynamic_config ();
-    bool set_sensor_mode_data (struct isp_supplemental_sensor_mode_data *sensor_mode);
+    bool set_sensor_mode_data (struct isp_supplemental_sensor_mode_data *sensor_mode, bool first = false);
     struct CamIA10_SensorModeData &get_sensor_mode_data() { return _ia_stat.sensor_mode; };
     bool set_3a_stats (SmartPtr<X3aIspStatistics> &stats);
     struct CamIA10_Stats& get_3a_ia10_stats () { return _ia_stat; };
@@ -318,6 +354,7 @@ public:
     bool set_vcm_time (struct rk_cam_vcm_tim *vcm_tim);
     bool set_frame_softime (int64_t sof_tim);
     bool set_effect_ispparams (struct rkisp_parameters& isp_params);
+    bool set_flash_status_info (rkisp_flash_setting_t& flash_info);
 
     ia_aiq  * get_handle () {
         return _ia_handle;
@@ -326,7 +363,7 @@ public:
         return _frame_use;
     }
 
-    XCamReturn integrate (  X3aResultList &results);
+    XCamReturn integrate (  X3aResultList &results, bool first = false);
 
     SmartPtr<X3aResult> generate_3a_configs (struct rkisp_parameters *parameters);
     void convert_window_to_ia (const XCam3AWindow &window, ia_rectangle &ia_window);
@@ -346,10 +383,23 @@ private:
     double calculate_value_by_factor (double factor, double min, double mid, double max);
 
     XCAM_DEAD_COPY (RKiqCompositor);
-
+    void tuning_tool_set_bls();
+    void tuning_tool_set_lsc();
+    void tuning_tool_set_ccm(CamIA10_AWB_Result_t &awb_results);
+    void tuning_tool_set_awb();
+    void tuning_tool_set_awb_wp();
+    void tuning_tool_set_awb_curve();
+    void tuning_tool_set_awb_refgain();
+    void tuning_tool_set_goc();
+    void tuning_tool_set_cproc();
+    void tuning_tool_set_dpf();
+    void tuning_tool_set_flt();
+    void tuning_tool_restart_engine();
+    void tuning_tool_process(struct CamIA10_Results &ia10_results);
 public:
     Isp10Engine* _isp10_engine;
-
+    struct rkisp_parameters    tool_isp_params;
+    bool                       _tuning_flag;
 private:
     SmartPtr<X3aHandlerManager> _handle_manager;
     XCamAEDescription* _ae_desc;
@@ -387,6 +437,17 @@ private:
     uint32_t                   _height;
     double                     _framerate;
     uint32_t                   _all_stats_meas_types;
+    bool _delay_still_capture;
+    int32_t _capture_to_preview_delay;
+    rkisp_flash_setting_t _flash_old_setting;
+    char                       _iq_name[64];
+    bool                       _flt_en_for_tool;
+    bool                       _ctk_en_for_tool;
+    bool                       _dpf_en_for_tool;
+    bool                       _skip_frame;
+    struct CamIA10_Results     _results_for_tool = {0};
+    // processed request id
+    unsigned int    _procReqId;
 };
 
 };

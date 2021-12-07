@@ -55,7 +55,7 @@ static int is_yuv_format(int fmt)
         return 1;
     }
 
-    return -1;
+    return 0;
 }
 
 static int is_rgb_format(int fmt)
@@ -64,7 +64,7 @@ static int is_rgb_format(int fmt)
         return 1;
     }
 
-    return -1;
+    return 0;
 }
 
 static RgaFormat rga_fmt_map(MppFrameFormat fmt)
@@ -118,7 +118,7 @@ MPP_RET rga_init(RgaCtx *ctx)
         goto END;
     }
 
-    impl->rga_fd = open(DEFAULT_RGA_DEV, O_RDWR, 0);
+    impl->rga_fd = open(DEFAULT_RGA_DEV, O_RDWR | O_CLOEXEC, 0);
     if (impl->rga_fd < 0) {
         mpp_err_f("open device failed\n");
         mpp_free(impl);
@@ -248,7 +248,7 @@ MPP_RET rga_control(RgaCtx ctx, RgaCmd cmd, void *param)
         }
 
         MppFrame *src = (MppFrame *)param;
-        config_rga_image(&request->src, src);
+        ret = config_rga_image(&request->src, src);
     } break;
     case RGA_CMD_SET_DST : {
         if (NULL == param) {
@@ -258,7 +258,7 @@ MPP_RET rga_control(RgaCtx ctx, RgaCmd cmd, void *param)
         }
 
         MppFrame *dst = (MppFrame *)param;
-        config_rga_image(&request->dst, dst);
+        ret = config_rga_image(&request->dst, dst);
         // When config dst setup default clip
         RK_U32 width  = mpp_frame_get_width(dst);
         RK_U32 height = mpp_frame_get_height(dst);

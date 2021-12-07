@@ -58,9 +58,6 @@
 #include "sysvideo.h"
 #include "pixels_c.h"
 #include "fbvideo.h"
-#include "fb3dfx.h"
-#include "fbmatrox.h"
-#include "fbneomagic.h"
 
 #ifdef _MGGAL_SIGMA8654 
 extern int sigma8654_hdmi_init();

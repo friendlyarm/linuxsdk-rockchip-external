@@ -1,5 +1,7 @@
 # vim: syntax=cmake
 
+add_subdirectory(common)
+
 if( HAVE_H263D )
     add_subdirectory(h263d)
 endif()
@@ -30,4 +32,8 @@ endif()
 
 if( HAVE_VP8E)
     add_subdirectory(vp8e)
+endif()
+
+if(HAVE_H265E)
+    add_subdirectory(h265e)
 endif()

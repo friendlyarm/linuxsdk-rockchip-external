@@ -25,7 +25,6 @@
 #include "mpp_log.h"
 #include "mpp_env.h"
 #include "mpp_packet_impl.h"
-#include "mpp_buffer_impl.h"
 
 #include "avsd_syntax.h"
 #include "avsd_api.h"
@@ -163,7 +162,7 @@ MPP_RET avsd_flush(void *decoder)
 *   control/perform
 ***********************************************************************
 */
-MPP_RET avsd_control(void *decoder, RK_S32 cmd_type, void *param)
+MPP_RET avsd_control(void *decoder, MpiCmd cmd_type, void *param)
 {
     MPP_RET ret = MPP_ERR_UNKNOW;
 
@@ -294,7 +293,7 @@ MPP_RET avsd_callback(void *decoder, void *info)
 {
     MPP_RET ret = MPP_ERR_UNKNOW;
     AvsdCtx_t *p_dec = (AvsdCtx_t *)decoder;
-    IOCallbackCtx *ctx = (IOCallbackCtx *)info;
+    DecCbHalDone *ctx = (DecCbHalDone *)info;
 
     AVSD_PARSE_TRACE("In.");
     {

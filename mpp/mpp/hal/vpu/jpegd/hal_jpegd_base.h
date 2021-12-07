@@ -18,23 +18,9 @@
 #define __HAL_JPEGD_BASE_H__
 
 #include <stdio.h>
-#include "rk_type.h"
-#include "mpp_common.h"
-#include "mpp_mem.h"
+
+#include "mpp_hal.h"
 #include "mpp_device.h"
-
-#define EXTRA_INFO_MAGIC                      (0x4C4A46)
-
-typedef struct JpegdIocExtInfoSlot_t {
-    RK_U32                 reg_idx;
-    RK_U32                 offset;
-} JpegdIocExtInfoSlot;
-
-typedef struct JpegdIocExtInfo_t {
-    RK_U32                 magic; /* tell kernel that it is extra info */
-    RK_U32                 cnt;
-    JpegdIocExtInfoSlot    slots[5];
-} JpegdIocExtInfo;
 
 typedef struct PPInfo_t {
     /* PP parameters */
@@ -51,7 +37,9 @@ typedef struct PPInfo_t {
 typedef struct JpegdHalCtx {
     MppBufSlots            packet_slots;
     MppBufSlots            frame_slots;
-    MppDevCtx              dev_ctx;
+    MppDev                 dev;
+    MppClientType          dev_type;
+    RK_U32                 codec_type;
     void                   *regs;
     MppBufferGroup         group;
     MppBuffer              frame_buf;
@@ -63,14 +51,13 @@ typedef struct JpegdHalCtx {
     RK_U32                 hal_debug_enable;
     RK_U32                 frame_count;
     RK_U32                 output_yuv_count;
+    RK_U8                  scale;
 
     RK_S32                 pkt_fd;    /* input stream's physical address(fd) */
     RK_S32                 frame_fd;  /* output picture's physical address(fd) */
 
+    RK_U32                 have_pp;
     PPInfo                 pp_info;
-
-    FILE                   *fp_reg_in;
-    FILE                   *fp_reg_out;
 } JpegdHalCtx;
 
 #endif /* __HAL_JPEGD_COMMON_H__ */

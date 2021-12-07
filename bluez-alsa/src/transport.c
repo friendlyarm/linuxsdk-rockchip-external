@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -35,6 +36,18 @@
 #include "shared/log.h"
 
 
+static const char *transport_type_to_string(enum ba_transport_type type) {
+	switch (type) {
+	case TRANSPORT_TYPE_A2DP:
+		return "A2DP";
+	case TRANSPORT_TYPE_RFCOMM:
+		return "RFCOMM";
+	case TRANSPORT_TYPE_SCO:
+		return "SCO";
+	}
+	return "N/A";
+}
+
 static int io_thread_create(struct ba_transport *t) {
 
 	void *(*routine)(void *) = NULL;
@@ -47,7 +60,7 @@ static int io_thread_create(struct ba_transport *t) {
 			case A2DP_CODEC_SBC:
 				routine = io_thread_a2dp_source_sbc;
 				break;
-#if ENABLE_MP3
+#if ENABLE_MPEG
 			case A2DP_CODEC_MPEG12:
 				break;
 #endif
@@ -61,6 +74,11 @@ static int io_thread_create(struct ba_transport *t) {
 				routine = io_thread_a2dp_source_aptx;
 				break;
 #endif
+#if ENABLE_LDAC
+			case A2DP_CODEC_VENDOR_LDAC:
+				routine = io_thread_a2dp_source_ldac;
+				break;
+#endif
 			default:
 				warn("Codec not supported: %u", t->codec);
 			}
@@ -69,7 +87,7 @@ static int io_thread_create(struct ba_transport *t) {
 			case A2DP_CODEC_SBC:
 				routine = io_thread_a2dp_sink_sbc;
 				break;
-#if ENABLE_MP3
+#if ENABLE_MPEG
 			case A2DP_CODEC_MPEG12:
 				break;
 #endif
@@ -100,8 +118,9 @@ static int io_thread_create(struct ba_transport *t) {
 	}
 
 	pthread_setname_np(t->thread, "baio");
-	debug("Created new IO thread: %s",
-			bluetooth_profile_to_string(t->profile, t->codec));
+	debug("Created new IO thread: %s: %s",
+			transport_type_to_string(t->type),
+			bluetooth_profile_to_string(t->profile));
 	return 0;
 }
 
@@ -235,6 +254,8 @@ struct ba_transport *transport_new(
 	if (profile == BLUETOOTH_PROFILE_HSP_HS || profile == BLUETOOTH_PROFILE_HSP_AG)
 		t->codec = HFP_CODEC_CVSD;
 
+	pthread_mutex_init(&t->mutex, NULL);
+
 	t->state = TRANSPORT_IDLE;
 	t->thread = config.main_thread;
 
@@ -327,8 +348,6 @@ struct ba_transport *transport_new_rfcomm(
 	pthread_cond_init(&t_sco->sco.mic_pcm.drained, NULL);
 	pthread_mutex_init(&t_sco->sco.mic_pcm.drained_mn, NULL);
 
-	transport_set_state(t_sco, TRANSPORT_ACTIVE);
-
 	bluealsa_ctl_event(BA_EVENT_TRANSPORT_ADDED);
 	return t;
 
@@ -345,17 +364,16 @@ void transport_free(struct ba_transport *t) {
 		return;
 
 	t->state = TRANSPORT_LIMBO;
-	debug("Freeing transport: %s",
-			bluetooth_profile_to_string(t->profile, t->codec));
+	debug("Freeing transport: %s: %s (%s)",
+			transport_type_to_string(t->type),
+			bluetooth_profile_to_string(t->profile),
+			bluetooth_a2dp_codec_to_string(t->codec));
 
 	/* If the transport is active, prior to releasing resources, we have to
 	 * terminate the IO thread (or at least make sure it is not running any
 	 * more). Not doing so might result in an undefined behavior or even a
 	 * race condition (closed and reused file descriptor). */
-	if (!pthread_equal(t->thread, config.main_thread)) {
-		pthread_cancel(t->thread);
-		pthread_join(t->thread, NULL);
-	}
+	transport_pthread_cancel(t->thread);
 
 	/* if possible, try to release resources gracefully */
 	if (t->release != NULL)
@@ -367,6 +385,8 @@ void transport_free(struct ba_transport *t) {
 		close(t->sig_fd[0]);
 	if (t->sig_fd[1] != -1)
 		close(t->sig_fd[1]);
+
+	pthread_mutex_destroy(&t->mutex);
 
 	/* free type-specific resources */
 	switch (t->type) {
@@ -502,7 +522,7 @@ unsigned int transport_get_channels(const struct ba_transport *t) {
 				return 2;
 			}
 			break;
-#if ENABLE_MP3
+#if ENABLE_MPEG
 		case A2DP_CODEC_MPEG12:
 			switch (((a2dp_mpeg_t *)t->a2dp.cconfig)->channel_mode) {
 			case MPEG_CHANNEL_MODE_MONO:
@@ -530,6 +550,17 @@ unsigned int transport_get_channels(const struct ba_transport *t) {
 			case APTX_CHANNEL_MODE_MONO:
 				return 1;
 			case APTX_CHANNEL_MODE_STEREO:
+				return 2;
+			}
+			break;
+#endif
+#if ENABLE_LDAC
+		case A2DP_CODEC_VENDOR_LDAC:
+			switch (((a2dp_ldac_t *)t->a2dp.cconfig)->channel_mode) {
+			case LDAC_CHANNEL_MODE_MONO:
+				return 1;
+			case LDAC_CHANNEL_MODE_STEREO:
+			case LDAC_CHANNEL_MODE_DUAL_CHANNEL:
 				return 2;
 			}
 			break;
@@ -563,7 +594,7 @@ unsigned int transport_get_sampling(const struct ba_transport *t) {
 				return 48000;
 			}
 			break;
-#if ENABLE_MP3
+#if ENABLE_MPEG
 		case A2DP_CODEC_MPEG12:
 			switch (((a2dp_mpeg_t *)t->a2dp.cconfig)->frequency) {
 			case MPEG_SAMPLING_FREQ_16000:
@@ -625,18 +656,36 @@ unsigned int transport_get_sampling(const struct ba_transport *t) {
 			}
 			break;
 #endif
+#if ENABLE_LDAC
+		case A2DP_CODEC_VENDOR_LDAC:
+			switch (((a2dp_ldac_t *)t->a2dp.cconfig)->frequency) {
+			case LDAC_SAMPLING_FREQ_44100:
+				return 44100;
+			case LDAC_SAMPLING_FREQ_48000:
+				return 48000;
+			case LDAC_SAMPLING_FREQ_88200:
+				return 88200;
+			case LDAC_SAMPLING_FREQ_96000:
+				return 96000;
+			case LDAC_SAMPLING_FREQ_176400:
+				return 176400;
+			case LDAC_SAMPLING_FREQ_192000:
+				return 192000;
+			}
+			break;
+#endif
 		}
 		break;
 	case TRANSPORT_TYPE_RFCOMM:
 		break;
 	case TRANSPORT_TYPE_SCO:
 		switch (t->codec) {
-			case HFP_CODEC_CVSD:
-				return 8000;
-			case HFP_CODEC_MSBC:
-				return 16000;
-			default:
-				debug("Unsupported SCO codec: %#x", t->codec);
+		case HFP_CODEC_CVSD:
+			return 8000;
+		case HFP_CODEC_MSBC:
+			return 16000;
+		default:
+			debug("Unsupported SCO codec: %#x", t->codec);
 		}
 	}
 
@@ -658,7 +707,7 @@ int transport_set_volume(struct ba_transport *t, uint8_t ch1_muted, uint8_t ch2_
 		t->a2dp.ch1_volume = ch1_volume;
 		t->a2dp.ch2_volume = ch2_volume;
 
-		if (config.a2dp_volume) {
+		if (config.a2dp.volume) {
 			uint16_t volume = (ch1_muted | ch2_muted) ? 0 : MIN(ch1_volume, ch2_volume);
 			g_dbus_set_property(config.dbus, t->dbus_owner, t->dbus_path,
 					"org.bluez.MediaTransport1", "Volume", g_variant_new_uint16(volume));
@@ -698,17 +747,13 @@ int transport_set_state(struct ba_transport *t, enum ba_transport_state state) {
 			t->state == TRANSPORT_IDLE && state != TRANSPORT_PENDING)
 		return 0;
 
-	const int created = !pthread_equal(t->thread, config.main_thread);
 	int ret = 0;
 
 	t->state = state;
 
 	switch (state) {
 	case TRANSPORT_IDLE:
-		if (created) {
-			pthread_cancel(t->thread);
-			ret = pthread_join(t->thread, NULL);
-		}
+		transport_pthread_cancel(t->thread);
 		break;
 	case TRANSPORT_PENDING:
 		/* When transport is marked as pending, try to acquire transport, but only
@@ -719,7 +764,7 @@ int transport_set_state(struct ba_transport *t, enum ba_transport_state state) {
 		break;
 	case TRANSPORT_ACTIVE:
 	case TRANSPORT_PAUSED:
-		if (!created)
+		if (pthread_equal(t->thread, config.main_thread))
 			ret = io_thread_create(t);
 		break;
 	case TRANSPORT_LIMBO:
@@ -799,10 +844,10 @@ int transport_acquire_bt_a2dp(struct ba_transport *t) {
 	GUnixFDList *fd_list;
 	GError *err = NULL;
 
+	/* Check whether transport is already acquired - keep-alive mode. */
 	if (t->bt_fd != -1) {
-		warn("Closing dangling BT socket: %d", t->bt_fd);
-		close(t->bt_fd);
-		t->bt_fd = -1;
+		debug("Reusing transport: %d", t->bt_fd);
+		goto final;
 	}
 
 	msg = g_dbus_message_new_method_call(t->dbus_owner, t->dbus_path, "org.bluez.MediaTransport1",
@@ -831,6 +876,9 @@ int transport_acquire_bt_a2dp(struct ba_transport *t) {
 	if (setsockopt(t->bt_fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) == -1)
 		warn("Couldn't set socket output buffer size: %s", strerror(errno));
 
+	if (ioctl(t->bt_fd, TIOCOUTQ, &t->a2dp.bt_fd_coutq_init) == -1)
+		warn("Couldn't get socket queued bytes: %s", strerror(errno));
+
 	debug("New transport: %d (MTU: R:%zu W:%zu)", t->bt_fd, t->mtu_read, t->mtu_write);
 
 fail:
@@ -841,6 +889,8 @@ fail:
 		error("Couldn't acquire transport: %s", err->message);
 		g_error_free(err);
 	}
+
+final:
 	return t->bt_fd;
 }
 
@@ -856,8 +906,9 @@ int transport_release_bt_a2dp(struct ba_transport *t) {
 	if (t->bt_fd == -1)
 		return 0;
 
-	debug("Releasing transport: %s",
-			bluetooth_profile_to_string(t->profile, t->codec));
+	debug("Releasing transport: %s (%s)",
+			bluetooth_profile_to_string(t->profile),
+			bluetooth_a2dp_codec_to_string(t->codec));
 
 	/* If the state is idle, it means that either transport was not acquired, or
 	 * was released by the BlueZ. In both cases there is no point in a explicit
@@ -955,6 +1006,35 @@ int transport_acquire_bt_sco(struct ba_transport *t) {
 	return t->bt_fd;
 }
 
+int transport_acquire_bt_sco2(struct ba_transport *t, int asock)
+{
+
+	struct hci_dev_info di;
+
+	if (t->bt_fd != -1)
+		return t->bt_fd;
+
+	t->bt_fd = asock;
+
+	if (hci_devinfo(t->device->hci_dev_id, &di) == -1) {
+		error("Couldn't get HCI device info: %s", strerror(errno));
+		return -1;
+	}
+
+	t->mtu_read = di.sco_mtu;
+	t->mtu_write = di.sco_mtu;
+	t->release = transport_release_bt_sco;
+
+	/* XXX: It seems, that the MTU values returned by the HCI interface
+	 *      are incorrect (or our interpretation of them is incorrect). */
+	t->mtu_read = 48;
+	t->mtu_write = 48;
+
+	debug("New SCO link: %d (MTU: R:%zu W:%zu)", t->bt_fd, t->mtu_read, t->mtu_write);
+
+	return t->bt_fd;
+}
+
 int transport_release_bt_sco(struct ba_transport *t) {
 
 	if (t->bt_fd == -1)
@@ -993,9 +1073,27 @@ int transport_release_pcm(struct ba_pcm *pcm) {
 }
 
 /**
- * Wrapper for release callback, which can be used by the pthread cleanup. */
-void transport_pthread_cleanup(void *arg) {
-	struct ba_transport *t = (struct ba_transport *)arg;
+ * Synchronous transport thread cancellation. */
+void transport_pthread_cancel(pthread_t thread) {
+
+	if (pthread_equal(thread, pthread_self()))
+		return;
+	if (pthread_equal(thread, config.main_thread))
+		return;
+
+	int err;
+	if ((err = pthread_cancel(thread)) != 0)
+		warn("Couldn't cancel transport thread: %s", strerror(err));
+	if ((err = pthread_join(thread, NULL)) != 0)
+		warn("Couldn't join transport thread: %s", strerror(err));
+}
+
+/**
+ * Wrapper for release callback, which can be used by the pthread cleanup.
+ *
+ * This function CAN be used with transport_pthread_cleanup_lock() in order
+ * to guard transport critical section during cleanup process. */
+void transport_pthread_cleanup(struct ba_transport *t) {
 
 	/* During the normal operation mode, the release callback should not
 	 * be NULL. Hence, we will relay on this callback - file descriptors
@@ -1007,7 +1105,22 @@ void transport_pthread_cleanup(void *arg) {
 	 * be used anymore. */
 	t->thread = config.main_thread;
 
+	transport_pthread_cleanup_unlock(t);
+
 	/* XXX: If the order of the cleanup push is right, this function will
 	 *      indicate the end of the IO/RFCOMM thread. */
 	debug("Exiting IO thread");
+}
+
+int transport_pthread_cleanup_lock(struct ba_transport *t) {
+	int ret = pthread_mutex_lock(&t->mutex);
+	t->cleanup_lock = true;
+	return ret;
+}
+
+int transport_pthread_cleanup_unlock(struct ba_transport *t) {
+	if (!t->cleanup_lock)
+		return 0;
+	t->cleanup_lock = false;
+	return pthread_mutex_unlock(&t->mutex);
 }

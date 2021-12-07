@@ -287,7 +287,7 @@ static int afm_param_check(struct cifisp_afc_config* arg)
 {
     int i;
     if (arg->num_afm_win > CIFISP_AFM_MAX_WINDOWS || arg->thres & CIF_ISP_AFM_THRES_RESERVED || arg->var_shift & CIF_ISP_AFM_VAR_SHIFT_RESERVED) {
-        LOGE("%s:%d check error !", __FUNCTION__, __LINE__);
+        LOGE("%s:%d check error ! win_num:%d thres:%d shift:%d", __FUNCTION__, __LINE__,arg->num_afm_win,arg->thres,arg->var_shift);
         return -1;
     }
     for (i = 0; i < arg->num_afm_win; i++) {
@@ -1177,13 +1177,13 @@ XCamReturn rkisp1_convert_results(
 #define CONVERT_RET(id, mask, cfg, ret, last) \
     XCAM_LOG_DEBUG("convert ret id: %d, en: %d, lasten: %d", id, aiq_results->enabled[id], last_aiq_results.enabled[id]); \
     if ((aiq_results->active_configs & mask) && (memcmp(&ret, &last, sizeof(ret)) != 0)) { \
-        if (aiq_results->enabled[id] != last_aiq_results.enabled[id]) \
-            isp_cfg->module_en_update |= mask; \
         isp_cfg->module_cfg_update |= mask; \
-        isp_cfg->module_ens |= (aiq_results->enabled[id] ? mask : 0); \
         cfg = ret; \
+    } \
+    if (aiq_results->enabled[id] != last_aiq_results.enabled[id]) { \
+        isp_cfg->module_en_update |= mask; \
+        isp_cfg->module_ens |= (aiq_results->enabled[id] ? mask : 0); \
     }
-
     //disable ie cproc bdm
     /* aiq_results->enabled[HAL_ISP_IE_ID] = 0; */
     /*

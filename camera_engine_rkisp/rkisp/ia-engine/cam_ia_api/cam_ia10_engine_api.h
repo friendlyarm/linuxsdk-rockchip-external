@@ -80,7 +80,6 @@ struct CamIA10_SensorModeData {
   float gains;
 };
 
-
 struct CamIA10_DyCfg {
   /*application can set */
   USE_CASE uc;
@@ -97,6 +96,23 @@ struct CamIA10_DyCfg {
   int len_pos;
 };
 
+typedef enum {
+	CAMIA10_FRAME_STATUS_OK,
+	CAMIA10_FRAME_STATUS_CORRUPTED,
+	CAMIA10_FRAME_STATUS_FLASH_EXPOSED,
+	CAMIA10_FRAME_STATUS_FLASH_PARTIAL,
+	CAMIA10_FRAME_STATUS_FLASH_FAILED,
+} CamIA10_frame_status;
+
+#define CAMIA10_FLASH_NUM_MAX 2
+typedef struct {
+  HAL_FLASH_MODE flash_mode;
+  int flash_timeout_ms;
+  float flash_power[CAMIA10_FLASH_NUM_MAX];
+  bool strobe;
+  int64_t effect_ts;
+} CamIA10_flash_setting_t;
+
 struct CamIA10_Stats {
   unsigned int meas_type;
   AecStat_t aec;
@@ -109,7 +125,11 @@ struct CamIA10_Stats {
   AwbGains_t             effct_awb_gains;
   Cam3x3FloatMatrix_t        effect_CtMatrix;
   AwbXTalkOffset_t         effect_CtOffset;
+  int32_t effect_DomIlluIdx;
   unsigned short cifisp_preisp_goc_curve[CIFISP_PREISP_GOC_CURVE_SIZE];
+  USE_CASE uc;
+  CamIA10_frame_status frame_status;
+  CamIA10_flash_setting_t flash_status;
 };
 
 typedef struct CamIA10_AWB_Result_s {
@@ -127,7 +147,32 @@ typedef struct CamIA10_AWB_Result_s {
   Cam_Win_t           awbWin;
   uint8_t                 DoorType;
   bool           converged;
+  int32_t DomIlluIdx;
   int err_code;
+  CamCcProfileName_t              CcNameUp;
+  CamCcProfileName_t              CcNameDn;
+  CamLscProfileName_t             LscNameUp;
+  CamLscProfileName_t             LscNameDn;
+  bool_t                          forceWbGainFlag;
+  AwbGains_t                      forceWbGains;
+  bool_t                          forceIlluFlag;
+  CamIlluminationName_t           forceIllName;
+  float                           RgProj;
+  WbGainsOverG_t                  WbGainsOverG;
+  WbGainsOverG_t                  WbClippedGainsOverG;
+  float                           RegionSize;
+  Cam1x4FloatMatrix_t             refWbgain;
+  CamIlluminationName_t           curIllName;
+  int                             Region;
+  float                           ExpPriorIn;
+  float                           ExpPriorOut;
+  float                           likehood[32];
+  float                           weight[32];
+  float                           Wb_s;
+  float                           Wb_s_max1;
+  float                           Wb_s_max2;
+  float                           Wb_bg;
+  float                           Wb_rg;
 } CamIA10_AWB_Result_t;
 
 typedef struct CamIA10_AFC_Result_s {
@@ -175,6 +220,8 @@ struct CamIA10_Results {
   CamerIcRKDemosaicLP_t rkDemosaicLP;
   bool_t otp_info_avl;
   CamOTPGlobal_t otp_info;
+  USE_CASE uc;
+  CamIA10_flash_setting_t flash;
   /* following results are included in 3A*/
   //struct cifisp_lsc_config lsc;
   //struct cifisp_awb_gain_config awb_gain;
@@ -208,15 +255,19 @@ class CamIA10EngineItf {
 
   virtual RESULT runAWB(HAL_AwbCfg* config = NULL) = 0;
   virtual RESULT getAWBResults(CamIA10_AWB_Result_t* result) = 0;
-
+  virtual void   tuningToolConfigAwbParams(AwbConfig_t* awbParams) = 0;
   virtual RESULT runADPF() = 0;
   virtual RESULT getADPFResults(AdpfResult_t* result) = 0;
+  virtual void   tuningToolForceConfigDpf() = 0;
 
   virtual RESULT runAF(HAL_AfcCfg* config = NULL) = 0;
   virtual RESULT getAFResults(XCam3aResultFocus* result) = 0;
 
   virtual RESULT runAWDR() = 0;
   virtual RESULT getAWDRResults(AwdrResult_t* result) = 0;
+  virtual RESULT getCalibdbHandle(CamCalibDbHandle_t * handle) = 0;
+  virtual uint32_t getCalibdbMagicVerCode() = 0;
+  virtual RESULT clearStatic() = 0;
   /* manual ISP configs*/
   virtual RESULT runManISP(
       struct HAL_ISP_cfg_s* manCfg,

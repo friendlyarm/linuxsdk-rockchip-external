@@ -11,3 +11,6 @@ libvideo_shadow_la_SOURCES = $(SRC_FILES) $(HDR_FILES)
 EXTRA_DIST=makefile.ng makefile.msvc
 
 LIB_NAME=libvideo_shadow
+
+libminiguiincludedir = $(includedir)/minigui
+libminiguiinclude_HEADERS = shadow_rga.h

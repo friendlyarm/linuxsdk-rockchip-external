@@ -83,7 +83,7 @@ void fill_scanlist(H264dVideoCtx_t *p_Vid, DXVA_Qmatrix_H264 *qm)
             qm->bScalingLists4x4[i][j] = p_Vid->qmatrix[i][j];
         }
     }
-    for (i = 6; i < ((p_Vid->active_sps->chroma_format_idc != YUV444) ? 8 : 12); ++i) {
+    for (i = 6; i < ((p_Vid->active_sps->chroma_format_idc != H264_CHROMA_444) ? 8 : 12); ++i) {
         for (j = 0; j < H264ScalingList8x8Length; j++) {
             qm->bScalingLists8x8[i - 6][j] = p_Vid->qmatrix[i][j];
         }
@@ -102,7 +102,7 @@ void fill_picparams(H264dVideoCtx_t *p_Vid, DXVA_PicParams_H264_MVC *pp)
     H264_StorePic_t *dec_pic = p_Vid->dec_pic;
     H264_DpbInfo_t *dpb_info = p_Vid->p_Dec->dpb_info;
 
-    memset(pp, 0, sizeof(DXVA_PicParams_H264_MVC));
+    // memset(pp, 0, sizeof(DXVA_PicParams_H264_MVC));
     //!< Configure current picture
     fill_picture_entry(&pp->CurrPic, dec_pic->mem_mark->slot_idx, dec_pic->structure == BOTTOM_FIELD);
     //!< Configure the set of references
@@ -123,36 +123,40 @@ void fill_picparams(H264dVideoCtx_t *p_Vid, DXVA_PicParams_H264_MVC *pp)
             }
         } else {
             pp->RefFrameList[i].bPicEntry = 0xff;
-            pp->FieldOrderCntList[i][0] = 0;
-            pp->FieldOrderCntList[i][1] = 0;
-            pp->FrameNumList[i] = 0;
+            pp->FieldOrderCntList[i][0]   = 0;
+            pp->FieldOrderCntList[i][1]   = 0;
+            pp->FrameNumList[i]           = 0;
         }
     }
-    pp->wFrameWidthInMbsMinus1  = p_Vid->active_sps->pic_width_in_mbs_minus1;
-    pp->wFrameHeightInMbsMinus1 = p_Vid->active_sps->pic_height_in_map_units_minus1;
-    pp->num_ref_frames = p_Vid->active_sps->max_num_ref_frames;
 
-    pp->wBitFields = ((dec_pic->iCodingType == FIELD_CODING) << 0)  //!< field_pic_flag
-                     | (dec_pic->mb_aff_frame_flag << 1) //!< MbaffFrameFlag
-                     | (0 << 2)   //!< residual_colour_transform_flag
-                     | (0 << 3)   //!< sp_for_switch_flag
-                     | (p_Vid->active_sps->chroma_format_idc << 4)  //!< chroma_format_idc
-                     | (dec_pic->used_for_reference << 6) //!< RefPicFlag
-                     | (p_Vid->active_pps->constrained_intra_pred_flag << 7) //!< constrained_intra_pred_flag
-                     | (p_Vid->active_pps->weighted_pred_flag << 8)  //!< weighted_pred_flag
-                     | (p_Vid->active_pps->weighted_bipred_idc << 9)  //!< weighted_bipred_idc
-                     | (1 << 11)   //!< MbsConsecutiveFlag
-                     | (p_Vid->active_sps->frame_mbs_only_flag << 12) //!< frame_mbs_only_flag
-                     | (p_Vid->active_pps->transform_8x8_mode_flag << 13) //!< transform_8x8_mode_flag
-                     | ((p_Vid->active_sps->level_idc >= 31) << 14) //!< MinLumaBipredSize8x8Flag
-                     | (1 << 15);  //!< IntraPicFlag (Modified if we detect a non-intra slice in dxva2_h264_decode_slice)
+    pp->spspps_update = p_Vid->spspps_update;
+    if (pp->spspps_update) {
+        pp->wFrameWidthInMbsMinus1         = p_Vid->active_sps->pic_width_in_mbs_minus1;
+        pp->wFrameHeightInMbsMinus1        = p_Vid->active_sps->pic_height_in_map_units_minus1;
+        pp->num_ref_frames                 = p_Vid->active_sps->max_num_ref_frames;
 
-    pp->bit_depth_luma_minus8   = p_Vid->active_sps->bit_depth_luma_minus8;
-    pp->bit_depth_chroma_minus8 = p_Vid->active_sps->bit_depth_chroma_minus8;
-    pp->Reserved16Bits = 3;  //!< FIXME is there a way to detect the right mode
+        pp->residual_colour_transform_flag = 0;
+        pp->sp_for_switch_flag             = 0;
+        pp->chroma_format_idc              = p_Vid->active_sps->chroma_format_idc;
+        pp->constrained_intra_pred_flag    = p_Vid->active_pps->constrained_intra_pred_flag;
+        pp->weighted_pred_flag             = p_Vid->active_pps->weighted_pred_flag;
+        pp->weighted_bipred_idc            = p_Vid->active_pps->weighted_bipred_idc;
+        pp->MbsConsecutiveFlag             = 1;
+        pp->frame_mbs_only_flag            = p_Vid->active_sps->frame_mbs_only_flag;
+        pp->transform_8x8_mode_flag        = p_Vid->active_pps->transform_8x8_mode_flag;
+        pp->MinLumaBipredSize8x8Flag       = (p_Vid->active_sps->level_idc >= 31);
+        pp->IntraPicFlag                   = 1; //(Modified if we detect a non-intra slice in dxva2_h264_decode_slice)
 
-    pp->StatusReportFeedbackNumber = 1 /*+ ctx->report_id++*/;
+        pp->bit_depth_luma_minus8          = p_Vid->active_sps->bit_depth_luma_minus8;
+        pp->bit_depth_chroma_minus8        = p_Vid->active_sps->bit_depth_chroma_minus8;
+        pp->Reserved16Bits                 = 3;  //!< FIXME is there a way to detect the right mode
 
+        pp->StatusReportFeedbackNumber     = 1 /*+ ctx->report_id++*/;
+    }
+    pp->MbaffFrameFlag = dec_pic->mb_aff_frame_flag;
+    pp->field_pic_flag = (dec_pic->iCodingType == FIELD_CODING);
+    pp->RefPicFlag     = dec_pic->used_for_reference;
+    //!< for current poc
     pp->CurrFieldOrderCnt[0] = 0;
     if (dec_pic->structure == TOP_FIELD || dec_pic->structure == FRAME) {
         pp->CurrFieldOrderCnt[0] = dec_pic->top_poc;
@@ -161,33 +165,58 @@ void fill_picparams(H264dVideoCtx_t *p_Vid, DXVA_PicParams_H264_MVC *pp)
     if (dec_pic->structure == BOTTOM_FIELD || dec_pic->structure == FRAME) {
         pp->CurrFieldOrderCnt[1] = dec_pic->bottom_poc;
     }
-    pp->pic_init_qs_minus26 = p_Vid->active_pps->pic_init_qs_minus26;
-    pp->chroma_qp_index_offset = p_Vid->active_pps->chroma_qp_index_offset;
-    pp->second_chroma_qp_index_offset = p_Vid->active_pps->second_chroma_qp_index_offset;
-    pp->ContinuationFlag = 1;
-    pp->pic_init_qp_minus26 = p_Vid->active_pps->pic_init_qp_minus26;
-    pp->num_ref_idx_l0_active_minus1 = p_Vid->active_pps->num_ref_idx_l0_default_active_minus1;
-    pp->num_ref_idx_l1_active_minus1 = p_Vid->active_pps->num_ref_idx_l1_default_active_minus1;
-    pp->Reserved8BitsA = 0;
-
     pp->frame_num = dec_pic->frame_num;
-    pp->log2_max_frame_num_minus4 = p_Vid->active_sps->log2_max_frame_num_minus4;
-    pp->pic_order_cnt_type = p_Vid->active_sps->pic_order_cnt_type;
-    if (pp->pic_order_cnt_type == 0) {
-        pp->log2_max_pic_order_cnt_lsb_minus4 = p_Vid->active_sps->log2_max_pic_order_cnt_lsb_minus4;
-    } else if (pp->pic_order_cnt_type == 1) {
-        pp->delta_pic_order_always_zero_flag = p_Vid->active_sps->delta_pic_order_always_zero_flag;
+
+    if (pp->spspps_update) {
+        pp->pic_init_qs_minus26           = p_Vid->active_pps->pic_init_qs_minus26;
+        pp->chroma_qp_index_offset        = p_Vid->active_pps->chroma_qp_index_offset;
+        pp->second_chroma_qp_index_offset = p_Vid->active_pps->second_chroma_qp_index_offset;
+        pp->ContinuationFlag              = 1;
+        pp->pic_init_qp_minus26           = p_Vid->active_pps->pic_init_qp_minus26;
+        pp->num_ref_idx_l0_active_minus1  = p_Vid->active_pps->num_ref_idx_l0_default_active_minus1;
+        pp->num_ref_idx_l1_active_minus1  = p_Vid->active_pps->num_ref_idx_l1_default_active_minus1;
+        pp->Reserved8BitsA                = 0;
+
+        pp->log2_max_frame_num_minus4     = p_Vid->active_sps->log2_max_frame_num_minus4;
+        pp->pic_order_cnt_type            = p_Vid->active_sps->pic_order_cnt_type;
+        if (pp->pic_order_cnt_type == 0) {
+            pp->log2_max_pic_order_cnt_lsb_minus4 = p_Vid->active_sps->log2_max_pic_order_cnt_lsb_minus4;
+        } else if (pp->pic_order_cnt_type == 1) {
+            pp->delta_pic_order_always_zero_flag = p_Vid->active_sps->delta_pic_order_always_zero_flag;
+        }
+        pp->direct_8x8_inference_flag              = p_Vid->active_sps->direct_8x8_inference_flag;
+        pp->entropy_coding_mode_flag               = p_Vid->active_pps->entropy_coding_mode_flag;
+        pp->pic_order_present_flag                 = p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag;
+        pp->num_slice_groups_minus1                = p_Vid->active_pps->num_slice_groups_minus1;
+        pp->slice_group_map_type                   = p_Vid->active_pps->slice_group_map_type;
+        pp->deblocking_filter_control_present_flag = p_Vid->active_pps->deblocking_filter_control_present_flag;
+        pp->redundant_pic_cnt_present_flag         = p_Vid->active_pps->redundant_pic_cnt_present_flag;
+        pp->Reserved8BitsB                         = 0;
+        /* FMO is not implemented and is not implemented by FFmpeg neither */
+        pp->slice_group_change_rate_minus1         = 0;
     }
-    pp->direct_8x8_inference_flag = p_Vid->active_sps->direct_8x8_inference_flag;
-    pp->entropy_coding_mode_flag = p_Vid->active_pps->entropy_coding_mode_flag;
-    pp->pic_order_present_flag = p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag;
-    pp->num_slice_groups_minus1 = p_Vid->active_pps->num_slice_groups_minus1;
-    pp->slice_group_map_type = p_Vid->active_pps->slice_group_map_type;
-    pp->deblocking_filter_control_present_flag = p_Vid->active_pps->deblocking_filter_control_present_flag;
-    pp->redundant_pic_cnt_present_flag = p_Vid->active_pps->redundant_pic_cnt_present_flag;
-    pp->Reserved8BitsB = 0;
-    /* FMO is not implemented and is not implemented by FFmpeg neither */
-    pp->slice_group_change_rate_minus1 = 0;
+
+    //!< scaleing list flag
+    if (p_Vid->active_pps->pic_scaling_matrix_present_flag
+        || p_Vid->active_sps->seq_scaling_matrix_present_flag) {
+        pp->scaleing_list_enable_flag = 1;
+    } else {
+        pp->scaleing_list_enable_flag = 0;
+    }
+
+    //!< add in Rock-chip RKVDEC IP
+    pp->RefPicFiledFlags = 0;
+    pp->RefPicColmvUsedFlags = 0;
+    for (i = 0; i < MPP_ARRAY_ELEMS(pp->RefFrameList); i++) {
+        if (dpb_info[i].refpic) {
+            if (dpb_info[i].colmv_is_used) {
+                pp->RefPicColmvUsedFlags |= 1 << i;
+            }
+            if (dpb_info[i].field_flag) {
+                pp->RefPicFiledFlags |= 1 << i;
+            }
+        }
+    }
 
     //!< Following are H.264 MVC Specific parameters
     if (p_Vid->active_subsps) {
@@ -218,34 +247,24 @@ void fill_picparams(H264dVideoCtx_t *p_Vid, DXVA_PicParams_H264_MVC *pp)
 
         for (i = num_views; i < 16; i++)
             pp->view_id[i] = 0xffff;
-    }
-    pp->curr_view_id = dec_pic->view_id;
-    pp->anchor_pic_flag = dec_pic->anchor_pic_flag;
-    pp->inter_view_flag = dec_pic->inter_view_flag;
-    for (i = 0; i < 16; i++) {
-        pp->ViewIDList[i] = dpb_info[i].view_id;
-    }
-    //!< add in Rock-chip RKVDEC IP
-    pp->curr_layer_id = dec_pic->layer_id;
-    pp->UsedForInTerviewflags = 0;
-    for (i = 0; i < MPP_ARRAY_ELEMS(pp->RefFrameList); i++) {
-        if (dpb_info[i].colmv_is_used) {
-            pp->RefPicColmvUsedFlags |= 1 << i;
+
+        pp->curr_view_id = dec_pic->view_id;
+        pp->anchor_pic_flag = dec_pic->anchor_pic_flag;
+        pp->inter_view_flag = dec_pic->inter_view_flag;
+        for (i = 0; i < 16; i++) {
+            pp->ViewIDList[i] = dpb_info[i].view_id;
         }
-        if (dpb_info[i].field_flag) {
-            pp->RefPicFiledFlags |= 1 << i;
+        //!< add in Rock-chip RKVDEC IP
+        pp->curr_layer_id = dec_pic->layer_id;
+        pp->UsedForInTerviewflags = 0;
+        for (i = 0; i < MPP_ARRAY_ELEMS(pp->RefFrameList); i++) {
+            if (dpb_info[i].is_ilt_flag) {
+                pp->UsedForInTerviewflags |= 1 << i;
+            }
+            pp->RefPicLayerIdList[i] = dpb_info[i].voidx;
         }
-        if (dpb_info[i].is_ilt_flag) {
-            pp->UsedForInTerviewflags |= 1 << i;
-        }
-        pp->RefPicLayerIdList[i] = dpb_info[i].voidx;
     }
-    if (p_Vid->active_pps->pic_scaling_matrix_present_flag
-        || p_Vid->active_sps->seq_scaling_matrix_present_flag) {
-        pp->scaleing_list_enable_flag = 1;
-    } else {
-        pp->scaleing_list_enable_flag = 0;
-    }
+    p_Vid->spspps_update = 0;
 }
 
 /*!
@@ -282,9 +301,6 @@ MPP_RET fill_slice_syntax(H264_SLICE_t *currSlice, H264dDxvaCtx_t *dxva_ctx)
     p_long->poc_used_bitlen = currSlice->poc_used_bitlen;
     p_long->nal_ref_idc = currSlice->nal_reference_idc;
     p_long->profileIdc = currSlice->active_sps->profile_idc;
-
-
-
 
     for (i = 0; i < MPP_ARRAY_ELEMS(p_long->RefPicList[0]); i++) {
         dpb_idx = currSlice->p_Dec->refpic_info_p[i].dpb_idx;

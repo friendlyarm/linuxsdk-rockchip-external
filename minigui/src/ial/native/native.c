@@ -424,6 +424,12 @@ BOOL InitNativeInput (INPUT* input, const char* mdev, const char* mtype)
         goto found;
     }
 #endif
+#ifdef _MGCONSOLE_USB
+    if (strcasecmp (mtype, "usb") == 0 ) {
+        mousedev = &mousedev_USB;
+        goto found;
+    }
+#endif
 #ifdef _MGCONSOLE_PS2
     if (strcasecmp (mtype, "ps2") == 0 ) {
         mousedev = &mousedev_PS2;

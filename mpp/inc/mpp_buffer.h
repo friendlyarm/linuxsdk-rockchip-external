@@ -251,6 +251,12 @@ typedef struct MppBufferInfo_t {
 #define mpp_buffer_set_index(buffer, index) \
         mpp_buffer_set_index_with_caller(buffer, index, __FUNCTION__)
 
+#define mpp_buffer_get_offset(buffer) \
+        mpp_buffer_get_offset_with_caller(buffer, __FUNCTION__)
+
+#define mpp_buffer_set_offset(buffer, offset) \
+        mpp_buffer_set_offset_with_caller(buffer, offset, __FUNCTION__)
+
 #define mpp_buffer_group_get_internal(group, type, ...) \
         mpp_buffer_group_get(group, type, MPP_BUFFER_INTERNAL, MODULE_TAG, __FUNCTION__)
 
@@ -285,6 +291,8 @@ int     mpp_buffer_get_fd_with_caller(MppBuffer buffer, const char *caller);
 size_t  mpp_buffer_get_size_with_caller(MppBuffer buffer, const char *caller);
 int     mpp_buffer_get_index_with_caller(MppBuffer buffer, const char *caller);
 MPP_RET mpp_buffer_set_index_with_caller(MppBuffer buffer, int index, const char *caller);
+size_t  mpp_buffer_get_offset_with_caller(MppBuffer buffer, const char *caller);
+MPP_RET mpp_buffer_set_offset_with_caller(MppBuffer buffer, size_t offset, const char *caller);
 
 MPP_RET mpp_buffer_group_get(MppBufferGroup *group, MppBufferType type, MppBufferMode mode,
                              const char *tag, const char *caller);
@@ -300,6 +308,9 @@ MppBufferType mpp_buffer_group_type(MppBufferGroup group);
  * count : 0 - no limit, other - max buffer count
  */
 MPP_RET mpp_buffer_group_limit_config(MppBufferGroup group, size_t size, RK_S32 count);
+
+RK_U32 mpp_buffer_total_now();
+RK_U32 mpp_buffer_total_max();
 
 #ifdef __cplusplus
 }

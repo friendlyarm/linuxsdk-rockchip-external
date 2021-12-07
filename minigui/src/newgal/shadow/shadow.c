@@ -83,9 +83,10 @@ union semun {
 #define SHADOWVID_DRIVER_NAME "shadow"
 #include "shadow.h"
 
-#if ENABLE_RGA
-#include "shadow_rga.h"
-#endif
+extern void *shadow_rga_g_bo_ptr(void);
+extern int shadow_rga_init(int size);
+extern void shadow_rga_exit(void);
+extern void shadow_rga_get_buffer_fd(void *bo, int *fd);
 
 #define FLAG_REALFB_PREALLOC  0x01
 #define _ROT_DIR_CW 0x02
@@ -412,7 +413,7 @@ static void RealEngine_Sleep(void)
 #ifdef WIN32
     win_sleep (20);
 #else
-    usleep(2000);
+    usleep(100000);
 #endif
     return ;
 }
@@ -539,7 +540,7 @@ static void* task_do_update (void* data)
 #ifdef _MGGAL_DRMCON
                 if (bo != NULL) {
 #if ENABLE_RGA
-                    c_RkRgaGetBufferFd((bo_t)bo, &this->hidden->realfb_info->fd);
+                    shadow_rga_get_buffer_fd(bo, &this->hidden->realfb_info->fd);
 #endif
                     this->hidden->realfb_info->fb = bo->ptr;
                     SetRect (&_shadowfbheader->dirty_rect, 0, 0,
@@ -1040,6 +1041,16 @@ void GUIAPI Shadow_cw_ccw_switch(int iscw)
         __mg_ial_change_mouse_xy_hook = change_mouseXY_ccw;
     }
     __mg_shadow_rotate_flags = __mg_realfb_info->flags;
+}
+
+int get_g_rcScr_right(void)
+{
+    return g_rcScr.right;
+}
+
+int get_g_rcScr_bottom(void)
+{
+    return g_rcScr.bottom;
 }
 
 #endif /* _MGGAL_SHADOW */

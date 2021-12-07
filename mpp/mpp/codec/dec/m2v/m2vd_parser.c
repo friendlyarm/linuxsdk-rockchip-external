@@ -197,7 +197,7 @@ static MPP_RET m2vd_parser_init_ctx(M2VDParserContext *ctx, ParserCfg *cfg)
     ctx->mExtraHeaderDecFlag = 0;
     ctx->max_stream_size = M2VD_BUF_SIZE_BITMEM;
     ctx->ref_frame_cnt = 0;
-    ctx->need_split = cfg->need_split;
+    ctx->need_split = cfg->cfg->base.split_parse;
     ctx->left_length = 0;
     ctx->vop_header_found = 0;
 
@@ -283,7 +283,7 @@ MPP_RET m2vd_parser_deinit(void *ctx)
     }
 
     for (k = 0; k < 3; k++) {
-        mpp_free(p->Framehead[k].f);
+        mpp_frame_deinit(&p->Framehead[k].f);
     }
 
     if (p) {
@@ -352,7 +352,7 @@ MPP_RET m2vd_parser_flush(void *ctx)
     M2VDParserContext *p = (M2VDParserContext *)c->parse_ctx;
     m2vd_dbg_func("FUN_I");
 
-    if ((p->frame_ref0->slot_index != 0xff) && !p->frame_ref0->flags) {
+    if ((p->frame_ref0->slot_index != 0xff) && p->frame_ref0->flags) {
         mpp_buf_slot_set_flag(p->frame_slots, p->frame_ref0->slot_index,
                               SLOT_QUEUE_USE);
         mpp_buf_slot_enqueue(p->frame_slots, p->frame_ref0->slot_index,
@@ -370,7 +370,7 @@ MPP_RET m2vd_parser_flush(void *ctx)
 *   control/perform
 ***********************************************************************
 */
-MPP_RET m2vd_parser_control(void *ctx, RK_S32 cmd_type, void *param)
+MPP_RET m2vd_parser_control(void *ctx, MpiCmd cmd_type, void *param)
 {
     MPP_RET ret = MPP_OK;
     m2vd_dbg_func("FUN_I");
@@ -429,7 +429,7 @@ MPP_RET mpp_m2vd_parser_split(M2VDParserContext *ctx, MppPacket dst, MppPacket s
             p->state = (p->state << 8) | src_buf[src_pos];
             dst_buf[dst_len++] = src_buf[src_pos++];
 
-            if (((p->state & 0x00FFFFFF) == 0x000001) &&
+            if (((p->state & 0x00FFFFFF) == 0x000001) && (src_pos < src_len) &&
                 (src_buf[src_pos] == (SEQUENCE_HEADER_CODE & 0xFF) ||
                  src_buf[src_pos] == (PICTURE_START_CODE & 0xFF))) {
                 dst_len -= 3;
@@ -1068,7 +1068,7 @@ static MPP_RET m2vd_decode_head(M2VDParserContext *ctx)
 
 static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
 {
-    RK_U64 pts = (RK_U64)(ctx->pts / 1000);
+    RK_U64 pts = ctx->pts;
     if (ctx->resetFlag && ctx->pic_head.picture_coding_type != M2VD_CODING_TYPE_I) {
         mpp_log("[m2v]: resetFlag[%d] && picture_coding_type[%d] != I_TYPE", ctx->resetFlag, ctx->pic_head.picture_coding_type);
         return MPP_NOK;
@@ -1081,7 +1081,8 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
         (ctx->frame_cur->slot_index == 0xff)) {
         RK_S64 Time = 0;
         if (ctx->PreGetFrameTime != pts) {
-            RK_U32 tmp_frame_period;
+            RK_S64 tmp_frame_period;
+
             if (ctx->GroupFrameCnt) {
                 ctx->GroupFrameCnt = ctx->GroupFrameCnt + ctx->pic_head.temporal_reference;
             } else if (ctx->pic_head.temporal_reference == (RK_S32)ctx->PreChangeTime_index)
@@ -1105,7 +1106,8 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
 
             if ((pts > ctx->PreGetFrameTime) && (ctx->GroupFrameCnt > 0)) {
                 tmp_frame_period = (tmp_frame_period * 256) / ctx->GroupFrameCnt;
-                if ((tmp_frame_period > 4200) && (tmp_frame_period < 11200) && (abs(ctx->frame_period - tmp_frame_period) > 128)) {
+                if ((tmp_frame_period > 4200) && (tmp_frame_period < 11200) &&
+                    (abs(ctx->frame_period - tmp_frame_period) > 128)) {
                     if (abs(ctx->preframe_period - tmp_frame_period) > 128)
                         ctx->preframe_period = tmp_frame_period;
                     else
@@ -1170,7 +1172,7 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
             mpp_frame_set_hor_stride(ctx->frame_cur->f, ctx->display_width);
             mpp_frame_set_ver_stride(ctx->frame_cur->f, ctx->display_height);
             mpp_frame_set_errinfo(ctx->frame_cur->f, 0);
-            mpp_frame_set_pts(ctx->frame_cur->f, Time * 1000);
+            mpp_frame_set_pts(ctx->frame_cur->f, Time);
             ctx->frame_cur->flags = M2V_OUT_FLAG;
             if (ctx->seq_ext_head.progressive_sequence) {
                 frametype = MPP_FRAME_FLAG_FRAME;
@@ -1220,9 +1222,11 @@ static MPP_RET m2v_update_ref_frame(M2VDParserContext *p)
             M2VDFrameHead *tmpHD = NULL;
             p->ref_frame_cnt++;
             if (p->frame_ref0->slot_index < 0x7f) {
-                mpp_buf_slot_set_flag(p->frame_slots, p->frame_ref0->slot_index, SLOT_QUEUE_USE);
-                mpp_buf_slot_enqueue(p->frame_slots, p->frame_ref0->slot_index, QUEUE_DISPLAY);
-                p->frame_ref0->flags = 0;
+                if (p->frame_ref0->flags) {
+                    mpp_buf_slot_set_flag(p->frame_slots, p->frame_ref0->slot_index, SLOT_QUEUE_USE);
+                    mpp_buf_slot_enqueue(p->frame_slots, p->frame_ref0->slot_index, QUEUE_DISPLAY);
+                    p->frame_ref0->flags = 0;
+                }
             }
             if (p->frame_ref1->slot_index < 0x7f) {
                 mpp_buf_slot_clr_flag(p->frame_slots, p->frame_ref1->slot_index, SLOT_CODEC_USE);

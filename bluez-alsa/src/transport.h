@@ -114,6 +114,10 @@ struct ba_transport {
 	enum bluetooth_profile profile;
 	uint16_t codec;
 
+	/* This mutex shall guard modifications of the critical sections in this
+	 * transport structure, e.g. thread creation/termination. */
+	pthread_mutex_t mutex;
+
 	/* IO thread - actual transport layer */
 	enum ba_transport_state state;
 	pthread_t thread;
@@ -156,6 +160,13 @@ struct ba_transport {
 			uint8_t *cconfig;
 			size_t cconfig_size;
 
+			/* Value reported by the ioctl(TIOCOUTQ) when the output buffer is
+			 * empty. Somehow this ioctl call reports "available" buffer space.
+			 * So, in order to get the number of bytes in the queue buffer, we
+			 * have to subtract the initial value from values returned by
+			 * subsequent ioctl() calls. */
+			int bt_fd_coutq_init;
+
 		} a2dp;
 
 		struct {
@@ -188,9 +199,14 @@ struct ba_transport {
 			struct ba_pcm spk_pcm;
 			struct ba_pcm mic_pcm;
 
+			int listen_fd;
+
 		} sco;
 
 	};
+
+	/* indicates cleanup lock */
+	bool cleanup_lock;
 
 	/* callback function for self-management */
 	int (*release)(struct ba_transport *);
@@ -252,10 +268,14 @@ int transport_release_bt_a2dp(struct ba_transport *t);
 int transport_release_bt_rfcomm(struct ba_transport *t);
 
 int transport_acquire_bt_sco(struct ba_transport *t);
+int transport_acquire_bt_sco2(struct ba_transport *t, int asock);
 int transport_release_bt_sco(struct ba_transport *t);
 
 int transport_release_pcm(struct ba_pcm *pcm);
 
-void transport_pthread_cleanup(void *arg);
+void transport_pthread_cancel(pthread_t thread);
+void transport_pthread_cleanup(struct ba_transport *t);
+int transport_pthread_cleanup_lock(struct ba_transport *t);
+int transport_pthread_cleanup_unlock(struct ba_transport *t);
 
 #endif

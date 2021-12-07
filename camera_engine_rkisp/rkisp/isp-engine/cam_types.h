@@ -266,6 +266,7 @@ enum HAL_AF_MODE {
 
 enum USE_CASE {
   UC_PREVIEW,
+  UC_PRE_CAPTRUE,
   UC_CAPTURE,
   UC_RECORDING,
   UC_RAW
@@ -286,7 +287,9 @@ enum HAL_FLASH_MODE {
   HAL_FLASH_OFF,
   HAL_FLASH_ON,
   HAL_FLASH_AUTO,
-  HAL_FLASH_TORCH
+  HAL_FLASH_TORCH,
+  HAL_FLASH_PRE,
+  HAL_FLASH_MAIN,
 };
 
 enum HAL_AE_METERING_MODE {
@@ -352,8 +355,10 @@ struct HAL_AecCfg {
   HAL_AE_METERING_MODE meter_mode;
   HAL_Window win;
   int ae_bias;
-  int frame_time_ms_min;
-  int frame_time_ms_max;
+  int frame_time_ns_min;
+  int frame_time_ns_max;
+  int iso_min;
+  int iso_max;
   float manual_gains;
 };
 
@@ -366,6 +371,7 @@ struct HAL_AfcType {
 struct HAL_AfcCfg {
   HAL_AF_MODE mode;
   struct HAL_AfcType type;
+  bool af_lock;
   bool_t oneshot_trigger;
   unsigned int win_num;
   HAL_Window win_a;

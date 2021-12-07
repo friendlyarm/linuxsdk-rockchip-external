@@ -12,6 +12,10 @@
 
 #include <grp.h>
 
+#if ENABLE_LDAC
+# include <ldacBT.h>
+#endif
+
 #include "hfp.h"
 #include "transport.h"
 
@@ -26,12 +30,14 @@ struct ba_config config = {
 	.enable.hfp_ag = false,
 	.enable.hfp_hf = true,
 
+	/* omit chown if audio group is not defined */
+	.gid_audio = -1,
+
 	/* initialization flags */
 	.ctl.socket_created = false,
 	.ctl.thread_created = false,
 
-	/* omit chown if audio group is not defined */
-	.gid_audio = -1,
+	.ctl.evt = { -1, -1 },
 
 	.hfp.features_sdp_hf =
 		SDP_HFP_HF_FEAT_CLI |
@@ -50,17 +56,24 @@ struct ba_config config = {
 		HFP_AG_FEAT_EERC |
 		HFP_AG_FEAT_CODEC,
 
+	.a2dp.volume = false,
+	.a2dp.force_mono = false,
+	.a2dp.force_44100 = false,
+	.a2dp.keep_alive = 0,
+
 #if ENABLE_AAC
 	/* There are two issues with the afterburner: a) it uses a LOT of power,
-	 * b) it generates larger payload (see VBR comment). These two reasons
-	 * are good enough to not enable afterburner by default. */
+	 * b) it generates larger payload. These two reasons are good enough to
+	 * not enable afterburner by default. */
 	.aac_afterburner = false,
 	.aac_vbr_mode = 4,
 #endif
 
-	.a2dp_force_mono = false,
-	.a2dp_force_44100 = false,
-	.a2dp_volume = false,
+#if ENABLE_LDAC
+	.ldac_abr = false,
+	/* Use standard encoder quality as a reasonable default. */
+	.ldac_eqmid = LDACBT_EQMID_SQ,
+#endif
 
 };
 
@@ -80,6 +93,8 @@ int bluealsa_config_init(void) {
 	/* use proper ACL group for our audio device */
 	if ((grp = getgrnam("audio")) != NULL)
 		config.gid_audio = grp->gr_gid;
+
+	config.a2dp.codecs = bluez_a2dp_codecs;
 
 	return 0;
 }

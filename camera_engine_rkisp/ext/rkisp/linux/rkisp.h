@@ -210,83 +210,9 @@ struct rkisp_awb_algo {
   float fBlueGain;
   float fCtCoeff[9];
   float fCtOffset[3];
+  int32_t DomIlluIdx;
 };
 
-struct rkisp_parameters {
-  unsigned int active_configs;
-  bool enabled[HAL_ISP_MODULE_MAX_ID_ID + 1];
-  int flt_denoise_level;
-  int flt_sharp_level;
-  struct cifisp_dpcc_config dpcc_config;
-  struct cifisp_bls_config bls_config;
-  struct cifisp_sdg_config sdg_config;
-  struct cifisp_hst_config hst_config;
-  struct cifisp_lsc_config lsc_config;
-  struct cifisp_awb_gain_config awb_gain_config;
-  struct cifisp_awb_meas_config awb_meas_config;
-  struct cifisp_flt_config flt_config;
-  struct cifisp_bdm_config bdm_config;
-  struct cifisp_ctk_config ctk_config;
-  struct cifisp_goc_config goc_config;
-  struct cifisp_cproc_config cproc_config;
-  struct cifisp_aec_config aec_config;
-  struct cifisp_afc_config afc_config;
-  struct cifisp_ie_config ie_config;
-  struct cifisp_dpf_config dpf_config;
-  struct cifisp_dpf_strength_config dpf_strength_config;
-  struct cifisp_wdr_config wdr_config;
-  struct cifisp_demosaiclp_config demosaiclp_config;
-  struct cifisp_rkiesharp_config rkiesharp_config;
-  struct rkisp_awb_algo awb_algo_results;
-  bool   otp_info_avl;
-  struct rkmodule_awb_cfg awb_otp_info;
-  struct rkmodule_af_cfg af_otp_info;
-  struct rkmodule_lsc_cfg lsc_otp_info;
-  int64_t frame_sof_ts;
-};
-
-#if 0
-struct rkisp_parameters {
-	struct rkisp_wb_config *wb_config;
-	struct rkisp_cc_config *cc_config;
-	struct rkisp_tnr_config *tnr_config;
-	struct rkisp_ecd_config  *ecd_config; /* Eigen Color Demosaicing */
-	struct rkisp_ynr_config  *ynr_config; /* Y(Luma) Noise Reduction */
-	struct rkisp_fc_config   *fc_config;  /* Fringe Control */
-	struct rkisp_formats_config *formats_config; /* Format Control*/
-	struct rkisp_cnr_config  *cnr_config; /* Chroma Noise Reduction */
-	struct rkisp_macc_config *macc_config;
-	struct rkisp_ctc_config  *ctc_config; /* Chroma Tone Control */
-	struct rkisp_aa_config   *aa_config;  /* Anti-Aliasing */
-	struct rkisp_aa_config   *baa_config;  /* Anti-Aliasing */
-	struct rkisp_ce_config *ce_config;
-	struct rkisp_dvs_6axis_config *dvs_6axis_config;
-	struct rkisp_ob_config *ob_config;
-	struct rkisp_dp_config *dp_config;
-	struct rkisp_nr_config *nr_config;
-	struct rkisp_ee_config *ee_config;
-	struct rkisp_de_config *de_config;
-	struct rkisp_gc_config *gc_config;
-	struct rkisp_anr_config  *anr_config; /* Advanced Noise Reduction */
-	struct rkisp_3a_config *a3a_config;
-	struct rkisp_xnr_config *xnr_config;
-	struct rkisp_dz_config   *dz_config;  /* Digital Zoom */
-	struct rkisp_cc_config *yuv2rgb_cc_config; /* Color Correction config */
-	struct rkisp_cc_config *rgb2yuv_cc_config; /* Color Correction config */
-	struct rkisp_macc_table *macc_table;
-	struct rkisp_gamma_table *gamma_table;
-	struct rkisp_ctc_table *ctc_table;
-	struct rkisp_xnr_table *xnr_table;
-	struct rkisp_rgb_gamma_table *r_gamma_table;
-	struct rkisp_rgb_gamma_table *g_gamma_table;
-	struct rkisp_rgb_gamma_table *b_gamma_table;
-	struct rkisp_vector      *motion_vector; /* For 2-axis DVS */
-	struct rkisp_shading_table *shading_table;
-	struct rkisp_morph_table *morph_table;
-	struct rkisp_anr_thres   *anr_thres;
-
-};
-#endif
 struct rkisp_makernote_info {
 	/* bits 31-16: numerator, bits 15-0: denominator */
 	unsigned int focal_length;
@@ -356,6 +282,18 @@ struct rkisp_sensor_mode_data {
 	uint8_t reserved[2];
 };
 
+
+// hdrae structs are copid from aec.h
+typedef struct rkisp_HdrAE_metadata_s {
+	unsigned int regGain[3];
+	unsigned int regTime[3];
+	float halGain[3];
+	float halTime[3];
+	float exposure[3];
+} rkisp_HdrAE_metadata_t;
+
+#define RKISP_HDRAE_EFFECT_FNUM 5
+
 struct rkisp_exposure {
     unsigned int coarse_integration_time;
     unsigned int fine_integration_time;
@@ -378,6 +316,7 @@ struct rkisp_exposure {
     int RegHdrTime[3];
     float HdrGains[3];
     float HdrIntTimes[3];
+    rkisp_HdrAE_metadata_t Hdrexp_smooth_setting[RKISP_HDRAE_EFFECT_FNUM];
 };
 
 struct rkisp_focus {
@@ -417,6 +356,8 @@ enum rkisp_camera_port {
 enum rkisp_flash_mode {
 	RKISP_FLASH_MODE_OFF,
 	RKISP_FLASH_MODE_FLASH,
+	RKISP_FLASH_MODE_FLASH_PRE,
+	RKISP_FLASH_MODE_FLASH_MAIN,
 	RKISP_FLASH_MODE_TORCH,
 	RKISP_FLASH_MODE_INDICATOR,
 };
@@ -516,6 +457,51 @@ struct rkisp_acc_fw_load {
 	unsigned int size;
 	unsigned int fw_handle;
 	void __user *data;
+};
+
+typedef struct rkisp_flash_setting_s {
+    enum rkisp_flash_mode flash_mode;
+    enum rkisp_frame_status frame_status;
+    float power[CAMIA10_FLASH_NUM_MAX];
+    bool strobe;
+    int timeout_ms;
+    int64_t effect_ts;
+    USE_CASE uc;
+} rkisp_flash_setting_t;
+
+struct rkisp_parameters {
+  unsigned int active_configs;
+  bool enabled[HAL_ISP_MODULE_MAX_ID_ID + 1];
+  int flt_denoise_level;
+  int flt_sharp_level;
+  struct cifisp_dpcc_config dpcc_config;
+  struct cifisp_bls_config bls_config;
+  struct cifisp_sdg_config sdg_config;
+  struct cifisp_hst_config hst_config;
+  struct cifisp_lsc_config lsc_config;
+  struct cifisp_awb_gain_config awb_gain_config;
+  struct cifisp_awb_meas_config awb_meas_config;
+  struct cifisp_flt_config flt_config;
+  struct cifisp_bdm_config bdm_config;
+  struct cifisp_ctk_config ctk_config;
+  struct cifisp_goc_config goc_config;
+  struct cifisp_cproc_config cproc_config;
+  struct cifisp_aec_config aec_config;
+  struct cifisp_afc_config afc_config;
+  struct cifisp_ie_config ie_config;
+  struct cifisp_dpf_config dpf_config;
+  struct cifisp_dpf_strength_config dpf_strength_config;
+  struct cifisp_wdr_config wdr_config;
+  struct cifisp_demosaiclp_config demosaiclp_config;
+  struct cifisp_rkiesharp_config rkiesharp_config;
+  struct rkisp_awb_algo awb_algo_results;
+  bool   otp_info_avl;
+  struct rkmodule_awb_cfg awb_otp_info;
+  struct rkmodule_af_cfg af_otp_info;
+  struct rkmodule_lsc_cfg lsc_otp_info;
+  int64_t frame_sof_ts;
+  USE_CASE uc;
+  rkisp_flash_setting_t flash_settings;
 };
 
 /*

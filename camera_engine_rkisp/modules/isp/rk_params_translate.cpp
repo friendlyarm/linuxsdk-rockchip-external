@@ -123,7 +123,7 @@ ParamsTranslate::convert_from_rkisp_awb_result(
     aiq_awb_result->awb_gain_cfg.awb_gains.green_r_gain= result->awbGains.GreenR == 0 ? 256 : result->awbGains.GreenR;
     aiq_awb_result->awb_gain_cfg.awb_gains.blue_gain= result->awbGains.Blue == 0 ? 296 : result->awbGains.Blue;
 
-    //ALOGD("AWB GAIN RESULT: %d-%d-%d-%d", result->awbGains.Red, result->awbGains.GreenB, result->awbGains.GreenR, result->awbGains.Blue);
+    //LOGD("AWB GAIN RESULT: %d-%d-%d-%d", result->awbGains.Red, result->awbGains.GreenB, result->awbGains.GreenR, result->awbGains.Blue);
 
     aiq_awb_result->ctk_config.enabled = true;
     memcpy(aiq_awb_result->ctk_config.ctk_matrix.coeff, result->CcMatrix.Coeff, sizeof(unsigned int)*9);
@@ -284,17 +284,20 @@ void ParamsTranslate::convert_to_rkisp_aec_config( XCamAeParam* aec_params,
     config->ae_bias = (int)(aec_params->ev_shift);
 
     if (config->mode == HAL_AE_OPERATION_MODE_AUTO) {
-        config->frame_time_ms_min = aec_params->exposure_time_min;
-        config->frame_time_ms_max = aec_params->exposure_time_max;
+        config->frame_time_ns_min = aec_params->exposure_time_min;
+        config->frame_time_ns_max = aec_params->exposure_time_max;
+        config->iso_max = (int)(aec_params->max_analog_gain);
+        config->iso_min = 1;
     } else {
-        config->frame_time_ms_min = aec_params->manual_exposure_time;
-        config->frame_time_ms_max = aec_params->manual_exposure_time;
+        config->frame_time_ns_min = aec_params->manual_exposure_time;
+        config->frame_time_ns_max = aec_params->manual_exposure_time;
         config->manual_gains = aec_params->manual_analog_gain;
     }
-    LOGI("@%s %d: aec_config, flk:%d, mode:%d, meter_mode:%d, win(%d,%d,%d,%d), bias:%d, min:%d, max:%d ", __FUNCTION__, __LINE__,
+    LOGI("@%s %d: aec_config, flk:%d, mode:%d, meter_mode:%d, win(%d,%d,%d,%d), bias:%d, "
+         "min:%" PRId64 " max:%" PRId64 " iso_max:%d",  __FUNCTION__, __LINE__,
          config->flk, config->mode, config->meter_mode,
          config->win.left_hoff, config->win.top_voff, config->win.right_width, config->win.bottom_height,
-         config->ae_bias, config->frame_time_ms_min, config->frame_time_ms_max);
+         config->ae_bias, config->frame_time_ns_min, config->frame_time_ns_max, config->iso_max);
 }
 
 void
@@ -390,7 +393,7 @@ ParamsTranslate::convert_to_rkisp_af_config(XCamAfParam* af_params,
 		af_params->trigger_new_search ? BOOL_TRUE : BOOL_FALSE;
     /* config->win_num = af_params->focus_rect_cnt; */
     config->win_num = 1;
-
+	config->af_lock = af_params->focus_lock;
     config->win_a.left_hoff = af_params->focus_rect[0].left_hoff;
     config->win_a.top_voff= af_params->focus_rect[0].top_voff;
     config->win_a.right_width = af_params->focus_rect[0].right_width;

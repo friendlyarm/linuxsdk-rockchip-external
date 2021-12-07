@@ -39,6 +39,16 @@
 
 #define BTCOEX
 
+/* Send host sleep notification to Controller */
+#define WOBT_NOTIFY		0	/* 1  enable; 0  disable */
+
+/* Send LE whitelist only for Background scan parameters */
+#define WOBT_NOTIFY_BG_SCAN_LE_WHITELIST_ONLY	(0 * WOBT_NOTIFY)	/* 1  enable; 0  disable */
+
+/* RTKBT Power-on Whitelist for sideband wake-up by LE Advertising from Remote.
+* Note that it's necessary to apply TV FW Patch. */
+#define RTKBT_TV_POWERON_WHITELIST	(0 * WOBT_NOTIFY)	/* 1  enable; 0  disable */
+
 /* Ioctls */
 #define HCIUARTSETPROTO		_IOW('U', 200, int)
 #define HCIUARTGETPROTO		_IOR('U', 201, int)
@@ -85,13 +95,21 @@ struct hci_uart {
 	struct workqueue_struct *hci_uart_wq;
 
 	struct hci_uart_proto	*proto;
-	rwlock_t		proto_lock;	/* Stop work for proto close */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0)
+	struct percpu_rw_semaphore proto_lock; /* Stop work for proto close */
+#else
+	struct rw_semaphore proto_lock;
+#endif
 	void			*priv;
 
-	spinlock_t		tx_lock;
+	struct semaphore tx_sem;	/* semaphore for tx */
 
 	struct sk_buff		*tx_skb;
 	unsigned long		tx_state;
+
+#if WOBT_NOTIFY
+	struct notifier_block pm_notify_block;
+#endif
 };
 
 /* HCI_UART proto flag bits */

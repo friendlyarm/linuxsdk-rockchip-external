@@ -20,14 +20,11 @@
 #include <string.h>
 
 #include "mpp_log.h"
-#include "mpp_err.h"
 #include "mpp_mem.h"
 #include "mpp_env.h"
 #include "mpp_buffer.h"
 #include "mpp_common.h"
 
-#include "mpp_device.h"
-#include "mpp_dec.h"
 #include "mpg4d_syntax.h"
 #include "hal_mpg4d_api.h"
 #include "hal_m4vd_com.h"
@@ -120,8 +117,9 @@ static void vdpu2_mpg4d_setup_regs_by_syntax(hal_mpg4_ctx *ctx, MppSyntax syntax
         RK_U32 start_bit_offset = stream_used & 0x3F;
         RK_U32 left_bytes = stream_length - consumed_bytes_align;
 
-        val += (consumed_bytes_align << 10);
         regs->reg64_input_stream_base = val;
+        if (consumed_bytes_align)
+            mpp_dev_set_reg_offset(ctx->dev, 64, consumed_bytes_align);
         regs->reg122.sw_stream_start_word = start_bit_offset;
         regs->reg51_stream_info.sw_stream_len = left_bytes;
     }
@@ -257,47 +255,22 @@ MPP_RET vdpu2_mpg4d_init(void *hal, MppHalCfg *cfg)
         goto ERR_RET;
     }
 
-    MppDevCfg dev_cfg = {
-        .type = MPP_CTX_DEC,              /* type */
-        .coding = MPP_VIDEO_CodingMPEG4,  /* coding */
-        .platform = 0,                    /* platform */
-        .pp_enable = 0,                   /* pp_enable */
-    };
-
-    ret = mpp_device_init(&ctx->dev_ctx, &dev_cfg);
+    ret = mpp_dev_init(&ctx->dev, VPU_CLIENT_VDPU2);
     if (ret) {
-        mpp_err_f("mpp_device_init failed. ret: %d\n", ret);
+        mpp_err_f("mpp_dev_init failed. ret: %d\n", ret);
         goto ERR_RET;
     }
 
-    /*
-     * basic register configuration setup here
-     */
-    regs->reg54_endian.sw_dec_out_endian = 1;
-    regs->reg54_endian.sw_dec_in_endian = 1;
-    regs->reg54_endian.sw_dec_in_wordsp = 1;
-    regs->reg54_endian.sw_dec_out_wordsp = 1;
-    regs->reg54_endian.sw_dec_strswap32_e = 1;
-    regs->reg54_endian.sw_dec_strendian_e = 1;
-    regs->reg56_axi_ctrl.sw_dec_max_burlen = 16;
-    regs->reg52_error_concealment.sw_adv_pref_thrd = 1;
-    regs->reg57_enable_ctrl.sw_timeout_sts_en = 1;
-    regs->reg57_enable_ctrl.sw_dec_clkgate_en = 1;
-    regs->reg57_enable_ctrl.sw_dec_st_work = 1;
-    regs->reg59.sw_pflt_set0_tap0 = -1;
-    regs->reg59.sw_pflt_set0_tap1    = 3;
-    regs->reg59.sw_pflt_set0_tap2 = -6;
-    regs->reg153.sw_pred_bc_tap_0_3 = 20;
-
     ctx->frm_slots  = cfg->frame_slots;
     ctx->pkt_slots  = cfg->packet_slots;
-    ctx->int_cb     = cfg->hal_int_cb;
+    ctx->dec_cb     = cfg->dec_cb;
     ctx->group      = group;
     ctx->mv_buf     = mv_buf;
     ctx->qp_table   = qp_table;
     ctx->regs       = regs;
+    cfg->dev        = ctx->dev;
 
-    mpp_env_get_u32("mpg4d_hal_debug", &mpg4d_hal_debug, 0);
+    mpp_env_get_u32("hal_mpg4d_debug", &hal_mpg4d_debug, 0);
 
     return ret;
 ERR_RET:
@@ -351,10 +324,9 @@ MPP_RET vdpu2_mpg4d_deinit(void *hal)
         ctx->group = NULL;
     }
 
-    if (ctx->dev_ctx) {
-        ret = mpp_device_deinit(ctx->dev_ctx);
-        if (ret)
-            mpp_err("mpp_device_deinit failed. ret: %d\n", ret);
+    if (ctx->dev) {
+        mpp_dev_deinit(ctx->dev);
+        ctx->dev = NULL;
     }
 
     return ret;
@@ -374,6 +346,27 @@ MPP_RET vdpu2_mpg4d_gen_regs(void *hal,  HalTaskInfo *syn)
     mpp_assert(task->valid);
     mpp_assert(task->input >= 0);
     mpp_assert(task->output >= 0);
+
+    memset(regs, 0, sizeof(M4vdVdpu2Regs_t));
+
+    /*
+     * basic register configuration setup here
+     */
+    regs->reg54_endian.sw_dec_out_endian = 1;
+    regs->reg54_endian.sw_dec_in_endian = 1;
+    regs->reg54_endian.sw_dec_in_wordsp = 1;
+    regs->reg54_endian.sw_dec_out_wordsp = 1;
+    regs->reg54_endian.sw_dec_strswap32_e = 1;
+    regs->reg54_endian.sw_dec_strendian_e = 1;
+    regs->reg56_axi_ctrl.sw_dec_max_burlen = 16;
+    regs->reg52_error_concealment.sw_adv_pref_thrd = 1;
+    regs->reg57_enable_ctrl.sw_timeout_sts_en = 1;
+    regs->reg57_enable_ctrl.sw_dec_clkgate_en = 1;
+    regs->reg57_enable_ctrl.sw_dec_st_work = 1;
+    regs->reg59.sw_pflt_set0_tap0 = -1;
+    regs->reg59.sw_pflt_set0_tap1    = 3;
+    regs->reg59.sw_pflt_set0_tap2 = -6;
+    regs->reg153.sw_pred_bc_tap_0_3 = 20;
 
     /* setup buffer for input / output / reference */
     mpp_buf_slot_get_prop(ctx->pkt_slots, task->input, SLOT_BUFFER, &buf_pkt);
@@ -405,17 +398,48 @@ MPP_RET vdpu2_mpg4d_start(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
     hal_mpg4_ctx *ctx = (hal_mpg4_ctx *)hal;
-    RK_U32 reg_count = (sizeof(*(M4vdVdpu2Regs_t *)ctx->regs) / sizeof(RK_U32));
     RK_U32* regs = (RK_U32 *)ctx->regs;
 
-    if (mpg4d_hal_debug & MPG4D_HAL_DBG_REG_PUT) {
+    if (hal_mpg4d_debug & MPG4D_HAL_DBG_REG_PUT) {
+        RK_U32 reg_count = (sizeof(M4vdVdpu2Regs_t) / sizeof(RK_U32));
         RK_U32 i = 0;
+
         for (i = 0; i < reg_count; i++) {
             mpp_log("reg[%03d]: %08x\n", i, regs[i]);
         }
     }
 
-    ret = mpp_device_send_reg(ctx->dev_ctx, regs, reg_count);
+    do {
+        MppDevRegWrCfg wr_cfg;
+        MppDevRegRdCfg rd_cfg;
+        RK_U32 reg_size = sizeof(M4vdVdpu2Regs_t);
+
+        wr_cfg.reg = regs;
+        wr_cfg.size = reg_size;
+        wr_cfg.offset = 0;
+
+        ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_REG_WR, &wr_cfg);
+        if (ret) {
+            mpp_err_f("set register write failed %d\n", ret);
+            break;
+        }
+
+        rd_cfg.reg = regs;
+        rd_cfg.size = reg_size;
+        rd_cfg.offset = 0;
+
+        ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_REG_RD, &rd_cfg);
+        if (ret) {
+            mpp_err_f("set register read failed %d\n", ret);
+            break;
+        }
+
+        ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_CMD_SEND, NULL);
+        if (ret) {
+            mpp_err_f("send cmd failed %d\n", ret);
+            break;
+        }
+    } while (0);
 
     (void)task;
     return ret;
@@ -425,45 +449,33 @@ MPP_RET vdpu2_mpg4d_wait(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
     hal_mpg4_ctx *ctx = (hal_mpg4_ctx *)hal;
-    M4vdVdpu2Regs_t reg_out;
-    RK_U32* regs = (RK_U32 *)&reg_out;
-    RK_U32 reg_count = (sizeof(reg_out) / sizeof(RK_U32));
+    M4vdVdpu2Regs_t *regs = (M4vdVdpu2Regs_t *)ctx->regs;
 
-    ret = mpp_device_wait_reg(ctx->dev_ctx, regs, (sizeof(reg_out) / sizeof(RK_U32)));
+    ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_CMD_POLL, NULL);
+    if (ret)
+        mpp_err_f("poll cmd failed %d\n", ret);
 
-    if (mpg4d_hal_debug & MPG4D_HAL_DBG_REG_GET) {
+    if (hal_mpg4d_debug & MPG4D_HAL_DBG_REG_GET) {
+        RK_U32 reg_count = (sizeof(M4vdVdpu2Regs_t) / sizeof(RK_U32));
         RK_U32 i = 0;
 
         for (i = 0; i < reg_count; i++) {
-            mpp_log("reg[%03d]: %08x\n", i, regs[i]);
+            mpp_log("reg[%03d]: %08x\n", i, ((RK_U32 *)regs)[i]);
         }
+    }
+
+    if (ctx->dec_cb) {
+        DecCbHalDone m_ctx = { 0 };
+
+        if (!regs->reg55_Interrupt.sw_dec_rdy_int)
+            m_ctx.hard_err = 1;
+
+        m_ctx.task = (void *)&task->dec;
+        m_ctx.regs = (RK_U32 *)ctx->regs;
+
+        mpp_callback(ctx->dec_cb, DEC_PARSER_CALLBACK, &m_ctx);
     }
 
     (void)task;
     return ret;
-}
-
-MPP_RET vdpu2_mpg4d_reset(void *hal)
-{
-    MPP_RET ret = MPP_OK;
-    (void)hal;
-    return ret;
-}
-
-MPP_RET vdpu2_mpg4d_flush(void *hal)
-{
-    MPP_RET ret = MPP_OK;
-
-    (void)hal;
-    return ret;
-}
-
-MPP_RET vdpu2_mpg4d_control(void *hal, RK_S32 cmd_type, void *param)
-{
-    MPP_RET ret = MPP_OK;
-
-    (void)hal;
-    (void)cmd_type;
-    (void)param;
-    return  ret;
 }

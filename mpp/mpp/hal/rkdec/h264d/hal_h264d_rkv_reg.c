@@ -27,8 +27,6 @@
 #include "mpp_common.h"
 #include "mpp_bitput.h"
 
-#include "mpp_device.h"
-
 #include "hal_h264d_global.h"
 #include "hal_h264d_rkv_reg.h"
 
@@ -580,6 +578,22 @@ MPP_RET rkv_h264d_init(void *hal, MppHalCfg *cfg)
     mpp_slots_set_prop(p_hal->frame_slots, SLOTS_VER_ALIGN, rkv_ver_align);
     mpp_slots_set_prop(p_hal->frame_slots, SLOTS_LEN_ALIGN, rkv_len_align);
 
+    {
+        // report hw_info to parser
+        const MppSocInfo *info = mpp_get_soc_info();
+        const void *hw_info = NULL;
+
+        for (i = 0; i < MPP_ARRAY_ELEMS(info->dec_caps); i++) {
+            if (info->dec_caps[i] && info->dec_caps[i]->type == VPU_CLIENT_RKVDEC) {
+                hw_info = info->dec_caps[i];
+                break;
+            }
+        }
+
+        mpp_assert(hw_info);
+        cfg->hw_info = hw_info;
+    }
+
     (void)cfg;
 __RETURN:
     return MPP_OK;
@@ -693,7 +707,9 @@ MPP_RET rkv_h264d_start(void *hal, HalTaskInfo *task)
     }
 
     H264dRkvRegCtx_t *reg_ctx = (H264dRkvRegCtx_t *)p_hal->reg_ctx;
-    RK_U32 *p_regs = (RK_U32 *)reg_ctx->regs;
+    RK_U32 *p_regs = p_hal->fast_mode ?
+                     (RK_U32 *)reg_ctx->reg_buf[task->dec.reg_index].regs :
+                     (RK_U32 *)reg_ctx->regs;
 
     p_regs[64] = 0;
     p_regs[65] = 0;
@@ -704,12 +720,37 @@ MPP_RET rkv_h264d_start(void *hal, HalTaskInfo *task)
 
     p_regs[1] |= 0x00000061;   // run hardware, enable buf_empty_en
 
-    ret = mpp_device_send_reg(p_hal->dev_ctx, (RK_U32 *)p_regs,
-                              DEC_RKV_REGISTERS);
-    if (ret) {
-        ret =  MPP_ERR_VPUHW;
-        H264D_ERR("H264 RKV FlushRegs fail. \n");
-    }
+    do {
+        MppDevRegWrCfg wr_cfg;
+        MppDevRegRdCfg rd_cfg;
+        RK_U32 reg_size = DEC_RKV_REGISTERS * sizeof(RK_U32);
+
+        wr_cfg.reg = p_regs;
+        wr_cfg.size = reg_size;
+        wr_cfg.offset = 0;
+
+        ret = mpp_dev_ioctl(p_hal->dev, MPP_DEV_REG_WR, &wr_cfg);
+        if (ret) {
+            mpp_err_f("set register write failed %d\n", ret);
+            break;
+        }
+
+        rd_cfg.reg = p_regs;
+        rd_cfg.size = reg_size;
+        rd_cfg.offset = 0;
+
+        ret = mpp_dev_ioctl(p_hal->dev, MPP_DEV_REG_RD, &rd_cfg);
+        if (ret) {
+            mpp_err_f("set register read failed %d\n", ret);
+            break;
+        }
+
+        ret = mpp_dev_ioctl(p_hal->dev, MPP_DEV_CMD_SEND, NULL);
+        if (ret) {
+            mpp_err_f("send cmd failed %d\n", ret);
+            break;
+        }
+    } while (0);
 
     (void)task;
 __RETURN:
@@ -729,37 +770,37 @@ MPP_RET rkv_h264d_wait(void *hal, HalTaskInfo *task)
 
     INP_CHECK(ret, NULL == p_hal);
     H264dRkvRegCtx_t *reg_ctx = (H264dRkvRegCtx_t *)p_hal->reg_ctx;
-    H264dRkvRegs_t *p_regs = reg_ctx->regs;
+    H264dRkvRegs_t *p_regs = p_hal->fast_mode ?
+                             reg_ctx->reg_buf[task->dec.reg_index].regs :
+                             reg_ctx->regs;
 
     if (task->dec.flags.parse_err ||
         task->dec.flags.ref_err) {
         goto __SKIP_HARD;
     }
 
-    {
-        RK_S32 wait_ret = -1;
-        wait_ret = mpp_device_wait_reg(p_hal->dev_ctx, (RK_U32 *)p_regs, DEC_RKV_REGISTERS);
-        if (wait_ret) {
-            ret =  MPP_ERR_VPUHW;
-            H264D_ERR("H264 RKV FlushRegs fail. \n");
-        }
-    }
+    ret = mpp_dev_ioctl(p_hal->dev, MPP_DEV_CMD_POLL, NULL);
+    if (ret)
+        mpp_err_f("poll cmd failed %d\n", ret);
 
 __SKIP_HARD:
-    if (p_hal->init_cb.callBack) {
-        IOCallbackCtx m_ctx = { 0 };
-        m_ctx.device_id = HAL_RKVDEC;
+    if (p_hal->dec_cb) {
+        DecCbHalDone m_ctx;
+
+        m_ctx.task = (void *)&task->dec;
+        m_ctx.regs = (RK_U32 *)p_regs;
+
         if (p_regs->sw01.dec_error_sta
             || (!p_regs->sw01.dec_rdy_sta)
             || p_regs->sw01.dec_empty_sta
             || p_regs->sw45.strmd_error_status
             || p_regs->sw45.colmv_error_ref_picidx
-            || p_regs->sw76.strmd_detect_error_flag) {
+            || p_regs->sw76.strmd_detect_error_flag)
             m_ctx.hard_err = 1;
-        }
-        m_ctx.task = (void *)&task->dec;
-        m_ctx.regs = (RK_U32 *)p_regs;
-        p_hal->init_cb.callBack(p_hal->init_cb.opaque, &m_ctx);
+        else
+            m_ctx.hard_err = 0;
+
+        mpp_callback(p_hal->dec_cb, DEC_PARSER_CALLBACK, &m_ctx);
     }
     memset(&p_regs->sw01, 0, sizeof(RK_U32));
     if (p_hal->fast_mode) {
@@ -812,7 +853,7 @@ __RETURN:
 ***********************************************************************
 */
 //extern "C"
-MPP_RET rkv_h264d_control(void *hal, RK_S32 cmd_type, void *param)
+MPP_RET rkv_h264d_control(void *hal, MpiCmd cmd_type, void *param)
 {
     MPP_RET ret = MPP_ERR_UNKNOW;
     H264dHalCtx_t *p_hal = (H264dHalCtx_t *)hal;

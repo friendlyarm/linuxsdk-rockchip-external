@@ -234,12 +234,38 @@ printf("Fixing execute permissions for %s\n", mount_point);
     return rv;
 }
 
+int mtd_get_flash_info(size_t *total_size, size_t *block_size, size_t *page_size)
+{
+    int fd = open("/dev/mtd0", O_RDONLY);
+    if (fd < 0) {
+        fprintf(stderr, "mtd: open /dev/mtd0 (%s)\n", strerror(errno));
+        return -1;
+    }
+
+    struct mtd_info_user mtd_info;
+    int ret = ioctl(fd, MEMGETINFO, &mtd_info);
+    close(fd);
+    if (ret < 0) {
+        fprintf(stderr, "mtd: ioctl MEMGETINFO (%s)\n", strerror(errno));
+        return -1;
+    }
+
+    printf("mtd_info.size = [%d]\n", mtd_info.size);
+    printf("mtd_info.erasesize = [%d]\n", mtd_info.erasesize);
+    printf("mtd_info.writesize = [%d]\n", mtd_info.writesize);
+    if (total_size) *total_size = mtd_info.size;
+    if (block_size) *block_size = mtd_info.erasesize;
+    if (page_size) *page_size = mtd_info.writesize;
+    return 0;
+}
+
 int
 mtd_partition_info(const MtdPartition *partition,
         size_t *total_size, size_t *erase_size, size_t *write_size)
 {
     char mtddevname[32];
-    sprintf(mtddevname, "/dev/mtd/mtd%d", partition->device_index);
+	//sprintf(mtddevname, "/dev/mtd/mtd%d", partition->device_index);
+    sprintf(mtddevname, "/dev/mtd%d", partition->device_index);
     int fd = open(mtddevname, O_RDONLY);
     if (fd < 0) return -1;
 
@@ -266,7 +292,8 @@ MtdReadContext *mtd_read_partition(const MtdPartition *partition)
     }
 
     char mtddevname[32];
-    sprintf(mtddevname, "/dev/mtd/mtd%d", partition->device_index);
+	sprintf(mtddevname, "/dev/mtd%d", partition->device_index);
+    //sprintf(mtddevname, "/dev/mtd/mtd%d", partition->device_index);
     ctx->fd = open(mtddevname, O_RDONLY);
     if (ctx->fd < 0) {
         free(ctx);
@@ -382,7 +409,8 @@ MtdWriteContext *mtd_write_partition(const MtdPartition *partition)
     }
 
     char mtddevname[32];
-    sprintf(mtddevname, "/dev/mtd/mtd%d", partition->device_index);
+	sprintf(mtddevname, "/dev/mtd%d", partition->device_index);
+    //sprintf(mtddevname, "/dev/mtd/mtd%d", partition->device_index);
     ctx->fd = open(mtddevname, O_RDWR);
     if (ctx->fd < 0) {
         free(ctx->buffer);

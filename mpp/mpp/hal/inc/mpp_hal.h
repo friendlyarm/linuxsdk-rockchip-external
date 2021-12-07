@@ -17,53 +17,40 @@
 #ifndef __MPP_HAL_H__
 #define __MPP_HAL_H__
 
-#include "hal_task.h"
+#include "rk_mpi_cmd.h"
+
 #include "mpp_buf_slot.h"
+#include "mpp_platform.h"
 
-typedef enum MppHalType_e {
-    HAL_MODE_LIBVPU,
-    HAL_MODE_V4L2,
-    HAL_MODE_BUTT,
-} HalWorkMode;
+#include "hal_task.h"
+#include "mpp_enc_cfg.h"
+#include "mpp_dec_cfg.h"
+#include "mpp_device.h"
 
-
-typedef enum MppHalHardType_e {
-    HAL_VDPU,           //!< vpu combined decoder
-    HAL_VEPU,           //!< vpu combined encoder
-    HAL_RKVDEC,         //!< rock-chip h264 h265 vp9 combined decoder
-    HAL_RKVENC,         //!< rock-chip h264 h265 combined encoder
-    HAL_DEVICE_BUTT,
-} HalDeviceId;
-
-typedef enum vpu_hard_mode_e {
+typedef enum VpuHwMode_e {
     MODE_NULL   = 0,
     RKVDEC_MODE = 0x01,
     VDPU1_MODE  = 0x02,
     VDPU2_MODE  = 0x04,
     RKVENC_MODE = 0x05,
     MODE_BUTT,
-} VpuHardMode;
-
-
-typedef void*   MppHalCtx;
+} VpuHwMode;
 
 typedef struct MppHalCfg_t {
     // input
-    MppCtxType      type;
-    MppCodingType   coding;
-    HalWorkMode     work_mode;
-    HalDeviceId     device_id;
-    MppBufSlots     frame_slots;
-    MppBufSlots     packet_slots;
-    // for encoder
-    MppEncCfgSet    *cfg;           /* encoder runtime config */
-    MppEncCfgSet    *set;           /* encoder input config */
+    MppCtxType          type;
+    MppCodingType       coding;
+    MppBufSlots         frame_slots;
+    MppBufSlots         packet_slots;
+    MppDecCfgSet        *cfg;
+    MppCbCtx            *dec_cb;
 
-    // output
-    HalTaskGroup    tasks;
-    RK_S32          task_count;
-    RK_U32          fast_mode;
-    IOInterruptCB   hal_int_cb;
+    // output from mpp_hal
+    HalTaskGroup        tasks;
+    // output from hardware module
+    const MppDecHwCap   *hw_info;
+    // codec dev
+    MppDev              dev;
 } MppHalCfg;
 
 typedef struct MppHalApi_t {
@@ -85,7 +72,7 @@ typedef struct MppHalApi_t {
 
     MPP_RET (*reset)(void *ctx);
     MPP_RET (*flush)(void *ctx);
-    MPP_RET (*control)(void *ctx, RK_S32 cmd, void *param);
+    MPP_RET (*control)(void *ctx, MpiCmd cmd, void *param);
 } MppHalApi;
 
 typedef void* MppHal;
@@ -103,7 +90,7 @@ MPP_RET mpp_hal_hw_wait(MppHal ctx, HalTaskInfo *task);
 
 MPP_RET mpp_hal_reset(MppHal ctx);
 MPP_RET mpp_hal_flush(MppHal ctx);
-MPP_RET mpp_hal_control(MppHal ctx, RK_S32 cmd, void *param);
+MPP_RET mpp_hal_control(MppHal ctx, MpiCmd cmd, void *param);
 
 #ifdef __cplusplus
 }

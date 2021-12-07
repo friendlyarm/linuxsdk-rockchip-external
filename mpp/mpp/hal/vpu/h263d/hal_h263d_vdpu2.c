@@ -82,7 +82,9 @@ static void vpu2_h263d_setup_regs_by_syntax(hal_h263_ctx *ctx, MppSyntax syntax)
         RK_U32 start_bit_offset = stream_used & 0x3F;
         RK_U32 left_bytes = stream_length - consumed_bytes_align;
 
-        val += (consumed_bytes_align << 10);
+        if (consumed_bytes_align) {
+            mpp_dev_set_reg_offset(ctx->dev, 64, consumed_bytes_align);
+        }
         regs->reg64_input_stream_base = val;
         regs->reg122.sw_stream_start_word = start_bit_offset;
         regs->reg51_stream_info.sw_stream_len = left_bytes;
@@ -133,42 +135,16 @@ MPP_RET hal_vpu2_h263d_init(void *hal, MppHalCfg *cfg)
         goto ERR_RET;
     }
 
-    MppDevCfg dev_cfg = {
-        .type = MPP_CTX_DEC,            /* type */
-        .coding = MPP_VIDEO_CodingH263, /* coding */
-        .platform = 0,                  /* platform */
-        .pp_enable = 0,                 /* pp_enable */
-    };
-
-    ret = mpp_device_init(&ctx->dev_ctx, &dev_cfg);
+    ret = mpp_dev_init(&ctx->dev, VPU_CLIENT_VDPU2);
     if (ret) {
-        mpp_err_f("mpp_device_init failed. ret: %d\n", ret);
+        mpp_err_f("mpp_dev_init failed. ret: %d\n", ret);
         ret = MPP_ERR_UNKNOW;
         goto ERR_RET;
     }
 
-    /*
-     * basic register configuration setup here
-     */
-    regs->reg54_endian.sw_dec_out_endian = 1;
-    regs->reg54_endian.sw_dec_in_endian = 1;
-    regs->reg54_endian.sw_dec_inswap32_e = 1;
-    regs->reg54_endian.sw_dec_outswap32_e = 1;
-    regs->reg54_endian.sw_dec_strswap32_e = 1;
-    regs->reg54_endian.sw_dec_strendian_e = 1;
-    regs->reg56_axi_ctrl.sw_dec_max_burst = 16;
-    regs->reg52_error_concealment.sw_apf_threshold = 1;
-    regs->reg57_enable_ctrl.sw_dec_timeout_e = 1;
-    regs->reg57_enable_ctrl.sw_dec_clk_gate_e = 1;
-    regs->reg57_enable_ctrl.sw_dec_e = 1;
-    regs->reg59.sw_pred_bc_tap_0_0 = -1;
-    regs->reg59.sw_pred_bc_tap_0_1 = 3;
-    regs->reg59.sw_pred_bc_tap_0_2 = -6;
-    regs->reg153.sw_pred_bc_tap_0_3 = 20;
-
     ctx->frm_slots  = cfg->frame_slots;
     ctx->pkt_slots  = cfg->packet_slots;
-    ctx->int_cb     = cfg->hal_int_cb;
+    ctx->dec_cb     = cfg->dec_cb;
     ctx->regs       = (void*)regs;
 
     return ret;
@@ -193,9 +169,10 @@ MPP_RET hal_vpu2_h263d_deinit(void *hal)
         ctx->regs = NULL;
     }
 
-    ret = mpp_device_deinit(ctx->dev_ctx);
-    if (ret)
-        mpp_err("mpp_device_deinit failed ret: %d\n", ret);
+    if (ctx->dev) {
+        mpp_dev_deinit(ctx->dev);
+        ctx->dev = NULL;
+    }
 
     return ret;
 }
@@ -213,6 +190,27 @@ MPP_RET hal_vpu2_h263d_gen_regs(void *hal,  HalTaskInfo *syn)
     mpp_assert(task->valid);
     mpp_assert(task->input >= 0);
     mpp_assert(task->output >= 0);
+
+    memset(regs, 0, sizeof(Vpu2H263dRegSet_t));
+
+    /*
+     * basic register configuration setup here
+     */
+    regs->reg54_endian.sw_dec_out_endian = 1;
+    regs->reg54_endian.sw_dec_in_endian = 1;
+    regs->reg54_endian.sw_dec_inswap32_e = 1;
+    regs->reg54_endian.sw_dec_outswap32_e = 1;
+    regs->reg54_endian.sw_dec_strswap32_e = 1;
+    regs->reg54_endian.sw_dec_strendian_e = 1;
+    regs->reg56_axi_ctrl.sw_dec_max_burst = 16;
+    regs->reg52_error_concealment.sw_apf_threshold = 1;
+    regs->reg57_enable_ctrl.sw_dec_timeout_e = 1;
+    regs->reg57_enable_ctrl.sw_dec_clk_gate_e = 1;
+    regs->reg57_enable_ctrl.sw_dec_e = 1;
+    regs->reg59.sw_pred_bc_tap_0_0 = -1;
+    regs->reg59.sw_pred_bc_tap_0_1 = 3;
+    regs->reg59.sw_pred_bc_tap_0_2 = -6;
+    regs->reg153.sw_pred_bc_tap_0_3 = 20;
 
     /* setup buffer for input / output / reference */
     mpp_buf_slot_get_prop(ctx->pkt_slots, task->input, SLOT_BUFFER, &buf_pkt);
@@ -236,17 +234,46 @@ MPP_RET hal_vpu2_h263d_start(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
     hal_h263_ctx *ctx = (hal_h263_ctx *)hal;
-    RK_U32 reg_count = (sizeof(*(Vpu2H263dRegSet_t*)ctx->regs) / sizeof(RK_U32));
-    RK_U32* regs = (RK_U32 *)ctx->regs;
+    RK_U32 *regs = (RK_U32 *)ctx->regs;
 
     if (h263d_hal_debug & H263D_HAL_DBG_REG_PUT) {
+        RK_U32 reg_count = (sizeof(Vpu2H263dRegSet_t) / sizeof(RK_U32));
         RK_U32 i = 0;
-        for (i = 0; i < reg_count; i++) {
+
+        for (i = 0; i < reg_count; i++)
             mpp_log("reg[%03d]: %08x\n", i, regs[i]);
-        }
     }
 
-    ret = mpp_device_send_reg(ctx->dev_ctx, regs, reg_count);
+    do {
+        MppDevRegWrCfg wr_cfg;
+        MppDevRegRdCfg rd_cfg;
+
+        wr_cfg.reg = regs;
+        wr_cfg.size = sizeof(Vpu2H263dRegSet_t);
+        wr_cfg.offset = 0;
+
+        ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_REG_WR, &wr_cfg);
+        if (ret) {
+            mpp_err_f("set register write failed %d\n", ret);
+            break;
+        }
+
+        rd_cfg.reg = regs;
+        rd_cfg.size = sizeof(Vpu2H263dRegSet_t);
+        rd_cfg.offset = 0;
+
+        ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_REG_RD, &rd_cfg);
+        if (ret) {
+            mpp_err_f("set register read failed %d\n", ret);
+            break;
+        }
+
+        ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_CMD_SEND, NULL);
+        if (ret) {
+            mpp_err_f("send cmd failed %d\n", ret);
+            break;
+        }
+    } while (0);
 
     (void)task;
     return ret;
@@ -256,46 +283,20 @@ MPP_RET hal_vpu2_h263d_wait(void *hal, HalTaskInfo *task)
 {
     MPP_RET ret = MPP_OK;
     hal_h263_ctx *ctx = (hal_h263_ctx *)hal;
-    Vpu2H263dRegSet_t reg_out;
-    RK_U32* regs = (RK_U32 *)&reg_out;
-    RK_U32 reg_count = (sizeof(reg_out) / sizeof(RK_U32));
 
-    ret = mpp_device_wait_reg(ctx->dev_ctx, regs, (sizeof(reg_out) / sizeof(RK_U32)));
+    ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_CMD_POLL, NULL);
+    if (ret)
+        mpp_err_f("poll cmd failed %d\n", ret);
 
     if (h263d_hal_debug & H263D_HAL_DBG_REG_GET) {
+        RK_U32 *regs = (RK_U32 *)ctx->regs;
+        RK_U32 reg_count = (sizeof(Vpu2H263dRegSet_t) / sizeof(RK_U32));
         RK_U32 i = 0;
 
-        for (i = 0; i < reg_count; i++) {
+        for (i = 0; i < reg_count; i++)
             mpp_log("reg[%03d]: %08x\n", i, regs[i]);
-        }
     }
 
     (void)task;
-    return ret;
-}
-
-MPP_RET hal_vpu2_h263d_reset(void *hal)
-{
-    MPP_RET ret = MPP_OK;
-
-    (void)hal;
-    return ret;
-}
-
-MPP_RET hal_vpu2_h263d_flush(void *hal)
-{
-    MPP_RET ret = MPP_OK;
-
-    (void)hal;
-    return ret;
-}
-
-MPP_RET hal_vpu2_h263d_control(void *hal, RK_S32 cmd_type, void *param)
-{
-    MPP_RET ret = MPP_OK;
-
-    (void)hal;
-    (void)cmd_type;
-    (void)param;
     return ret;
 }

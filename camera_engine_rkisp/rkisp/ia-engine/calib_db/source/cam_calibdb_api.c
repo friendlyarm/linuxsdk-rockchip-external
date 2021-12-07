@@ -5,7 +5,7 @@
  * transcribed, or translated into any language or computer format, in any form
  * or by any means without written permission of:
  * Fuzhou Rockchip Electronics Co.Ltd .
- * 
+ *
  *
  *****************************************************************************/
 /**
@@ -18,12 +18,28 @@
 //#include <ebase/trace.h>
 #include <ebase/builtins.h>
 #include <ebase/dct_assert.h>
-#include <base/log.h>
+#include <base/xcam_log.h>
 
 #include "cam_calibdb_api.h"
 #include "cam_calibdb.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#define LOAD_IQ_TRACE_INFO_ON
+// if defined, bin file should be included in following
+// iq_xml_db array, and will be built into library
+//#define USE_C_SOURCE_XML_BIN
+#ifdef USE_C_SOURCE_XML_BIN
+static const char iq_xml_db[] = {
+    #include "imx258_GEIR180089_LG500627G.xml.db"
+};
+#endif
 
 /******************************************************************************
  * local macro definitions
@@ -48,6 +64,14 @@
 /******************************************************************************
  * local functions
  *****************************************************************************/
+
+/******************************************************************************
+ * Where to store generated xml bin file
+ *****************************************************************************/
+static const char * GetXmlDbDir()
+{
+  return getenv("CAMERA_ENGINE_RKISP_XML_DB");
+}
 
 
 /******************************************************************************
@@ -83,6 +107,14 @@ static int SearchResolutionByName(List* l, void* key) {
   return ((!strncmp(res->name, k, strlen(res->name))) ? 1 : 0);
 }
 
+/******************************************************************************
+ * SearchResolutionByIdx
+ *****************************************************************************/
+static int SearchResolutionByIdx(List* l, void* key) {
+    uint32_t id = *((uint32_t*)key);
+    CamResolution_t* res = (CamResolution_t*)l;
+    return ((res->id == id) ? 1 : 0);
+}
 
 
 /******************************************************************************
@@ -104,7 +136,7 @@ static int SearchForEqualAwb_V11_Global(List* l, void* key) {
   CamCalibAwb_V11_Global_t* awb = (CamCalibAwb_V11_Global_t*)l;
   CamCalibAwb_V11_Global_t* k = (CamCalibAwb_V11_Global_t*)key;
 
-  return ((!strncmp(awb->name, k->name, sizeof(k->name))) ? 1 : 0);
+  return ((!strncasecmp(awb->name, k->name, sizeof(k->name))) ? 1 : 0);
 }
 
 
@@ -116,7 +148,7 @@ static int SearchForEqualAwb_V10_Global(List* l, void* key) {
   CamCalibAwb_V10_Global_t* awb = (CamCalibAwb_V10_Global_t*)l;
   CamCalibAwb_V10_Global_t* k = (CamCalibAwb_V10_Global_t*)key;
 
-  return ((!strncmp(awb->name, k->name, sizeof(k->name))) ? 1 : 0);
+  return ((!strncasecmp(awb->name, k->name, sizeof(k->name))) ? 1 : 0);
 }
 
 
@@ -128,7 +160,7 @@ static int SearchAwb_V11_GlobalByName(List* l, void* key) {
   CamCalibAwb_V11_Global_t* awb = (CamCalibAwb_V11_Global_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(awb->name, k, sizeof(awb->name))) ? 1 : 0);
+  return ((!strncasecmp(awb->name, k, sizeof(awb->name))) ? 1 : 0);
 }
 
 
@@ -140,7 +172,7 @@ static int SearchAwb_V10_GlobalByName(List* l, void* key) {
   CamCalibAwb_V10_Global_t* awb = (CamCalibAwb_V10_Global_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(awb->name, k, sizeof(awb->name))) ? 1 : 0);
+  return ((!strncasecmp(awb->name, k, sizeof(awb->name))) ? 1 : 0);
 }
 
 
@@ -152,7 +184,7 @@ static int SearchAwb_V11_GlobalByResolution(List* l, void* key) {
   CamCalibAwb_V11_Global_t* awb = (CamCalibAwb_V11_Global_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(awb->resolution, k, sizeof(awb->resolution))) ? 1 : 0);
+  return ((!strncasecmp(awb->resolution, k, sizeof(awb->resolution))) ? 1 : 0);
 }
 /******************************************************************************
  * SearchAwb_V10_GlobalByResolution
@@ -161,7 +193,7 @@ static int SearchAwb_V10_GlobalByResolution(List* l, void* key) {
   CamCalibAwb_V10_Global_t* awb = (CamCalibAwb_V10_Global_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(awb->resolution, k, sizeof(awb->resolution))) ? 1 : 0);
+  return ((!strncasecmp(awb->resolution, k, sizeof(awb->resolution))) ? 1 : 0);
 }
 
 
@@ -257,6 +289,15 @@ static int SearchAwb_V10_IlluminationByName(List* l, void* key) {
   return ((!strncmp(illu->name, k, sizeof(illu->name))) ? 1 : 0);
 }
 
+/******************************************************************************
+ * SearchForEqualIllumination
+ *****************************************************************************/
+static int SearchForEqualIllumination(List* l, void* key) {
+  CamAwb_V10_IlluProfile_t* illu = (CamAwb_V10_IlluProfile_t*)l;
+  CamAwb_V10_IlluProfile_t* k = (CamAwb_V10_IlluProfile_t*)key;
+
+  return ((!strncmp(illu->name, k->name, sizeof(k->name))) ? 1 : 0);
+}
 
 
 /******************************************************************************
@@ -278,7 +319,7 @@ static int SearchLscProfileByName(List* l, void* key) {
   CamLscProfile_t* lsc = (CamLscProfile_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(lsc->name, k, sizeof(lsc->name))) ? 1 : 0);
+  return ((!strncasecmp(lsc->name, k, sizeof(lsc->name))) ? 1 : 0);
 }
 
 
@@ -289,7 +330,7 @@ static int SearchForEqualCcProfile(List* l, void* key) {
   CamCcProfile_t* cc = (CamCcProfile_t*)l;
   CamCcProfile_t* k = (CamCcProfile_t*)key;
 
-  return ((!strncmp(cc->name, k->name, sizeof(k->name))) ? 1 : 0);
+  return ((!strncasecmp(cc->name, k->name, sizeof(k->name))) ? 1 : 0);
 }
 
 
@@ -301,7 +342,7 @@ static int SearchCcProfileByName(List* l, void* key) {
   CamCcProfile_t* cc = (CamCcProfile_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(cc->name, k, sizeof(cc->name))) ? 1 : 0);
+  return ((!strncasecmp(cc->name, k, sizeof(cc->name))) ? 1 : 0);
 }
 
 
@@ -407,7 +448,7 @@ static int SearchDpfProfileByName(List* l, void* key) {
   CamDpfProfile_t* dpf = (CamDpfProfile_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(dpf->name, k, sizeof(dpf->name))) ? 1 : 0);
+  return ((!strncasecmp(dpf->name, k, sizeof(dpf->name))) ? 1 : 0);
 }
 
 
@@ -463,7 +504,7 @@ static int SearchFilterProfileByName(List* l, void* key) {
   CamFilterProfile_t* filter = (CamFilterProfile_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(filter->name, k, sizeof(filter->name))) ? 1 : 0);
+  return ((!strncasecmp(filter->name, k, sizeof(filter->name))) ? 1 : 0);
 }
 static int SearchForEqualDySetpointProfile(List* l, void* key) {
   CamCalibAecDynamicSetpoint_t* pDySetpoint = (CamCalibAecDynamicSetpoint_t*)l;
@@ -528,7 +569,7 @@ static int SearchGocProfileByName(List* l, void* key) {
   CamCalibGocProfile_t* dpf = (CamCalibGocProfile_t*)l;
   char* k = (char*)key;
 
-  return ((!strncmp(dpf->name, k, sizeof(dpf->name))) ? 1 : 0);
+  return ((!strncasecmp(dpf->name, k, sizeof(dpf->name))) ? 1 : 0);
 }
 
 static void ReplaceLscProfile(List* l, void* content) {
@@ -950,14 +991,14 @@ static void ClearDsp3DNRList(List* l) {
 	  if(pDsp3DNR->sDefaultLevelSetting.pshp_level){
 		free(pDsp3DNR->sDefaultLevelSetting.pshp_level);
   	  }
-	  
+
 	  if(pDsp3DNR->sLumaSetting.pluma_sp_rad){
 		free(pDsp3DNR->sLumaSetting.pluma_sp_rad);
   	  }
 	  if(pDsp3DNR->sLumaSetting.pluma_te_max_bi_num){
 		free(pDsp3DNR->sLumaSetting.pluma_te_max_bi_num);
   	  }
-	  
+
 
 	  if(pDsp3DNR->sChrmSetting.pchrm_sp_rad){
 		free(pDsp3DNR->sChrmSetting.pchrm_sp_rad);
@@ -965,8 +1006,8 @@ static void ClearDsp3DNRList(List* l) {
 	  if(pDsp3DNR->sChrmSetting.pchrm_te_max_bi_num){
 		free(pDsp3DNR->sChrmSetting.pchrm_te_max_bi_num);
   	  }
-	 
-  
+
+
 	  if(pDsp3DNR->sSharpSetting.psrc_shp_c){
 		free(pDsp3DNR->sSharpSetting.psrc_shp_c);
   	  }
@@ -979,7 +1020,7 @@ static void ClearDsp3DNRList(List* l) {
 	  if(pDsp3DNR->sSharpSetting.psrc_shp_thr){
 		free(pDsp3DNR->sSharpSetting.psrc_shp_thr);
   	  }
-	
+
 
 	  for(int i=0; i<CAM_CALIBDB_3DNR_WEIGHT_NUM; i++){
 		if(pDsp3DNR->sLumaSetting.pluma_weight[i]){
@@ -989,7 +1030,7 @@ static void ClearDsp3DNRList(List* l) {
 		if(pDsp3DNR->sChrmSetting.pchrm_weight[i]){
 		  	free(pDsp3DNR->sChrmSetting.pchrm_weight[i]);
   	    }
-		
+
 		if(pDsp3DNR->sSharpSetting.psrc_shp_weight[i]){
 		   free(pDsp3DNR->sSharpSetting.psrc_shp_weight[i]);
 		}
@@ -1016,7 +1057,7 @@ static void ClearDemosicLP(CamDemosaicLpProfile_t *pDemosaicLp) {
 	if(pDemosaicLp->gainsArray){
 		free(pDemosaicLp->gainsArray);
 	}
-	
+
 	if(pDemosaicLp->diff_divided0){
 		free(pDemosaicLp->diff_divided0);
 	}
@@ -1032,7 +1073,7 @@ static void ClearDemosicLP(CamDemosaicLpProfile_t *pDemosaicLp) {
 	if(pDemosaicLp->diff_divided4){
 		free(pDemosaicLp->diff_divided4);
 	}
-	
+
 	if(pDemosaicLp->thCSC_divided0){
 		free(pDemosaicLp->thCSC_divided0);
 	}
@@ -1048,7 +1089,7 @@ static void ClearDemosicLP(CamDemosaicLpProfile_t *pDemosaicLp) {
 	if(pDemosaicLp->thCSC_divided4){
 		free(pDemosaicLp->thCSC_divided4);
 	}
-	
+
 	if(pDemosaicLp->thH_divided0){
 		free(pDemosaicLp->thH_divided0);
 	}
@@ -1064,7 +1105,7 @@ static void ClearDemosicLP(CamDemosaicLpProfile_t *pDemosaicLp) {
 	if(pDemosaicLp->thH_divided4){
 		free(pDemosaicLp->thH_divided4);
 	}
-	
+
 	if(pDemosaicLp->varTh_divided0){
 		free(pDemosaicLp->varTh_divided0);
 	}
@@ -1146,7 +1187,7 @@ static void ClearFilterList(List* l) {
 	  if(pFilter->DemosaicThCurve.pThlevel){
 		free(pFilter->DemosaicThCurve.pThlevel);
   	  }
-	   
+
 	  if(pFilter->DenoiseLevelCurve.pSensorGain){
 		free(pFilter->DenoiseLevelCurve.pSensorGain);
   	  }
@@ -1203,7 +1244,7 @@ static void ClearFilterList(List* l) {
 
 	  ClearDemosicLP(&pFilter->DemosaicLpConf);
       free(pFilter);
-		
+
       /* 3.) get next item */
       pFilter = (CamFilterProfile_t*)ListRemoveHead(l);
     }
@@ -1223,7 +1264,7 @@ static void ClearDpfProfileList(List* l) {
 	  ClearDsp3DNRList(&pDpfProfile->Dsp3DNRSettingProfileList);
 	  ClearNewDsp3DNRList(&pDpfProfile->newDsp3DNRProfileList);
 	  ClearFilterList(&pDpfProfile->FilterList);
-	  
+
       free(pDpfProfile);
       pDpfProfile = (CamDpfProfile_t*)ListRemoveHead(l);
     }
@@ -1835,7 +1876,7 @@ static RESULT ClearContext(CamCalibDbContext_t* pCamCalibDbCtx) {
 	ClearExpSeparateList(&pCamCalibDbCtx->pAecGlobal->ExpSeparateList);
     free(pCamCalibDbCtx->pAecGlobal);
   }
-  
+
   if (pCamCalibDbCtx->pWdrGlobal) {
     if (pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfMaxGain_level != NULL) {
       free(pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfMaxGain_level);
@@ -1849,13 +1890,13 @@ static RESULT ClearContext(CamCalibDbContext_t* pCamCalibDbCtx) {
   if (pCamCalibDbCtx->pCprocGlobal)
     free(pCamCalibDbCtx->pCprocGlobal);
 
-  if(pCamCalibDbCtx->pOTPGlobal){	
+  if(pCamCalibDbCtx->pOTPGlobal){
 	free(pCamCalibDbCtx->pOTPGlobal);
   }
-  
+
   ClearEcmProfileList(& pCamCalibDbCtx->ecm_profile);
-  ClearAwb_V11_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination);  
-  ClearAwb_V10_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V10.illumination);  
+  ClearAwb_V11_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination);
+  ClearAwb_V10_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V10.illumination);
   free(pCamCalibDbCtx->pAwbProfile);
   ClearLscProfileList(&pCamCalibDbCtx->lsc_profile);
   ClearCcProfileList(&pCamCalibDbCtx->cc_profile);
@@ -1872,6 +1913,2043 @@ static RESULT ClearContext(CamCalibDbContext_t* pCamCalibDbCtx) {
   return (RET_SUCCESS);
 }
 
+static void DumpFrameRateList(List* l, FILE* fp) {
+  LOGD("%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamFrameRate_t* pFrameRate = (CamFrameRate_t*)ListHead(l);
+    while (pFrameRate) {
+      LOGD("%s: pFrameRate->p_next 0x%x\n", __FUNCTION__, pFrameRate->p_next);
+      fwrite(pFrameRate, sizeof(CamFrameRate_t), 1, fp);
+
+      pFrameRate = pFrameRate->p_next;
+    }
+  }
+  LOGD("%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpResolutionList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamResolution_t* pResolution = (CamResolution_t*)ListHead(l);
+    while (pResolution) {
+      LOGD("%s: pResolution->p_next 0x%x\n", __FUNCTION__, pResolution->p_next);
+      fwrite(pResolution, sizeof(CamResolution_t), 1, fp);
+      DumpFrameRateList(&pResolution->framerates, fp);
+
+      pResolution = pResolution->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpAwb_V10_GlobalList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamCalibAwb_V10_Global_t* pAwbGlobal = (CamCalibAwb_V10_Global_t*)ListHead(l);
+    while (pAwbGlobal) {
+      fwrite(pAwbGlobal, sizeof(CamCalibAwb_V10_Global_t), 1, fp);
+
+      fwrite(pAwbGlobal->AwbClipParam.pRg1, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbClipParam.pMaxDist1, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbClipParam.pRg2, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize2, fp);
+      fwrite(pAwbGlobal->AwbClipParam.pMaxDist2, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize2, fp);
+
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade1, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance1, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade2, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize2, fp);
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance2, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize2, fp);
+
+      fwrite(pAwbGlobal->AwbFade2Parm.pFade, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pCbMinRegionMax, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pCrMinRegionMax, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxCSumRegionMax, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pCbMinRegionMin, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pCrMinRegionMin, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxCSumRegionMin, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinCRegionMax, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinCRegionMin, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxYRegionMax, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxYRegionMin, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinYMaxGRegionMax, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinYMaxGRegionMin, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pRefCb, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pRefCr, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+
+      /* 3.) get next illumination */
+      pAwbGlobal = pAwbGlobal->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpAwb_V11_GlobalList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamCalibAwb_V11_Global_t* pAwbGlobal = (CamCalibAwb_V11_Global_t*)ListHead(l);
+    while (pAwbGlobal) {
+      fwrite(pAwbGlobal, sizeof(CamCalibAwb_V11_Global_t), 1, fp);
+
+      fwrite(pAwbGlobal->AwbClipParam.pRg1, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbClipParam.pMaxDist1, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbClipParam.pRg2, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize2, fp);
+      fwrite(pAwbGlobal->AwbClipParam.pMaxDist2, sizeof(float),
+        pAwbGlobal->AwbClipParam.ArraySize2, fp);
+
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade1, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance1, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize1, fp);
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade2, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize2, fp);
+      fwrite(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance2, sizeof(float),
+        pAwbGlobal->AwbGlobalFadeParm.ArraySize2, fp);
+
+      fwrite(pAwbGlobal->AwbFade2Parm.pFade, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxCSum_br, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxCSum_sr, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinC_br, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinC_sr, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxY_br, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMaxY_sr, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinY_br, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pMinY_sr, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+
+      fwrite(pAwbGlobal->AwbFade2Parm.pRefCb, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+      fwrite(pAwbGlobal->AwbFade2Parm.pRefCr, sizeof(float),
+        pAwbGlobal->AwbFade2Parm.ArraySize, fp);
+
+      pAwbGlobal = pAwbGlobal->p_next;
+    }
+  }
+
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpEcmSchemeList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamEcmScheme_t* pEcmScheme = (CamEcmScheme_t*)ListHead(l);
+    while (pEcmScheme) {
+      fwrite(pEcmScheme, sizeof(CamEcmScheme_t), 1, fp);
+
+      pEcmScheme = pEcmScheme->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpEcmProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamEcmProfile_t* pEcmProfile = (CamEcmProfile_t*)ListHead(l);
+    while (pEcmProfile) {
+      fwrite(pEcmProfile, sizeof(CamEcmProfile_t), 1, fp);
+      DumpEcmSchemeList(&pEcmProfile->ecm_scheme, fp);
+
+      pEcmProfile = pEcmProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpAwb_V10_IlluminationList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamAwb_V10_IlluProfile_t* pIllumination = (CamAwb_V10_IlluProfile_t*)ListHead(l);
+    while (pIllumination) {
+      fwrite(pIllumination, sizeof(CamAwb_V10_IlluProfile_t), 1, fp);
+
+      fwrite(pIllumination->SaturationCurve.pSensorGain, sizeof(float),
+        pIllumination->SaturationCurve.ArraySize, fp);
+      fwrite(pIllumination->SaturationCurve.pSaturation, sizeof(float),
+        pIllumination->SaturationCurve.ArraySize, fp);
+
+      fwrite(pIllumination->VignettingCurve.pSensorGain, sizeof(float),
+        pIllumination->VignettingCurve.ArraySize, fp);
+      fwrite(pIllumination->VignettingCurve.pVignetting, sizeof(float),
+        pIllumination->VignettingCurve.ArraySize, fp);
+
+      pIllumination = pIllumination->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpAwb_V11_IlluminationList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamAwb_V11_IlluProfile_t* pIllumination = (CamAwb_V11_IlluProfile_t*)ListHead(l);
+    while (pIllumination) {
+      fwrite(pIllumination, sizeof(CamAwb_V11_IlluProfile_t), 1, fp);
+
+      fwrite(pIllumination->SaturationCurve.pSensorGain, sizeof(float),
+        pIllumination->SaturationCurve.ArraySize, fp);
+      fwrite(pIllumination->SaturationCurve.pSaturation, sizeof(float),
+        pIllumination->SaturationCurve.ArraySize, fp);
+
+      fwrite(pIllumination->VignettingCurve.pSensorGain, sizeof(float),
+        pIllumination->VignettingCurve.ArraySize, fp);
+      fwrite(pIllumination->VignettingCurve.pVignetting, sizeof(float),
+        pIllumination->VignettingCurve.ArraySize, fp);
+
+      pIllumination = pIllumination->p_next;
+    }
+  }
+
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpLscProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamLscProfile_t* pLscProfile = (CamLscProfile_t*)ListHead(l);
+    while (pLscProfile) {
+      fwrite(pLscProfile, sizeof(CamLscProfile_t), 1, fp);
+      pLscProfile = pLscProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpCcProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamCcProfile_t* pCcProfile = (CamCcProfile_t*)ListHead(l);
+    while (pCcProfile) {
+      fwrite(pCcProfile, sizeof(CamCcProfile_t), 1, fp);
+      pCcProfile = pCcProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpBlsProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamBlsProfile_t* pBlsProfile = (CamBlsProfile_t*)ListHead(l);
+    while (pBlsProfile) {
+      fwrite(pBlsProfile, sizeof(CamBlsProfile_t), 1, fp);
+      pBlsProfile = pBlsProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpCacProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamCacProfile_t* pCacProfile = (CamCacProfile_t*)ListHead(l);
+    while (pCacProfile) {
+      fwrite(pCacProfile, sizeof(CamCacProfile_t), 1, fp);
+      pCacProfile = pCacProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpDsp3DNRList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamDsp3DNRSettingProfile_t * pDsp3DNR = (CamDsp3DNRSettingProfile_t*)ListHead(l);
+    while (pDsp3DNR) {
+          fwrite(pDsp3DNR, sizeof(CamDsp3DNRSettingProfile_t), 1, fp);
+
+          if(pDsp3DNR->pgain_Level){
+            fwrite(pDsp3DNR->pgain_Level, sizeof(float),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->pnoise_coef_denominator){
+            fwrite(pDsp3DNR->pnoise_coef_denominator, sizeof(uint16_t),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->pnoise_coef_numerator){
+            fwrite(pDsp3DNR->pnoise_coef_numerator, sizeof(uint16_t),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sDefaultLevelSetting.pchrm_sp_nr_level){
+            fwrite(pDsp3DNR->sDefaultLevelSetting.pchrm_sp_nr_level, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sDefaultLevelSetting.pchrm_te_nr_level){
+            fwrite(pDsp3DNR->sDefaultLevelSetting.pchrm_te_nr_level, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sDefaultLevelSetting.pluma_sp_nr_level){
+            fwrite(pDsp3DNR->sDefaultLevelSetting.pluma_sp_nr_level, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sDefaultLevelSetting.pluma_te_nr_level){
+            fwrite(pDsp3DNR->sDefaultLevelSetting.pluma_te_nr_level, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sDefaultLevelSetting.pshp_level){
+            fwrite(pDsp3DNR->sDefaultLevelSetting.pshp_level, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+
+          if(pDsp3DNR->sLumaSetting.pluma_sp_rad){
+            fwrite(pDsp3DNR->sLumaSetting.pluma_sp_rad, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sLumaSetting.pluma_te_max_bi_num){
+            fwrite(pDsp3DNR->sLumaSetting.pluma_te_max_bi_num, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+
+          if(pDsp3DNR->sChrmSetting.pchrm_sp_rad){
+            fwrite(pDsp3DNR->sChrmSetting.pchrm_sp_rad, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sChrmSetting.pchrm_te_max_bi_num){
+            fwrite(pDsp3DNR->sChrmSetting.pchrm_te_max_bi_num, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+
+          if(pDsp3DNR->sSharpSetting.psrc_shp_c){
+            fwrite(pDsp3DNR->sSharpSetting.psrc_shp_c, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sSharpSetting.psrc_shp_div){
+            fwrite(pDsp3DNR->sSharpSetting.psrc_shp_div, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sSharpSetting.psrc_shp_l){
+            fwrite(pDsp3DNR->sSharpSetting.psrc_shp_l, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+          if(pDsp3DNR->sSharpSetting.psrc_shp_thr){
+            fwrite(pDsp3DNR->sSharpSetting.psrc_shp_thr, sizeof(unsigned char),
+                   pDsp3DNR->ArraySize, fp);
+          }
+
+          for(int i=0; i<CAM_CALIBDB_3DNR_WEIGHT_NUM; i++){
+            if(pDsp3DNR->sLumaSetting.pluma_weight[i]){
+              fwrite(pDsp3DNR->sLumaSetting.pluma_weight[i], sizeof(uint8_t),
+                     pDsp3DNR->ArraySize, fp);
+            }
+
+            if(pDsp3DNR->sChrmSetting.pchrm_weight[i]){
+              fwrite(pDsp3DNR->sChrmSetting.pchrm_weight[i], sizeof(uint8_t),
+                     pDsp3DNR->ArraySize, fp);
+            }
+
+            if(pDsp3DNR->sSharpSetting.psrc_shp_weight[i]){
+              fwrite(pDsp3DNR->sSharpSetting.psrc_shp_weight[i], sizeof(int8_t),
+                     pDsp3DNR->ArraySize, fp);
+            }
+          }
+
+      pDsp3DNR = pDsp3DNR->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpNewDsp3DNRList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamNewDsp3DNRProfile_t * pNewDsp3DNR = (CamNewDsp3DNRProfile_t*)ListHead(l);
+
+    while (pNewDsp3DNR) {
+      fwrite(pNewDsp3DNR, sizeof(CamNewDsp3DNRProfile_t), 1, fp);
+      if(pNewDsp3DNR->pgain_Level){
+        fwrite(pNewDsp3DNR->pgain_Level, sizeof(float),
+           pNewDsp3DNR->ArraySize, fp);
+      }
+
+      if(pNewDsp3DNR->ynr.pynr_time_weight_level){
+        fwrite(pNewDsp3DNR->ynr.pynr_time_weight_level, sizeof(uint32_t),
+           pNewDsp3DNR->ArraySize, fp);
+      }
+
+      if(pNewDsp3DNR->ynr.pynr_spat_weight_level){
+        fwrite(pNewDsp3DNR->ynr.pynr_spat_weight_level, sizeof(uint32_t),
+           pNewDsp3DNR->ArraySize, fp);
+      }
+
+      if(pNewDsp3DNR->uvnr.puvnr_weight_level){
+        fwrite(pNewDsp3DNR->uvnr.puvnr_weight_level, sizeof(uint32_t),
+           pNewDsp3DNR->ArraySize, fp);
+      }
+
+      if(pNewDsp3DNR->sharp.psharp_weight_level){
+        fwrite(pNewDsp3DNR->sharp.psharp_weight_level, sizeof(uint32_t),
+           pNewDsp3DNR->ArraySize, fp);
+      }
+
+      /* 3.) get next item */
+      pNewDsp3DNR = pNewDsp3DNR->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpFilterList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamFilterProfile_t * pFilter = (CamFilterProfile_t*)ListHead(l);
+    while (pFilter) {
+      fwrite(pFilter, sizeof(CamFilterProfile_t), 1, fp);
+
+      if(pFilter->DemosaicThCurve.pSensorGain){
+        fwrite(pFilter->DemosaicThCurve.pSensorGain, sizeof(float),
+               pFilter->DemosaicThCurve.ArraySize, fp);
+      }
+      if(pFilter->DemosaicThCurve.pThlevel){
+        fwrite(pFilter->DemosaicThCurve.pThlevel, sizeof(uint8_t),
+               pFilter->DemosaicThCurve.ArraySize, fp);
+      }
+
+      if(pFilter->DenoiseLevelCurve.pSensorGain){
+        fwrite(pFilter->DenoiseLevelCurve.pSensorGain, sizeof(float),
+               pFilter->DenoiseLevelCurve.ArraySize, fp);
+      }
+      if(pFilter->DenoiseLevelCurve.pDlevel){
+        fwrite(pFilter->DenoiseLevelCurve.pDlevel, sizeof(CamerIcIspFltDeNoiseLevel_t),
+               pFilter->DenoiseLevelCurve.ArraySize, fp);
+      }
+
+      if(pFilter->SharpeningLevelCurve.pSensorGain){
+        fwrite(pFilter->SharpeningLevelCurve.pSensorGain, sizeof(float),
+               pFilter->SharpeningLevelCurve.ArraySize, fp);
+      }
+      if(pFilter->SharpeningLevelCurve.pSlevel){
+        fwrite(pFilter->SharpeningLevelCurve.pSlevel, sizeof(CamerIcIspFltSharpeningLevel_t),
+               pFilter->SharpeningLevelCurve.ArraySize, fp);
+      }
+
+      if(pFilter->FiltLevelRegConf.p_chr_h_mode){
+        fwrite(pFilter->FiltLevelRegConf.p_chr_h_mode, sizeof(uint8_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_chr_v_mode){
+        fwrite(pFilter->FiltLevelRegConf.p_chr_v_mode, sizeof(uint8_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_fac_bl0){
+        fwrite(pFilter->FiltLevelRegConf.p_fac_bl0, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_fac_bl1){
+        fwrite(pFilter->FiltLevelRegConf.p_fac_bl1, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_fac_mid){
+        fwrite(pFilter->FiltLevelRegConf.p_fac_mid, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_fac_sh0){
+        fwrite(pFilter->FiltLevelRegConf.p_fac_sh0, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_fac_sh1){
+        fwrite(pFilter->FiltLevelRegConf.p_fac_sh1, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_FiltLevel){
+        fwrite(pFilter->FiltLevelRegConf.p_FiltLevel, sizeof(uint8_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_grn_stage1){
+        fwrite(pFilter->FiltLevelRegConf.p_grn_stage1, sizeof(uint8_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_thresh_bl0){
+        fwrite(pFilter->FiltLevelRegConf.p_thresh_bl0, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_thresh_bl1){
+        fwrite(pFilter->FiltLevelRegConf.p_thresh_bl1, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_thresh_sh0){
+        fwrite(pFilter->FiltLevelRegConf.p_thresh_sh0, sizeof(uint8_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+      if(pFilter->FiltLevelRegConf.p_thresh_sh1){
+        fwrite(pFilter->FiltLevelRegConf.p_thresh_sh1, sizeof(uint32_t),
+               pFilter->FiltLevelRegConf.ArraySize, fp);
+      }
+
+      pFilter = pFilter->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpDpfProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamDpfProfile_t* pDpfProfile = (CamDpfProfile_t*)ListHead(l);
+    while (pDpfProfile) {
+      fwrite(pDpfProfile, sizeof(CamDpfProfile_t), 1, fp);
+      DumpDsp3DNRList(&pDpfProfile->Dsp3DNRSettingProfileList, fp);
+      DumpNewDsp3DNRList(&pDpfProfile->newDsp3DNRProfileList, fp);
+      DumpFilterList(&pDpfProfile->FilterList, fp);
+
+      pDpfProfile = pDpfProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpDpccProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamDpccProfile_t* pDpccProfile = (CamDpccProfile_t*)ListHead(l);
+    while (pDpccProfile) {
+      fwrite(pDpccProfile, sizeof(CamDpccProfile_t), 1, fp);
+      pDpccProfile = pDpccProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpGocProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamCalibGocProfile_t* pGocProfile = (CamCalibGocProfile_t*)ListHead(l);
+    while (pGocProfile) {
+      fwrite(pGocProfile, sizeof(CamCalibGocProfile_t), 1, fp);
+      pGocProfile = pGocProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpIeSharpenProfileList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamIesharpenProfile_t* pIeSharpenProfile = (CamIesharpenProfile_t*)ListHead(l);
+    while (pIeSharpenProfile) {
+      fwrite(pIeSharpenProfile, sizeof(CamIesharpenProfile_t), 1, fp);
+      if (pIeSharpenProfile->yavg_thr)
+          fwrite(pIeSharpenProfile->yavg_thr, pIeSharpenProfile->yavg_thr_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->P_delta1)
+          fwrite(pIeSharpenProfile->P_delta1, pIeSharpenProfile->P_delta1_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->P_delta2)
+          fwrite(pIeSharpenProfile->P_delta2, pIeSharpenProfile->P_delta2_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->pmaxnumber)
+          fwrite(pIeSharpenProfile->pmaxnumber, pIeSharpenProfile->pmaxnumber_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->pminnumber)
+          fwrite(pIeSharpenProfile->pminnumber, pIeSharpenProfile->pminnumber_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->gauss_flat_coe)
+          fwrite(pIeSharpenProfile->gauss_flat_coe, pIeSharpenProfile->gauss_flat_coe_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->gauss_noise_coe)
+          fwrite(pIeSharpenProfile->gauss_noise_coe, pIeSharpenProfile->gauss_noise_coe_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->gauss_other_coe)
+          fwrite(pIeSharpenProfile->gauss_other_coe, pIeSharpenProfile->gauss_other_coe_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->uv_gauss_flat_coe)
+          fwrite(pIeSharpenProfile->uv_gauss_flat_coe, pIeSharpenProfile->uv_gauss_flat_coe_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->uv_gauss_noise_coe)
+          fwrite(pIeSharpenProfile->uv_gauss_noise_coe, pIeSharpenProfile->uv_gauss_noise_coe_ArraySize * sizeof(uint8_t), 1, fp);
+      if (pIeSharpenProfile->uv_gauss_other_coe)
+          fwrite(pIeSharpenProfile->uv_gauss_other_coe, pIeSharpenProfile->uv_gauss_other_coe_ArraySize * sizeof(uint8_t), 1, fp);
+      {
+         // CamIesharpenGridConf_t
+          if (pIeSharpenProfile->lgridconf.p_grad)
+              fwrite(pIeSharpenProfile->lgridconf.p_grad, pIeSharpenProfile->lgridconf.p_grad_ArraySize * sizeof(uint16_t), 1, fp);
+          if (pIeSharpenProfile->lgridconf.sharp_factor)
+              fwrite(pIeSharpenProfile->lgridconf.sharp_factor, pIeSharpenProfile->lgridconf.sharp_factor_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->lgridconf.line1_filter_coe)
+              fwrite(pIeSharpenProfile->lgridconf.line1_filter_coe, pIeSharpenProfile->lgridconf.line1_filter_coe_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->lgridconf.line2_filter_coe)
+              fwrite(pIeSharpenProfile->lgridconf.line2_filter_coe, pIeSharpenProfile->lgridconf.line2_filter_coe_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->lgridconf.line3_filter_coe)
+              fwrite(pIeSharpenProfile->lgridconf.line3_filter_coe, pIeSharpenProfile->lgridconf.line3_filter_coe_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->lgridconf.lap_mat_coe)
+              fwrite(pIeSharpenProfile->lgridconf.lap_mat_coe, pIeSharpenProfile->lgridconf.lap_mat_coe_ArraySize * sizeof(uint8_t), 1, fp);
+
+          if (pIeSharpenProfile->hgridconf.p_grad)
+              fwrite(pIeSharpenProfile->hgridconf.p_grad, pIeSharpenProfile->hgridconf.p_grad_ArraySize * sizeof(uint16_t), 1, fp);
+          if (pIeSharpenProfile->hgridconf.sharp_factor)
+              fwrite(pIeSharpenProfile->hgridconf.sharp_factor, pIeSharpenProfile->hgridconf.sharp_factor_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->hgridconf.line1_filter_coe)
+              fwrite(pIeSharpenProfile->hgridconf.line1_filter_coe, pIeSharpenProfile->hgridconf.line1_filter_coe_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->hgridconf.line2_filter_coe)
+              fwrite(pIeSharpenProfile->hgridconf.line2_filter_coe, pIeSharpenProfile->hgridconf.line2_filter_coe_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->hgridconf.line3_filter_coe)
+              fwrite(pIeSharpenProfile->hgridconf.line3_filter_coe, pIeSharpenProfile->hgridconf.line3_filter_coe_ArraySize * sizeof(uint8_t), 1, fp);
+          if (pIeSharpenProfile->hgridconf.lap_mat_coe)
+              fwrite(pIeSharpenProfile->hgridconf.lap_mat_coe, pIeSharpenProfile->hgridconf.lap_mat_coe_ArraySize * sizeof(uint8_t), 1, fp);
+      }
+      pIeSharpenProfile = pIeSharpenProfile->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpDySetpointList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamCalibAecDynamicSetpoint_t* pDySetpoint = (CamCalibAecDynamicSetpoint_t*)ListHead(l);
+    while (pDySetpoint) {
+      fwrite(pDySetpoint, sizeof(CamCalibAecDynamicSetpoint_t), 1, fp);
+      if(pDySetpoint->pDySetpoint != NULL)
+        fwrite(pDySetpoint->pDySetpoint, sizeof(float),
+               pDySetpoint->array_size, fp);
+
+      if(pDySetpoint->pExpValue != NULL)
+        fwrite(pDySetpoint->pExpValue, sizeof(float),
+               pDySetpoint->array_size, fp);
+
+      pDySetpoint = pDySetpoint->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static void DumpExpSeparateList(List* l, FILE* fp) {
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+  if (!ListEmpty(l)) {
+    CamCalibAecExpSeparate_t* pExpSeparate = (CamCalibAecExpSeparate_t*)ListHead(l);
+    while (pExpSeparate) {
+      fwrite(pExpSeparate, sizeof(CamCalibAecExpSeparate_t), 1, fp);
+
+      pExpSeparate = pExpSeparate->p_next;
+    }
+  }
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, ftell(fp));
+}
+
+static RESULT DumpBin2CSource(const char *bin_path, const char *c_path) {
+  FILE* fp_in = NULL;
+  FILE* fp_out = NULL;
+  int dump_size, i, dump_idx;
+  unsigned char *pDumpBuf;
+
+  fp_in = fopen(bin_path, "rb");
+  if (!fp_in) {
+    LOGE( "%s:open %s failed!!\n", __func__, bin_path);
+    return RET_FAILURE;
+  }
+
+  fseek(fp_in, 0L, SEEK_END);
+  dump_size = ftell(fp_in);
+  fseek(fp_in, 0L, SEEK_SET);
+
+  pDumpBuf = malloc(dump_size);
+  if (pDumpBuf == NULL) {
+    LOGE( "%s:malloc failed!!\n", __func__);
+    return RET_FAILURE;
+  }
+
+  fread(pDumpBuf, dump_size, 1, fp_in);
+  fclose(fp_in);
+
+  fp_out = fopen(c_path, "w");
+  if (!fp_out) {
+    LOGE( "%s:open %s failed!!\n", __func__, c_path);
+    return RET_FAILURE;
+  }
+
+  dump_idx = 0;
+  while (dump_idx < dump_size) {
+    fprintf(fp_out, "\n");
+    for (i = 0; i < 16; i++) {
+      if (dump_idx < dump_size)
+        fprintf(fp_out, " 0x%02x,", pDumpBuf[dump_idx++]);
+    }
+  }
+  fprintf(fp_out, "\n");
+
+  fclose(fp_out);
+  free(pDumpBuf);
+
+  LOGD( "%s (exit)\n", __FUNCTION__);
+  return (RET_SUCCESS);
+}
+
+RESULT CamCalibDbDumpFile
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    const char *dump_path
+) {
+  CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+  RESULT result;
+  FILE* fp = NULL;
+  List* l;
+  char xml_dump_bin_file[128]; 
+  char xml_dump_db_file[128]; 
+  char* xml_path_split;
+
+  LOGD( "%s (enter)\n", __FUNCTION__);
+
+  if (NULL == pCamCalibDbCtx) {
+    return (RET_WRONG_HANDLE);
+  }
+
+  if (NULL == GetXmlDbDir())
+    return RET_FAILURE;
+
+  xml_path_split = strrchr(dump_path, '/');
+
+  sprintf(xml_dump_bin_file, "%s/%s.bin", GetXmlDbDir(), xml_path_split + 1);
+  
+  fp = fopen(xml_dump_bin_file, "wb");
+  if (!fp) {
+    LOGE( "%s:open %s failed %s!!\n", __func__, xml_dump_bin_file, strerror(errno));
+    return RET_FAILURE;
+  }
+
+  fwrite(pCamCalibDbCtx, sizeof(CamCalibDbContext_t), 1, fp);
+
+  DumpResolutionList(&pCamCalibDbCtx->resolution, fp);
+  fwrite(pCamCalibDbCtx->pAwbProfile, sizeof(CamCalibAwbPara_t), 1, fp);
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, ftell(fp));
+  DumpAwb_V10_GlobalList(&pCamCalibDbCtx->pAwbProfile->Para_V10.awb_global, fp);
+  DumpAwb_V10_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V10.illumination, fp);
+  DumpAwb_V11_GlobalList(&pCamCalibDbCtx->pAwbProfile->Para_V11.awb_global, fp);
+  DumpAwb_V11_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination, fp);
+  if (pCamCalibDbCtx->pAfGlobal) {
+    fwrite(pCamCalibDbCtx->pAfGlobal, sizeof(CamCalibAfGlobal_t), 1, fp);
+    if (pCamCalibDbCtx->pAfGlobal->contrast_af.FullSteps > 0) {
+        fwrite(pCamCalibDbCtx->pAfGlobal->contrast_af.FullRangeTbl, sizeof(uint16_t),
+               pCamCalibDbCtx->pAfGlobal->contrast_af.FullSteps, fp);
+    }
+
+    if (pCamCalibDbCtx->pAfGlobal->contrast_af.AdaptiveSteps > 0) {
+        fwrite(pCamCalibDbCtx->pAfGlobal->contrast_af.AdaptRangeTbl, sizeof(uint16_t),
+               pCamCalibDbCtx->pAfGlobal->contrast_af.AdaptiveSteps, fp);
+    }
+  }
+  if (pCamCalibDbCtx->pAecGlobal) {
+    fwrite(pCamCalibDbCtx->pAecGlobal, sizeof(CamCalibAecGlobal_t), 1, fp);
+    if(pCamCalibDbCtx->pAecGlobal->GridWeights.pWeight != NULL){
+       fwrite(pCamCalibDbCtx->pAecGlobal->GridWeights.pWeight, sizeof(uint8_t),
+              pCamCalibDbCtx->pAecGlobal->GridWeights.ArraySize, fp);
+    }
+    if(pCamCalibDbCtx->pAecGlobal->NightGridWeights.pWeight != NULL){
+       fwrite(pCamCalibDbCtx->pAecGlobal->NightGridWeights.pWeight, sizeof(uint8_t),
+              pCamCalibDbCtx->pAecGlobal->NightGridWeights.ArraySize, fp);
+    }
+    if(pCamCalibDbCtx->pAecGlobal->GainRange.pGainRange != NULL){
+       fwrite(pCamCalibDbCtx->pAecGlobal->GainRange.pGainRange, sizeof(float),
+              pCamCalibDbCtx->pAecGlobal->GainRange.array_size, fp);
+    }
+    DumpDySetpointList(&pCamCalibDbCtx->pAecGlobal->DySetpointList, fp);
+    DumpExpSeparateList(&pCamCalibDbCtx->pAecGlobal->ExpSeparateList, fp);
+  }
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, ftell(fp));
+
+  if (pCamCalibDbCtx->pWdrGlobal) {
+    fwrite(pCamCalibDbCtx->pWdrGlobal, sizeof(CamCalibWdrGlobal_t), 1, fp);
+    if (pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfMaxGain_level != NULL) {
+      fwrite(pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfMaxGain_level, sizeof(float),
+             pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.nSize, fp);
+    }
+    if (pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfSensorGain_level != NULL) {
+      fwrite(pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfSensorGain_level, sizeof(float),
+             pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.nSize, fp);
+    }
+  }
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, ftell(fp));
+
+  if (pCamCalibDbCtx->pCprocGlobal)
+    fwrite(pCamCalibDbCtx->pCprocGlobal, sizeof(CamCprocProfile_t), 1, fp);
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, ftell(fp));
+  DumpEcmProfileList(& pCamCalibDbCtx->ecm_profile, fp);
+  DumpLscProfileList(&pCamCalibDbCtx->lsc_profile, fp);
+  DumpCcProfileList(&pCamCalibDbCtx->cc_profile, fp);
+  DumpBlsProfileList(&pCamCalibDbCtx->bls_profile, fp);
+  DumpCacProfileList(&pCamCalibDbCtx->cac_profile, fp);
+  DumpDpfProfileList(&pCamCalibDbCtx->dpf_profile, fp);
+  DumpDpccProfileList(&pCamCalibDbCtx->dpcc_profile, fp);
+  DumpGocProfileList(&pCamCalibDbCtx->gocProfile, fp);
+  DumpIeSharpenProfileList(&pCamCalibDbCtx->iesharpen_profile, fp);
+  if (pCamCalibDbCtx->pOTPGlobal)
+    fwrite(pCamCalibDbCtx->pOTPGlobal, sizeof(CamOTPGlobal_t), 1, fp);
+
+  fclose(fp);
+  { /* sync file data */
+    int fd;
+
+    fd = open(xml_dump_bin_file, O_RDWR);
+    fdatasync(fd);
+    close(fd);
+  }
+
+#ifdef USE_C_SOURCE_XML_BIN
+  sprintf(xml_dump_db_file, "%s/%s.db", GetXmlDbDir(), xml_path_split + 1);
+  DumpBin2CSource(xml_dump_bin_file, xml_dump_db_file);
+#endif
+  //remove(xml_dump_bin_file);
+  LOGD( "%s (exit)\n", __FUNCTION__);
+
+  return (RET_SUCCESS);
+}
+
+static unsigned int gCamCalibDbIqIdx;
+static const char* gpCamCalibDbIqData = NULL;
+
+static RESULT initCamCalibDbIq(const char* CamCalibDbIqData) {
+  char* xml_path_split = strrchr(CamCalibDbIqData, '/');
+  char xml_db_file[128];
+
+#ifdef USE_C_SOURCE_XML_BIN
+  // use built-in iq
+  LOGD("%s: loading iq from built-in source", __FUNCTION__);
+  gpCamCalibDbIqData = iq_xml_db;
+#else
+  sprintf(xml_db_file, "%s/%s.bin", GetXmlDbDir(), xml_path_split + 1);
+  if (access(xml_db_file, R_OK) != -1) {
+    FILE* fp_in = NULL;
+    size_t bin_size;
+
+    fp_in = fopen(xml_db_file, "rb");
+    if (!fp_in) {
+        LOGE( "%s:open %s failed!!\n", __func__, xml_db_file);
+        return RET_FAILURE;
+    }
+
+    fseek(fp_in, 0L, SEEK_END);
+    bin_size = ftell(fp_in);
+    fseek(fp_in, 0L, SEEK_SET);
+
+    gpCamCalibDbIqData = malloc(bin_size);
+    if (gpCamCalibDbIqData == NULL) {
+        LOGE( "%s:malloc failed!!\n", __func__);
+        fclose(fp_in);
+        return RET_FAILURE;
+    }
+
+    fread((void*)gpCamCalibDbIqData, bin_size, 1, fp_in);
+    fclose(fp_in);
+	LOGD("%s: loading iq from bin file %s", __FUNCTION__, xml_db_file);
+  } else
+    return RET_FAILURE;
+#endif
+  gCamCalibDbIqIdx = 0;
+  return RET_SUCCESS;
+}
+
+static void readCamCalibDbIq(void* pBuf, unsigned int size) {
+  memcpy(pBuf, &gpCamCalibDbIqData[gCamCalibDbIqIdx], size);
+  gCamCalibDbIqIdx += size;
+}
+
+static unsigned int getCamCalibDbIqIdx() {
+  return gCamCalibDbIqIdx;
+}
+
+static void LoadFrameRateList(List* l) {
+  CamFrameRate_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+  if (!ListEmpty(l)) {
+    CamFrameRate_t* pFrameRate = malloc(sizeof(CamFrameRate_t));
+    l->p_next = (List*)pFrameRate;
+    readCamCalibDbIq(pFrameRate, sizeof(CamFrameRate_t));
+    while (pFrameRate->p_next) {
+      pNew = malloc(sizeof(CamFrameRate_t));
+      readCamCalibDbIq(pNew, sizeof(CamFrameRate_t));
+
+      pFrameRate->p_next = pNew;
+      pFrameRate = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadResolutionList(List* l) {
+  CamResolution_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamResolution_t* pResolution = malloc(sizeof(CamResolution_t));
+    l->p_next = (List*)pResolution;
+    readCamCalibDbIq(pResolution, sizeof(CamResolution_t));
+    LOGD("pResolution->p_next %p, pResolution->list %p", pResolution->p_next,
+        pResolution->framerates.p_next);
+    LoadFrameRateList(&pResolution->framerates);
+    while (pResolution->p_next) {
+      pNew = malloc(sizeof(CamResolution_t));
+      readCamCalibDbIq(pNew, sizeof(CamResolution_t));
+      LoadFrameRateList(&pNew->framerates);
+
+      pResolution->p_next = pNew;
+      pResolution = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadAwb_V10_GlobalSubList(CamCalibAwb_V10_Global_t* pAwbGlobal) {
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  pAwbGlobal->AwbClipParam.pRg1 = malloc(pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pRg1, pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbClipParam.pMaxDist1 = malloc(pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pMaxDist1, pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbClipParam.pRg2 = malloc(pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pRg2, pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+  pAwbGlobal->AwbClipParam.pMaxDist2 = malloc(pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pMaxDist2, pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalFade1 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade1, pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance1 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance1, pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalFade2 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade2, pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance2 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance2, pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+
+  pAwbGlobal->AwbFade2Parm.pFade = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pFade, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pCbMinRegionMax = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pCbMinRegionMax, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pCrMinRegionMax = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pCrMinRegionMax, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMaxCSumRegionMax = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxCSumRegionMax, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pCbMinRegionMin = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pCbMinRegionMin, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pCrMinRegionMin = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pCrMinRegionMin, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMaxCSumRegionMin = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxCSumRegionMin, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinCRegionMax = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinCRegionMax, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinCRegionMin = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinCRegionMin, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMaxYRegionMax = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxYRegionMax, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMaxYRegionMin = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxYRegionMin, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinYMaxGRegionMax = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinYMaxGRegionMax, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinYMaxGRegionMin = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinYMaxGRegionMin, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pRefCb = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pRefCb, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pRefCr = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pRefCr, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadAwb_V10_GlobalList(List* l) {
+  CamCalibAwb_V10_Global_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+  if (!ListEmpty(l)) {
+    CamCalibAwb_V10_Global_t* pAwbGlobal = malloc(sizeof(CamCalibAwb_V10_Global_t));
+    l->p_next = (List*)pAwbGlobal;
+    readCamCalibDbIq(pAwbGlobal, sizeof(CamCalibAwb_V10_Global_t));
+    LoadAwb_V10_GlobalSubList(pAwbGlobal);
+    while (pAwbGlobal->p_next) {
+      pNew = malloc(sizeof(CamCalibAwb_V10_Global_t));
+      readCamCalibDbIq(pNew, sizeof(CamCalibAwb_V10_Global_t));
+      LoadAwb_V10_GlobalSubList(pNew);
+
+      pAwbGlobal->p_next = pNew;
+      pAwbGlobal = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit)\n", __FUNCTION__);
+#endif
+}
+
+static void LoadAwb_V11_GlobalSubList(CamCalibAwb_V11_Global_t* pAwbGlobal) {
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+  pAwbGlobal->AwbClipParam.pRg1 = malloc(pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pRg1, pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbClipParam.pMaxDist1 = malloc(pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pMaxDist1, pAwbGlobal->AwbClipParam.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbClipParam.pRg2 = malloc(pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pRg2, pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+  pAwbGlobal->AwbClipParam.pMaxDist2 = malloc(pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbClipParam.pMaxDist2, pAwbGlobal->AwbClipParam.ArraySize2 * sizeof(float));
+
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalFade1 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade1, pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance1 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance1, pAwbGlobal->AwbGlobalFadeParm.ArraySize1 * sizeof(float));
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalFade2 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalFade2, pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+  pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance2 = malloc(pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbGlobalFadeParm.pGlobalGainDistance2, pAwbGlobal->AwbGlobalFadeParm.ArraySize2 * sizeof(float));
+
+  pAwbGlobal->AwbFade2Parm.pFade = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pFade, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+
+  pAwbGlobal->AwbFade2Parm.pMaxCSum_br = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxCSum_br, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMaxCSum_sr = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxCSum_sr, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinC_br = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinC_br, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinC_sr = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinC_sr, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+
+  pAwbGlobal->AwbFade2Parm.pMaxY_br = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxY_br, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMaxY_sr = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMaxY_sr, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinY_br = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinY_br, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pMinY_sr = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pMinY_sr, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+
+  pAwbGlobal->AwbFade2Parm.pRefCb = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pRefCb, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  pAwbGlobal->AwbFade2Parm.pRefCr = malloc(pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+  readCamCalibDbIq(pAwbGlobal->AwbFade2Parm.pRefCr, pAwbGlobal->AwbFade2Parm.ArraySize * sizeof(float));
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadAwb_V11_GlobalList(List* l) {
+  CamCalibAwb_V11_Global_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+  if (!ListEmpty(l)) {
+    CamCalibAwb_V11_Global_t* pAwbGlobal = malloc(sizeof(CamCalibAwb_V11_Global_t));
+    l->p_next = (List*)pAwbGlobal;
+    readCamCalibDbIq(pAwbGlobal, sizeof(CamCalibAwb_V11_Global_t));
+    LoadAwb_V11_GlobalSubList(pAwbGlobal);
+    while (pAwbGlobal->p_next) {
+      pNew = malloc(sizeof(CamCalibAwb_V11_Global_t));
+      readCamCalibDbIq(pNew, sizeof(CamCalibAwb_V11_Global_t));
+      LoadAwb_V11_GlobalSubList(pNew);
+
+      pAwbGlobal->p_next = pNew;
+      pAwbGlobal = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadEcmSchemeList(List* l) {
+  CamEcmScheme_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+  if (!ListEmpty(l)) {
+    CamEcmScheme_t* pEcmScheme = malloc(sizeof(CamEcmScheme_t));
+    l->p_next = (List*)pEcmScheme;
+    readCamCalibDbIq(pEcmScheme, sizeof(CamEcmScheme_t));
+    while (pEcmScheme->p_next) {
+      pNew = malloc(sizeof(CamEcmScheme_t));
+      readCamCalibDbIq(pNew, sizeof(CamEcmScheme_t));
+
+      pEcmScheme->p_next = pNew;
+      pEcmScheme = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadEcmProfileList(List* l) {
+  CamEcmProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamEcmProfile_t* pEcmProfile = malloc(sizeof(CamEcmProfile_t));
+    l->p_next = (List*)pEcmProfile;
+    readCamCalibDbIq(pEcmProfile, sizeof(CamEcmProfile_t));
+    LoadEcmSchemeList(&pEcmProfile->ecm_scheme);
+    while (pEcmProfile->p_next) {
+      pNew = malloc(sizeof(CamEcmProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamEcmProfile_t));
+      LoadEcmSchemeList(&pNew->ecm_scheme);
+
+      pEcmProfile->p_next = pNew;
+      pEcmProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadAwb_V10_IlluminationSubList(CamAwb_V10_IlluProfile_t* pIllumination) {
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  pIllumination->SaturationCurve.pSensorGain = malloc(pIllumination->SaturationCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->SaturationCurve.pSensorGain,
+    pIllumination->SaturationCurve.ArraySize * sizeof(float));
+  pIllumination->SaturationCurve.pSaturation = malloc(pIllumination->SaturationCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->SaturationCurve.pSaturation,
+    pIllumination->SaturationCurve.ArraySize * sizeof(float));
+
+  pIllumination->VignettingCurve.pSensorGain = malloc(pIllumination->VignettingCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->VignettingCurve.pSensorGain,
+    pIllumination->VignettingCurve.ArraySize * sizeof(float));
+  pIllumination->VignettingCurve.pVignetting = malloc(pIllumination->VignettingCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->VignettingCurve.pVignetting,
+    pIllumination->VignettingCurve.ArraySize * sizeof(float));
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadAwb_V10_IlluminationList(List* l) {
+  CamAwb_V10_IlluProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamAwb_V10_IlluProfile_t* pIllumination = malloc(sizeof(CamAwb_V10_IlluProfile_t));
+    l->p_next = (List*)pIllumination;
+    readCamCalibDbIq(pIllumination, sizeof(CamAwb_V10_IlluProfile_t));
+    LoadAwb_V10_IlluminationSubList(pIllumination);
+    while (pIllumination->p_next) {
+      pNew = malloc(sizeof(CamAwb_V10_IlluProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamAwb_V10_IlluProfile_t));
+      LoadAwb_V10_IlluminationSubList(pNew);
+
+      pIllumination->p_next = pNew;
+      pIllumination = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadAwb_V11_IlluminationSubList(CamAwb_V11_IlluProfile_t* pIllumination) {
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  pIllumination->SaturationCurve.pSensorGain = malloc(pIllumination->SaturationCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->SaturationCurve.pSensorGain,
+    pIllumination->SaturationCurve.ArraySize * sizeof(float));
+  pIllumination->SaturationCurve.pSaturation = malloc(pIllumination->SaturationCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->SaturationCurve.pSaturation,
+    pIllumination->SaturationCurve.ArraySize * sizeof(float));
+
+  pIllumination->VignettingCurve.pSensorGain = malloc(pIllumination->VignettingCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->VignettingCurve.pSensorGain,
+    pIllumination->VignettingCurve.ArraySize * sizeof(float));
+  pIllumination->VignettingCurve.pVignetting = malloc(pIllumination->VignettingCurve.ArraySize * sizeof(float));
+  readCamCalibDbIq(pIllumination->VignettingCurve.pVignetting,
+    pIllumination->VignettingCurve.ArraySize * sizeof(float));
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadAwb_V11_IlluminationList(List* l) {
+  CamAwb_V11_IlluProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamAwb_V11_IlluProfile_t* pIllumination = malloc(sizeof(CamAwb_V11_IlluProfile_t));
+    l->p_next = (List*)pIllumination;
+    readCamCalibDbIq(pIllumination, sizeof(CamAwb_V11_IlluProfile_t));
+    LoadAwb_V11_IlluminationSubList(pIllumination);
+    while (pIllumination->p_next) {
+      pNew = malloc(sizeof(CamAwb_V11_IlluProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamAwb_V11_IlluProfile_t));
+      LoadAwb_V11_IlluminationSubList(pNew);
+
+      pIllumination->p_next = pNew;
+      pIllumination = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadLscProfileList(List* l) {
+  CamLscProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamLscProfile_t* pLscProfile = malloc(sizeof(CamLscProfile_t));
+    l->p_next = (List*)pLscProfile;
+    readCamCalibDbIq(pLscProfile, sizeof(CamLscProfile_t));
+    while (pLscProfile->p_next) {
+      pNew = malloc(sizeof(CamLscProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamLscProfile_t));
+
+      pLscProfile->p_next = pNew;
+      pLscProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadCcProfileList(List* l) {
+  CamCcProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamCcProfile_t* pCcProfile = malloc(sizeof(CamCcProfile_t));
+    l->p_next = (List*)pCcProfile;
+    readCamCalibDbIq(pCcProfile, sizeof(CamCcProfile_t));
+    while (pCcProfile->p_next) {
+      pNew = malloc(sizeof(CamCcProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamCcProfile_t));
+
+      pCcProfile->p_next = pNew;
+      pCcProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadBlsProfileList(List* l) {
+  CamBlsProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamBlsProfile_t* pBlsProfile = malloc(sizeof(CamBlsProfile_t));
+    l->p_next = (List*)pBlsProfile;
+    readCamCalibDbIq(pBlsProfile, sizeof(CamBlsProfile_t));
+    while (pBlsProfile->p_next) {
+      pNew = malloc(sizeof(CamBlsProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamBlsProfile_t));
+
+      pBlsProfile->p_next = pNew;
+      pBlsProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadCacProfileList(List* l) {
+  CamCacProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamCacProfile_t* pCacProfile = malloc(sizeof(CamCacProfile_t));
+    l->p_next = (List*)pCacProfile;
+    readCamCalibDbIq(pCacProfile, sizeof(CamCacProfile_t));
+    while (pCacProfile->p_next) {
+      pNew = malloc(sizeof(CamCacProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamCacProfile_t));
+
+      pCacProfile->p_next = pNew;
+      pCacProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadDsp3DNRSubList(CamDsp3DNRSettingProfile_t * pDsp3DNR) {
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if(pDsp3DNR->pgain_Level){
+    pDsp3DNR->pgain_Level = malloc(pDsp3DNR->ArraySize * sizeof(float));
+    readCamCalibDbIq(pDsp3DNR->pgain_Level, pDsp3DNR->ArraySize * sizeof(float));
+  }
+  if(pDsp3DNR->pnoise_coef_denominator){
+    pDsp3DNR->pnoise_coef_denominator = malloc(pDsp3DNR->ArraySize * sizeof(uint16_t));
+    readCamCalibDbIq(pDsp3DNR->pnoise_coef_denominator, pDsp3DNR->ArraySize * sizeof(uint16_t));
+  }
+  if(pDsp3DNR->pnoise_coef_numerator){
+    pDsp3DNR->pnoise_coef_numerator = malloc(pDsp3DNR->ArraySize * sizeof(uint16_t));
+    readCamCalibDbIq(pDsp3DNR->pnoise_coef_numerator, pDsp3DNR->ArraySize * sizeof(uint16_t));
+  }
+  if(pDsp3DNR->sDefaultLevelSetting.pchrm_sp_nr_level){
+    pDsp3DNR->sDefaultLevelSetting.pchrm_sp_nr_level = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sDefaultLevelSetting.pchrm_sp_nr_level, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sDefaultLevelSetting.pchrm_te_nr_level){
+    pDsp3DNR->sDefaultLevelSetting.pchrm_te_nr_level = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sDefaultLevelSetting.pchrm_te_nr_level, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sDefaultLevelSetting.pluma_sp_nr_level){
+    pDsp3DNR->sDefaultLevelSetting.pluma_sp_nr_level = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sDefaultLevelSetting.pluma_sp_nr_level, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sDefaultLevelSetting.pluma_te_nr_level){
+    pDsp3DNR->sDefaultLevelSetting.pluma_te_nr_level = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sDefaultLevelSetting.pluma_te_nr_level, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sDefaultLevelSetting.pshp_level){
+    pDsp3DNR->sDefaultLevelSetting.pshp_level = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sDefaultLevelSetting.pshp_level, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+
+  if(pDsp3DNR->sLumaSetting.pluma_sp_rad){
+    pDsp3DNR->sLumaSetting.pluma_sp_rad = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sLumaSetting.pluma_sp_rad, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sLumaSetting.pluma_te_max_bi_num){
+    pDsp3DNR->sLumaSetting.pluma_te_max_bi_num = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sLumaSetting.pluma_te_max_bi_num, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+
+  if(pDsp3DNR->sChrmSetting.pchrm_sp_rad){
+    pDsp3DNR->sChrmSetting.pchrm_sp_rad = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sChrmSetting.pchrm_sp_rad, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sChrmSetting.pchrm_te_max_bi_num){
+    pDsp3DNR->sChrmSetting.pchrm_te_max_bi_num = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sChrmSetting.pchrm_te_max_bi_num, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+
+  if(pDsp3DNR->sSharpSetting.psrc_shp_c){
+    pDsp3DNR->sSharpSetting.psrc_shp_c = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sSharpSetting.psrc_shp_c, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sSharpSetting.psrc_shp_div){
+    pDsp3DNR->sSharpSetting.psrc_shp_div = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sSharpSetting.psrc_shp_div, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sSharpSetting.psrc_shp_l){
+    pDsp3DNR->sSharpSetting.psrc_shp_l = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sSharpSetting.psrc_shp_l, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+  if(pDsp3DNR->sSharpSetting.psrc_shp_thr){
+    pDsp3DNR->sSharpSetting.psrc_shp_thr = malloc(pDsp3DNR->ArraySize * sizeof(unsigned char));
+    readCamCalibDbIq(pDsp3DNR->sSharpSetting.psrc_shp_thr, pDsp3DNR->ArraySize * sizeof(unsigned char));
+  }
+
+  for(int i=0; i<CAM_CALIBDB_3DNR_WEIGHT_NUM; i++){
+    if(pDsp3DNR->sLumaSetting.pluma_weight[i]){
+       pDsp3DNR->sLumaSetting.pluma_weight[i] = malloc(pDsp3DNR->ArraySize * sizeof(uint8_t));
+       readCamCalibDbIq(pDsp3DNR->sLumaSetting.pluma_weight[i], pDsp3DNR->ArraySize * sizeof(uint8_t));
+    }
+
+    if(pDsp3DNR->sChrmSetting.pchrm_weight[i]){
+       pDsp3DNR->sChrmSetting.pchrm_weight[i] = malloc(pDsp3DNR->ArraySize * sizeof(uint8_t));
+       readCamCalibDbIq(pDsp3DNR->sChrmSetting.pchrm_weight[i], pDsp3DNR->ArraySize * sizeof(uint8_t));
+    }
+
+    if(pDsp3DNR->sSharpSetting.psrc_shp_weight[i]){
+       pDsp3DNR->sSharpSetting.psrc_shp_weight[i] = malloc(pDsp3DNR->ArraySize * sizeof(int8_t));
+       readCamCalibDbIq(pDsp3DNR->sSharpSetting.psrc_shp_weight[i], pDsp3DNR->ArraySize * sizeof(int8_t));
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadDsp3DNRList(List* l) {
+  CamDsp3DNRSettingProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamDsp3DNRSettingProfile_t * pDsp3DNR = malloc(sizeof(CamDsp3DNRSettingProfile_t));
+    l->p_next = (List*)pDsp3DNR;
+    readCamCalibDbIq(pDsp3DNR, sizeof(CamDsp3DNRSettingProfile_t));
+    LoadDsp3DNRSubList(pDsp3DNR);
+    while (pDsp3DNR->p_next) {
+      pNew = malloc(sizeof(CamDsp3DNRSettingProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamDsp3DNRSettingProfile_t));
+      LoadDsp3DNRSubList(pNew);
+
+      pDsp3DNR->p_next = pNew;
+      pDsp3DNR = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadNewDsp3DNRSubList(CamNewDsp3DNRProfile_t * pNewDsp3DNR) {
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if(pNewDsp3DNR->pgain_Level) {
+    pNewDsp3DNR->pgain_Level = malloc(pNewDsp3DNR->ArraySize * sizeof(float));
+    readCamCalibDbIq(pNewDsp3DNR->pgain_Level, pNewDsp3DNR->ArraySize * sizeof(float));
+  }
+
+  if(pNewDsp3DNR->ynr.pynr_time_weight_level) {
+    pNewDsp3DNR->ynr.pynr_time_weight_level = malloc(pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pNewDsp3DNR->ynr.pynr_time_weight_level, pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+  }
+
+  if(pNewDsp3DNR->ynr.pynr_spat_weight_level) {
+    pNewDsp3DNR->ynr.pynr_spat_weight_level = malloc(pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pNewDsp3DNR->ynr.pynr_spat_weight_level, pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+  }
+
+  if(pNewDsp3DNR->uvnr.puvnr_weight_level) {
+    pNewDsp3DNR->uvnr.puvnr_weight_level = malloc(pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pNewDsp3DNR->uvnr.puvnr_weight_level, pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+  }
+
+  if(pNewDsp3DNR->sharp.psharp_weight_level) {
+    pNewDsp3DNR->sharp.psharp_weight_level = malloc(pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pNewDsp3DNR->sharp.psharp_weight_level, pNewDsp3DNR->ArraySize * sizeof(uint32_t));
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadNewDsp3DNRList(List* l) {
+  CamNewDsp3DNRProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamNewDsp3DNRProfile_t * pNewDsp3DNR = malloc(sizeof(CamNewDsp3DNRProfile_t));
+    l->p_next = (List*)pNewDsp3DNR;
+    readCamCalibDbIq(pNewDsp3DNR, sizeof(CamNewDsp3DNRProfile_t));
+    LoadNewDsp3DNRSubList(pNewDsp3DNR);
+    while (pNewDsp3DNR->p_next) {
+      pNew = malloc(sizeof(CamNewDsp3DNRProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamNewDsp3DNRProfile_t));
+      LoadNewDsp3DNRSubList(pNew);
+
+      pNewDsp3DNR->p_next = pNew;
+      pNewDsp3DNR = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadFilterSubList(CamFilterProfile_t * pFilter) {
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if(pFilter->DemosaicThCurve.pSensorGain){
+    pFilter->DemosaicThCurve.pSensorGain = malloc(pFilter->DemosaicThCurve.ArraySize * sizeof(float));
+    readCamCalibDbIq(pFilter->DemosaicThCurve.pSensorGain, pFilter->DemosaicThCurve.ArraySize * sizeof(float));
+  }
+  if(pFilter->DemosaicThCurve.pThlevel){
+    pFilter->DemosaicThCurve.pThlevel = malloc(pFilter->DemosaicThCurve.ArraySize * sizeof(uint8_t));
+    readCamCalibDbIq(pFilter->DemosaicThCurve.pThlevel, pFilter->DemosaicThCurve.ArraySize * sizeof(uint8_t));
+  }
+
+  if(pFilter->DenoiseLevelCurve.pSensorGain){
+    pFilter->DenoiseLevelCurve.pSensorGain = malloc(pFilter->DenoiseLevelCurve.ArraySize * sizeof(float));
+    readCamCalibDbIq(pFilter->DenoiseLevelCurve.pSensorGain, pFilter->DenoiseLevelCurve.ArraySize * sizeof(float));
+  }
+  if(pFilter->DenoiseLevelCurve.pDlevel){
+    pFilter->DenoiseLevelCurve.pDlevel = malloc(pFilter->DenoiseLevelCurve.ArraySize * sizeof(CamerIcIspFltDeNoiseLevel_t));
+    readCamCalibDbIq(pFilter->DenoiseLevelCurve.pDlevel,
+      pFilter->DenoiseLevelCurve.ArraySize * sizeof(CamerIcIspFltDeNoiseLevel_t));
+  }
+
+  if(pFilter->SharpeningLevelCurve.pSensorGain){
+    pFilter->SharpeningLevelCurve.pSensorGain = malloc(pFilter->SharpeningLevelCurve.ArraySize * sizeof(float));
+    readCamCalibDbIq(pFilter->SharpeningLevelCurve.pSensorGain, pFilter->SharpeningLevelCurve.ArraySize * sizeof(float));
+  }
+  if(pFilter->SharpeningLevelCurve.pSlevel){
+    pFilter->SharpeningLevelCurve.pSlevel = malloc(pFilter->SharpeningLevelCurve.ArraySize * sizeof(CamerIcIspFltSharpeningLevel_t));
+    readCamCalibDbIq(pFilter->SharpeningLevelCurve.pSlevel,
+      pFilter->SharpeningLevelCurve.ArraySize * sizeof(CamerIcIspFltSharpeningLevel_t));
+  }
+
+  if(pFilter->FiltLevelRegConf.p_chr_h_mode){
+    pFilter->FiltLevelRegConf.p_chr_h_mode = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_chr_h_mode, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_chr_v_mode){
+    pFilter->FiltLevelRegConf.p_chr_v_mode = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_chr_v_mode, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_fac_bl0){
+    pFilter->FiltLevelRegConf.p_fac_bl0 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_fac_bl0, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_fac_bl1){
+    pFilter->FiltLevelRegConf.p_fac_bl1 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_fac_bl1, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_fac_mid){
+    pFilter->FiltLevelRegConf.p_fac_mid = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_fac_mid, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_fac_sh0){
+    pFilter->FiltLevelRegConf.p_fac_sh0 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_fac_sh0, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_fac_sh1){
+    pFilter->FiltLevelRegConf.p_fac_sh1 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_fac_sh1, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_FiltLevel){
+    pFilter->FiltLevelRegConf.p_FiltLevel = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_FiltLevel, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_grn_stage1){
+    pFilter->FiltLevelRegConf.p_grn_stage1 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_grn_stage1, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_thresh_bl0){
+    pFilter->FiltLevelRegConf.p_thresh_bl0 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_thresh_bl0, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_thresh_bl1){
+    pFilter->FiltLevelRegConf.p_thresh_bl1 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_thresh_bl1, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_thresh_sh0){
+    pFilter->FiltLevelRegConf.p_thresh_sh0 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_thresh_sh0, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint8_t));
+  }
+  if(pFilter->FiltLevelRegConf.p_thresh_sh1){
+    pFilter->FiltLevelRegConf.p_thresh_sh1 = malloc(pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+    readCamCalibDbIq(pFilter->FiltLevelRegConf.p_thresh_sh1, pFilter->FiltLevelRegConf.ArraySize * sizeof(uint32_t));
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadFilterList(List* l) {
+  CamFilterProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamFilterProfile_t * pFilter = malloc(sizeof(CamFilterProfile_t));
+    l->p_next = (List*)pFilter;
+    readCamCalibDbIq(pFilter, sizeof(CamFilterProfile_t));
+    LoadFilterSubList(pFilter);
+    while (pFilter->p_next) {
+      pNew = malloc(sizeof(CamFilterProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamFilterProfile_t));
+      LoadFilterSubList(pNew);
+
+      pFilter->p_next = pNew;
+      pFilter = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadDpfProfileList(List* l) {
+  CamDpfProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamDpfProfile_t* pDpfProfile = malloc(sizeof(CamDpfProfile_t));
+    l->p_next = (List*)pDpfProfile;
+    readCamCalibDbIq(pDpfProfile, sizeof(CamDpfProfile_t));
+    LoadDsp3DNRList(&pDpfProfile->Dsp3DNRSettingProfileList);
+    LoadNewDsp3DNRList(&pDpfProfile->newDsp3DNRProfileList);
+    LoadFilterList(&pDpfProfile->FilterList);
+    while (pDpfProfile->p_next) {
+      pNew = malloc(sizeof(CamDpfProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamDpfProfile_t));
+      LoadDsp3DNRList(&pNew->Dsp3DNRSettingProfileList);
+      LoadNewDsp3DNRList(&pNew->newDsp3DNRProfileList);
+      LoadFilterList(&pNew->FilterList);
+
+      pDpfProfile->p_next = pNew;
+      pDpfProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadDpccProfileList(List* l) {
+  CamDpccProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamDpccProfile_t* pDpccProfile = malloc(sizeof(CamDpccProfile_t));
+    l->p_next = (List*)pDpccProfile;
+    readCamCalibDbIq(pDpccProfile, sizeof(CamDpccProfile_t));
+    while (pDpccProfile->p_next) {
+      pNew = malloc(sizeof(CamDpccProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamDpccProfile_t));
+
+      pDpccProfile->p_next = pNew;
+      pDpccProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadGocProfileList(List* l) {
+  CamCalibGocProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamCalibGocProfile_t* pGocProfile = malloc(sizeof(CamCalibGocProfile_t));
+    l->p_next = (List*)pGocProfile;
+    readCamCalibDbIq(pGocProfile, sizeof(CamCalibGocProfile_t));
+    while (pGocProfile->p_next) {
+      pNew = malloc(sizeof(CamCalibGocProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamCalibGocProfile_t));
+
+      pGocProfile->p_next = pNew;
+      pGocProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadIeSharpenProfileList(List* l) {
+  CamIesharpenProfile_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamIesharpenProfile_t* pIeSharpenProfile = malloc(sizeof(CamIesharpenProfile_t));
+    l->p_next = (List*)pIeSharpenProfile;
+    readCamCalibDbIq(pIeSharpenProfile, sizeof(CamIesharpenProfile_t));
+    while (pIeSharpenProfile->p_next) {
+      pNew = malloc(sizeof(CamIesharpenProfile_t));
+      readCamCalibDbIq(pNew, sizeof(CamIesharpenProfile_t));
+
+      if (pIeSharpenProfile->yavg_thr) {
+          pIeSharpenProfile->yavg_thr = malloc(pIeSharpenProfile->yavg_thr_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->yavg_thr, pIeSharpenProfile->yavg_thr_ArraySize * sizeof(uint8_t));
+      }
+
+      if (pIeSharpenProfile->yavg_thr) {
+          pIeSharpenProfile->yavg_thr = malloc(pIeSharpenProfile->yavg_thr_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->yavg_thr, pIeSharpenProfile->yavg_thr_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->P_delta1) {
+          pIeSharpenProfile->P_delta1 = malloc(pIeSharpenProfile->P_delta1_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->P_delta1, pIeSharpenProfile->P_delta1_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->P_delta2) {
+          pIeSharpenProfile->P_delta2 = malloc(pIeSharpenProfile->P_delta2_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->P_delta2, pIeSharpenProfile->P_delta2_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->pmaxnumber) {
+          pIeSharpenProfile->pmaxnumber = malloc(pIeSharpenProfile->pmaxnumber_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->pmaxnumber, pIeSharpenProfile->pmaxnumber_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->pminnumber) {
+          pIeSharpenProfile->pminnumber = malloc(pIeSharpenProfile->pminnumber_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->pminnumber, pIeSharpenProfile->pminnumber_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->gauss_flat_coe) {
+          pIeSharpenProfile->gauss_flat_coe = malloc(pIeSharpenProfile->gauss_flat_coe_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->gauss_flat_coe, pIeSharpenProfile->gauss_flat_coe_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->gauss_noise_coe) {
+          pIeSharpenProfile->gauss_noise_coe = malloc(pIeSharpenProfile->gauss_noise_coe_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->gauss_noise_coe, pIeSharpenProfile->gauss_noise_coe_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->gauss_other_coe) {
+          pIeSharpenProfile->gauss_other_coe = malloc(pIeSharpenProfile->gauss_other_coe_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->gauss_other_coe, pIeSharpenProfile->gauss_other_coe_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->uv_gauss_flat_coe) {
+          pIeSharpenProfile->uv_gauss_flat_coe = malloc(pIeSharpenProfile->uv_gauss_flat_coe_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->uv_gauss_flat_coe, pIeSharpenProfile->uv_gauss_flat_coe_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->uv_gauss_noise_coe) {
+          pIeSharpenProfile->uv_gauss_noise_coe = malloc(pIeSharpenProfile->uv_gauss_noise_coe_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->uv_gauss_noise_coe, pIeSharpenProfile->uv_gauss_noise_coe_ArraySize * sizeof(uint8_t));
+      }
+      if (pIeSharpenProfile->uv_gauss_other_coe) {
+          pIeSharpenProfile->uv_gauss_other_coe = malloc(pIeSharpenProfile->uv_gauss_other_coe_ArraySize * sizeof(uint8_t));
+          readCamCalibDbIq(pIeSharpenProfile->uv_gauss_noise_coe, pIeSharpenProfile->uv_gauss_other_coe_ArraySize * sizeof(uint8_t));
+      }
+      {
+         // CamIesharpenGridConf_t
+          if (pIeSharpenProfile->lgridconf.p_grad) {
+              pIeSharpenProfile->lgridconf.p_grad = malloc(pIeSharpenProfile->lgridconf.p_grad_ArraySize * sizeof(uint16_t));
+              readCamCalibDbIq(pIeSharpenProfile->lgridconf.p_grad, pIeSharpenProfile->lgridconf.p_grad_ArraySize * sizeof(uint16_t));
+          }
+          if (pIeSharpenProfile->lgridconf.sharp_factor) {
+              pIeSharpenProfile->lgridconf.sharp_factor = malloc(pIeSharpenProfile->lgridconf.sharp_factor_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->lgridconf.sharp_factor, pIeSharpenProfile->lgridconf.sharp_factor_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->lgridconf.line1_filter_coe) {
+              pIeSharpenProfile->lgridconf.line1_filter_coe = malloc(pIeSharpenProfile->lgridconf.line1_filter_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->lgridconf.line1_filter_coe, pIeSharpenProfile->lgridconf.line1_filter_coe_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->lgridconf.line2_filter_coe) {
+              pIeSharpenProfile->lgridconf.line2_filter_coe = malloc(pIeSharpenProfile->lgridconf.line2_filter_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->lgridconf.line2_filter_coe, pIeSharpenProfile->lgridconf.line2_filter_coe_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->lgridconf.line3_filter_coe) {
+              pIeSharpenProfile->lgridconf.line3_filter_coe = malloc(pIeSharpenProfile->lgridconf.line3_filter_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->lgridconf.line3_filter_coe, pIeSharpenProfile->lgridconf.line3_filter_coe_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->lgridconf.lap_mat_coe) {
+              pIeSharpenProfile->lgridconf.lap_mat_coe = malloc(pIeSharpenProfile->lgridconf.lap_mat_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->lgridconf.lap_mat_coe, pIeSharpenProfile->lgridconf.lap_mat_coe_ArraySize * sizeof(uint8_t));
+          }
+
+          if (pIeSharpenProfile->hgridconf.p_grad) {
+              pIeSharpenProfile->hgridconf.p_grad = malloc(pIeSharpenProfile->hgridconf.p_grad_ArraySize * sizeof(uint16_t));
+              readCamCalibDbIq(pIeSharpenProfile->hgridconf.p_grad, pIeSharpenProfile->hgridconf.p_grad_ArraySize * sizeof(uint16_t));
+          }
+          if (pIeSharpenProfile->hgridconf.sharp_factor) {
+              pIeSharpenProfile->hgridconf.sharp_factor = malloc(pIeSharpenProfile->hgridconf.sharp_factor_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->hgridconf.sharp_factor, pIeSharpenProfile->hgridconf.sharp_factor_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->hgridconf.line1_filter_coe) {
+              pIeSharpenProfile->hgridconf.line1_filter_coe = malloc(pIeSharpenProfile->hgridconf.line1_filter_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->hgridconf.line1_filter_coe, pIeSharpenProfile->hgridconf.line1_filter_coe_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->hgridconf.line2_filter_coe) {
+              pIeSharpenProfile->hgridconf.line2_filter_coe = malloc(pIeSharpenProfile->hgridconf.line2_filter_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->hgridconf.line2_filter_coe, pIeSharpenProfile->hgridconf.line2_filter_coe_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->hgridconf.line3_filter_coe) {
+              pIeSharpenProfile->hgridconf.line3_filter_coe = malloc(pIeSharpenProfile->hgridconf.line3_filter_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->hgridconf.line3_filter_coe, pIeSharpenProfile->hgridconf.line3_filter_coe_ArraySize * sizeof(uint8_t));
+          }
+          if (pIeSharpenProfile->hgridconf.lap_mat_coe) {
+              pIeSharpenProfile->hgridconf.lap_mat_coe = malloc(pIeSharpenProfile->hgridconf.lap_mat_coe_ArraySize * sizeof(uint8_t));
+              readCamCalibDbIq(pIeSharpenProfile->hgridconf.lap_mat_coe, pIeSharpenProfile->hgridconf.lap_mat_coe_ArraySize * sizeof(uint8_t));
+          }
+      }
+      pIeSharpenProfile->p_next = pNew;
+      pIeSharpenProfile = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadDySetpointList(List* l) {
+  CamCalibAecDynamicSetpoint_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamCalibAecDynamicSetpoint_t* pDySetpoint = malloc(sizeof(CamCalibAecDynamicSetpoint_t));
+    l->p_next = (List*)pDySetpoint;
+    readCamCalibDbIq(pDySetpoint, sizeof(CamCalibAecDynamicSetpoint_t));
+    if(pDySetpoint->pDySetpoint != NULL) {
+      pDySetpoint->pDySetpoint = malloc(pDySetpoint->array_size * sizeof(float));
+      readCamCalibDbIq(pDySetpoint->pDySetpoint, pDySetpoint->array_size * sizeof(float));
+    }
+    if(pDySetpoint->pExpValue != NULL) {
+      pDySetpoint->pExpValue = malloc(pDySetpoint->array_size * sizeof(float));
+      readCamCalibDbIq(pDySetpoint->pExpValue, pDySetpoint->array_size * sizeof(float));
+    }
+    while (pDySetpoint->p_next) {
+      pNew = malloc(sizeof(CamCalibAecDynamicSetpoint_t));
+      readCamCalibDbIq(pNew, sizeof(CamCalibAecDynamicSetpoint_t));
+      if(pNew->pDySetpoint != NULL) {
+        pNew->pDySetpoint = malloc(pNew->array_size * sizeof(float));
+        readCamCalibDbIq(pNew->pDySetpoint, pNew->array_size * sizeof(float));
+      }
+      if(pNew->pExpValue != NULL) {
+        pNew->pExpValue = malloc(pNew->array_size * sizeof(float));
+        readCamCalibDbIq(pNew->pExpValue, pNew->array_size * sizeof(float));
+      }
+
+      pDySetpoint->p_next = pNew;
+      pDySetpoint = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+static void LoadExpSeparateList(List* l) {
+  CamCalibAecExpSeparate_t* pNew;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+
+  if (!ListEmpty(l)) {
+    CamCalibAecExpSeparate_t* pExpSeparate = malloc(sizeof(CamCalibAecExpSeparate_t));
+    l->p_next = (List*)pExpSeparate;
+    readCamCalibDbIq(pExpSeparate, sizeof(CamCalibAecExpSeparate_t));
+    while (pExpSeparate->p_next) {
+      pNew = malloc(sizeof(CamCalibAecExpSeparate_t));
+      readCamCalibDbIq(pNew, sizeof(CamCalibAecExpSeparate_t));
+
+      pExpSeparate->p_next = pNew;
+      pExpSeparate = pNew;
+    }
+  }
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit): file pos 0x%x\n", __FUNCTION__, getCamCalibDbIqIdx());
+#endif
+}
+
+RESULT CamCalibDbLoadFile
+(
+    CamCalibDbHandle_t*  hCamCalibDb,
+    const char* CamCalibDbIqData
+) {
+  char *pIqBuf;
+  CamCalibDbContext_t* pCamCalibDbCtx;
+  RESULT result;
+  List* l;
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (enter)\n", __FUNCTION__);
+#endif
+
+  if (GetXmlDbDir() == NULL || initCamCalibDbIq(CamCalibDbIqData) != RET_SUCCESS)
+    return (RET_FAILURE);
+  pCamCalibDbCtx = malloc(sizeof(CamCalibDbContext_t));
+  readCamCalibDbIq(pCamCalibDbCtx, sizeof(CamCalibDbContext_t));
+  LoadResolutionList(&pCamCalibDbCtx->resolution);
+  pCamCalibDbCtx->pAwbProfile = malloc(sizeof(CamCalibAwbPara_t));
+  readCamCalibDbIq(pCamCalibDbCtx->pAwbProfile, sizeof(CamCalibAwbPara_t));
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, getCamCalibDbIqIdx());
+#endif
+  LoadAwb_V10_GlobalList(&pCamCalibDbCtx->pAwbProfile->Para_V10.awb_global);
+  LoadAwb_V10_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V10.illumination);
+  LoadAwb_V11_GlobalList(&pCamCalibDbCtx->pAwbProfile->Para_V11.awb_global);
+  LoadAwb_V11_IlluminationList(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination);
+  if (pCamCalibDbCtx->pAfGlobal) {
+    pCamCalibDbCtx->pAfGlobal = malloc(sizeof(CamCalibAfGlobal_t));
+    readCamCalibDbIq(pCamCalibDbCtx->pAfGlobal, sizeof(CamCalibAfGlobal_t));
+    if (pCamCalibDbCtx->pAfGlobal->contrast_af.FullSteps > 0) {
+       pCamCalibDbCtx->pAfGlobal->contrast_af.FullRangeTbl =
+         malloc(pCamCalibDbCtx->pAfGlobal->contrast_af.FullSteps * sizeof(uint16_t));
+       readCamCalibDbIq(pCamCalibDbCtx->pAfGlobal->contrast_af.FullRangeTbl,
+         pCamCalibDbCtx->pAfGlobal->contrast_af.FullSteps * sizeof(uint16_t));
+    }
+
+    if (pCamCalibDbCtx->pAfGlobal->contrast_af.AdaptiveSteps > 0) {
+       pCamCalibDbCtx->pAfGlobal->contrast_af.AdaptRangeTbl =
+         malloc(pCamCalibDbCtx->pAfGlobal->contrast_af.FullSteps * sizeof(uint16_t));
+       readCamCalibDbIq(pCamCalibDbCtx->pAfGlobal->contrast_af.AdaptRangeTbl,
+         pCamCalibDbCtx->pAfGlobal->contrast_af.AdaptiveSteps * sizeof(uint16_t));
+    }
+  }
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, getCamCalibDbIqIdx());
+#endif
+  if (pCamCalibDbCtx->pAecGlobal) {
+    pCamCalibDbCtx->pAecGlobal = malloc(sizeof(CamCalibAecGlobal_t));
+    readCamCalibDbIq(pCamCalibDbCtx->pAecGlobal, sizeof(CamCalibAecGlobal_t));
+    if(pCamCalibDbCtx->pAecGlobal->GridWeights.ArraySize != 0){
+       pCamCalibDbCtx->pAecGlobal->GridWeights.pWeight =
+         malloc(pCamCalibDbCtx->pAecGlobal->GridWeights.ArraySize * sizeof(uint8_t));
+       readCamCalibDbIq(pCamCalibDbCtx->pAecGlobal->GridWeights.pWeight,
+         pCamCalibDbCtx->pAecGlobal->GridWeights.ArraySize * sizeof(uint8_t));
+    }
+    if(pCamCalibDbCtx->pAecGlobal->NightGridWeights.ArraySize != 0){
+       pCamCalibDbCtx->pAecGlobal->NightGridWeights.pWeight =
+         malloc(pCamCalibDbCtx->pAecGlobal->NightGridWeights.ArraySize * sizeof(uint8_t));
+       readCamCalibDbIq(pCamCalibDbCtx->pAecGlobal->NightGridWeights.pWeight,
+         pCamCalibDbCtx->pAecGlobal->NightGridWeights.ArraySize * sizeof(uint8_t));
+    }
+    if(pCamCalibDbCtx->pAecGlobal->GainRange.array_size != 0){
+       pCamCalibDbCtx->pAecGlobal->GainRange.pGainRange =
+         malloc(pCamCalibDbCtx->pAecGlobal->GainRange.array_size * sizeof(float));
+       readCamCalibDbIq(pCamCalibDbCtx->pAecGlobal->GainRange.pGainRange,
+         pCamCalibDbCtx->pAecGlobal->GainRange.array_size * sizeof(float));
+    }
+    LoadDySetpointList(&pCamCalibDbCtx->pAecGlobal->DySetpointList);
+    LoadExpSeparateList(&pCamCalibDbCtx->pAecGlobal->ExpSeparateList);
+  }
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, getCamCalibDbIqIdx());
+#endif
+
+  if (pCamCalibDbCtx->pWdrGlobal) {
+    pCamCalibDbCtx->pWdrGlobal = malloc(sizeof(CamCalibWdrGlobal_t));
+    readCamCalibDbIq(pCamCalibDbCtx->pWdrGlobal, sizeof(CamCalibWdrGlobal_t));
+    if (pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfMaxGain_level != NULL) {
+      pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfMaxGain_level =
+        malloc(sizeof(float) * pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.nSize);
+      readCamCalibDbIq(pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfMaxGain_level,
+          sizeof(float) * pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.nSize);
+    }
+    if (pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfSensorGain_level != NULL) {
+      pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfSensorGain_level =
+        malloc(sizeof(float) * pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.nSize);
+      readCamCalibDbIq(pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.pfSensorGain_level,
+          sizeof(float) * pCamCalibDbCtx->pWdrGlobal->wdr_MaxGain_Level_curve.nSize);
+    }
+  }
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, getCamCalibDbIqIdx());
+#endif
+
+  if (pCamCalibDbCtx->pCprocGlobal) {
+    pCamCalibDbCtx->pCprocGlobal = malloc(sizeof(CamCprocProfile_t));
+    readCamCalibDbIq(pCamCalibDbCtx->pCprocGlobal, sizeof(CamCprocProfile_t));
+  }
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s:%d: file pos 0x%x\n", __FUNCTION__, __LINE__, getCamCalibDbIqIdx());
+#endif
+
+  LoadEcmProfileList(& pCamCalibDbCtx->ecm_profile);
+  LoadLscProfileList(&pCamCalibDbCtx->lsc_profile);
+  LoadCcProfileList(&pCamCalibDbCtx->cc_profile);
+  LoadBlsProfileList(&pCamCalibDbCtx->bls_profile);
+  LoadCacProfileList(&pCamCalibDbCtx->cac_profile);
+  LoadDpfProfileList(&pCamCalibDbCtx->dpf_profile);
+  LoadDpccProfileList(&pCamCalibDbCtx->dpcc_profile);
+  LoadGocProfileList(&pCamCalibDbCtx->gocProfile);
+  LoadIeSharpenProfileList(&pCamCalibDbCtx->iesharpen_profile);
+  if (pCamCalibDbCtx->pOTPGlobal) {
+    pCamCalibDbCtx->pOTPGlobal = malloc(sizeof(CamOTPGlobal_t));
+    readCamCalibDbIq(pCamCalibDbCtx->pOTPGlobal, sizeof(CamOTPGlobal_t));
+  }
+
+  *hCamCalibDb = (CamCalibDbHandle_t)pCamCalibDbCtx;
+
+#ifndef USE_C_SOURCE_XML_BIN
+  // free gpCamCalibDbIqData allocated in func initCamCalibDbIq
+  if (gpCamCalibDbIqData) {
+    free((void*)gpCamCalibDbIqData);
+    gpCamCalibDbIqData = NULL;
+  }
+#endif
+
+#ifdef LOAD_IQ_TRACE_INFO_ON
+  LOGD( "%s (exit)\n", __FUNCTION__);
+#endif
+
+  return (RET_SUCCESS);
+}
 
 /******************************************************************************
  * See header file for detailed comment.
@@ -1938,7 +4016,7 @@ RESULT CamCalibDbCreate
   /* allocate control context */
   pCamCalibDbCtx = (CamCalibDbContext_t *)malloc(sizeof(CamCalibDbContext_t));
   if (pCamCalibDbCtx == NULL) {
-    ALOGE("%s (allocating control context failed)\n", __func__);
+    LOGE("%s (allocating control context failed)\n", __func__);
     return (RET_OUTOFMEM);
   }
   MEMSET(pCamCalibDbCtx, 0, sizeof(CamCalibDbContext_t));
@@ -1950,7 +4028,7 @@ RESULT CamCalibDbCreate
   pCamCalibDbCtx->pAfGlobal = NULL;
   pCamCalibDbCtx->pOTPGlobal = NULL;
   ListInit(&pCamCalibDbCtx->ecm_profile);
-  ListInit(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination);  
+  ListInit(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination);
   ListInit(&pCamCalibDbCtx->pAwbProfile->Para_V10.illumination);
   ListInit(&pCamCalibDbCtx->lsc_profile);
   ListInit(&pCamCalibDbCtx->cc_profile);
@@ -1958,7 +4036,7 @@ RESULT CamCalibDbCreate
   ListInit(&pCamCalibDbCtx->dpf_profile);
   ListInit(&pCamCalibDbCtx->dpcc_profile);
   ListInit(&pCamCalibDbCtx->iesharpen_profile);
-  
+
   *hCamCalibDb = (CamCalibDbHandle_t)pCamCalibDbCtx;
   LOGV("%s (exit)\n", __func__);
 
@@ -2434,6 +4512,38 @@ RESULT CamCalibDbGetResolutionIdxByName
   return (RET_SUCCESS);
 }
 
+/******************************************************************************
+ * CamCalibDbGetResolutionNameByIdx
+ *****************************************************************************/
+RESULT CamCalibDbGetResolutionNameByIdx
+(
+    CamCalibDbHandle_t          hCamCalibDb,
+    int32_t                     idx,
+    const CamResolutionName_t*  pName
+) {
+  CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+  CamResolution_t*     pResolution;
+
+  RESULT result = RET_SUCCESS;
+
+  LOGV("%s (enter)\n", __func__);
+
+  if (NULL == pCamCalibDbCtx) {
+    return (RET_WRONG_HANDLE);
+  }
+
+  if (NULL == pName) {
+    return (RET_INVALID_PARM);
+  }
+
+  /* search resolution by name */
+  pResolution = (CamResolution_t*)ListSearch(&pCamCalibDbCtx->resolution, SearchResolutionByIdx, (void*)&idx);
+  strncpy((char*)pName, (char*)pResolution->name, sizeof(CamResolutionName_t));
+
+  LOGV("%s: (exit)\n", __func__);
+
+  return (RET_SUCCESS);
+}
 
 
 /******************************************************************************
@@ -2567,7 +4677,7 @@ RESULT CamCalibDbAddAwb_VersionName
   if (NULL == pCamCalibDbCtx) {
     return (RET_WRONG_HANDLE);
   }
-  
+
   LOGV( "valid_version :%d \n", vName);
   pCamCalibDbCtx->pAwbProfile->valid_version =	vName;
 
@@ -2577,6 +4687,53 @@ RESULT CamCalibDbAddAwb_VersionName
   return (RET_SUCCESS);
 }
 
+
+
+/******************************************************************************
+ * CamCalibDbGetAwb_FlashProfiles
+ *****************************************************************************/
+RESULT CamCalibDbGetAwb_FlashProfiles
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwbPara_Flash_t **flash
+) {
+  CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+
+  RESULT result;
+
+  LOGV( "%s (enter)\n", __func__);
+
+  if (NULL == pCamCalibDbCtx) {
+    return (RET_WRONG_HANDLE);
+  }
+  *flash = &pCamCalibDbCtx->pAwbProfile->Para_Flash;
+
+  LOGV( "%s (exit)\n", __func__);
+
+  return (RET_SUCCESS);
+}
+
+/******************************************************************************
+ * CamCalibDbGetAwb_FlashProfiles
+ *****************************************************************************/
+RESULT CamCalibDbAddAwb_FlashProfiles
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwbPara_Flash_t  flash
+) {
+    CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+
+    LOGV( "%s (enter)\n", __func__);
+
+    if (NULL == pCamCalibDbCtx) {
+      return (RET_WRONG_HANDLE);
+    }
+
+    MEMCPY(&pCamCalibDbCtx->pAwbProfile->Para_Flash,&flash,sizeof(CamAwbPara_Flash_t));
+
+    return (RET_SUCCESS);
+    LOGV( "%s (exit)\n", __func__);
+}
 
 
 /******************************************************************************
@@ -2597,7 +4754,7 @@ RESULT CamCalibDbGetAwb_VersionName
   if (NULL == pCamCalibDbCtx) {
     return (RET_WRONG_HANDLE);
   }
-  
+
   *vName = pCamCalibDbCtx->pAwbProfile->valid_version;
 
   LOGV( "%s (exit)\n", __func__);
@@ -2802,7 +4959,7 @@ RESULT CamCalibDbAddAfGlobal
     return (RET_OUTOFMEM);
   }
 
-  MEMCPY(pNewAfGlobal, pAddAfGlobal, sizeof(CamCalibAfGlobal_t)); 
+  MEMCPY(pNewAfGlobal, pAddAfGlobal, sizeof(CamCalibAfGlobal_t));
 
   pCamCalibDbCtx->pAfGlobal = pNewAfGlobal;
 
@@ -2884,10 +5041,10 @@ RESULT CamCalibDbAddAecGlobal
     if (result != RET_SUCCESS) {
       return (result);
     }
-  
+
     pDySetpoint = (CamCalibAecDynamicSetpoint_t*)pDySetpoint->p_next;
   }
-  
+
   /* add already linked ExpSeparate as well */
   CamCalibAecExpSeparate_t* pExpSeparate = (CamCalibAecExpSeparate_t*)ListHead(&pAddAecGlobal->ExpSeparateList);
   while (pExpSeparate) {
@@ -2895,7 +5052,7 @@ RESULT CamCalibDbAddAecGlobal
     if (result != RET_SUCCESS) {
       return (result);
     }
-  
+
     pExpSeparate = (CamCalibAecExpSeparate_t*)pExpSeparate->p_next;
   }
   pCamCalibDbCtx->pAecGlobal = pNewAecGlobal;
@@ -3665,10 +5822,10 @@ RESULT CamCalibDbGetNoOfAwbIlluminations
   CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
   RESULT result = RET_SUCCESS;
   LOGV( "%s (enter)\n", __func__);
-  
+
   switch (pCamCalibDbCtx->pAwbProfile->valid_version)
   {
-	case CAM_AWB_VERSION_11:	  
+	case CAM_AWB_VERSION_11:
 		// get number of availabe illumination profiles from database
 		result = CamCalibDbGetNoOfAwb_V11_Illuminations(hCamCalibDb, pNo);
 		break;
@@ -3819,7 +5976,7 @@ RESULT CamCalibDbAddAwb_V10_Illumination
   } else {
     return (RET_INVALID_PARM);
   }
-  
+
   LOGV( "%s (exit)\n", __func__);
   return (RET_SUCCESS);
 }
@@ -3896,7 +6053,7 @@ RESULT CamCalibDbGetAwbIlluminationNameByIdx
   CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
   RESULT result = RET_SUCCESS;
   LOGV( "%s (enter)\n", __func__);
-  CamAwb_V11_IlluProfile_t* pIlluProfile11 = NULL;  
+  CamAwb_V11_IlluProfile_t* pIlluProfile11 = NULL;
   CamAwb_V10_IlluProfile_t* pIlluProfile10 = NULL;
   switch (pCamCalibDbCtx->pAwbProfile->valid_version)
   {
@@ -3905,7 +6062,7 @@ RESULT CamCalibDbGetAwbIlluminationNameByIdx
 		strcpy(illName,pIlluProfile11->name);
 		break;
 	default :
-		result = CamCalibDbGetAwb_V10_IlluminationByIdx(hCamCalibDb, idx, &pIlluProfile10);		
+		result = CamCalibDbGetAwb_V10_IlluminationByIdx(hCamCalibDb, idx, &pIlluProfile10);
 		strcpy(illName,pIlluProfile10->name);
   }
 
@@ -3976,7 +6133,121 @@ RESULT CamCalibDbGetAwb_V10_IlluminationByIdx
   return (RET_SUCCESS);
 }
 
+/******************************************************************************
+ * CamCalibDbReplaceIlluminationAll
+ *****************************************************************************/
+RESULT CamCalibDbReplaceAwb_V10_IlluminationAll
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V10_IlluProfile_t    *pIllumination
+) {
+  CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+  CamAwb_V10_IlluProfile_t* pNewIllum = NULL;
 
+  RESULT result;
+
+  LOGV( "%s (enter)\n", __func__);
+
+  if (NULL == pCamCalibDbCtx) {
+    return (RET_WRONG_HANDLE);
+  }
+  pNewIllum = (CamAwb_V10_IlluProfile_t*)ListHead(&pCamCalibDbCtx->pAwbProfile->Para_V10.illumination);
+  while (pNewIllum) {
+    pNewIllum->CrossTalkCoeff = pIllumination->CrossTalkCoeff;
+    pNewIllum->CrossTalkOffset = pIllumination->CrossTalkOffset;
+    pNewIllum = pNewIllum->p_next;
+  }
+
+  LOGV( "%s (exit)\n", __func__);
+  return (RET_SUCCESS);
+}
+
+RESULT CamCalibDbReplaceAwb_V11_IlluminationAll
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V11_IlluProfile_t    *pIllumination
+) {
+  CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+  CamAwb_V11_IlluProfile_t* pNewIllum = NULL;
+
+  RESULT result;
+
+  LOGV( "%s (enter)\n", __func__);
+
+  if (NULL == pCamCalibDbCtx) {
+    return (RET_WRONG_HANDLE);
+  }
+  pNewIllum = (CamAwb_V11_IlluProfile_t*)ListHead(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination);
+  while (pNewIllum) {
+    pNewIllum->CrossTalkCoeff = pIllumination->CrossTalkCoeff;
+    pNewIllum->CrossTalkOffset = pIllumination->CrossTalkOffset;
+    pNewIllum = pNewIllum->p_next;
+  }
+
+  LOGV( "%s (exit)\n", __func__);
+  return (RET_SUCCESS);
+}
+
+/******************************************************************************
+ * CamCalibDbReplaceIlluminationByName
+ *****************************************************************************/
+RESULT CamCalibDbReplaceAwb_V10_IlluminationByName
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V10_IlluProfile_t    *pIllumination
+) {
+  CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+  CamAwb_V10_IlluProfile_t* pNewIllum = NULL;
+
+  RESULT result;
+
+  LOGV( "%s (enter)\n", __func__);
+
+  if (NULL == pCamCalibDbCtx) {
+    return (RET_WRONG_HANDLE);
+  }
+
+  pNewIllum = (CamAwb_V10_IlluProfile_t*)ListSearch(&pCamCalibDbCtx->pAwbProfile->Para_V10.illumination, SearchForEqualIllumination, (void*)pIllumination);
+
+  if (NULL != pNewIllum) {
+    pNewIllum->CrossTalkCoeff = pIllumination->CrossTalkCoeff;
+    pNewIllum->CrossTalkOffset = pIllumination->CrossTalkOffset;
+    return (RET_SUCCESS);
+  }
+
+  LOGV( "%s (exit)\n", __func__);
+
+  return (RET_NOTAVAILABLE);
+}
+
+RESULT CamCalibDbReplaceAwb_V11_IlluminationByName
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V11_IlluProfile_t    *pIllumination
+) {
+  CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
+  CamAwb_V11_IlluProfile_t* pNewIllum = NULL;
+
+  RESULT result;
+
+  LOGV( "%s (enter)\n", __func__);
+
+  if (NULL == pCamCalibDbCtx) {
+    return (RET_WRONG_HANDLE);
+  }
+
+  pNewIllum = (CamAwb_V11_IlluProfile_t*)ListSearch(&pCamCalibDbCtx->pAwbProfile->Para_V11.illumination, SearchForEqualIllumination, (void*)pIllumination);
+
+  if (NULL != pNewIllum) {
+    pNewIllum->CrossTalkCoeff = pIllumination->CrossTalkCoeff;
+    pNewIllum->CrossTalkOffset = pIllumination->CrossTalkOffset;
+    return (RET_SUCCESS);
+  }
+
+  LOGV( "%s (exit)\n", __func__);
+
+  return (RET_NOTAVAILABLE);
+}
 
 /******************************************************************************
  * CamCalibDbAddLscProfile
@@ -4248,7 +6519,7 @@ RESULT CamCalibDbReplaceCcProfileAll
 RESULT CamCalibDbGetCcProfileByName
 (
     CamCalibDbHandle_t      hCamCalibDb,
-    CamLscProfileName_t     name,
+    CamCcProfileName_t      name,
     CamCcProfile_t**          pCcProfile
 ) {
   CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
@@ -4598,7 +6869,7 @@ RESULT CamCalibDbAddDpfProfile
 	ListInit(&pNewDpf->Dsp3DNRSettingProfileList);   // clear possibly not empty schemes list in copy
 	ListInit(&pNewDpf->newDsp3DNRProfileList);   // clear possibly not empty schemes list in copy
 	ListInit(&pNewDpf->FilterList);   // clear possibly not empty schemes list in copy
-	
+
     ListPrepareItem(pNewDpf);
     ListAddTail(&pCamCalibDbCtx->dpf_profile, pNewDpf);
 
@@ -4609,7 +6880,7 @@ RESULT CamCalibDbAddDpfProfile
       if (result != RET_SUCCESS) {
         return (result);
       }
-  
+
       pDsp3DNR = (CamDsp3DNRSettingProfile_t*)pDsp3DNR->p_next;
     }
 
@@ -4620,7 +6891,7 @@ RESULT CamCalibDbAddDpfProfile
       if (result != RET_SUCCESS) {
         return (result);
       }
-  
+
       pNewDsp3DNR = (CamNewDsp3DNRProfile_t*)pNewDsp3DNR->p_next;
     }
 
@@ -4631,7 +6902,7 @@ RESULT CamCalibDbAddDpfProfile
       if (result != RET_SUCCESS) {
         return (result);
       }
-  
+
       pFilter = (CamFilterProfile_t*)pFilter->p_next;
     }
   } else {
@@ -5424,7 +7695,7 @@ static inline RESULT ValidateGocProfileData(CamCalibGocProfile_t* pGocData) {
   if (!strlen(pGocData->name)) {
     return (RET_INVALID_PARM);
   }
-  
+
   LOGV("%s (exit)\n", __func__);
 
   return (RET_SUCCESS);
@@ -5452,7 +7723,7 @@ RESULT CamCalibDbAddGocProfile
   if (result != RET_SUCCESS) {
     return (result);
   }
-  
+
   pNewGoc = (CamCalibGocProfile_t*)ListSearch(&pCamCalibDbCtx->gocProfile, SearchForEqualGocProfile, (void*)pAddGocProfile);
   if (NULL == pNewGoc) {
    pNewGoc = (CamCalibGocProfile_t*)malloc(sizeof(CamCalibGocProfile_t));
@@ -5461,7 +7732,7 @@ RESULT CamCalibDbAddGocProfile
      ListPrepareItem(pNewGoc);
      ListAddTail(&pCamCalibDbCtx->gocProfile, pNewGoc);
    }else{
-     ALOGE("%s malloc fail\n", __func__);
+     LOGE("%s malloc fail\n", __func__);
 	 return (RET_INVALID_PARM);
    }
   } else {
@@ -5513,22 +7784,22 @@ RESULT CamCalibDbGetGocProfileByName
     CamCalibGocProfile_t** ppGocProfile
 ){
    CamCalibDbContext_t* pCamCalibDbCtx = (CamCalibDbContext_t*)hCamCalibDb;
- 
+
    LOGV("%s (enter)\n", __func__);
- 
+
    if (NULL == pCamCalibDbCtx) {
  	return (RET_WRONG_HANDLE);
    }
- 
+
    if (NULL == ppGocProfile) {
  	return (RET_INVALID_PARM);
    }
- 
+
    /* search resolution by name */
    *ppGocProfile = (CamCalibGocProfile_t*)ListSearch(&pCamCalibDbCtx->gocProfile, SearchGocProfileByName, (void*)name);
- 
+
    LOGV("%s (exit)\n", __func__);
- 
+
    return (RET_SUCCESS);
 }
 
@@ -5731,7 +8002,7 @@ RESULT CamCalibDbAddOTPGlobal
   if (result != RET_SUCCESS) {
     return (result);
   }
-  
+
   /* check if data already exists */
   if (NULL != pCamCalibDbCtx->pOTPGlobal) {
     return (RET_INVALID_PARM);
@@ -5743,7 +8014,7 @@ RESULT CamCalibDbAddOTPGlobal
     return (RET_OUTOFMEM);
   }
 
-  MEMCPY(pNewOTPGlobal, pAddOTPGlobal, sizeof(CamOTPGlobal_t)); 
+  MEMCPY(pNewOTPGlobal, pAddOTPGlobal, sizeof(CamOTPGlobal_t));
 
   pCamCalibDbCtx->pOTPGlobal = pNewOTPGlobal;
 

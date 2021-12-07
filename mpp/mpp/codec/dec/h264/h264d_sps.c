@@ -22,7 +22,6 @@
 #include "mpp_mem.h"
 
 #include "h264d_global.h"
-#include "h264_syntax.h"
 #include "h264d_sps.h"
 #include "h264d_scalist.h"
 #include "h264d_dpb.h"
@@ -268,8 +267,8 @@ static MPP_RET parser_sps(BitReadCtx_t *p_bitctx, H264_SPS_t *cur_sps, H264_DecC
     }
     READ_ONEBIT(p_bitctx, &cur_sps->vui_parameters_present_flag);
 
-    init_VUI(&cur_sps->vui_seq_parameters);
     if (cur_sps->vui_parameters_present_flag) {
+        init_VUI(&cur_sps->vui_seq_parameters);
         ret = read_VUI(p_bitctx, &cur_sps->vui_seq_parameters);
     }
     cur_sps->Valid = 1;
@@ -385,16 +384,17 @@ static void update_video_pars(H264dVideoCtx_t *p_Vid, H264_SPS_t *sps)
     p_Vid->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 + 1);
     p_Vid->FrameHeightInMbs = (2 - sps->frame_mbs_only_flag) * (sps->pic_height_in_map_units_minus1 + 1);
     p_Vid->yuv_format = sps->chroma_format_idc;
+    p_Vid->frame_mbs_only_flag = sps->frame_mbs_only_flag;
 
     p_Vid->width = p_Vid->PicWidthInMbs * 16;
     p_Vid->height = p_Vid->FrameHeightInMbs * 16;
     p_Vid->bit_depth_luma = sps->bit_depth_luma_minus8 + 8;
     p_Vid->bit_depth_chroma = sps->bit_depth_chroma_minus8 + 8;
 
-    if (p_Vid->yuv_format == YUV420) {
+    if (p_Vid->yuv_format == H264_CHROMA_420) {
         p_Vid->width_cr = (p_Vid->width >> 1);
         p_Vid->height_cr = (p_Vid->height >> 1);
-    } else if (p_Vid->yuv_format == YUV422) {
+    } else if (p_Vid->yuv_format == H264_CHROMA_422) {
         p_Vid->width_cr = (p_Vid->width >> 1);
         p_Vid->height_cr = p_Vid->height;
     }
@@ -455,8 +455,13 @@ MPP_RET process_sps(H264_SLICE_t *currSlice)
     FUN_CHECK(ret = get_max_dec_frame_buf_size(cur_sps));
     //!< make SPS available, copy
     if (cur_sps->Valid) {
-        memcpy(&currSlice->p_Vid->spsSet[cur_sps->seq_parameter_set_id], cur_sps, sizeof(H264_SPS_t));
+        if (!currSlice->p_Vid->spsSet[cur_sps->seq_parameter_set_id]) {
+            currSlice->p_Vid->spsSet[cur_sps->seq_parameter_set_id] = mpp_calloc(H264_SPS_t, 1);
+        }
+        memcpy(currSlice->p_Vid->spsSet[cur_sps->seq_parameter_set_id],
+               cur_sps, sizeof(H264_SPS_t));
     }
+    p_Cur->p_Vid->spspps_update = 1;
 
     return ret = MPP_OK;
 __FAILED:
@@ -516,9 +521,13 @@ MPP_RET process_subsps(H264_SLICE_t *currSlice)
     MPP_RET ret = MPP_ERR_UNKNOW;
 
     BitReadCtx_t *p_bitctx = &currSlice->p_Cur->bitctx;
-    H264_subSPS_t *cur_subsps = &currSlice->p_Cur->subsps;
+    H264_subSPS_t *cur_subsps = NULL;
     H264_subSPS_t *p_subset = NULL;
 
+    if (!currSlice->p_Cur->subsps)
+        currSlice->p_Cur->subsps = mpp_calloc(H264_subSPS_t, 1);
+
+    cur_subsps = currSlice->p_Cur->subsps;
     reset_cur_subpps_data(cur_subsps); //reset
 
     FUN_CHECK(ret = parser_sps(p_bitctx, &cur_subsps->sps, currSlice->p_Dec));
@@ -529,7 +538,9 @@ MPP_RET process_subsps(H264_SLICE_t *currSlice)
     }
     get_max_dec_frame_buf_size(&cur_subsps->sps);
     //!< make subSPS available
-    p_subset = &currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id];
+    if (!currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id])
+        currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id] = mpp_malloc(H264_subSPS_t, 1);
+    p_subset = currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id];
     if (p_subset->Valid) {
         recycle_subsps(p_subset);
     }
@@ -537,7 +548,7 @@ MPP_RET process_subsps(H264_SLICE_t *currSlice)
 
     return ret = MPP_OK;
 __FAILED:
-    recycle_subsps(&currSlice->p_Cur->subsps);
+    recycle_subsps(currSlice->p_Cur->subsps);
 
     return ret;
 }
@@ -568,6 +579,7 @@ MPP_RET activate_sps(H264dVideoCtx_t *p_Vid, H264_SPS_t *sps, H264_subSPS_t *sub
             update_last_video_pars(p_Vid, p_Vid->active_sps, 1);
             //!< init frame slots, store frame buffer size
             p_Vid->dpb_size[1] = p_Vid->p_Dpb_layer[1]->size;
+            p_Vid->spspps_update = 1;
         }
         VAL_CHECK(ret, p_Vid->dpb_size[1] > 0);
     } else { //!< layer_id == 0
@@ -584,6 +596,7 @@ MPP_RET activate_sps(H264dVideoCtx_t *p_Vid, H264_SPS_t *sps, H264_subSPS_t *sub
             update_last_video_pars(p_Vid, p_Vid->active_sps, 0);
             //!< init frame slots, store frame buffer size
             p_Vid->dpb_size[0] = p_Vid->p_Dpb_layer[0]->size;
+            p_Vid->spspps_update = 1;
         }
         VAL_CHECK(ret, p_Vid->dpb_size[0] > 0);
     }

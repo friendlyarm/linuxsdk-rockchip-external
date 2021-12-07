@@ -137,7 +137,8 @@ class CalibDb {
   bool parseEntryAwb_V10_IlluminationAlsc(const XMLElement*, void* param = NULL);
   bool parseEntryAwb_V11_IlluminationAcc(const XMLElement*, void* param = NULL);
   
-  bool parseEntryAwb_V10_IlluminationAcc(const XMLElement*, void* param = NULL);
+  bool parseEntryAwb_V10_IlluminationAcc(const XMLElement*, void* param = NULL);  
+  bool parseEntryAwb_Flash_Para(const XMLElement*, void* param = NULL);
   bool parseEntryAfWin( const XMLElement*, void *param = NULL, uint32_t parent_id = 0);
   bool parseEntryContrastAf( const XMLElement*, void *param = NULL );
   bool parseEntryLaserAf( const XMLElement*, void *param = NULL );
@@ -149,12 +150,14 @@ class CalibDb {
   bool parseEntryAecHist2Hal( const XMLElement*, void *param = NULL );
   bool parseEntryAecNLSC( const XMLElement*, void *param = NULL );
   bool parseEntryAecIntervalAdjustStrategy( const XMLElement*, void *param = NULL );
+  bool parseEntryAecBackLightWeightMethod( const XMLElement*, void *param = NULL );
+  bool parseEntryAecBackLightDarkROIMethod( const XMLElement*, void *param = NULL );
   bool parseEntryAecBacklight( const XMLElement*, void *param = NULL );
   bool parseEntryAecLockAE( const XMLElement*, void *param = NULL );
   bool parseEntryAecHdrCtrlLframe( const XMLElement*, void *param = NULL );
   bool parseEntryAecHdrCtrlSframe( const XMLElement*, void *param = NULL );
   bool parseEntryAecHdrCtrl( const XMLElement*, void *param = NULL );
-	
+  bool parseEntryAecFlashCtrl( const XMLElement*, void *param = NULL );
   bool parseEntryAec(const XMLElement*, void* param = NULL);
   bool parseEntryAecEcm(const XMLElement*, void* param = NULL);
   bool parseEntryAecEcmPriorityScheme(const XMLElement*, void* param = NULL);

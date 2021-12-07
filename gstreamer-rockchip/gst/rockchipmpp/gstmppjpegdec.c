@@ -2,6 +2,9 @@
  * Copyright 2018 Rockchip Electronics Co., Ltd
  *     Author: Randy Li <randy.li@rock-chips.com>
  *
+ * Copyright 2021 Rockchip Electronics Co., Ltd
+ *     Author: Jeffy Chen <jeffy.chen@rock-chips.com>
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
@@ -23,18 +26,40 @@
 #include "config.h"
 #endif
 
-#include <gst/gst.h>
-
-#include "gstmppbarebufferpool.h"
+#include "gstmppallocator.h"
 #include "gstmppjpegdec.h"
 
-GST_DEBUG_CATEGORY (mpp_jpeg_dec_debug);
+#define GST_MPP_JPEG_DEC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), \
+    GST_TYPE_MPP_JPEG_DEC, GstMppJpegDec))
+
 #define GST_CAT_DEFAULT mpp_jpeg_dec_debug
+GST_DEBUG_CATEGORY (GST_CAT_DEFAULT);
+
+struct _GstMppJpegDec
+{
+  GstMppDec parent;
+
+  /* size of output buffer */
+  guint buf_size;
+
+  /* group for input packet buffer allocations */
+  MppBufferGroup input_group;
+
+  MppPacket eos_packet;
+};
 
 #define parent_class gst_mpp_jpeg_dec_parent_class
-G_DEFINE_TYPE (GstMppJpegDec, gst_mpp_jpeg_dec, GST_TYPE_VIDEO_DECODER);
+G_DEFINE_TYPE (GstMppJpegDec, gst_mpp_jpeg_dec, GST_TYPE_MPP_DEC);
 
-#define NB_OUTPUT_BUFS 4        /* nb frames necessary for display pipeline */
+/* Default output format is auto */
+static GstVideoFormat DEFAULT_PROP_FORMAT = GST_VIDEO_FORMAT_UNKNOWN;
+
+enum
+{
+  PROP_0,
+  PROP_FORMAT,
+  PROP_LAST,
+};
 
 /* GstVideoDecoder base class method */
 static GstStaticPadTemplate gst_mpp_jpeg_dec_sink_template =
@@ -44,437 +69,487 @@ static GstStaticPadTemplate gst_mpp_jpeg_dec_sink_template =
     GST_STATIC_CAPS ("image/jpeg," "parsed = (boolean) true" ";")
     );
 
+#define MPP_JPEGD_FORMATS \
+    "NV12, " \
+    "BGR16, RGB16, " \
+    "ABGR, ARGB, BGRA, RGBA, xBGR, xRGB, BGRx, RGBx"
+
 static GstStaticPadTemplate gst_mpp_jpeg_dec_src_template =
     GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw, "
-        "format = (string) NV12, "
-        "width  = (int) [ 48, 8176 ], " "height =  (int) [ 48, 8176 ]"
-        ";"
-        "video/x-raw, "
-        "format = (string) NV16, "
+        "format = (string) { " MPP_DEC_FORMATS ", " MPP_JPEGD_FORMATS " }, "
         "width  = (int) [ 48, 8176 ], " "height =  (int) [ 48, 8176 ]" ";")
     );
 
-static MppCodingType
-to_mpp_codec (GstStructure * s)
-{
-  if (gst_structure_has_name (s, "image/jpeg"))
-    return MPP_VIDEO_CodingMJPEG;
+static const GstVideoFormat gst_mpp_jpeg_dec_pp_formats[] = {
+  GST_VIDEO_FORMAT_UNKNOWN,
+  GST_VIDEO_FORMAT_NV12,
+  GST_VIDEO_FORMAT_RGB16,
+  GST_VIDEO_FORMAT_BGR16,
+  GST_VIDEO_FORMAT_ARGB,
+  GST_VIDEO_FORMAT_ABGR,
+  GST_VIDEO_FORMAT_RGBA,
+  GST_VIDEO_FORMAT_BGRA,
+  GST_VIDEO_FORMAT_xRGB,
+  GST_VIDEO_FORMAT_xBGR,
+  GST_VIDEO_FORMAT_RGBx,
+  GST_VIDEO_FORMAT_BGRx,
+};
 
-  /* add more type here */
-  return MPP_VIDEO_CodingUnused;
+static GstVideoFormat
+gst_mpp_jpeg_dec_try_pp_format (GstVideoDecoder * decoder, gboolean force)
+{
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
+  MppFrameFormat mpp_format = force ? MPP_FMT_YUV420SP : MPP_FMT_BUTT;
+  guint i;
+
+  for (i = 0; i < ARRAY_SIZE (gst_mpp_jpeg_dec_pp_formats); i++) {
+    if (mppdec->format == gst_mpp_jpeg_dec_pp_formats[i]) {
+      mpp_format = gst_mpp_gst_format_to_mpp_format (mppdec->format);
+      break;
+    }
+  }
+
+  /* Using MPP internal format conversion (PP) */
+  if (mpp_format != MPP_FMT_BUTT) {
+    if (mppdec->mpi->control (mppdec->mpp_ctx, MPP_DEC_SET_OUTPUT_FORMAT,
+            &mpp_format) >= 0)
+      return gst_mpp_mpp_format_to_gst_format (mpp_format);
+  }
+
+  return GST_VIDEO_FORMAT_UNKNOWN;
 }
 
 static GstVideoFormat
-gst_mpp_get_jpeg_color (GstStructure * structure)
+gst_mpp_jpeg_dec_get_format (GstStructure * structure)
 {
   const gchar *s;
-  GstVideoFormat format = GST_VIDEO_FORMAT_UNKNOWN;
 
-  if (gst_structure_has_name (structure, "image/jpeg")) {
-    if (!(s = gst_structure_get_string (structure, "format")))
-      return GST_VIDEO_FORMAT_UNKNOWN;
+  if ((s = gst_structure_get_string (structure, "format")))
+    return gst_video_format_from_string (s);
 
-    format = gst_video_format_from_string (s);
-  }
-  return format;
+  return GST_VIDEO_FORMAT_UNKNOWN;
 }
 
 static void
-gst_mpp_jpeg_dec_unlock (GstMppJpegDec * self)
+gst_mpp_jpeg_dec_set_property (GObject * object,
+    guint prop_id, const GValue * value, GParamSpec * pspec)
 {
-  if (self->pool && gst_buffer_pool_is_active (self->pool))
-    gst_buffer_pool_set_flushing (self->pool, TRUE);
+  GstVideoDecoder *decoder = GST_VIDEO_DECODER (object);
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
+
+  switch (prop_id) {
+    case PROP_FORMAT:{
+      GstVideoFormat format = g_value_get_enum (value);
+      if (mppdec->format == format)
+        return;
+
+      if (mppdec->input_state) {
+        GST_WARNING_OBJECT (decoder, "unable to change output format");
+        return;
+      }
+
+      mppdec->format = format;
+      break;
+    }
+
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      return;
+  }
 }
 
 static void
-gst_mpp_jpeg_dec_unlock_stop (GstMppJpegDec * self)
+gst_mpp_jpeg_dec_get_property (GObject * object,
+    guint prop_id, GValue * value, GParamSpec * pspec)
 {
-  if (self->pool && gst_buffer_pool_is_active (self->pool))
-    gst_buffer_pool_set_flushing (self->pool, FALSE);
-}
+  GstVideoDecoder *decoder = GST_VIDEO_DECODER (object);
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
 
-static gboolean
-gst_mpp_jpeg_dec_close (GstVideoDecoder * decoder)
-{
-  GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
-  if (self->mpp_ctx != NULL) {
-    mpp_destroy (self->mpp_ctx);
-    self->mpp_ctx = NULL;
+  switch (prop_id) {
+    case PROP_FORMAT:
+      g_value_set_enum (value, mppdec->format);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
   }
-
-  GST_DEBUG_OBJECT (self, "Rockchip MPP context closed");
-
-  return TRUE;
-}
-
-/* Open the device */
-static gboolean
-gst_mpp_jpeg_dec_open (GstVideoDecoder * decoder)
-{
-  GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
-  if (mpp_create (&self->mpp_ctx, &self->mpi))
-    return FALSE;
-
-  GST_DEBUG_OBJECT (self, "created mpp context %p", self->mpp_ctx);
-  return TRUE;
 }
 
 static gboolean
 gst_mpp_jpeg_dec_start (GstVideoDecoder * decoder)
 {
+  GstVideoDecoderClass *pclass = GST_VIDEO_DECODER_CLASS (parent_class);
   GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
+  MppBuffer mbuf;
 
-  GST_DEBUG_OBJECT (self, "Starting");
-  gst_mpp_jpeg_dec_unlock (self);
-  g_atomic_int_set (&self->active, TRUE);
-  self->output_flow = GST_FLOW_OK;
+  GST_DEBUG_OBJECT (self, "starting");
 
-  return TRUE;
-}
-
-static gboolean
-gst_mpp_video_set_format (GstMppJpegDec * self, MppCodingType codec_format)
-{
-  if (mpp_init (self->mpp_ctx, MPP_CTX_DEC, codec_format))
+  if (mpp_buffer_group_get_internal (&self->input_group, MPP_BUFFER_TYPE_DRM))
     return FALSE;
 
-  return TRUE;
-}
+  /* Prepare EOS packet */
+  mpp_buffer_get (self->input_group, &mbuf, 1);
+  mpp_packet_init_with_buffer (&self->eos_packet, mbuf);
+  mpp_buffer_put (mbuf);
+  mpp_packet_set_size (self->eos_packet, 0);
+  mpp_packet_set_length (self->eos_packet, 0);
+  mpp_packet_set_eos (self->eos_packet);
 
-static gboolean
-gst_mpp_jpeg_dec_finish (GstVideoDecoder * decoder)
-{
-  GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
-  GstFlowReturn ret = GST_FLOW_OK;
-
-done:
-  return ret;
-}
-
-static GstStateChangeReturn
-gst_mpp_jpeg_dec_change_state (GstElement * element, GstStateChange transition)
-{
-  GstVideoDecoder *decoder = GST_VIDEO_DECODER (element);
-  GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
-
-  if (transition == GST_STATE_CHANGE_PAUSED_TO_READY) {
-    g_atomic_int_set (&self->active, FALSE);
-    gst_mpp_jpeg_dec_unlock (self);
+  if (!pclass->start (decoder)) {
+    mpp_packet_deinit (&self->eos_packet);
+    mpp_buffer_group_put (self->input_group);
+    return FALSE;
   }
 
-  return GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+  mppdec->mpp_type = MPP_VIDEO_CodingMJPEG;
+
+  GST_DEBUG_OBJECT (self, "started");
+
+  return TRUE;
 }
 
 static gboolean
 gst_mpp_jpeg_dec_stop (GstVideoDecoder * decoder)
 {
+  GstVideoDecoderClass *pclass = GST_VIDEO_DECODER_CLASS (parent_class);
   GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
 
-  GST_DEBUG_OBJECT (self, "Stopping");
+  GST_DEBUG_OBJECT (self, "stopping");
 
-  gst_mpp_jpeg_dec_unlock (self);
+  pclass->stop (decoder);
 
-  GST_VIDEO_DECODER_STREAM_LOCK (decoder);
-  self->output_flow = GST_FLOW_OK;
-  GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
+  mpp_packet_deinit (&self->eos_packet);
+  mpp_buffer_group_put (self->input_group);
 
-  /* Should have been flushed already */
-  g_assert (g_atomic_int_get (&self->active) == FALSE);
-
-  /* Release all the internal references of the buffer */
-  if (self->pool) {
-    gst_object_unref (self->pool);
-    self->pool = NULL;
-  }
-
-  mpp_buffer_put (self->input_buffer[0]);
-  self->input_buffer[0] = NULL;
-  if (self->input_group) {
-    mpp_buffer_group_put (self->input_group);
-    self->input_group = NULL;
-  }
-
-  if (self->input_state)
-    gst_video_codec_state_unref (self->input_state);
-
-  GST_DEBUG_OBJECT (self, "Stopped");
+  GST_DEBUG_OBJECT (self, "stopped");
 
   return TRUE;
-}
-
-static gboolean
-gst_mpp_jpeg_dec_flush (GstVideoDecoder * decoder)
-{
-  GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
-  gint ret = 0;
-  ret = self->mpi->reset (self->mpp_ctx);
-
-  /* Ensure the processing thread has stopped for the reverse playback
-   * discount case */
-  if (gst_pad_get_task_state (decoder->srcpad) == GST_TASK_STARTED) {
-    GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
-    gst_mpp_jpeg_dec_unlock (self);
-    GST_VIDEO_DECODER_STREAM_LOCK (decoder);
-  }
-  self->output_flow = GST_FLOW_OK;
-
-  gst_mpp_jpeg_dec_unlock_stop (self);
-  return !ret;
 }
 
 static gboolean
 gst_mpp_jpeg_dec_set_format (GstVideoDecoder * decoder,
     GstVideoCodecState * state)
 {
+  GstVideoDecoderClass *pclass = GST_VIDEO_DECODER_CLASS (parent_class);
   GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
+  GstVideoInfo *info = &state->info;
   GstStructure *structure;
   GstVideoFormat format;
-  GstVideoInfo *info;
-  gsize ver_stride, cr_h, mv_size;
+  gint width = GST_VIDEO_INFO_WIDTH (info);
+  gint height = GST_VIDEO_INFO_HEIGHT (info);
 
-  GST_DEBUG_OBJECT (self, "Setting format: %" GST_PTR_FORMAT, state->caps);
-
-  structure = gst_caps_get_structure (state->caps, 0);
-
-  if (self->input_state) {
-    if (gst_caps_is_strictly_equal (self->input_state->caps, state->caps))
-      goto done;
-  } else {
-    MppCodingType codingtype;
-    codingtype = to_mpp_codec (structure);
-    if (MPP_VIDEO_CodingUnused == codingtype)
-      goto format_error;
-
-    if (!gst_mpp_video_set_format (self, codingtype))
-      goto device_error;
+  if (!width || !height) {
+    GST_ERROR_OBJECT (self, "invalid input video info");
+    return FALSE;
   }
 
-  format = gst_mpp_get_jpeg_color (structure);
+  if (!pclass->set_format (decoder, state))
+    return FALSE;
+
+  structure = gst_caps_get_structure (state->caps, 0);
+  format = gst_mpp_jpeg_dec_get_format (structure);
   switch (format) {
     case GST_VIDEO_FORMAT_NV12:
     case GST_VIDEO_FORMAT_I420:
-    case GST_VIDEO_FORMAT_YV12:
       format = GST_VIDEO_FORMAT_NV12;
       break;
     case GST_VIDEO_FORMAT_UYVY:
+    case GST_VIDEO_FORMAT_Y42B:
     case GST_VIDEO_FORMAT_NV16:
       format = GST_VIDEO_FORMAT_NV16;
       break;
     default:
-      g_assert_not_reached ();
-      return FALSE;
+      /* FIXME: Gst doesn't support semi-planar version of Y444/Y41B...etc */
+      format = GST_VIDEO_FORMAT_UNKNOWN;
+      break;
   }
 
-  info = &self->info;
-  gst_video_info_init (info);
-  gst_video_info_set_format (info, format, GST_VIDEO_INFO_WIDTH (&state->info),
-      GST_VIDEO_INFO_HEIGHT (&state->info));
-
-  switch (format) {
-    case GST_VIDEO_FORMAT_NV12:
-      info->stride[0] = GST_ROUND_UP_16 (info->stride[0]);
-      ver_stride = GST_ROUND_UP_16 (GST_VIDEO_INFO_HEIGHT (info));
-      info->offset[0] = 0;
-      info->offset[1] = info->stride[0] * ver_stride;
-      cr_h = GST_ROUND_UP_2 (ver_stride) / 2;
-      info->size = info->offset[1] + info->stride[0] * cr_h;
-      mv_size = info->size / 3;
-      info->size += mv_size;
-      break;
-    case GST_VIDEO_FORMAT_NV16:
-      info->stride[0] = GST_ROUND_UP_16 (info->stride[0]);
-      ver_stride = GST_ROUND_UP_16 (GST_VIDEO_INFO_HEIGHT (info));
-      info->offset[0] = 0;
-      info->offset[1] = info->stride[0] * ver_stride;
-      cr_h = GST_ROUND_UP_2 (ver_stride);
-      info->size = info->stride[0] * cr_h * 2;
-      break;
-    default:
-      g_assert_not_reached ();
-      return FALSE;
+  if (mppdec->format == GST_VIDEO_FORMAT_UNKNOWN) {
+    /* Try to convert unsupported formats to NV12 */
+    if (format == GST_VIDEO_FORMAT_UNKNOWN)
+      mppdec->format = GST_VIDEO_FORMAT_NV12;
+    else
+      mppdec->format = format;
   }
 
-  self->input_state = gst_video_codec_state_ref (state);
+  /* Prefer MPP internal format conversion (PP) */
+  if (mppdec->format != format) {
+    GstVideoFormat pp_format;
+    gboolean force = format == GST_VIDEO_FORMAT_UNKNOWN;
 
-done:
+    pp_format = gst_mpp_jpeg_dec_try_pp_format (decoder, force);
+    if (pp_format != GST_VIDEO_FORMAT_UNKNOWN)
+      format = pp_format;
+  }
+
+  /* Output buffer size calculation */
+  info = &mppdec->info;
+  gst_video_info_set_format (info, format, width, height);
+  if (!gst_mpp_video_info_align (info, 0, 0))
+    return FALSE;
+
+  self->buf_size = GST_VIDEO_INFO_SIZE (info);
+
+  /* FIXME: Workaround MPP's JPEG parser size requirement issue (w * h * 2) */
+  self->buf_size =
+      MAX (self->buf_size, GST_VIDEO_INFO_PLANE_OFFSET (info, 1) * 2);
+
+  /* Update final output info */
+  if (!gst_mpp_dec_update_video_info (decoder, mppdec->format,
+          width, height, 0, 0, format == mppdec->format))
+    return FALSE;
+
   return TRUE;
-
-  /* Errors */
-format_error:
-  {
-    GST_ERROR_OBJECT (self, "Unsupported format in caps: %" GST_PTR_FORMAT,
-        state->caps);
-    return FALSE;
-  }
-device_error:
-  {
-    GST_ERROR_OBJECT (self, "Failed to open the device");
-    return FALSE;
-  }
 }
 
-static GstFlowReturn
-gst_mpp_jpeg_dec_handle_frame (GstVideoDecoder * decoder,
-    GstVideoCodecFrame * frame)
+static MppPacket
+gst_mpp_jpeg_dec_get_mpp_packet (GstVideoDecoder * decoder,
+    GstMapInfo * mapinfo)
 {
   GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
-  GstBufferPool *pool = NULL;
-  GstFlowReturn ret = GST_FLOW_OK;
-  GstBuffer *outbuf = NULL;
+  MppBuffer mbuf = NULL;
   MppPacket mpkt = NULL;
-  MPP_RET mret = 0;
-  MppTask mtask = NULL;
-  MppFrame mframe = NULL;
 
-  GST_DEBUG_OBJECT (self, "Handling frame %d", frame->system_frame_number);
+  mpp_buffer_get (self->input_group, &mbuf, mapinfo->size);
+  if (G_UNLIKELY (!mbuf))
+    return NULL;
 
-  if (G_UNLIKELY (!g_atomic_int_get (&self->active)))
-    goto flushing;
-
-  if (self->pool == NULL) {
-    if (!self->input_state)
-      goto not_negotiated;
-
-    self->pool = gst_mpp_bare_buffer_pool_new (self, NULL);
-    if (!self->pool)
-      goto not_negotiated;
-  }
-
-  pool = GST_BUFFER_POOL (self->pool);
-  if (!gst_buffer_pool_is_active (pool)) {
-    GstVideoCodecState *output_state;
-    GstVideoInfo *info = &self->info;
-    GstStructure *config = gst_buffer_pool_get_config (pool);
-
-    output_state =
-        gst_video_decoder_set_output_state (decoder,
-        info->finfo->format, info->width, info->height, self->input_state);
-    gst_video_codec_state_unref (output_state);
-
-    gst_buffer_pool_config_set_params (config, output_state->caps,
-        self->info.size, NB_OUTPUT_BUFS, NB_OUTPUT_BUFS);
-
-    if (!gst_buffer_pool_set_config (pool, config))
-      goto error_activate_pool;
-    /* activate the pool: the buffers are allocated */
-    if (gst_buffer_pool_set_active (self->pool, TRUE) == FALSE)
-      goto error_activate_pool;
-
-    if (mpp_buffer_group_get_internal (&self->input_group, MPP_BUFFER_TYPE_ION))
-      goto error_activate_pool;
-
-    mpp_buffer_get (self->input_group, &self->input_buffer[0], self->info.size);
-
-  }
-#if 0
-  ret = gst_buffer_pool_acquire_buffer (self->pool, &tmp, NULL);
-  if (ret != GST_FLOW_OK)
-    goto drop;
-#endif
-
-  ret = gst_buffer_pool_acquire_buffer (self->pool, &outbuf, NULL);
-  if (ret != GST_FLOW_OK)
-    goto drop;
-
-  if (self->mpi->poll (self->mpp_ctx, MPP_PORT_INPUT, MPP_POLL_BLOCK))
-    goto start_task_failed;
-  if (self->mpi->dequeue (self->mpp_ctx, MPP_PORT_INPUT, &mtask))
-    goto drop;
-
-#if 0
-  mpp_packet_new (&mpkt);
-  gst_buffer_copy_into (tmp, frame->input_buffer, GST_BUFFER_COPY_MEMORY, 0,
-      -1);
-  if (ret != GST_FLOW_OK)
-    goto drop;
-#else
   /* FIXME: performance bad */
-  gst_buffer_extract (frame->input_buffer, 0,
-      mpp_buffer_get_ptr (self->input_buffer[0]),
-      gst_buffer_get_size (frame->input_buffer));
+  memcpy (mpp_buffer_get_ptr (mbuf), mapinfo->data, mapinfo->size);
 
-  mpp_packet_init_with_buffer (&mpkt, self->input_buffer[0]);
-#endif
+  mpp_packet_init_with_buffer (&mpkt, mbuf);
+  mpp_buffer_put (mbuf);
+  if (G_UNLIKELY (!mpkt))
+    return NULL;
+
+  mpp_packet_set_size (mpkt, mapinfo->size);
+  mpp_packet_set_length (mpkt, mapinfo->size);
+
+  return mpkt;
+}
+
+static gboolean
+gst_mpp_jpeg_dec_send_mpp_packet (GstVideoDecoder * decoder,
+    MppPacket mpkt, gint timeout_ms)
+{
+  GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
+  MppBuffer mbuf;
+  MppFrame mframe = NULL;
+  MppTask mtask = NULL;
+  MppMeta meta;
+
+  mppdec->mpi->poll (mppdec->mpp_ctx, MPP_PORT_INPUT, timeout_ms);
+  mppdec->mpi->dequeue (mppdec->mpp_ctx, MPP_PORT_INPUT, &mtask);
+  if (G_UNLIKELY (!mtask))
+    goto error;
+
   mpp_task_meta_set_packet (mtask, KEY_INPUT_PACKET, mpkt);
 
+  mbuf = gst_mpp_allocator_alloc_mppbuf (mppdec->allocator, self->buf_size);
+  if (G_UNLIKELY (!mbuf))
+    goto error;
+
   mpp_frame_init (&mframe);
-  ret = gst_mpp_bare_buffer_pool_fill_frame (mframe, outbuf);
-  if (ret != GST_FLOW_OK)
-    goto drop;
+  mpp_frame_set_buffer (mframe, mbuf);
+  mpp_buffer_put (mbuf);
+
+  meta = mpp_frame_get_meta (mframe);
+  mpp_meta_set_packet (meta, KEY_INPUT_PACKET, mpkt);
 
   mpp_task_meta_set_frame (mtask, KEY_OUTPUT_FRAME, mframe);
 
-  if (self->mpi->enqueue (self->mpp_ctx, MPP_PORT_INPUT, mtask))
-    goto send_stream_error;
+  if (mppdec->mpi->enqueue (mppdec->mpp_ctx, MPP_PORT_INPUT, mtask))
+    goto error;
 
-  if (self->mpi->poll (self->mpp_ctx, MPP_PORT_OUTPUT, MPP_POLL_BLOCK))
-    goto send_stream_error;
+  return TRUE;
 
-  mpp_packet_deinit (&mpkt);
-
-  mret = self->mpi->dequeue (self->mpp_ctx, MPP_PORT_OUTPUT, &mtask);
+error:
   if (mtask) {
-    GstVideoCodecFrame *frame = NULL;
+    mpp_task_meta_set_packet (mtask, KEY_INPUT_PACKET, NULL);
+    mpp_task_meta_set_frame (mtask, KEY_OUTPUT_FRAME, NULL);
+    mppdec->mpi->enqueue (mppdec->mpp_ctx, MPP_PORT_INPUT, mtask);
+  }
 
-    frame = gst_video_decoder_get_oldest_frame (decoder);
-    frame->output_buffer = outbuf;
-    ret = gst_video_decoder_finish_frame (decoder, frame);
-    mret = self->mpi->enqueue (self->mpp_ctx, MPP_PORT_OUTPUT, mtask);
+  if (mframe)
     mpp_frame_deinit (&mframe);
+
+  return FALSE;
+}
+
+static MppFrame
+gst_mpp_jpeg_dec_poll_mpp_frame (GstVideoDecoder * decoder, gint timeout_ms)
+{
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
+  MppPacket mpkt = NULL;
+  MppTask mtask = NULL;
+  MppFrame mframe = NULL;
+  MppMeta meta;
+
+  if (mppdec->mpi->poll (mppdec->mpp_ctx, MPP_PORT_OUTPUT, timeout_ms))
+    return NULL;
+
+  mppdec->mpi->dequeue (mppdec->mpp_ctx, MPP_PORT_OUTPUT, &mtask);
+  if (!mtask)
+    return NULL;
+
+  mpp_task_meta_get_frame (mtask, KEY_OUTPUT_FRAME, &mframe);
+  if (!mframe) {
+    mppdec->mpi->enqueue (mppdec->mpp_ctx, MPP_PORT_OUTPUT, mtask);
+    return NULL;
   }
 
-  /* No need to keep input arround */
-
-  gst_video_codec_frame_unref (frame);
-  return ret;
-
-  /* ERRORS */
-error_activate_pool:
-  {
-    GST_ERROR_OBJECT (self, "Unable to activate the pool");
-    ret = GST_FLOW_ERROR;
-    goto drop;
-  }
-flushing:
-  {
-    ret = GST_FLOW_FLUSHING;
-    goto drop;
-  }
-start_task_failed:
-  {
-    GST_ELEMENT_ERROR (self, RESOURCE, FAILED,
-        ("Failed to start decoding thread."), (NULL));
-    ret = GST_FLOW_ERROR;
-    goto drop;
-  }
-not_negotiated:
-  {
-    GST_ERROR_OBJECT (self, "not negotiated");
-    gst_video_decoder_drop_frame (decoder, frame);
-    return GST_FLOW_NOT_NEGOTIATED;
-  }
-send_stream_error:
-  {
-    GST_ERROR_OBJECT (self, "send packet failed %d", mret);
+  meta = mpp_frame_get_meta (mframe);
+  mpp_meta_get_packet (meta, KEY_INPUT_PACKET, &mpkt);
+  if (mpkt)
     mpp_packet_deinit (&mpkt);
-    return GST_FLOW_ERROR;
+
+  mppdec->mpi->enqueue (mppdec->mpp_ctx, MPP_PORT_OUTPUT, mtask);
+
+  return mframe;
+}
+
+static gboolean
+gst_mpp_jpeg_dec_shutdown (GstVideoDecoder * decoder, gboolean drain UNUSED)
+{
+  GstMppJpegDec *self = GST_MPP_JPEG_DEC (decoder);
+  GstMppDec *mppdec = GST_MPP_DEC (decoder);
+  MppFrame mframe = NULL;
+  MppTask mtask = NULL;
+
+  GST_DEBUG_OBJECT (self, "sending EOS");
+
+  mppdec->mpi->poll (mppdec->mpp_ctx, MPP_PORT_INPUT, MPP_POLL_BLOCK);
+  mppdec->mpi->dequeue (mppdec->mpp_ctx, MPP_PORT_INPUT, &mtask);
+  if (!mtask)
+    goto error;
+
+  mpp_task_meta_set_packet (mtask, KEY_INPUT_PACKET, self->eos_packet);
+
+  mpp_frame_init (&mframe);
+  if (!mframe)
+    goto error;
+
+  mpp_task_meta_set_frame (mtask, KEY_OUTPUT_FRAME, mframe);
+
+  if (mppdec->mpi->enqueue (mppdec->mpp_ctx, MPP_PORT_INPUT, mtask))
+    goto error;
+
+  return TRUE;
+
+error:
+  GST_WARNING_OBJECT (self, "failed to send EOS");
+
+  if (mtask) {
+    mpp_task_meta_set_packet (mtask, KEY_INPUT_PACKET, NULL);
+    mpp_task_meta_set_frame (mtask, KEY_OUTPUT_FRAME, NULL);
+    mppdec->mpi->enqueue (mppdec->mpp_ctx, MPP_PORT_INPUT, mtask);
   }
-drop:
-  {
-    GST_ERROR_OBJECT (self, "can't process this frame");
-    gst_video_decoder_drop_frame (decoder, frame);
-    return ret;
+
+  if (mframe)
+    mpp_frame_deinit (&mframe);
+
+  return FALSE;
+}
+
+#define GST_TYPE_MPP_JPEG_DEC_FORMAT (gst_mpp_jpeg_dec_format_get_type ())
+static GType
+gst_mpp_jpeg_dec_format_get_type (void)
+{
+  static GType format = 0;
+
+  if (!format) {
+    static const GEnumValue formats[] = {
+      {GST_VIDEO_FORMAT_UNKNOWN, "Auto", "auto"},
+      {GST_VIDEO_FORMAT_NV12, "NV12", "NV12"},
+      {GST_VIDEO_FORMAT_NV21, "NV21", "NV21"},
+      {GST_VIDEO_FORMAT_I420, "I420", "I420"},
+      {GST_VIDEO_FORMAT_YV12, "YV12", "YV12"},
+      {GST_VIDEO_FORMAT_NV16, "NV16", "NV16"},
+      {GST_VIDEO_FORMAT_NV61, "NV61", "NV61"},
+      {GST_VIDEO_FORMAT_RGB16, "RGB565", "RGB16"},
+      {GST_VIDEO_FORMAT_BGR16, "BGR565", "BGR16"},
+      {GST_VIDEO_FORMAT_ARGB, "ARGB8888", "ARGB"},
+      {GST_VIDEO_FORMAT_ABGR, "ABGR8888", "ABGR"},
+      {GST_VIDEO_FORMAT_RGBA, "RGBA8888", "RGBA"},
+      {GST_VIDEO_FORMAT_BGRA, "BGRA8888", "BGRA"},
+      {GST_VIDEO_FORMAT_xRGB, "XRGB8888", "xRGB"},
+      {GST_VIDEO_FORMAT_xBGR, "XBGR8888", "xBGR"},
+      {GST_VIDEO_FORMAT_RGBx, "RGBX8888", "RGBx"},
+      {GST_VIDEO_FORMAT_BGRx, "BGRX8888", "BGRx"},
+      {0, NULL, NULL}
+    };
+    format = g_enum_register_static ("GstMppJpegDecFormat", formats);
   }
+  return format;
+}
+
+static void
+gst_mpp_jpeg_dec_init (GstMppJpegDec * self)
+{
+  GstMppDec *mppdec = GST_MPP_DEC (self);
+  mppdec->format = DEFAULT_PROP_FORMAT;
+}
+
+static void
+gst_mpp_jpeg_dec_setup_default_format (void)
+{
+  GEnumClass *class;
+  GEnumValue *value;
+  const gchar *env;
+
+  env = g_getenv ("GST_MPP_JPEGDEC_DEFAULT_FORMAT");
+  if (!env)
+    return;
+
+  class = g_type_class_ref (GST_TYPE_MPP_JPEG_DEC_FORMAT);
+
+  value = g_enum_get_value_by_nick (class, env);
+  if (value)
+    DEFAULT_PROP_FORMAT = value->value;
+
+  g_type_class_unref (class);
 }
 
 static void
 gst_mpp_jpeg_dec_class_init (GstMppJpegDecClass * klass)
 {
+  GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+  GstMppDecClass *pclass = GST_MPP_DEC_CLASS (klass);
+  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
-  GstVideoDecoderClass *video_decoder_class = GST_VIDEO_DECODER_CLASS (klass);
+
+  GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "mppjpegdec", 0,
+      "MPP JPEG decoder");
+
+  decoder_class->start = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_start);
+  decoder_class->stop = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_stop);
+  decoder_class->set_format = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_set_format);
+
+  pclass->startup = NULL;
+  pclass->get_mpp_packet = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_get_mpp_packet);
+  pclass->send_mpp_packet =
+      GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_send_mpp_packet);
+  pclass->poll_mpp_frame = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_poll_mpp_frame);
+  pclass->shutdown = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_shutdown);
+
+  gobject_class->set_property =
+      GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_set_property);
+  gobject_class->get_property =
+      GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_get_property);
+
+  gst_mpp_jpeg_dec_setup_default_format ();
+
+  g_object_class_install_property (gobject_class, PROP_FORMAT,
+      g_param_spec_enum ("format", "Prefered output format",
+          "Prefered output format",
+          GST_TYPE_MPP_JPEG_DEC_FORMAT, DEFAULT_PROP_FORMAT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_add_pad_template (element_class,
       gst_static_pad_template_get (&gst_mpp_jpeg_dec_src_template));
@@ -482,36 +557,9 @@ gst_mpp_jpeg_dec_class_init (GstMppJpegDecClass * klass)
   gst_element_class_add_pad_template (element_class,
       gst_static_pad_template_get (&gst_mpp_jpeg_dec_sink_template));
 
-  video_decoder_class->open = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_open);
-  video_decoder_class->close = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_close);
-  video_decoder_class->start = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_start);
-  video_decoder_class->stop = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_stop);
-  video_decoder_class->finish = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_finish);
-  video_decoder_class->set_format = GST_DEBUG_FUNCPTR
-      (gst_mpp_jpeg_dec_set_format);
-  video_decoder_class->handle_frame =
-      GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_handle_frame);
-  video_decoder_class->flush = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_dec_flush);
-
-  element_class->change_state = GST_DEBUG_FUNCPTR
-      (gst_mpp_jpeg_dec_change_state);
-
-  GST_DEBUG_CATEGORY_INIT (mpp_jpeg_dec_debug, "mppjpegdec", 0,
-      "mpp jpeg decoder");
-
   gst_element_class_set_static_metadata (element_class,
       "Rockchip's MPP JPEG image decoder", "Decoder/Image",
-      "JPEG hardware decoder", "Randy Li <randy.li@rock-chips.com>");
-}
-
-static void
-gst_mpp_jpeg_dec_init (GstMppJpegDec * self)
-{
-  GstVideoDecoder *decoder = (GstVideoDecoder *) self;
-
-  gst_video_decoder_set_packetized (decoder, TRUE);
-
-  self->active = FALSE;
-
-  self->input_state = NULL;
+      "JPEG hardware decoder",
+      "Randy Li <randy.li@rock-chips.com>, "
+      "Jeffy Chen <jeffy.chen@rock-chips.com>");
 }

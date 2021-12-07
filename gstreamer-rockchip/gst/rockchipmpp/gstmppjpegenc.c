@@ -2,6 +2,9 @@
  * Copyright 2018 Rockchip Electronics Co., Ltd
  *     Author: Randy Li <randy.li@rock-chips.com>
  *
+ * Copyright 2021 Rockchip Electronics Co., Ltd
+ *     Author: Jeffy Chen <jeffy.chen@rock-chips.com>
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
@@ -18,130 +21,188 @@
  * Boston, MA 02110-1301, USA.
  *
  */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
 #include <string.h>
 
 #include "gstmppjpegenc.h"
 
-#define GST_CAT_DEFAULT mppvideoenc_debug
+#define GST_MPP_JPEG_ENC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), \
+    GST_TYPE_MPP_JPEG_ENC, GstMppJpegEnc))
+
+#define GST_CAT_DEFAULT mpp_jpeg_enc_debug
+GST_DEBUG_CATEGORY (GST_CAT_DEFAULT);
+
+struct _GstMppJpegEnc
+{
+  GstMppEnc parent;
+
+  guint quant;
+};
 
 #define parent_class gst_mpp_jpeg_enc_parent_class
-G_DEFINE_TYPE (GstMppJpegEnc, gst_mpp_jpeg_enc, GST_TYPE_MPP_VIDEO_ENC);
+G_DEFINE_TYPE (GstMppJpegEnc, gst_mpp_jpeg_enc, GST_TYPE_MPP_ENC);
+
+#define DEFAULT_PROP_QUANT 10
+
+enum
+{
+  PROP_0,
+  PROP_QUANT,
+  PROP_LAST,
+};
 
 static GstStaticPadTemplate gst_mpp_jpeg_enc_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("image/jpeg, "
-        "width  = (int) [ 96, 8192 ], " "height = (int) [ 32, 8192 ], "
-        /* Up to 90 million pixels per second at the rk3399 */
-        "framerate = (fraction) [0/1, 60/1], " "sof-marker = { 0 }")
+        "width  = (int) [ 16, 8192 ], "
+        "height = (int) [ 16, 8192 ], "
+        "framerate = " GST_VIDEO_FPS_RANGE ", " "sof-marker = { 0 }")
     );
 
-static gboolean
-gst_mpp_jpeg_enc_open (GstVideoEncoder * encoder)
+static GstStaticPadTemplate gst_mpp_jpeg_enc_sink_template =
+    GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_PAD_SINK,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("video/x-raw,"
+        "format = (string) { " MPP_ENC_FORMATS " }, "
+        "width  = (int) [ 16, 8192 ], "
+        "height = (int) [ 16, 8192 ], "
+        "framerate = " GST_VIDEO_FPS_RANGE ";"));
+
+static void
+gst_mpp_h264_enc_set_property (GObject * object,
+    guint prop_id, const GValue * value, GParamSpec * pspec)
 {
-  GstMppVideoEnc *self = GST_MPP_VIDEO_ENC (encoder);
+  GstVideoEncoder *encoder = GST_VIDEO_ENCODER (object);
+  GstMppJpegEnc *self = GST_MPP_JPEG_ENC (encoder);
+  GstMppEnc *mppenc = GST_MPP_ENC (encoder);
 
-  GST_DEBUG_OBJECT (self, "Opening");
+  switch (prop_id) {
+    case PROP_QUANT:{
+      guint quant = g_value_get_uint (value);
+      if (self->quant == quant)
+        return;
 
-  if (mpp_create (&self->mpp_ctx, &self->mpi))
-    goto failure;
-  if (mpp_init (self->mpp_ctx, MPP_CTX_ENC, MPP_VIDEO_CodingMJPEG))
-    goto failure;
+      self->quant = quant;
+      break;
+    }
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      return;
+  }
 
-  return TRUE;
+  mppenc->prop_dirty = TRUE;
+}
 
-failure:
-  return FALSE;
+static void
+gst_mpp_h264_enc_get_property (GObject * object,
+    guint prop_id, GValue * value, GParamSpec * pspec)
+{
+  GstVideoEncoder *encoder = GST_VIDEO_ENCODER (object);
+  GstMppJpegEnc *self = GST_MPP_JPEG_ENC (encoder);
+
+  switch (prop_id) {
+    case PROP_QUANT:
+      g_value_set_uint (value, self->quant);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static gboolean
+gst_mpp_jpeg_enc_apply_properties (GstVideoEncoder * encoder)
+{
+  GstMppJpegEnc *self = GST_MPP_JPEG_ENC (encoder);
+  GstMppEnc *mppenc = GST_MPP_ENC (encoder);
+
+  if (!mppenc->prop_dirty)
+    return TRUE;
+
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "jpeg:quant", self->quant);
+
+  return gst_mpp_enc_apply_properties (encoder);
 }
 
 static gboolean
 gst_mpp_jpeg_enc_set_format (GstVideoEncoder * encoder,
     GstVideoCodecState * state)
 {
-  GstMppJpegEnc *self = GST_MPP_JPEG_ENC (encoder);
-  GstMppVideoEnc *mpp_video_enc = GST_MPP_VIDEO_ENC (encoder);
-  MppEncCodecCfg codec_cfg;
-  MppEncRcCfg rc_cfg;
+  GstVideoEncoderClass *pclass = GST_VIDEO_ENCODER_CLASS (parent_class);
+  GstCaps *caps;
 
-  memset (&rc_cfg, 0, sizeof (rc_cfg));
-  memset (&codec_cfg, 0, sizeof (codec_cfg));
-
-  rc_cfg.change = MPP_ENC_RC_CFG_CHANGE_ALL;
-  rc_cfg.rc_mode = MPP_ENC_RC_MODE_CBR;
-  rc_cfg.quality = MPP_ENC_RC_QUALITY_MEDIUM;
-
-  rc_cfg.fps_in_flex = 0;
-  rc_cfg.fps_in_num = GST_VIDEO_INFO_FPS_N (&state->info);
-  rc_cfg.fps_in_denorm = GST_VIDEO_INFO_FPS_D (&state->info);
-  rc_cfg.fps_out_flex = 0;
-  rc_cfg.fps_out_num = GST_VIDEO_INFO_FPS_N (&state->info);
-  rc_cfg.fps_out_denorm = GST_VIDEO_INFO_FPS_D (&state->info);
-  rc_cfg.gop = GST_VIDEO_INFO_FPS_N (&state->info)
-      / GST_VIDEO_INFO_FPS_D (&state->info);
-  rc_cfg.skip_cnt = 0;
-
-
-  if (mpp_video_enc->mpi->control (mpp_video_enc->mpp_ctx, MPP_ENC_SET_RC_CFG,
-          &rc_cfg)) {
-    GST_DEBUG_OBJECT (self, "Setting rate control for rockchip mpp failed");
+  if (!pclass->set_format (encoder, state))
     return FALSE;
-  }
 
-  codec_cfg.coding = MPP_VIDEO_CodingMJPEG;
-  codec_cfg.jpeg.quant = 10;
-  codec_cfg.jpeg.change = MPP_ENC_JPEG_CFG_CHANGE_QP;
-
-  if (mpp_video_enc->mpi->control (mpp_video_enc->mpp_ctx,
-          MPP_ENC_SET_CODEC_CFG, &codec_cfg)) {
-    GST_DEBUG_OBJECT (self, "Setting codec info for rockchip mpp failed");
+  if (!gst_mpp_jpeg_enc_apply_properties (encoder))
     return FALSE;
-  }
 
-  return GST_MPP_VIDEO_ENC_CLASS (parent_class)->set_format (encoder, state);
+  caps = gst_caps_new_empty_simple ("image/jpeg");
+  return gst_mpp_enc_set_src_caps (encoder, caps);
 }
 
 static GstFlowReturn
 gst_mpp_jpeg_enc_handle_frame (GstVideoEncoder * encoder,
     GstVideoCodecFrame * frame)
 {
-  GstCaps *outcaps;
+  GstVideoEncoderClass *pclass = GST_VIDEO_ENCODER_CLASS (parent_class);
 
-  outcaps = gst_caps_new_empty_simple ("image/jpeg");
+  if (G_UNLIKELY (!gst_mpp_jpeg_enc_apply_properties (encoder))) {
+    gst_video_codec_frame_unref (frame);
+    return GST_FLOW_NOT_NEGOTIATED;
+  }
 
-  return GST_MPP_VIDEO_ENC_CLASS (parent_class)->handle_frame (encoder, frame,
-      outcaps);
+  return pclass->handle_frame (encoder, frame);
 }
 
 static void
 gst_mpp_jpeg_enc_init (GstMppJpegEnc * self)
 {
+  self->parent.mpp_type = MPP_VIDEO_CodingMJPEG;
+
+  self->quant = DEFAULT_PROP_QUANT;
 }
 
 static void
 gst_mpp_jpeg_enc_class_init (GstMppJpegEncClass * klass)
 {
-  GstElementClass *element_class;
-  GstVideoEncoderClass *video_encoder_class;
+  GstVideoEncoderClass *encoder_class = GST_VIDEO_ENCODER_CLASS (klass);
+  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  element_class = (GstElementClass *) klass;
-  video_encoder_class = (GstVideoEncoderClass *) klass;
+  GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "mppjpegenc", 0,
+      "MPP JPEG encoder");
 
-  gst_element_class_set_static_metadata (element_class,
-      "Rockchip Mpp JPEG Encoder",
-      "Codec/Encoder/Video",
-      "Encode video streams via Rockchip Mpp",
-      "Randy Li <randy.li@rock-chips.com>");
-
-  video_encoder_class->open = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_enc_open);
-  video_encoder_class->set_format =
-      GST_DEBUG_FUNCPTR (gst_mpp_jpeg_enc_set_format);
-  video_encoder_class->handle_frame =
+  encoder_class->set_format = GST_DEBUG_FUNCPTR (gst_mpp_jpeg_enc_set_format);
+  encoder_class->handle_frame =
       GST_DEBUG_FUNCPTR (gst_mpp_jpeg_enc_handle_frame);
+
+  gobject_class->set_property =
+      GST_DEBUG_FUNCPTR (gst_mpp_h264_enc_set_property);
+  gobject_class->get_property =
+      GST_DEBUG_FUNCPTR (gst_mpp_h264_enc_get_property);
+
+  g_object_class_install_property (gobject_class, PROP_QUANT,
+      g_param_spec_uint ("quant", "Quant",
+          "JPEG Quantization", 0, 10, DEFAULT_PROP_QUANT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_add_pad_template (element_class,
       gst_static_pad_template_get (&gst_mpp_jpeg_enc_src_template));
+
+  gst_element_class_add_pad_template (element_class,
+      gst_static_pad_template_get (&gst_mpp_jpeg_enc_sink_template));
+
+  gst_element_class_set_static_metadata (element_class,
+      "Rockchip Mpp JPEG Encoder", "Codec/Encoder/Video",
+      "Encode video streams via Rockchip Mpp",
+      "Randy Li <randy.li@rock-chips.com>, "
+      "Jeffy Chen <jeffy.chen@rock-chips.com>");
 }

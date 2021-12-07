@@ -4,7 +4,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES +=\
-	xcam_common.cpp \
+	xcam_log.cpp \
 
 LOCAL_CFLAGS += -Wno-error=unused-function -Wno-array-bounds
 LOCAL_CFLAGS += -DLINUX  -D_FILE_OFFSET_BITS=64 -DHAS_STDINT_H -DENABLE_ASSERTa
@@ -19,7 +19,7 @@ LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/base \
 
 LOCAL_MODULE:= libisp_log
-ifeq (1,$(strip $(shell expr $(PLATFORM_VERSION) \>= 8.0)))
+ifeq (1,$(strip $(shell expr $(PLATFORM_SDK_VERSION) \>= 26)))
 LOCAL_PROPRIETARY_MODULE := true
 LOCAL_C_INCLUDES += \
 system/core/libutils/include \
@@ -31,6 +31,7 @@ include $(BUILD_STATIC_LIBRARY)
 # build xcore
 include $(CLEAR_VARS)
 
+ifeq ($(IS_HAVE_DRM),true)
 DRM_SRC_FILES += \
 	intel_ia_ctrl.cpp \
 	dma_video_buffer.cpp \
@@ -40,8 +41,10 @@ DRM_SRC_FILES += \
 
 LOCAL_SRC_FILES +=\
 	$(DRM_SRC_FILES)
+endif
 
 LOCAL_SRC_FILES +=\
+	xcam_common.cpp \
 	analyzer_loader.cpp \
 	buffer_pool.cpp \
 	calibration_parser.cpp \
@@ -110,7 +113,7 @@ LOCAL_C_INCLUDES += \
 endif
 
 LOCAL_MODULE:= librkisp_ctrlloop
-ifeq (1,$(strip $(shell expr $(PLATFORM_VERSION) \>= 8.0)))
+ifeq (1,$(strip $(shell expr $(PLATFORM_SDK_VERSION) \>= 26)))
 LOCAL_CFLAGS += -DANDROID_VERSION_ABOVE_8_X
 LOCAL_PROPRIETARY_MODULE := true
 LOCAL_C_INCLUDES += \

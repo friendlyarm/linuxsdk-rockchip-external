@@ -44,10 +44,16 @@
 #include "sysvideo.h"
 #include "error.h"
 #include "shadow.h"
-#include "shadow_rga.h"
    
 gal_uint8* __gal_a_line;
  
+extern void shadow_rga_refresh(int fd, int offset, int src_w, int src_h,
+                               int dst_w, int dst_h, int rotate);
+extern void shadow_rga_refresh90(int fd, int offset, int src_w, int src_h,
+                                 int dst_w, int dst_h);
+extern void shadow_rga_refresh270(int fd, int offset, int src_w, int src_h,
+                                  int dst_w, int dst_h);
+
 int refresh_init (int pitch)
 {
     __gal_a_line = malloc (pitch);
@@ -300,9 +306,9 @@ void refresh_cw_msb_right (ShadowFBHeader *shadowfb_header, RealFBInfo *realfb_i
     dst_line = (gal_uint8*)realfb_info->fb + dst_update.top * realfb_info->pitch;
 
 #if defined(_MGGAL_DRMCON) && ENABLE_RGA
-    shadow_rga_refresh(realfb_info->fd, shadowfb_header->fb_offset,
-                       shadowfb_header->width, shadowfb_header->height,
-                       realfb_info->width, realfb_info->height, HAL_TRANSFORM_ROT_90);
+    shadow_rga_refresh90(realfb_info->fd, shadowfb_header->fb_offset,
+                         shadowfb_header->width, shadowfb_header->height,
+                         realfb_info->width, realfb_info->height);
 #else
     for (x = 0; x < dst_height; x++) {
         /* Copy the bits from vertical line to horizontal line */
@@ -408,9 +414,9 @@ void refresh_ccw_msb_right (ShadowFBHeader* shadowfb_header, RealFBInfo* realfb_
     dst_line = (gal_uint8*)realfb_info->fb + (dst_update.bottom - 1) * realfb_info->pitch;
 
 #if defined(_MGGAL_DRMCON) && ENABLE_RGA
-    shadow_rga_refresh(realfb_info->fd, shadowfb_header->fb_offset,
-                       shadowfb_header->width, shadowfb_header->height,
-                       realfb_info->width, realfb_info->height, HAL_TRANSFORM_ROT_270);
+    shadow_rga_refresh270(realfb_info->fd, shadowfb_header->fb_offset,
+                          shadowfb_header->width, shadowfb_header->height,
+                          realfb_info->width, realfb_info->height);
 #else
     for (x = 0; x < dst_height; x++) {
         /* Copy the bits from vertical line to horizontal line */

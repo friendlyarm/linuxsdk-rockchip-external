@@ -71,8 +71,6 @@ static const ParserApi *parsers[] = {
 };
 
 typedef struct ParserImpl_t {
-    ParserCfg           cfg;
-
     const ParserApi     *api;
     void                *ctx;
 } ParserImpl;
@@ -107,7 +105,6 @@ MPP_RET mpp_parser_init(Parser *prs, ParserCfg *cfg)
                 return ret;
             }
 
-            p->cfg  = *cfg;
             p->api  = api;
             p->ctx  = ctx;
             *prs = p;
@@ -161,7 +158,7 @@ MPP_RET mpp_parser_parse(Parser prs, HalDecTask *task)
     return p->api->parse(p->ctx, task);
 }
 
-MPP_RET mpp_hal_callback(void *prs, void *err_info)
+MPP_RET mpp_parser_callback(void *prs, void *err_info)
 {
     if (NULL == prs) {
         mpp_err_f("found NULL input\n");
@@ -200,7 +197,7 @@ MPP_RET mpp_parser_flush(Parser prs)
     return p->api->flush(p->ctx);
 }
 
-MPP_RET mpp_parser_control(Parser prs, RK_S32 cmd, void *para)
+MPP_RET mpp_parser_control(Parser prs, MpiCmd cmd, void *para)
 {
     if (NULL == prs) {
         mpp_err_f("found NULL input\n");

@@ -24,9 +24,7 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Media Process Platform
 
-Package: librockchip-mpp-static
+Package: rockchip-mpp-demos
 Architecture: any
-Depends: ${misc:Depends}
-Description: Media Process Platform
-
-
+Depends: librockchip-mpp1 (= ${binary:Version}), librockchip-vpu0 (= ${binary:Version}), ${misc:Depends}
+Description: Media Process Platform Demos

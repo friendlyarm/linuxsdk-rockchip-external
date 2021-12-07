@@ -96,7 +96,6 @@ bool ParsePartitionInfo(string &strPartInfo,string &strName,UINT &uiOffset,UINT 
 
 bool parse_parameter(char *pParameter,PARAM_ITEM_VECTOR &vecItem)
 {
-
 	stringstream paramStream(pParameter);
 	bool bRet,bFind=false;
 	string strLine,strPartition,strPartInfo,strPartName;
@@ -806,11 +805,15 @@ bool do_rk_firmware_upgrade(char *szFw,void *pCallback,void *pProgressCallback,c
 		goto EXIT_UPGRADE;
 	}
 	pDevice->SetObject(pImage,pComm,pLog);
-	if (CreateUid(uid))
+
+	if (!pComm->RKU_IsEmmcFlash())    //chad.ma if is Emmc flash don't create UUID.
 	{
-		pDevice->Uid = uid;
-		pLog->PrintBuffer(strUid,uid,RKDEVICE_UID_LEN);
-		pLog->Record("uid:%s",strUid.c_str());
+		if (CreateUid(uid))
+		{
+			pDevice->Uid = uid;
+			pLog->PrintBuffer(strUid,uid,RKDEVICE_UID_LEN);
+			pLog->Record("uid:%s",strUid.c_str());
+		}
 	}
 
 	pDevice->m_pCallback = (UpgradeCallbackFunc)pCallback;
@@ -1046,6 +1049,8 @@ bool do_rk_backup_recovery(void *pCallback,void *pProgressCallback)
 	DWORD dwBackupOffset=0;
 	PARAM_ITEM_VECTOR vecParam;
 	STRUCT_RKIMAGE_HDR hdr;
+    const char *strPartSys = PARTNAME_SYSTEM;
+
 	g_callback = (UpgradeCallbackFunc)pCallback;
 	g_progress_callback = (UpgradeProgressCallbackFunc)pProgressCallback;
 	if (g_progress_callback)
@@ -1112,7 +1117,8 @@ bool do_rk_backup_recovery(void *pCallback,void *pProgressCallback)
 	}
 
 	pLog->Record("Start to write system...");
-	if(!download_backup_image(vecParam,PARTNAME_SYSTEM,dwBackupOffset,hdr,pComm,pLog))
+
+	if(!download_backup_image(vecParam,(char*)strPartSys,dwBackupOffset,hdr,pComm,pLog))
 	{
 		pLog->Record("write system failed!");
 		goto EXIT_RECOVERY;

@@ -36,11 +36,11 @@ typedef struct _XCamAeParam {
     /* speed, default 1.0 */
     double                  speed;
 
-    /* exposure limitation */
+    /* exposure limitation, unit ns */
     uint64_t                exposure_time_min, exposure_time_max;
     double                  max_analog_gain;
 
-    /* exposure manual values */
+    /* exposure manual values, unit ns */
     uint64_t                manual_exposure_time;
     double                  manual_analog_gain;
 
@@ -48,6 +48,7 @@ typedef struct _XCamAeParam {
 
     /*ev*/
     double                  ev_shift;
+    XCamAeFlashMode         flash_mode;
 } XCamAeParam;
 
 typedef struct _XCamAwbParam {
@@ -78,6 +79,7 @@ typedef struct _XCamAfParam {
     XCamAfManualParams   manual_focus_parameters;               /*!< Optional. Manual focus parameters (manual lens position, manual focusing distance). Used only if
                                                                           focus mode 'rk_aiq_af_operation_mode_manual' is used. */
     bool                 trigger_new_search;                    /*!< TRUE if new AF search is needed, FALSE otherwise. Host is responsible for flag cleaning. */
+	bool                 focus_lock;                            /*!< Mandatory. User setting to lock af. */
 } XCamAfParam;
 
 typedef struct _XCamCommonParam {

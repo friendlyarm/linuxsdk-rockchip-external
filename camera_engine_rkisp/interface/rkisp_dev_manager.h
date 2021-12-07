@@ -54,6 +54,7 @@ using ::android::hardware::camera::common::V1_0::helper::CameraMetadata;
 #include "rkisp_control_loop.h"
 #include "x3a_meta_result.h"
 #include "rkaiq.h"
+#include "isp_controller.h"
 
 /*
  ***************** CAM ENGINE LIB VERSION NOTE *****************
@@ -90,8 +91,8 @@ using ::android::hardware::camera::common::V1_0::helper::CameraMetadata;
  *  - awb lib v0.0.9
  *  - af lib v0.2.10
  * v2.0.0
- *  note: ISP drvier should be updated to v0.1.2
- *  - calibdb v1.0.0 iq: v1.0.0 checksum: 635074
+ *  note: ISP drvier should be updated to v0.1.3
+ *  - calibdb v1.0.0 iq: v1.0.0 checksum: 635075
  *    add strict tag level checking for iq xml
  *  - support lsc otp enable control in iq xml
  *  - fix some bugs
@@ -100,12 +101,24 @@ using ::android::hardware::camera::common::V1_0::helper::CameraMetadata;
  *    fix bug of mapping hist weights error from 9x9 to 5x5
  *  - rkisp_demo support usr_ptr memory mode, and fix some bugs
  *  - aec lib v0.0.9
- *  - awb lib v0.0.9
- *  - af lib v0.2.11
+ *  - awb lib v0.0.b
+ *  - af lib v0.2.14
  *    fix the wrong af trigger when picture taken
+ * v2.0.1
+ *  - support flashlight and precapture
+ *  - ae lib v0.0.a
+ *  - calibdb v1.1.0 iq: v1.1.0 checksum: 677941 
+ * v2.2.0
+ *  - fully support flashlight, pass CTS
+ *  - use new log system
+ *  - calibdb v1.5.0,magic code: 706729
+ *  - aec lib v0.0.e
+ *  - awb lib v0.0.e
+ *  - af lib v0.2.17
+ *  - matched rkisp driver v0.1.5
  */
 
-#define CONFIG_CAM_ENGINE_LIB_VERSION "v2.0.0"
+#define CONFIG_CAM_ENGINE_LIB_VERSION "v2.2.0"
 
 using namespace XCam;
 class SettingsProcessor;
@@ -126,12 +139,18 @@ public:
     XCam::SmartPtr<AiqInputParams> getAiqInputParams()
     {
         SmartLock lock(_settingsMutex);
-        if (!_settings.empty())
+        // use new setting when no flying settings to make sure
+        // same settings used for 3A stats of one frame
+        if (!_settings.empty() && _fly_settings.empty()) {
             _cur_settings = *_settings.begin();
+            _settings.erase(_settings.begin());
+            _fly_settings.push_back(_cur_settings);
+        }
 
         return _cur_settings;
     }
 
+    void set_isp_controller (SmartPtr<IspController> &isp) { _isp_controller = isp; }
     // only called one time in the func rkisp_cl_prepare@rkisp_control_loop_impl.cpp
     void set_static_metadata(const camera_metadata_t *metas) { staticMeta = metas; };
     static CameraMetadata& get_static_metadata() { return staticMeta; };
@@ -171,11 +190,13 @@ private:
     Mutex _settingsMutex;
     // push_back when set_control_params, erase when calculationd done
     std::vector<XCam::SmartPtr<AiqInputParams>>  _settings;
+    std::vector<XCam::SmartPtr<AiqInputParams>>  _fly_settings;
     XCam::SmartPtr<AiqInputParams>  _cur_settings;
     SettingsProcessor*            _settingsProcessor;
     static CameraMetadata staticMeta;
 
     const cl_result_callback_ops_t *mCallbackOps;
+    SmartPtr<IspController>          _isp_controller;
 
 };
 

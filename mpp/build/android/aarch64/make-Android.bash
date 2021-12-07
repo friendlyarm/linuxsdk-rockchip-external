@@ -1,37 +1,49 @@
 #!/bin/bash
-# Run this from within a bash shell
-HOST_IP=`hostname --all-ip-addresses`
-if [ ${HOST_IP} == "10.10.10.65" ] || [ ${HOST_IP} == "10.10.10.67" ]; then
-    ANDROID_NDK=/home/pub/ndk/android-ndk-r10d/
-else
-    ANDROID_NDK=~/work/android/ndk/android-ndk-r10d/
-fi
 
-PLATFORM=$ANDROID_NDK/platforms/android-21/arch-arm64
+BUILD_TYPE="Release"
+ANDROID_ABI="arm64-v8a"
 
-cmake -DCMAKE_TOOLCHAIN_FILE=../android.toolchain.cmake                     \
-      -DCMAKE_BUILD_TYPE=Release                                            \
+#Specify Android NDK path if needed
+#ANDROID_NDK=
+
+#Specify cmake if needed
+#CMAKE_PROGRAM=
+
+source ../env_setup.sh
+
+${CMAKE_PROGRAM} -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE}                   \
+      -DCMAKE_BUILD_TYPE=${BUILD_TYPE}                                      \
+      -DCMAKE_MAKE_PROGRAM=${MAKE_PROGRAM}                                  \
       -DANDROID_FORCE_ARM_BUILD=ON                                          \
       -DANDROID_NDK=${ANDROID_NDK}                                          \
       -DANDROID_SYSROOT=${PLATFORM}                                         \
-      -DANDROID_ABI="arm64-v8a"                                             \
-      -DANDROID_TOOLCHAIN_NAME="aarch64-linux-android-4.9"                  \
-      -DANDROID_NATIVE_API_LEVEL=android-21                                 \
+      -DANDROID_ABI=${ANDROID_ABI}                                          \
+      -DANDROID_TOOLCHAIN_NAME=${TOOLCHAIN_NAME}                            \
+      -DANDROID_NATIVE_API_LEVEL=${NATIVE_API_LEVEL}                        \
       -DANDROID_STL=system                                                  \
-      -DRKPLATFORM=ON                                                       \
+      -DMPP_PROJECT_NAME=mpp                                                \
+      -DVPU_PROJECT_NAME=vpu                                                \
       -DHAVE_DRM=ON                                                         \
       ../../../
+
+if [ "${CMAKE_PARALLEL_ENABLE}" = "0" ]; then
+    ${CMAKE_PROGRAM} --build .
+else
+    ${CMAKE_PROGRAM} --build . -j
+fi
 
 # ----------------------------------------------------------------------------
 # usefull cmake debug flag
 # ----------------------------------------------------------------------------
+      #-DMPP_NAME="rockchip_mpp"                                             \
+      #-DVPU_NAME="rockchip_vpu"                                             \
+      #-DHAVE_DRM                                                            \
       #-DCMAKE_BUILD_TYPE=Debug                                              \
       #-DCMAKE_VERBOSE_MAKEFILE=true                                         \
       #--trace                                                               \
       #--debug-output                                                        \
 
 #cmake --build . --clean-first -- V=1
-cmake --build .
 
 # ----------------------------------------------------------------------------
 # test script
@@ -43,5 +55,3 @@ cmake --build .
 #adb shell rk_log_test
 #adb shell rk_thread_test
 #adb logcat -d|tail -30
-
-

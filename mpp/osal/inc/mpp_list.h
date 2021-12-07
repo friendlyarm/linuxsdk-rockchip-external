@@ -31,7 +31,8 @@
 typedef void *(*node_destructor)(void *);
 
 struct mpp_list_node;
-class mpp_list
+
+class mpp_list : public MppMutexCond
 {
 public:
     mpp_list(node_destructor func = NULL);
@@ -47,6 +48,10 @@ public:
     RK_S32 del_at_head(void *data, RK_S32 size);
     RK_S32 del_at_tail(void *data, RK_S32 size);
 
+    // direct fifo operation
+    RK_S32 fifo_wr(void *data, RK_S32 size);
+    RK_S32 fifo_rd(void *data, RK_S32 *size);
+
     // for status check
     RK_S32 list_is_empty();
     RK_S32 list_size();
@@ -59,22 +64,7 @@ public:
 
     RK_S32 flush();
 
-    // open lock function for external combination usage
-    void   lock();
-    void   unlock();
-    RK_S32 trylock();
-
-    // open lock function for external auto lock
-    Mutex *mutex();
-
-    void wait();
-    RK_S32 wait(RK_S64 timeout);
-    void signal();
-
 private:
-    Mutex                   mMutex;
-    Condition               mCondition;
-
     node_destructor         destroy;
     struct mpp_list_node    *head;
     RK_S32                  count;
@@ -111,21 +101,45 @@ struct list_head {
 #define list_entry(ptr, type, member) \
     ((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
 
-/*
- * due to typeof gcc extension list_for_each_entry and list_for_each_entry_safe
- * can not be used on windows platform
- * So we add a extra type parameter to the macro
- */
+#define list_first_entry(ptr, type, member) \
+        list_entry((ptr)->next, type, member)
+
+#define list_last_entry(ptr, type, member) \
+        list_entry((ptr)->prev, type, member)
+
+#define list_first_entry_or_null(ptr, type, member) ({ \
+        struct list_head *head__ = (ptr); \
+        struct list_head *pos__ = head__->next; \
+        pos__ != head__ ? list_entry(pos__, type, member) : NULL; \
+})
+
+#define list_next_entry(pos, type, member) \
+        list_entry((pos)->member.next, type, member)
+
+#define list_prev_entry(pos, type, member) \
+        list_entry((pos)->member.prev, type, member)
+
 #define list_for_each_entry(pos, head, type, member) \
     for (pos = list_entry((head)->next, type, member); \
          &pos->member != (head); \
-         pos = list_entry(pos->member.next, type, member))
+         pos = list_next_entry(pos, type, member))
 
 #define list_for_each_entry_safe(pos, n, head, type, member) \
-    for (pos = list_entry((head)->next, type, member),  \
-         n = list_entry(pos->member.next, type, member); \
+    for (pos = list_first_entry(head, type, member),  \
+         n = list_next_entry(pos, type, member); \
          &pos->member != (head);                    \
-         pos = n, n = list_entry(n->member.next, type, member))
+         pos = n, n = list_next_entry(n, type, member))
+
+#define list_for_each_entry_reverse(pos, head, type, member) \
+    for (pos = list_last_entry(head, type, member); \
+         &pos->member != (head); \
+         pos = list_prev_entry(pos, type, member))
+
+#define list_for_each_entry_safe_reverse(pos, n, head, type, member) \
+    for (pos = list_last_entry(head, type, member),  \
+         n = list_prev_entry(pos, type, member); \
+         &pos->member != (head);                    \
+         pos = n, n = list_prev_entry(n, type, member))
 
 static __inline void __list_add(struct list_head * _new,
                                 struct list_head * prev,
@@ -158,6 +172,18 @@ static __inline void list_del_init(struct list_head *entry)
     __list_del(entry->prev, entry->next);
 
     INIT_LIST_HEAD(entry);
+}
+
+static __inline void list_move(struct list_head *list, struct list_head *head)
+{
+    __list_del(list->prev, list->next);
+    list_add(list, head);
+}
+
+static __inline void list_move_tail(struct list_head *list, struct list_head *head)
+{
+    __list_del(list->prev, list->next);
+    list_add_tail(list, head);
 }
 
 static __inline int list_is_last(const struct list_head *list, const struct list_head *head)

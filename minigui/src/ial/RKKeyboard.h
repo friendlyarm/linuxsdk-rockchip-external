@@ -22,7 +22,6 @@ extern "C" {
 
 BOOL    InitRKInput (INPUT* input, const char* mdev, const char* mtype);
 void    TermRKInput (void);
-void    mg_ial_ioctl(unsigned int cmd, unsigned int value);
 
 #ifdef __cplusplus
 }

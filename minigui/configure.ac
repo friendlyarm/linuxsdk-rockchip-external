@@ -119,6 +119,7 @@ dnl common IAL engines
 build_console_ial_engine="yes"
 build_console_ps2="yes"
 build_console_imps2="yes"
+build_console_usb="yes"
 build_console_ms="yes"
 build_console_ms3="yes"
 build_console_gpm="no"
@@ -471,6 +472,10 @@ build_console_ps2=$enableval)
 AC_ARG_ENABLE(consoleimps2,
 [  --enable-consoleimps2    build the console engine subdriver for IntelligentMouse (IMPS/2) mouse <default=yes>],
 build_console_imps2=$enableval)
+
+AC_ARG_ENABLE(consoleusb,
+[  --enable-consoleusb    build the console engine subdriver for usb mouse <default=yes>],
+build_console_usb=$enableval)
 
 AC_ARG_ENABLE(consolems,
 [  --enable-consolems       build the console engine subdirver for old MS serial mouse <default=yes>],
@@ -872,6 +877,9 @@ CheckDRMCON()
     AC_ARG_ENABLE(videodrmcon,
 [  --enable-videodrmcon      include DRM console NEWGAL engine <default=yes>],
     enable_video_drmcon=$enableval)
+    AC_ARG_ENABLE(pixman,
+[  --enable-pixman      include DRM console NEWGAL engine <default=yes>],
+    enable_pixman=$enableval)
     if test x$enable_video_drmcon = xyes; then
         AC_MSG_CHECKING(for DRM console support)
         video_drmcon=yes
@@ -894,7 +902,9 @@ CheckDRMCON()
             fi
         fi
 
-        PKG_CHECK_MODULES(PIXMAN, [pixman-1])
+        if test x$enable_pixman = xyes; then
+            PKG_CHECK_MODULES(PIXMAN, [pixman-1])
+        fi
     fi
 }
 
@@ -1889,6 +1899,11 @@ fi
 if test "x$build_console_imps2" = "xyes"; then
     AC_DEFINE(_MGCONSOLE_IMPS2, 1,
             [Define if include IMPS2 mouse subdriver])
+fi
+
+if test "x$build_console_usb" = "xyes"; then
+    AC_DEFINE(_MGCONSOLE_USB, 1,
+            [Define if include usb mouse subdriver])
 fi
 
 if test "x$build_console_ms" = "xyes"; then

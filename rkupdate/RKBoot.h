@@ -5,7 +5,7 @@
 
 #define  BOOT_RESERVED_SIZE 57
 #pragma pack(1)
-typedef struct  
+typedef struct
 {
 	UINT uiTag;
 	USHORT usSize;
@@ -27,7 +27,7 @@ typedef struct
 	UCHAR reserved[BOOT_RESERVED_SIZE];
 }STRUCT_RKBOOT_HEAD,*PSTRUCT_RKBOOT_HEAD;
 
-typedef struct  
+typedef struct
 {
 	UCHAR ucSize;
 	ENUM_RKBOOTENTRY emType;
@@ -65,6 +65,7 @@ public:
 	bool GetEntryProperty(ENUM_RKBOOTENTRY type,UCHAR ucIndex,DWORD &dwSize,DWORD &dwDelay,tchar *pName=NULL);
 	CHAR GetIndexByName(ENUM_RKBOOTENTRY type,tchar *pName);
 	bool GetEntryData(ENUM_RKBOOTENTRY type,UCHAR ucIndex,PBYTE lpData);
+	bool IsNewIDBFlag();
 	CRKBoot(PBYTE lpBootData,DWORD dwBootSize,bool &bCheck);
 	~CRKBoot();
 protected:
@@ -88,6 +89,7 @@ private:
 	PBYTE m_BootData;
 	DWORD m_BootSize;
 	USHORT m_BootHeadSize;
+	bool m_NewIDBFlag;
 	void WCHAR_To_char(WCHAR *src,char *dst,int len);
 };
 

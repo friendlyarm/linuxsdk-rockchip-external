@@ -1,5 +1,7 @@
 #include <fcntl.h>
+#if !DRM_VOP_SCALE
 #include <pixman.h>
+#endif
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
@@ -13,10 +15,7 @@
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
 
-#define MAX_FB      3
 #define NUM_DUMB_BO 2
-
-//#define DRM_VOP_SCALE
 
 #define DEBUG
 #ifdef DEBUG
@@ -60,7 +59,6 @@ struct device {
         int hdisplay;
         int vdisplay;
 
-        struct drm_bo *bo[MAX_FB];
         int current;
         int fb_num;
         int bpp;
@@ -143,7 +141,9 @@ bo_create(struct device *dev, int width, int height, int bpp)
     };
     struct drm_bo *bo;
     uint32_t handles[4] = {0}, pitches[4] = {0}, offsets[4] = {0};
+
     int format = bpp == 32 ? DRM_FORMAT_ABGR8888 : DRM_FORMAT_BGR565;
+
     int ret;
 
     bo = malloc(sizeof(struct drm_bo));
@@ -159,6 +159,7 @@ bo_create(struct device *dev, int width, int height, int bpp)
         goto err;
     }
 
+    bo->fd = dev->fd;
     bo->handle = arg.handle;
     bo->size = arg.size;
     bo->pitch = arg.pitch;
@@ -190,10 +191,6 @@ static void free_fb(struct device *dev)
     unsigned int i;
 
     DRM_DEBUG("Free fb, num: %d, bpp: %d\n", dev->mode.fb_num, dev->mode.bpp);
-    for (i = 0; i < dev->mode.fb_num; i++) {
-        if (dev->mode.bo[i])
-            bo_destroy(dev, dev->mode.bo[i]);
-    }
 
     dev->mode.fb_num = 0;
     dev->mode.bpp = 0;
@@ -209,16 +206,6 @@ static int alloc_fb(struct device *dev, int num, int bpp)
     dev->mode.fb_num = num;
     dev->mode.bpp = bpp;
     dev->mode.current = 0;
-
-    for (i = 0; i < dev->mode.fb_num; i++) {
-        dev->mode.bo[i] =
-            bo_create(dev, dev->mode.width, dev->mode.height, bpp);
-        if (!dev->mode.bo[i]) {
-            fprintf(stderr, "create bo failed\n");
-            free_fb(dev);
-            return -1;
-        }
-    }
 
     return 0;
 }
@@ -525,6 +512,56 @@ static void drm_free(struct device *dev)
     dev->mode.vdisplay = 0;
 }
 
+static void configure_plane_zpos (struct device *self, int plane_id)
+{
+    drmModeObjectPropertiesPtr props = NULL;
+    drmModePropertyPtr prop = NULL;
+    char *buf;
+    int i;
+    uint64_t min, max, zpos;
+
+    if (plane_id <= 0)
+        return;
+
+    if (drmSetClientCap (self->fd, DRM_CLIENT_CAP_ATOMIC, 1))
+        return;
+
+    props = drmModeObjectGetProperties (self->fd, plane_id,
+          DRM_MODE_OBJECT_PLANE);
+    if (!props)
+        goto out;
+
+    for (i = 0; i < props->count_props; i++) {
+        prop = drmModeGetProperty (self->fd, props->props[i]);
+        if (prop && !strcmp (prop->name, "ZPOS"))
+          break;
+        drmModeFreeProperty (prop);
+        prop = NULL;
+    }
+
+    if (!prop)
+        goto out;
+
+    min = prop->values[0];
+    max = prop->values[1];
+
+    zpos = max;
+
+    buf = getenv ("OVERLAY_PLANE_ZPOS");
+    if (buf)
+        zpos = atoi (buf);
+    else if (getenv ("OVERLAY_PLANE_ON_TOP"))
+        zpos = max;
+
+    printf("set plane zpos = %lld (%lld~%lld)", zpos, min, max);
+
+    drmModeObjectSetProperty (self->fd, plane_id,
+          DRM_MODE_OBJECT_PLANE, props->props[i], zpos);
+out:
+    drmModeFreeProperty (prop);
+    drmModeFreeObjectProperties (props);
+}
+
 static int drm_setup(struct device *dev)
 {
     drmModeConnectorPtr conn = NULL;
@@ -565,20 +602,17 @@ static int drm_setup(struct device *dev)
         fprintf(stderr, "drm find plane failed\n");
         goto err;
     }
+    configure_plane_zpos(dev, plane->plane_id);
+
     DRM_DEBUG("Best plane: %d\n", plane->plane_id);
 
     for (i = 0; i < NUM_DUMB_BO; i++) {
-        dev->dumb_bo[i] = bo_create(dev, mode->hdisplay, mode->vdisplay, 32);
+        dev->dumb_bo[i] = bo_create(dev, mode->hdisplay, mode->vdisplay, dev->mode.bpp);
         if (!dev->dumb_bo[i]) {
             fprintf(stderr, "create dumb bo %d failed\n", i);
             goto err;
         }
         DRM_DEBUG("Created dumb bo fb: %d\n", dev->dumb_bo[i]->fb_id);
-
-#ifdef DRM_VOP_SCALE
-        // Only need one dumb bo to setup crtc
-        break;
-#endif
     }
 
     dev->current_dumb = 0;
@@ -608,24 +642,6 @@ err:
     if (!success) {
         drm_free(dev);
         return -1;
-    }
-    return 0;
-}
-
-int drm_setmode(int num, int bpp)
-{
-    if (num > MAX_FB) {
-        printf("err: fb num = %d > %d%s\n", __func__, num, MAX_FB);
-        return -1;
-    }
-
-    DRM_DEBUG("FB num: %d, bpp: %d\n", num, bpp);
-    if ((num != pdev->mode.fb_num) || (bpp != pdev->mode.bpp)) {
-        free_fb(pdev);
-        if (alloc_fb(pdev, num, bpp) < 0) {
-            fprintf(stderr, "alloc fb failed\n");
-            return -1;
-        }
     }
     return 0;
 }
@@ -661,14 +677,9 @@ static void drm_install_sighandler(struct device* dev)
     sigaction(SIGUSR2, &sa, NULL);
 }
 
-int drm_init(int num, int bpp)
+int drm_init(int bpp)
 {
     int ret;
-
-    if (num > MAX_FB) {
-        printf("err: fb num = %d > %d%s\n", __func__, num, MAX_FB);
-        return -1;
-    }
 
     pdev = malloc(sizeof(struct device));
     if (pdev == NULL) {
@@ -690,16 +701,16 @@ int drm_init(int num, int bpp)
 
     drmSetClientCap(pdev->fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 
+    ret = alloc_fb(pdev, NUM_DUMB_BO, bpp);
+    if (ret) {
+        fprintf(stderr, "alloc fb failed\n");
+        goto err_alloc_fb;
+    }
+
     ret = drm_setup(pdev);
     if (ret) {
         fprintf(stderr, "drm setup failed\n");
         goto err_drm_setup;
-    }
-
-    ret = alloc_fb(pdev, num, bpp);
-    if (ret) {
-        fprintf(stderr, "alloc fb failed\n");
-        goto err_alloc_fb;
     }
 
     pdev->drm_pollfd.fd = pdev->fd;
@@ -739,16 +750,16 @@ int drm_deinit(void)
 
 char * getdrmdispbuff(void)
 {
-    if (pdev->mode.bo)
-        return pdev->mode.bo[0]->ptr;
+    if (pdev->dumb_bo[pdev->current_dumb])
+        return pdev->dumb_bo[pdev->current_dumb]->ptr;
     else
         return NULL;
 }
 
 int getdrmdispinfo(struct drm_bo *bo, int *w, int *h)
 {
-    if (pdev->mode.bo[0]) {
-        memcpy(bo, pdev->mode.bo[0], sizeof(struct drm_bo));
+    if (pdev->dumb_bo[pdev->current_dumb]) {
+        memcpy(bo, pdev->dumb_bo[pdev->current_dumb], sizeof(struct drm_bo));
         *w = pdev->mode.width;
         *h = pdev->mode.height;
     }
@@ -758,11 +769,11 @@ int getdrmdispinfo(struct drm_bo *bo, int *w, int *h)
 
 struct drm_bo *getdrmdisp(void)
 {
-    pdev->mode.current ++;
-    if (pdev->mode.current >= MAX_FB || pdev->mode.current >= pdev->mode.fb_num)
-        pdev->mode.current = 0;
+    pdev->current_dumb ++;
+    if (pdev->current_dumb >= NUM_DUMB_BO)
+        pdev->current_dumb = 0;
 
-    return pdev->mode.bo[pdev->mode.current];
+    return pdev->dumb_bo[pdev->current_dumb];
 }
 
 static void drm_wait_flip(struct device* dev, int timeout)
@@ -779,6 +790,7 @@ static void drm_wait_flip(struct device* dev, int timeout)
     }
 }
 
+#if !DRM_VOP_SCALE
 static void
 drm_scale_bo(struct device *dev, struct drm_bo*src_bo, struct drm_bo *dst_bo,
              int sw, int sh, int dw, int dh, double scale)
@@ -806,6 +818,7 @@ drm_scale_bo(struct device *dev, struct drm_bo*src_bo, struct drm_bo *dst_bo,
     pixman_image_unref (src_img);
     pixman_image_unref (dst_img);
 }
+#endif
 
 void setdrmdisp(struct drm_bo *bo)
 {
@@ -852,7 +865,7 @@ void setdrmdisp(struct drm_bo *bo)
     crtc_x = (dev->mode.hdisplay - crtc_w) / 2;
     crtc_y = (dev->mode.vdisplay - crtc_h) / 2;
 
-#ifndef DRM_VOP_SCALE
+#if !DRM_VOP_SCALE
     // Software scale
     dev->current_dumb = ++dev->current_dumb % NUM_DUMB_BO;
     drm_scale_bo(dev, bo, dev->dumb_bo[dev->current_dumb], dev->mode.width,
@@ -891,6 +904,17 @@ void setdrmdisp(struct drm_bo *bo)
 int drm_invalide(void)
 {
     return pdev && pdev->drm_invalide;
+}
+
+void getdrmdispbpp(int *bpp)
+{
+    *bpp = pdev->mode.bpp;
+}
+
+void getdrmresolve(int *w, int *h)
+{
+    *w = pdev->mode.width;
+    *h = pdev->mode.height;
 }
 
 #ifndef __MINIGUI_LIB__

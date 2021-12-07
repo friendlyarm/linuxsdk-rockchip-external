@@ -25,7 +25,6 @@
 
 #include <linux/rkisp.h>
 #include <rkiq_params.h>
-
 namespace XCam {
 
 IspController::IspController ():
@@ -43,10 +42,13 @@ IspController::IspController ():
 {
     xcam_mem_clear(_last_aiq_results);
     xcam_mem_clear(_full_active_isp_params);
-    _max_delay = EXPOSURE_GAIN_DELAY > EXPOSURE_TIME_DELAY ?
-                    EXPOSURE_GAIN_DELAY : EXPOSURE_TIME_DELAY;
+    xcam_mem_clear(_flash_settings);
 
-    _exposure_queue = 
+    _max_delay = (EXPOSURE_GAIN_DELAY > EXPOSURE_TIME_DELAY)?
+		         (EXPOSURE_GAIN_DELAY > RKISP_HDRAE_EFFECT_FNUM ? EXPOSURE_GAIN_DELAY : RKISP_HDRAE_EFFECT_FNUM)
+                 :(EXPOSURE_TIME_DELAY > RKISP_HDRAE_EFFECT_FNUM ? EXPOSURE_TIME_DELAY : RKISP_HDRAE_EFFECT_FNUM);
+
+    _exposure_queue =
         (struct rkisp_exposure *)xcam_malloc0(sizeof(struct rkisp_exposure) * _max_delay);
 
     XCAM_LOG_DEBUG ("IspController construction");
@@ -56,6 +58,8 @@ IspController::~IspController ()
 {
     XCAM_LOG_DEBUG ("~IspController destruction");
     free(_exposure_queue);
+    float power[2] = {0.0f, 0.0f};
+    set_3a_fl (RKISP_FLASH_MODE_OFF, power, 0, 0);
 }
 
 void IspController::exit(bool pause) {
@@ -92,6 +96,18 @@ IspController::set_vcm_subdev(SmartPtr<V4l2SubDevice> &subdev) {
 };
 
 void
+IspController::set_fl_subdev(SmartPtr<V4l2SubDevice> subdev[]) {
+    _active_fl_num = 0;
+
+    for (int i = 0; i < ISP_CONTRLLER_FLASH_MAX_NUM; i++) {
+        _fl_device[i] = subdev[i];
+        if (_fl_device[i].ptr())
+            _active_fl_num++;
+    }
+    get_flash_info ();
+};
+
+void
 IspController::set_isp_stats_device(SmartPtr<V4l2Device> &dev) {
     _isp_stats_device = dev;
 };
@@ -106,6 +122,9 @@ XCamReturn
 IspController::handle_sof(int64_t time, int frameid)
 {
     SmartLock locker (_mutex);
+    if (_is_exit)
+        return XCAM_RETURN_BYPASS;
+
     _frame_sequence_cond.signal();
 
     _frame_sof_time = time;
@@ -113,14 +132,25 @@ IspController::handle_sof(int64_t time, int frameid)
 
     char log_str[1024];
     int num = 0;
-    for(int i=0; i<EXPOSURE_TIME_DELAY; i++) {
-        num += sprintf(log_str + num, "        |||queue(%d) (%d-%d) expsync\n",
-                    i,
-                    _exposure_queue[i].coarse_integration_time,
-                    _exposure_queue[i].analog_gain);
-    }
+	if (!_exposure_queue[0].IsHdrExp){
+		for(int i=0; i<EXPOSURE_TIME_DELAY; i++) {
+	        num += sprintf(log_str + num, "      |||queue(%d) (%d-%d) expsync\n",
+	                    i,
+	                    _exposure_queue[i].coarse_integration_time,
+	                    _exposure_queue[i].analog_gain);
+	    }
+	}else{
+		for(int i=0; i<_used_exp_que_len; i++) {
+	        num += sprintf(log_str + num, "      |||queue(%d) L(%d-%d) S(%d-%d) expsync\n",
+	                    i,
+	                    _exposure_queue[i].Hdrexp_smooth_setting[0].regGain[0],
+	                    _exposure_queue[i].Hdrexp_smooth_setting[0].regTime[0],
+	                    _exposure_queue[i].Hdrexp_smooth_setting[0].regGain[2],
+	                    _exposure_queue[i].Hdrexp_smooth_setting[0].regTime[2]);
+	    }
+	}
 
-    XCAM_LOG_DEBUG("--SOF[%d]------------------expsync-statsync\n%s", frameid, log_str);
+    XCAM_LOG_DEBUG(" --SOF[%d]------------------expsync-statsync\n%s", frameid, log_str);
 
     struct rkisp_exposure exposure;
 
@@ -130,10 +160,11 @@ IspController::handle_sof(int64_t time, int frameid)
     //exposure.frame_line_length = _exposure_queue[EXPOSURE_GAIN_DELAY - 1].frame_line_length;
     exposure = _exposure_queue[EXPOSURE_GAIN_DELAY - 1];
     exposure = _exposure_queue[_cur_apply_index++];
-    if (_cur_apply_index == 3) {
-        _cur_apply_index = 2;
+    if (_cur_apply_index == _used_exp_que_len) {
+        _cur_apply_index = _used_exp_que_len-1;
         LOGD("no new expoure, use the latest !");
     }
+
     set_3a_exposure(exposure);
 
     _effecting_ispparm_map[frameid].frame_sof_ts = _frame_sof_time;
@@ -287,6 +318,120 @@ IspController::get_sensor_descriptor (rk_aiq_exposure_sensor_descriptor *sensor_
 #endif
 
 XCamReturn
+IspController::get_flash_status (rkisp_flash_setting_t& flash_settings, int frame_id)
+{
+
+    SmartLock locker (_mutex);
+
+    if (_is_exit)
+        return XCAM_RETURN_BYPASS;
+
+    std::map<int, struct rkisp_effect_params>::iterator it;
+    int num = _effecting_ispparm_map.size();
+    int search_id = frame_id < 0 ? 0 : frame_id;
+
+    do {
+        it = _effecting_ispparm_map.find(search_id);
+        if (it != _effecting_ispparm_map.end()) {
+            flash_settings =
+              _effecting_ispparm_map[search_id].flash_settings;
+            break;
+        }
+    } while (--num > 0 && --search_id >=0);
+
+    if (it == _effecting_ispparm_map.end()) {
+        LOGW("can't find %d flash settings in effecting map.", frame_id);
+    }
+
+    if (_fl_device[0].ptr()) {
+        struct timeval flash_time;
+
+        if (_fl_device[0]->io_control (RK_VIDIOC_FLASH_TIMEINFO , &flash_time) < 0) {
+            XCAM_LOG_ERROR (" get RK_VIDIOC_FLASH_TIMEINFO failed. cmd = 0x%x", RK_VIDIOC_FLASH_TIMEINFO);
+            /* return XCAM_RETURN_ERROR_IOCTL; */
+        }
+        flash_settings.effect_ts = (int64_t)flash_time.tv_sec * 1000 * 1000 +
+                                   (int64_t)flash_time.tv_usec;
+        XCAM_LOG_DEBUG("frameid %d, get RK_VIDIOC_FLASH_TIMEINFO flash ts %lld",
+            frame_id, flash_settings.effect_ts);
+    }
+
+    // for the following case:
+    // 1) set to flash mode
+    // 2) one flash power set to 0
+    // then we can't get the effect ts from the node which power set to 0
+    if (_fl_device[1].ptr() && flash_settings.effect_ts == 0 &&
+        flash_settings.power[0] != flash_settings.power[1]) {
+        struct timeval flash_time;
+
+        if (_fl_device[1]->io_control (RK_VIDIOC_FLASH_TIMEINFO , &flash_time) < 0) {
+            XCAM_LOG_ERROR (" get RK_VIDIOC_FLASH_TIMEINFO failed. cmd = 0x%x", RK_VIDIOC_FLASH_TIMEINFO);
+            /* return XCAM_RETURN_ERROR_IOCTL; */
+        }
+        flash_settings.effect_ts = (int64_t)flash_time.tv_sec * 1000 * 1000 +
+                                   (int64_t)flash_time.tv_usec;
+        XCAM_LOG_DEBUG("frameid %d, get RK_VIDIOC_FLASH_TIMEINFO flash ts %lld",
+            frame_id, flash_settings.effect_ts);
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+int
+IspController::get_flash_info ()
+{
+    struct v4l2_queryctrl ctrl;
+    int flash_power, torch_power;
+    SmartPtr<V4l2SubDevice> fl_device;
+
+    for (int i = 0; i < _active_fl_num; i++) {
+        fl_device = _fl_device[i];
+
+        memset(&ctrl, 0, sizeof(ctrl));
+        ctrl.id = V4L2_CID_FLASH_INTENSITY;
+        if (fl_device->io_control(VIDIOC_QUERYCTRL, &ctrl) < 0) {
+            XCAM_LOG_ERROR ("query V4L2_CID_FLASH_INTENSITY failed. cmd = 0x%x",
+                            V4L2_CID_FLASH_INTENSITY);
+            return -errno;
+        }
+
+        _v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MIN] =
+               ctrl.minimum;
+        _v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX] =
+               ctrl.maximum;
+        _v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_DEFAULT] =
+               ctrl.default_value;
+        _v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_STEP] =
+               ctrl.step;
+
+        XCAM_LOG_DEBUG("fl_dev[%d], flash power range:[%d,%d]",
+                       i, ctrl.minimum, ctrl.maximum);
+
+        memset(&ctrl, 0, sizeof(ctrl));
+        ctrl.id = V4L2_CID_FLASH_TORCH_INTENSITY;
+        if (fl_device->io_control(VIDIOC_QUERYCTRL, &ctrl) < 0) {
+            XCAM_LOG_ERROR ("query V4L2_CID_FLASH_TORCH_INTENSITY failed. cmd = 0x%x",
+                            V4L2_CID_FLASH_TORCH_INTENSITY);
+            return -errno;
+        }
+
+        _v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MIN] =
+               ctrl.minimum;
+        _v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX] =
+               ctrl.maximum;
+        _v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_DEFAULT] =
+               ctrl.default_value;
+        _v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_STEP] =
+               ctrl.step;
+
+        XCAM_LOG_DEBUG("fl_dev[%d], torch power range:[%d,%d]",
+                       i, ctrl.minimum, ctrl.maximum);
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn
 IspController::get_sensor_mode_data (struct isp_supplemental_sensor_mode_data &sensor_mode_data, int frame_id)
 {
     if (_is_exit)
@@ -383,7 +528,7 @@ IspController::get_sensor_mode_data (struct isp_supplemental_sensor_mode_data &s
     }
 #endif
 
-	return XCAM_RETURN_NO_ERROR;
+    return XCAM_RETURN_NO_ERROR;
 }
 
 XCamReturn
@@ -427,9 +572,18 @@ IspController::get_isp_parameter (struct rkisp_parameters& parameters, int frame
         isp_effect_params->awb_algo_results;
     parameters.frame_sof_ts =
         isp_effect_params->frame_sof_ts;
+    parameters.bls_config =
+        isp_effect_params->isp_params.others.bls_config;
+    parameters.awb_meas_config =
+        isp_effect_params->isp_params.meas.awb_meas_config;
 
     return XCAM_RETURN_NO_ERROR;
 }
+
+// TODO: I don't know why the first 2 AEC mean luma stats
+// are incorrect(may be the isp driver bug), just ignore the
+// first 2 stats now
+#define RKISP_SKIP_STATS_NUM 0
 
 XCamReturn
 IspController::get_3a_statistics (SmartPtr<X3aIspStatistics> &stats)
@@ -487,7 +641,7 @@ IspController::get_3a_statistics (SmartPtr<X3aIspStatistics> &stats)
         /* compatible with no emd info, so we could use new camera engine with
          * old rkisp driver that has no emd field in stats
          */
-        if (isp_stats->meas_type & CIFISP_STAT_EMB_DATA)
+        if (aiq_stats->meas_type & CIFISP_STAT_EMB_DATA)
             *isp_stats = *aiq_stats;
         else
             memcpy(isp_stats, aiq_stats,
@@ -577,7 +731,6 @@ IspController::get_3a_statistics (SmartPtr<X3aIspStatistics> &stats)
             _frame_sequence, cur_frame_id,
             _frame_sof_time, cur_time,
             cur_time - _frame_sof_time);
-
 resync:
         if (_frame_sequence < cur_frame_id) {
             // impossible case
@@ -598,6 +751,9 @@ resync:
                 XCAM_LOG_ERROR(" stats comes late over 10ms than sof !");
             }
         }
+
+        if (cur_frame_id < RKISP_SKIP_STATS_NUM)
+            return XCAM_RETURN_BYPASS;
     }
 #endif
 
@@ -636,12 +792,13 @@ IspController::gen_full_isp_params(const struct rkisp1_isp_params_cfg *update_pa
     XCAM_ASSERT (full_params);
     int i = 0;
 
-	unsigned int module_en_update;
-	unsigned int module_ens;
-	unsigned int module_cfg_update;
+    unsigned int module_en_update;
+    unsigned int module_ens;
+    unsigned int module_cfg_update;
 
-	struct cifisp_isp_meas_cfg meas;
-	struct cifisp_isp_other_cfg others;
+    struct cifisp_isp_meas_cfg meas;
+    struct cifisp_isp_other_cfg others;
+
     for (; i <= CIFISP_RK_IESHARP_ID; i++)
         if (update_params->module_en_update & (1 << i)) {
             full_params->module_en_update |= 1 << i;
@@ -727,18 +884,32 @@ IspController::set_3a_config_sync ()
 {
     struct rkisp_parameters config;
     struct rkisp_parameters* isp_cfg = NULL;
+    rkisp_flash_setting_t* flash_settings = NULL;
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    static bool delay_flash_strobe = false;
 
-    if (_effecting_ispparm_map.size() > 10)
+    while (_effecting_ispparm_map.size() > 10)
         _effecting_ispparm_map.erase(_effecting_ispparm_map.begin());
 
     if (_pending_ispparams_queue.empty()) {
         LOGD("no new isp params !");
         // reuse last params
-        if (_frame_sequence >= 0)
+        if (_frame_sequence >= 0) {
             _effecting_ispparm_map[_frame_sequence + 1] =
                 _effecting_ispparm_map[_frame_sequence];
-        else
+
+            if (delay_flash_strobe) {
+                rkisp_flash_setting_t* flash_settings = &_flash_settings;
+                delay_flash_strobe = false;
+                flash_settings->strobe = true;
+                set_3a_fl(flash_settings->flash_mode, flash_settings->power,
+                          flash_settings->timeout_ms, flash_settings->strobe);
+            }
+
+            if (_frame_sequence > 0)
+                _effecting_ispparm_map[_frame_sequence].flash_settings =
+                    _effecting_ispparm_map[_frame_sequence - 1].flash_settings;
+        } else
             LOGE("FIXME! no initial isp params !");
 
         return ret;
@@ -794,12 +965,33 @@ IspController::set_3a_config_sync ()
         dump_isp_config(&_full_active_isp_params, isp_cfg);
     }
 
+    // set flash if needed
+    flash_settings = &isp_cfg->flash_settings;
+    rkisp_flash_setting_t* old_flash_settings = &_flash_settings;
+    if ((old_flash_settings->flash_mode != flash_settings->flash_mode) ||
+        (old_flash_settings->strobe != flash_settings->strobe) ||
+        (old_flash_settings->power[0] != flash_settings->power[0]) ||
+        (old_flash_settings->power[1] != flash_settings->power[1])
+        ) {
+        if (_frame_sequence < 0 && flash_settings->strobe &&
+            !delay_flash_strobe) {
+            flash_settings->strobe = false;
+            delay_flash_strobe = true;
+        } else
+            set_3a_fl(flash_settings->flash_mode, flash_settings->power,
+                      flash_settings->timeout_ms, flash_settings->strobe);
+    }
+
+    _flash_settings = *flash_settings;
+
     if (_frame_sequence < 0) {
         _effecting_ispparm_map[0].isp_params = _full_active_isp_params;
         _effecting_ispparm_map[0].awb_algo_results = isp_cfg->awb_algo_results;
+        _effecting_ispparm_map[0].flash_settings = *flash_settings;
     } else {
         _effecting_ispparm_map[_frame_sequence + 1].isp_params = _full_active_isp_params;
         _effecting_ispparm_map[_frame_sequence + 1].awb_algo_results = isp_cfg->awb_algo_results;
+        _effecting_ispparm_map[_frame_sequence].flash_settings = *flash_settings;
     }
 
 #if RKISP
@@ -872,9 +1064,11 @@ IspController::apply_otp_config (struct rkisp_parameters *isp_cfg) {
 }
 
 XCamReturn
-IspController::set_3a_config (X3aIspConfig *config)
+IspController::set_3a_config (X3aIspConfig *config, bool first)
 {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    SmartLock locker (_mutex);
 
     if (_is_exit) {
         XCAM_LOG_DEBUG ("set 3a config bypass since ia engine has stop");
@@ -885,16 +1079,14 @@ IspController::set_3a_config (X3aIspConfig *config)
 
     XCAM_ASSERT (isp_cfg);
 
-    SmartLock locker (_mutex);
-
-    if (_pending_ispparams_queue.size() > 3) {
+    if (_pending_ispparams_queue.size() > 8) {
         XCAM_LOG_DEBUG ("too many pending isp params:%d !", _pending_ispparams_queue.size());
         _pending_ispparams_queue.erase(_pending_ispparams_queue.begin());
     }
     _pending_ispparams_queue.push_back(*isp_cfg);
 
     // set initial isp params
-    if (_frame_sequence < 0) {
+    if (_frame_sequence < 0 || first) {
         set_3a_config_sync();
         apply_otp_config (isp_cfg);
     }
@@ -903,74 +1095,108 @@ IspController::set_3a_config (X3aIspConfig *config)
 }
 
 void
-IspController::exposure_delay(struct rkisp_exposure isp_exposure)
+IspController::exposure_delay(struct rkisp_exposure isp_exposure, bool first)
 {
-    int i = 0;
-
     SmartLock locker (_mutex);
-    if (isp_exposure.RegSmoothTime[2] != 0 &&
-        _exposure_queue[0].RegSmoothGains[2] ==
-        isp_exposure.RegSmoothGains[2] &&
-        _exposure_queue[0].RegSmoothTime[2] ==
-        isp_exposure.RegSmoothTime[2]) {
-        LOGD("exposure reg(%d,%d) haven't changed , drop it !",
-             isp_exposure.RegSmoothGains[2],
-             isp_exposure.RegSmoothTime[2]);
+    _used_exp_que_len = isp_exposure.IsHdrExp ? RKISP_HDRAE_EFFECT_FNUM : 3;
 
-        return ;
+    if (isp_exposure.IsHdrExp) {
+        // check if destination exposure have changed
+
+        struct rkisp_HdrAE_metadata_s cur_dest_metadata;
+		memcpy (&cur_dest_metadata,
+			&_exposure_queue[0].Hdrexp_smooth_setting[_used_exp_que_len - 1],
+			sizeof(cur_dest_metadata));
+
+		struct rkisp_HdrAE_metadata_s new_dest_metadata;
+		memcpy (&new_dest_metadata,
+			&isp_exposure.Hdrexp_smooth_setting[_used_exp_que_len - 1],
+			sizeof(new_dest_metadata));
+
+        if (new_dest_metadata.regGain[0]>= 1 && new_dest_metadata.regGain[2] >= 1 &&
+			new_dest_metadata.regTime[0]>= 1 && new_dest_metadata.regTime[2] >= 1 &&
+            new_dest_metadata.regGain[0]== cur_dest_metadata.regGain[0]&&
+            new_dest_metadata.regTime[0]== cur_dest_metadata.regTime[0]&&
+            new_dest_metadata.regGain[2]== cur_dest_metadata.regGain[2]&&
+            new_dest_metadata.regTime[2]== cur_dest_metadata.regTime[2]&&
+            !first) {
+            LOGD("exposure Lreg(%d,%d) Sreg(%d,%d) haven't changed , drop it !",
+				 isp_exposure.Hdrexp_smooth_setting[_used_exp_que_len - 1].regTime[0],
+                 isp_exposure.Hdrexp_smooth_setting[_used_exp_que_len - 1].regGain[0],
+                 isp_exposure.Hdrexp_smooth_setting[_used_exp_que_len - 1].regTime[2],
+                 isp_exposure.Hdrexp_smooth_setting[_used_exp_que_len - 1].regGain[2]);
+
+            return ;
+        }
+
+        _cur_apply_index = 0;
+        for (int i = 0; i < _used_exp_que_len; i++) {
+            _exposure_queue[i] = isp_exposure;
+            _exposure_queue[i].Hdrexp_smooth_setting[0] =
+                isp_exposure.Hdrexp_smooth_setting[i];
+
+            if (i>0 & memcmp(&_exposure_queue[i], &_exposure_queue[i-1], sizeof(_exposure_queue[0])) == 0)
+                _cur_apply_index++;
+
+			LOGD("Hdr i=%d,lgain=%f,ltime=%f,sgain=%f,stime=%f cur_apply_index=%d\n",
+				i,
+				isp_exposure.Hdrexp_smooth_setting[i].halGain[0],
+				isp_exposure.Hdrexp_smooth_setting[i].halTime[0],
+				isp_exposure.Hdrexp_smooth_setting[i].halGain[2],
+				isp_exposure.Hdrexp_smooth_setting[i].halTime[2],
+				_cur_apply_index);
+        }
+
+
+    } else {
+        if (isp_exposure.RegSmoothTime[2] != 0 &&
+            _exposure_queue[0].RegSmoothGains[2] ==
+            isp_exposure.RegSmoothGains[2] &&
+            _exposure_queue[0].RegSmoothTime[2] ==
+            isp_exposure.RegSmoothTime[2] && !first) {
+            LOGD("exposure reg(%d,%d) haven't changed , drop it !",
+                 isp_exposure.RegSmoothGains[2],
+                 isp_exposure.RegSmoothTime[2]);
+
+            return ;
+        }
+        _cur_apply_index = 0;
+        for (int i = 0; i < _used_exp_que_len; i++) {
+            _exposure_queue[i] = isp_exposure;
+
+            _exposure_queue[i].RegSmoothGains[0] =
+                isp_exposure.RegSmoothGains[i];
+            _exposure_queue[i].RegSmoothTime[0] =
+                isp_exposure.RegSmoothTime[i];
+            _exposure_queue[i].SmoothGains[0] =
+                isp_exposure.SmoothGains[i];
+            _exposure_queue[i].SmoothIntTimes[0] =
+                isp_exposure.SmoothIntTimes[i];
+            _exposure_queue[i].RegSmoothFll[0] =
+                isp_exposure.RegSmoothFll[i];
+
+            if (i>0 && memcmp(&_exposure_queue[i], &_exposure_queue[i-1], sizeof(_exposure_queue[0])) == 0)
+                _cur_apply_index++;
+        }
     }
-    _exposure_queue[0] = isp_exposure;
-    _cur_apply_index = 0;
-
-    isp_exposure.RegSmoothGains[0] =
-        isp_exposure.RegSmoothGains[1];
-    isp_exposure.RegSmoothTime[0] =
-        isp_exposure.RegSmoothTime[1];
-    isp_exposure.SmoothGains[0] =
-        isp_exposure.SmoothGains[1];
-    isp_exposure.SmoothIntTimes[0] =
-        isp_exposure.SmoothIntTimes[1];
-    isp_exposure.RegSmoothFll[0] =
-        isp_exposure.RegSmoothFll[1];
-    _exposure_queue[1] = isp_exposure;
-
-    if (memcmp(&_exposure_queue[0], &_exposure_queue[1], sizeof(_exposure_queue[0])) == 0)
-        _cur_apply_index++;
-
-    isp_exposure.RegSmoothGains[0] =
-        isp_exposure.RegSmoothGains[2];
-    isp_exposure.RegSmoothTime[0] =
-        isp_exposure.RegSmoothTime[2];
-    isp_exposure.SmoothGains[0] =
-        isp_exposure.SmoothGains[2];
-    isp_exposure.SmoothIntTimes[0] =
-        isp_exposure.SmoothIntTimes[2];
-    isp_exposure.RegSmoothFll[0] =
-        isp_exposure.RegSmoothFll[2];
-
-    _exposure_queue[2] = isp_exposure;
-
-    if (memcmp(&_exposure_queue[1], &_exposure_queue[2], sizeof(_exposure_queue[0])) == 0)
-        _cur_apply_index++;
-
     // set the initial exposure before streaming
-    if (_frame_sequence < 0) {
+    if (_frame_sequence < 0 || first) {
         set_3a_exposure(_exposure_queue[_cur_apply_index]);
         _frame_sequence++;
     }
 }
 
 void
-IspController::push_3a_exposure (X3aIspExposureResult *res)
+IspController::push_3a_exposure (X3aIspExposureResult *res, bool first)
 {
     const struct rkisp_exposure &exposure = res->get_isp_config ();
-    push_3a_exposure(exposure);
+    push_3a_exposure(exposure, first);
 }
 
 void
-IspController::push_3a_exposure (struct rkisp_exposure isp_exposure)
+IspController::push_3a_exposure (struct rkisp_exposure isp_exposure, bool first)
 {
-    exposure_delay(isp_exposure);
+    exposure_delay(isp_exposure, first);
 }
 
 XCamReturn
@@ -1004,9 +1230,12 @@ IspController::set_3a_exposure (struct rkisp_exposure isp_exposure)
     else
         LOGD("|||set_3a_exposure timereg (%d-%d-%d), gainreg (%d-%d-%d)"
              "fll 0x%x expsync in sof %d\n",
-            isp_exposure.RegHdrTime[0], isp_exposure.RegHdrTime[1],
-            isp_exposure.RegHdrTime[2], isp_exposure.RegHdrGains[0],
-            isp_exposure.RegHdrGains[1],isp_exposure.RegHdrGains[2],
+            isp_exposure.Hdrexp_smooth_setting[0].regTime[0],
+            isp_exposure.Hdrexp_smooth_setting[0].regTime[1],
+            isp_exposure.Hdrexp_smooth_setting[0].regTime[2],
+            isp_exposure.Hdrexp_smooth_setting[0].regGain[0],
+            isp_exposure.Hdrexp_smooth_setting[0].regGain[1],
+            isp_exposure.Hdrexp_smooth_setting[0].regGain[2],
             isp_exposure.frame_line_length, _frame_sequence);
     if (_device.ptr()) {
         struct v4l2_ext_control exp_gain[3];
@@ -1049,7 +1278,7 @@ IspController::set_3a_exposure (struct rkisp_exposure isp_exposure)
                 return XCAM_RETURN_ERROR_IOCTL;
             }
 
-            if (isp_exposure.analog_gain!= 0) {
+            if (isp_exposure.analog_gain >= 0) {
                 memset(&ctrl, 0, sizeof(ctrl));
                 ctrl.id = V4L2_CID_ANALOGUE_GAIN;
                 /* ctrl.value = isp_exposure.analog_gain; */
@@ -1084,29 +1313,35 @@ IspController::set_3a_exposure (struct rkisp_exposure isp_exposure)
             struct preisp_hdrae_exp_s hdrae;
 
             memset(&hdrae, 0, sizeof(hdrae));
-            hdrae.long_exp_reg = isp_exposure.RegHdrTime[0];
-            hdrae.long_gain_reg = isp_exposure.RegHdrGains[0];
-            hdrae.middle_exp_reg = isp_exposure.RegHdrTime[1];
-            hdrae.middle_gain_reg = isp_exposure.RegHdrGains[1];
-            hdrae.short_exp_reg = isp_exposure.RegHdrTime[2];
-            hdrae.short_gain_reg = isp_exposure.RegHdrGains[2];
+            hdrae.long_exp_reg =
+                isp_exposure.Hdrexp_smooth_setting[0].regTime[0];
+            hdrae.long_gain_reg =
+                isp_exposure.Hdrexp_smooth_setting[0].regGain[0];
+            hdrae.middle_exp_reg =
+                isp_exposure.Hdrexp_smooth_setting[0].regTime[1];
+            hdrae.middle_gain_reg =
+                isp_exposure.Hdrexp_smooth_setting[0].regGain[1];
+            hdrae.short_exp_reg =
+                isp_exposure.Hdrexp_smooth_setting[0].regTime[2];
+            hdrae.short_gain_reg =
+                isp_exposure.Hdrexp_smooth_setting[0].regGain[2];
             memcpy(&hdrae.long_exp_val,
-                   &isp_exposure.HdrIntTimes[0],
+                   &isp_exposure.Hdrexp_smooth_setting[0].halTime[0],
                    sizeof(hdrae.long_exp_val));
             memcpy(&hdrae.long_gain_val,
-                   &isp_exposure.HdrGains[0],
+                   &isp_exposure.Hdrexp_smooth_setting[0].halGain[0],
                    sizeof(hdrae.long_gain_val));
             memcpy(&hdrae.middle_exp_val,
-                   &isp_exposure.HdrIntTimes[1],
+                   &isp_exposure.Hdrexp_smooth_setting[0].halTime[1],
                    sizeof(hdrae.middle_exp_val));
             memcpy(&hdrae.middle_gain_val,
-                   &isp_exposure.HdrGains[1],
+                   &isp_exposure.Hdrexp_smooth_setting[0].halGain[1],
                    sizeof(hdrae.middle_gain_val));
             memcpy(&hdrae.short_exp_val,
-                   &isp_exposure.HdrIntTimes[2],
+                   &isp_exposure.Hdrexp_smooth_setting[0].halTime[2],
                    sizeof(hdrae.short_exp_val));
             memcpy(&hdrae.short_gain_val,
-                   &isp_exposure.HdrGains[2],
+                   &isp_exposure.Hdrexp_smooth_setting[0].halGain[2],
                    sizeof(hdrae.short_gain_val));
 
             if (_sensor_subdev->io_control(CIFISP_CMD_SET_HDRAE_EXP, &hdrae) < 0) {
@@ -1122,7 +1357,7 @@ IspController::set_3a_exposure (struct rkisp_exposure isp_exposure)
 }
 
 XCamReturn
-IspController::set_3a_focus (X3aIspFocusResult *res)
+IspController::set_3a_focus (X3aIspFocusResult *res, bool first)
 {
     const struct rkisp_focus &focus = res->get_isp_config ();
 
@@ -1145,11 +1380,100 @@ IspController::set_3a_focus (X3aIspFocusResult *res)
     return XCAM_RETURN_NO_ERROR;
 }
 
+XCamReturn
+IspController::set_3a_fl (int fl_mode, float fl_intensity[],
+                          int fl_timeout, int fl_on)
+{
+    struct v4l2_control control;
+    int fl_v4l_mode;
+    int i = 0;
+#define set_fl_contol_to_dev(fl_dev,control_id,val) \
+        {\
+            xcam_mem_clear (control); \
+            control.id = control_id; \
+            control.value = val; \
+            if (fl_dev->io_control (VIDIOC_S_CTRL, &control) < 0) { \
+                XCAM_LOG_ERROR (" set fl %s to %d failed", #control_id, val); \
+                return XCAM_RETURN_ERROR_IOCTL; \
+            } \
+            XCAM_LOG_DEBUG (" sof seq %d, set fl %p, cid %s to %d, success",\
+                            _frame_sequence, fl_dev.ptr(), #control_id, val); \
+        }\
+
+    if (fl_mode == RKISP_FLASH_MODE_OFF)
+        fl_v4l_mode = V4L2_FLASH_LED_MODE_NONE;
+    else if (fl_mode == RKISP_FLASH_MODE_FLASH || fl_mode == RKISP_FLASH_MODE_FLASH_MAIN)
+        fl_v4l_mode = V4L2_FLASH_LED_MODE_FLASH;
+    else if (fl_mode == RKISP_FLASH_MODE_FLASH_PRE || fl_mode ==  RKISP_FLASH_MODE_TORCH)
+        fl_v4l_mode = V4L2_FLASH_LED_MODE_TORCH;
+    else {
+        XCAM_LOG_ERROR (" set fl to mode  %d failed", fl_mode);
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    SmartPtr<V4l2SubDevice> fl_device;
+
+    if (fl_v4l_mode == V4L2_FLASH_LED_MODE_NONE) {
+        for (i = 0; i < _active_fl_num; i++) {
+            fl_device = _fl_device[i];
+            set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_LED_MODE, V4L2_FLASH_LED_MODE_NONE);
+        }
+    } else if (fl_v4l_mode == V4L2_FLASH_LED_MODE_FLASH) {
+        for (i = 0; i < _active_fl_num; i++) {
+            fl_device = _fl_device[i];
+            set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_LED_MODE, V4L2_FLASH_LED_MODE_FLASH);
+            set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_TIMEOUT, fl_timeout * 1000);
+            if (_v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_STEP] ==
+                _v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX]) {
+                set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_INTENSITY,
+                                     _v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX]);
+            } else {
+                int flash_power =
+                        fl_intensity[i] * (_v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX]);
+                set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_INTENSITY, flash_power);
+                XCAM_LOG_DEBUG("set flash: flash:%f max:%d set:%d\n",
+                               fl_intensity[i],
+                               _v4l_flash_info[i].flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX],
+                               flash_power);
+            }
+        }
+
+        // shoude flash on all finally
+        for (i = 0; i < _active_fl_num; i++) {
+            set_fl_contol_to_dev(fl_device,
+                                 fl_on ? V4L2_CID_FLASH_STROBE : V4L2_CID_FLASH_STROBE_STOP, 0);
+        }
+    } else if (fl_v4l_mode == V4L2_FLASH_LED_MODE_TORCH) {
+        for (i = 0; i < _active_fl_num; i++) {
+            fl_device = _fl_device[i];
+            if (_v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_STEP] ==
+                _v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX]) {
+                set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_INTENSITY,
+                                     _v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX]);
+            } else {
+                int torch_power =
+                        fl_intensity[i] * (_v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX]);
+                set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_TORCH_INTENSITY, torch_power);
+                XCAM_LOG_DEBUG("set flash: torch:%f max:%d set:%d\n",
+                               fl_intensity[i],
+                               _v4l_flash_info[i].torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_MAX],
+                               torch_power);
+            }
+            set_fl_contol_to_dev(fl_device, V4L2_CID_FLASH_LED_MODE, V4L2_FLASH_LED_MODE_TORCH);
+        }
+    } else {
+        XCAM_LOG_ERROR ("|||set_3a_fl error fl mode %d", fl_mode);
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
 #if RKISP
 void
 IspController::dump_isp_config(struct rkisp1_isp_params_cfg* isp_params,
                             struct rkisp_parameters *isp_cfg) {
-    
+
     XCAM_LOG_DEBUG("-------------------------------------------------------\n \
             |||set_3a_config rkisp1_isp_params_cfg size: %d, meas: %d, others: %d\n  \
                module enable mask - update: %x - %x, cfg update: %x\n \
@@ -1162,16 +1486,16 @@ IspController::dump_isp_config(struct rkisp1_isp_params_cfg* isp_params,
         sizeof (struct rkisp1_isp_params_cfg),
         sizeof (struct cifisp_isp_meas_cfg),
         sizeof (struct cifisp_isp_other_cfg),
-        
+
         isp_params->module_ens,
         isp_params->module_en_update,
         isp_params->module_cfg_update,
-        
+
         isp_cfg->awb_gain_config.gain_red,
         isp_cfg->awb_gain_config.gain_blue,
         isp_cfg->awb_gain_config.gain_green_b,
         isp_cfg->awb_gain_config.gain_green_r,
-        
+
         isp_params->others.ctk_config.coeff0,
         isp_params->others.ctk_config.coeff1,
         isp_params->others.ctk_config.coeff2,

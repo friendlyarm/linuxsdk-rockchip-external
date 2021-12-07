@@ -45,37 +45,6 @@ static RK_U32 drm_debug = 0;
 #define drm_dbg(flag, fmt, ...)     _mpp_dbg_f(drm_debug, flag, fmt, ## __VA_ARGS__)
 #define drm_dbg_func(fmt, ...)      drm_dbg(DRM_FUNCTION, fmt, ## __VA_ARGS__)
 
-#if defined(ANDROID) && !defined(__LP64__)
-#include <errno.h> /* for EINVAL */
-
-extern void *__mmap2(void *, size_t, int, int, int, size_t);
-
-static inline void *drm_mmap(void *addr, size_t length, int prot, int flags,
-                             int fd, loff_t offset)
-{
-    /* offset must be aligned to 4096 (not necessarily the page size) */
-    if (offset & 4095) {
-        errno = EINVAL;
-        return MAP_FAILED;
-    }
-
-    return __mmap2(addr, length, prot, flags, fd, (size_t) (offset >> 12));
-}
-
-#  define drm_munmap(addr, length) \
-              munmap(addr, length)
-
-#else
-
-/* assume large file support exists */
-#  define drm_mmap(addr, length, prot, flags, fd, offset) \
-              mmap(addr, length, prot, flags, fd, offset)
-
-#  define drm_munmap(addr, length) \
-              munmap(addr, length)
-
-#endif
-
 typedef struct {
     RK_U32  alignment;
     RK_S32  drm_device;
@@ -196,7 +165,7 @@ static MPP_RET os_allocator_drm_open(void **ctx, MppAllocatorCfg *cfg)
 
     mpp_env_get_u32("drm_debug", &drm_debug, 0);
 
-    fd = open(dev_drm, O_RDWR);
+    fd = open(dev_drm, O_RDWR | O_CLOEXEC);
     if (fd < 0) {
         mpp_err_f("open %s failed!\n", dev_drm);
         return MPP_ERR_UNKNOW;
@@ -250,7 +219,7 @@ static MPP_RET os_allocator_drm_alloc(void *ctx, MppBufferInfo *info)
                  (RK_U32)((intptr_t)info->hnd));
 
     ret = drm_handle_to_fd(p->drm_device, (RK_U32)((intptr_t)info->hnd),
-                           &info->fd, 0);
+                           &info->fd, DRM_CLOEXEC | DRM_RDWR);
 
     if (ret) {
         mpp_err_f("handle_to_fd failed ret %d\n", ret);
@@ -271,7 +240,7 @@ static MPP_RET os_allocator_drm_import(void *ctx, MppBufferInfo *data)
     ret = drm_fd_to_handle(p->drm_device, data->fd, (RK_U32 *)&data->hnd, 0);
 
     ret = drm_handle_to_fd(p->drm_device, (RK_U32)((intptr_t)data->hnd),
-                           &data->fd, 0);
+                           &data->fd, DRM_CLOEXEC | DRM_RDWR);
 
     data->ptr = NULL;
     drm_dbg_func("leave dev %d\n", p->drm_device);
@@ -290,11 +259,14 @@ static MPP_RET os_allocator_drm_free(void *ctx, MppBufferInfo *data)
 
     p = (allocator_ctx_drm *)ctx;
 
+    /* NOTE: update hnd avoid freed hnd */
+    drm_fd_to_handle(p->drm_device, data->fd, (RK_U32 *)&data->hnd, 0);
+
     drm_dbg_func("dev %d unmap %p size %d fd %d handle %p\n", p->drm_device,
                  data->ptr, data->size, data->fd, data->hnd);
 
     if (data->ptr) {
-        drm_munmap(data->ptr, data->size);
+        munmap(data->ptr, data->size);
         data->ptr = NULL;
     }
     close(data->fd);
@@ -337,27 +309,21 @@ static MPP_RET os_allocator_drm_mmap(void *ctx, MppBufferInfo *data)
         return MPP_ERR_NULL_PTR;
 
     if (NULL == data->ptr) {
-        struct drm_mode_map_dumb dmmd;
+        int flags = PROT_READ;
 
-        memset(&dmmd, 0, sizeof(dmmd));
-        dmmd.handle = (RK_U32)(intptr_t)data->hnd;
+        if (fcntl(data->fd, F_GETFL) & O_RDWR)
+            flags |= PROT_WRITE;
 
-        ret = drm_ioctl(p->drm_device, DRM_IOCTL_MODE_MAP_DUMB, &dmmd);
-        if (ret) {
-            mpp_err_f("map_dumb failed: %s\n", strerror(ret));
-            return ret;
-        }
-
-        data->ptr = drm_mmap(NULL, data->size, PROT_READ | PROT_WRITE,
-                             MAP_SHARED, p->drm_device, dmmd.offset);
+        data->ptr = mmap(NULL, data->size, flags, MAP_SHARED, data->fd, 0);
         if (data->ptr == MAP_FAILED) {
             mpp_err("mmap failed: %s\n", strerror(errno));
             data->ptr = NULL;
             return -errno;
         }
 
-        drm_dbg_func("dev %d mmap handle %d to %p\n", p->drm_device,
-                     dmmd.handle, data->ptr);
+        drm_dbg_func("dev %d mmap fd %d to %p (%s)\n", p->drm_device,
+                     data->fd, data->ptr,
+                     flags & PROT_WRITE ? "RDWR" : "RDONLY");
     }
 
     return ret;

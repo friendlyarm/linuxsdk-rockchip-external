@@ -77,7 +77,7 @@ static int    maxx;        /* maximum allowed x position */
 static int    miny;        /* minimum allowed y position */
 static int    maxy;        /* maximum allowed y position */
 static KBDDEVICE * kbddev = &kbddev_event;
-static MOUSEDEVICE * mousedev = &mousedev_IMPS2;
+static MOUSEDEVICE * mousedev = &mousedev_USB;
 static int    scale;       /* acceleration scale factor */
 static int    thresh;      /* acceleration threshhold */
 static int buttons = 0; 
@@ -89,7 +89,7 @@ static int app_fd = -1;
 static char state[NR_KEYS];
 static int s_enable_appmode;
 
-void mg_ial_ioctl(unsigned int cmd, unsigned int value)
+static void mg_ial_ioctl(unsigned int cmd, unsigned int value)
 { 
     if (s_enable_appmode) {
         if (cmd == CMD_SET_MODE) {

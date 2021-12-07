@@ -38,6 +38,7 @@
 void *audio_play_test(void *argv)
 {
     char cmd[128];
+    memset(cmd, 0, sizeof(cmd));
 
     fprintf(stderr,"=========function :%s start=============\n",__func__);
     //* 1、先放音
@@ -53,8 +54,18 @@ void *audio_play_test(void *argv)
     sprintf(cmd,"aplay %s/%s",PCBA_TEST_PATH,AUDIO_PLAY_FILE);
 #endif
 
-    system(cmd);
+#ifdef PCBA_1808
+    sprintf(cmd,"aplay -D default:CARD=rockchiprk809co %s/%s",PCBA_TEST_PATH,AUDIO_PLAY_FILE);
+#endif
+
+    if (cmd[0] != '\0')
+        system(cmd);
+    else {
+        fprintf(stderr,"====CMD is null, Pls check PCBA platform====\n",__func__);
+        return (void*)-1;
+    }
     fprintf(stderr,"=========function :%s finish=============\n",__func__);
+    return 0;
 }
 
 /*主函数入口*/
@@ -76,9 +87,16 @@ int main(int argc, char *argv[])
 #endif
 	log_info("audio play test start...\n");
 	gettimeofday(&t1, NULL);
+
+    int ret;
     while(1)
     {
-        audio_play_test(argv[0]);
+        ret = (int)audio_play_test(argv[0]);
+        if (ret) {
+            err_code = AUDIO_PLAY_ERR;
+            break;
+        }
+
         gettimeofday(&t2, NULL);
 		delay_t = (t2.tv_sec - t1.tv_sec) * 1000000 + (t2.tv_usec - t1.tv_usec);
 		if (delay_t > MANUAL_TEST_TIMEOUT) {

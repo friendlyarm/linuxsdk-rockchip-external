@@ -42,6 +42,7 @@ X3aAnalyzerRKiq::X3aAnalyzerRKiq (RkispDeviceManager* device_manager, SmartPtr<I
     if (cpf_path)
         _cpf_path = strndup (cpf_path, XCAM_MAX_STR_SIZE);
 
+    memset(&_otpInfo, 0, sizeof(_otpInfo));
     _rkiq_compositor = new RKiqCompositor ();
     XCAM_ASSERT (_rkiq_compositor.ptr());
     xcam_mem_clear (_sensor_mode_data);
@@ -58,6 +59,7 @@ X3aAnalyzerRKiq::X3aAnalyzerRKiq (struct isp_supplemental_sensor_mode_data &sens
     if (cpf_path)
         _cpf_path = strndup (cpf_path, XCAM_MAX_STR_SIZE);
 
+    memset(&_otpInfo, 0, sizeof(_otpInfo));
     _rkiq_compositor = new RKiqCompositor ();
     XCAM_ASSERT (_rkiq_compositor.ptr());
 
@@ -150,6 +152,8 @@ X3aAnalyzerRKiq::internal_init (uint32_t width, uint32_t height, double framerat
     _rkiq_compositor->set_size (width, height);
     _rkiq_compositor->set_framerate (framerate);
     _rkiq_compositor->init_dynamic_config();
+    _rkiq_compositor->set_iq_name(_cpf_path);
+    _rkiq_compositor->set_otp_info(_otpInfo);
 
     return XCAM_RETURN_NO_ERROR;
 
@@ -172,6 +176,51 @@ X3aAnalyzerRKiq::internal_deinit ()
     return XCAM_RETURN_NO_ERROR;
 }
 
+XCamReturn X3aAnalyzerRKiq::restart()
+{
+    XCamReturn ret;
+
+    if (_isp_ctrl_dev) {
+        _isp_ctrl_dev->clearStatic();
+        _isp_ctrl_dev->deInit();
+        delete _isp_ctrl_dev;
+        _isp_ctrl_dev = NULL;
+    }
+
+    struct isp_supplemental_sensor_mode_data sensor_mode_data;
+    _isp_ctrl_dev = new Isp10Engine();
+
+    _rkiq_compositor->set_isp_ctrl_device(_isp_ctrl_dev);
+    if (!_device) {
+        XCAM_LOG_WARNING("no capture device.\n");
+    }
+
+    XCAM_LOG_INFO ("ready get sensor mode succc.");
+    ret = _isp->get_sensor_mode_data (sensor_mode_data);
+    XCAM_FAIL_RETURN (WARNING, ret == XCAM_RETURN_NO_ERROR, ret, "get sensor mode data failed");
+
+    XCAM_LOG_INFO ("init get sensor mode succc.");
+    configIsp(_isp_ctrl_dev, &sensor_mode_data);
+
+//    if (!_rkiq_compositor->set_sensor_mode_data (&sensor_mode_data, true)) {
+//        XCAM_LOG_WARNING ("AIQ configure 3a failed");
+//        return XCAM_RETURN_ERROR_AIQ;
+//    }
+
+    //init _isp_ctrl_dev
+    if (_device) {
+        _isp_ctrl_dev->setISPDeviceFd(_isp_stats_device->get_fd());
+    }
+
+    _isp_ctrl_dev->init(_cpf_path, _device_manager->get_sensor_entity_name(),
+                        _device_manager->get_isp_ver(),
+                        /*_device->get_fd()*/0);
+
+    _rkiq_compositor->init_dynamic_config();
+    return XCAM_RETURN_NO_ERROR;
+
+}
+
 XCamReturn
 X3aAnalyzerRKiq::configure_3a ()
 {
@@ -192,7 +241,7 @@ X3aAnalyzerRKiq::configure_3a ()
 
     /* update the initial settings from user */
     _rkiq_compositor->setAiqInputParams(this->getAiqInputParams());
-    if (!_rkiq_compositor->set_sensor_mode_data (&_sensor_mode_data)) {
+    if (!_rkiq_compositor->set_sensor_mode_data (&_sensor_mode_data, true)) {
         XCAM_LOG_WARNING ("AIQ configure 3a failed");
         return XCAM_RETURN_ERROR_AIQ;
     }
@@ -231,7 +280,7 @@ X3aAnalyzerRKiq::configure_3a ()
     get_af_handler ()->analyze (first_results, true);
 
     if (!first_results.empty()) {
-        ret = _rkiq_compositor->integrate (first_results);
+        ret = _rkiq_compositor->integrate (first_results, true);
         XCAM_FAIL_RETURN (WARNING, ret == XCAM_RETURN_NO_ERROR, ret, "AIQ configure_3a failed on integrate results");
         #if 1
         for (X3aResultList::iterator iter = first_results.begin (); iter != first_results.end (); ++iter) {
@@ -296,7 +345,7 @@ X3aAnalyzerRKiq::pre_3a_analyze (SmartPtr<X3aStats> &stats)
     //function
     _rkiq_compositor->setAiqInputParams(this->getAiqInputParams());
     LOGD("@%s : reqId %d", __FUNCTION__, this->getAiqInputParams().ptr() ? this->getAiqInputParams()->reqId : -1);
-
+    _rkiq_compositor->pre_process_3A_states();
     ret = _isp->get_frame_softime (sof_tim);
     XCAM_FAIL_RETURN (WARNING, ret == XCAM_RETURN_NO_ERROR, ret, "get sof time failed");
     ret = _isp->get_vcm_time (&vcm_tim);
@@ -322,6 +371,15 @@ X3aAnalyzerRKiq::pre_3a_analyze (SmartPtr<X3aStats> &stats)
         return XCAM_RETURN_ERROR_AIQ;
     }
 
+    rkisp_flash_setting_t flash_settings;
+    ret = _isp->get_flash_status (flash_settings, stats_3a->frame_id);
+    XCAM_FAIL_RETURN (WARNING, ret == XCAM_RETURN_NO_ERROR, ret, "get flash setting failed");
+
+    if (!_rkiq_compositor->set_flash_status_info (flash_settings)) {
+        XCAM_LOG_WARNING ("AIQ set effect flash info failed");
+        return XCAM_RETURN_ERROR_AIQ;
+    }
+
     if (!_rkiq_compositor->set_3a_stats (xcam_isp_stats)) {
         XCAM_LOG_WARNING ("Aiq compositor set 3a stats failed");
         return XCAM_RETURN_ERROR_UNKNOWN;
@@ -340,6 +398,11 @@ X3aAnalyzerRKiq::post_3a_analyze (X3aResultList &results)
 
     _rkiq_compositor->setAiqInputParams(NULL);
     return XCAM_RETURN_NO_ERROR;
+}
+
+void X3aAnalyzerRKiq::setOtpInfo(CamOTPGlobal_t &param)
+{
+    _otpInfo = param;
 }
 
 };

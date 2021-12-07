@@ -9,7 +9,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * 	 http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -36,8 +36,8 @@
 #define KEY_INPUT_EVENT1 "/dev/input/event1"
 #define KEY_INPUT_EVENT2 "/dev/input/event2"
 
-#define KEY_TIMEOUT_DOWN	60
-#define KEY_TIMEOUT_UP		5
+#define KEY_TIMEOUT_DOWN    60
+#define KEY_TIMEOUT_UP      5
 
 typedef struct KEY_BOARD_st {
     char *key_name;
@@ -75,7 +75,7 @@ KEY_st gkey_test[KEY_VALID_NUM] = {
 #define KEY_VOLUP_CODE      115
 #define KEY_VOLDN_CODE      114
 #define KEY_MUTE_CODE       113
-#define KEY_POWER		    116
+#define KEY_POWER           116
 #define KEY_PLAY_CODE       207
 #define KEY_MODE_CODE       373
 
@@ -92,8 +92,76 @@ KEY_st gkey_test[KEY_VALID_NUM] = {
 #endif
 
 #ifdef PCBA_3229GVA
-//TODO:
+//TODO: According to 3229 real board to add test code.
 
+#endif
+
+#ifdef PCBA_1808
+//TODO:According to 1808 real board to add test code.
+#define KEY_VALID_NUM       2    //RK_EVB_RK1808_LP3D8P132SD6_V11
+
+/* key code */
+#define KEY_VOLUP_CODE      115
+#define KEY_VOLDN_CODE      114
+
+KEY_st gkey_test[KEY_VALID_NUM] = {
+    {"VOL+",    KEY_VOLUMEUP,    0},
+    {"VOL-",    KEY_VOLUMEDOWN,    0},
+};
+
+#endif
+
+#ifdef PCBA_PX30
+//TODO:According to PX30 real board to add test code.
+#define KEY_VALID_NUM       0
+
+#endif
+
+#ifdef PCBA_3288
+//TODO:According to 3288 real board to add test code.
+#define KEY_VALID_NUM       0
+
+#endif
+
+#ifdef PCBA_3328
+//TODO:According to 3328 real board to add test code.
+#define KEY_VALID_NUM       0
+
+#endif
+
+#ifdef PCBA_3326
+//TODO:According to 3326 real board to add test code.
+#define KEY_VALID_NUM       0
+#endif
+
+#ifdef PCBA_3399
+//TODO:According to 3399 real board to add test code.
+#define KEY_VALID_NUM       0
+#endif
+
+#ifdef PCBA_3399PRO
+//TODO:According to 3399 PRO real board to add test code.
+#define KEY_VALID_NUM       0
+#endif
+
+#ifdef PCBA_1126_1109
+//TODO:According to RV1126 / RV1109 real board to add test code.
+#define KEY_VALID_NUM       0
+#endif
+
+#ifdef PCBA_356X
+//TODO:According to 356X board to add test code.
+#define KEY_VALID_NUM       2
+
+KEY_st gkey_test[KEY_VALID_NUM] = {
+    {"VOL+",    KEY_VOLUMEUP,    0},
+    {"VOL-",    KEY_VOLUMEDOWN,    0},
+};
+#endif
+
+#ifdef PCBA_3588
+//TODO:According to 3588 real board to add test code.
+#define KEY_VALID_NUM       0
 #endif
 
 static char result[COMMAND_VALUESIZE] = RESULT_FAIL;
@@ -193,49 +261,48 @@ static int save_scan_result(char *result_buf)
 
 static int key_wait_event(int maxfd, fd_set *readfds, int time)
 {
-	int ret;
-	struct timeval timeout;
+    int ret;
+    struct timeval timeout;
 
-	FD_ZERO(readfds);
-	FD_SET(maxfd, readfds);
-	timeout.tv_sec = time;
-	timeout.tv_usec = 0;
-	ret = select(maxfd + 1, readfds, NULL, NULL, &timeout);
-	switch (ret) {
-		case -1:
-			return -1;
-		case 0:
-			log_err("select timeout(%ds)\n", time);
-			return 1;
-		default:
-			if (FD_ISSET(maxfd, readfds)) {
-				FD_CLR (maxfd, readfds);
-				return 0;
-			}
-			break;
-	}
+    FD_ZERO(readfds);
+    FD_SET(maxfd, readfds);
+    timeout.tv_sec = time;
+    timeout.tv_usec = 0;
+    ret = select(maxfd + 1, readfds, NULL, NULL, &timeout);
+    switch (ret) {
+        case -1:
+            return -1;
+        case 0:
+            log_err("select timeout(%ds)\n", time);
+            return 1;
+        default:
+            if (FD_ISSET(maxfd, readfds)) {
+                FD_CLR (maxfd, readfds);
+                return 0;
+            }
+            break;
+    }
 
-	return -1;
+    return -1;
 }
 
 static int key_event_read(int fd, struct input_event *buf)
 {
-	int read_len = 0;
+    int read_len = 0;
 
-	read_len = read(fd, buf, sizeof(*buf));
-	if (read_len < 0) {
-		if ((errno != EINTR) && (errno != EAGAIN))
-			return 0;
-		return -1;
-	}
+    read_len = read(fd, buf, sizeof(*buf));
+    if (read_len < 0) {
+        if ((errno != EINTR) && (errno != EAGAIN))
+            return 0;
+        return -1;
+    }
 
-	if (buf->type)
-		return 1;
+    if (buf->type)
+        return 1;
 
-	return 0;
+    return 0;
 }
 
-//* 信号处理函数，在结束进程前，为按键测试返回一个结果；
 static int key_result_send(int sign_no)
 {
     int err_code =0;
@@ -272,7 +339,6 @@ int main(int argc, char **argv)
     struct timeval sel_timeout_tv;
 
     log_info("key test process start...\n");
-    //* 注册信号处理函数
     signal(SIGTERM, (__sighandler_t)key_result_send);
 
     for (i = 0; i < MAX_INPUT_COUNT; i++) {

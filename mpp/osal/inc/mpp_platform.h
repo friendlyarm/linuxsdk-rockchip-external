@@ -17,49 +17,37 @@
 #ifndef __MPP_PLATFORM__
 #define __MPP_PLATFORM__
 
-#include "rk_mpi.h"
+#include "rk_type.h"
+#include "mpp_soc.h"
 
 /*
  * Platform flag detection is for rockchip hardware platform detection
  */
+typedef enum MppIoctlVersion_e {
+    IOCTL_VCODEC_SERVICE,
+    IOCTL_MPP_SERVICE_V1,
+    IOCTL_VERSION_BUTT,
+} MppIoctlVersion;
+
+typedef enum MppKernelVersion_e {
+    KERNEL_UNKNOWN,
+    KERNEL_3_10,
+    KERNEL_4_4,
+    KERNEL_4_19,
+    KERNEL_VERSION_BUTT,
+} MppKernelVersion;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*
- * Platform video codec hardware feature
- */
-/* RK combined codec */
-#define HAVE_VPU1               (0x00000001)
-#define HAVE_VPU2               (0x00000002)
-/* RK standalone decoder */
-#define HAVE_HEVC_DEC           (0x00000100)
-#define HAVE_RKVDEC             (0x00000200)
-#define HAVE_AVSDEC             (0x00001000)
-/* RK standalone encoder */
-#define HAVE_RKVENC             (0x00010000)
-#define HAVE_VEPU               (0x00020000)
-/* External encoder */
-#define HAVE_H265ENC            (0x01000000)
-
-/*
- * Platform image process hardware feature
- */
-#define HAVE_IPP                (0x00000001)
-#define HAVE_RGA                (0x00000002)
-#define HAVE_RGA2               (0x00000004)
-#define HAVE_IEP                (0x00000008)
-
-const char *mpp_get_soc_name(void);
-RK_U32 mpp_get_vcodec_type(void);
+MppIoctlVersion mpp_get_ioctl_version(void);
+MppKernelVersion mpp_get_kernel_version(void);
 RK_U32 mpp_get_2d_hw_flag(void);
-const char *mpp_get_platform_dev_name(MppCtxType type, MppCodingType coding, RK_U32 platform);
-const char *mpp_get_vcodec_dev_name(MppCtxType type, MppCodingType coding);
+RK_U32 mpp_get_client_hw_id(RK_S32 client_type);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /*__MPP_PLATFORM__*/
-

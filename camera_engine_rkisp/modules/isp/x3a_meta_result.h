@@ -23,7 +23,7 @@
 
 #include <xcam_std.h>
 #include <x3a_result.h>
-#include <base/log.h>
+#include <base/xcam_log.h>
 #include <base/xcam_3a_result.h>
 #ifdef ANDROID_VERSION_ABOVE_8_X
 #include <CameraMetadata.h>
@@ -73,7 +73,7 @@ public:
         fileName += "dump_result_" + std::to_string(count);
         LOGI("%s filename is %s", __FUNCTION__, fileName.data());
 
-        int fd = open(fileName.data(), O_RDWR | O_CREAT, 0666);
+        int fd = open(fileName.data(), O_RDWR | O_CREAT | O_CLOEXEC, 0666);
         if (fd != -1) {
             _metadata->dump(fd, 2);
         } else {

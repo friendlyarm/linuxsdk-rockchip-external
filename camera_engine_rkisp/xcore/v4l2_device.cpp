@@ -170,7 +170,7 @@ V4l2Device::open ()
         XCAM_LOG_DEBUG ("v4l2 device open failed, there's no device name");
         return XCAM_RETURN_ERROR_PARAM;
     }
-    _fd = ::open (_name, O_RDWR);
+    _fd = ::open (_name, O_RDWR | O_CLOEXEC);
     if (_fd == -1) {
         XCAM_LOG_DEBUG ("open device(%s) failed", _name);
         return XCAM_RETURN_ERROR_IOCTL;
@@ -215,7 +215,7 @@ int
 V4l2Device::io_control (int cmd, void *arg)
 
 {
-    if (_fd <= 0)
+    if (_fd < 0)
         return -1;
 
     return xcam_device_ioctl (_fd, cmd, arg);
@@ -228,7 +228,7 @@ V4l2Device::poll_event (int timeout_msec, int stop_fd)
     struct pollfd poll_fds[num_fds];
     int ret = 0;
 
-    XCAM_ASSERT (_fd > 0);
+    XCAM_ASSERT (_fd >= 0);
 
     memset(poll_fds, 0, sizeof(poll_fds));
     poll_fds[0].fd = _fd;
@@ -534,6 +534,12 @@ V4l2Device::stop ()
 {
     XCAM_LOG_INFO ("device(%s) stop, already start: %d", XCAM_STR (_name), _active);
 
+    while (poll_event (0, -1) > 0) {
+        SmartPtr<V4l2Buffer> buf = get_buffer_by_index (0);
+        if (buf.ptr())
+            dequeue_buffer(buf);
+    }
+
     // stream off
     if (_active) {
         if (io_control (VIDIOC_STREAMOFF, &_buf_type) < 0) {
@@ -834,6 +840,9 @@ V4l2Device::queue_buffer (SmartPtr<V4l2Buffer> &buf)
     XCAM_LOG_DEBUG ("device(%s) queue buffer index:%d, memory: %d, type:%d, length: %d, fd: %d",
         XCAM_STR (_name), v4l2_buf.index, v4l2_buf.memory,
         v4l2_buf.type, v4l2_buf.m.planes[0].length, v4l2_buf.m.planes[0].m.fd);
+
+    if (v4l2_buf.type == V4L2_BUF_TYPE_META_OUTPUT)
+        v4l2_buf.bytesused = v4l2_buf.length;
 
     if (io_control (VIDIOC_QBUF, &v4l2_buf) < 0) {
         XCAM_LOG_ERROR("fail to enqueue buffer index:%d.", v4l2_buf.index);

@@ -1,75 +1,332 @@
-Source: libmali-rk
+Source: libmali
 Priority: optional
-Maintainer: Randy Li <randy.li@rock-chips.com>
-Build-Depends: debhelper (>= 9)
-Standards-Version: 3.9.5
+Maintainer: Putin Lee <putin.li@rock-chips.com>
+Uploaders: Jeffy Chen <jeffy.chen@rock-chips.com>
+Build-Depends: debhelper (>= 11),
+               meson,
+               pkg-config,
+               libstdc++6,
+               libgbm-dev,
+               libdrm-dev,
+               libx11-xcb1,
+               libxcb-dri2-0,
+               libxdamage1,
+               libxext6,
+               libwayland-client0
+Standards-Version: 4.1.3
 Section: libs
-Homepage: http://www.rock-chips.com/
+Homepage: https://github.com/rockchip-linux/libmali
+Vcs-Git: https://github.com/rockchip-linux/libmali
+Vcs-Browser: https://github.com/rockchip-linux/libmali
 
-Package: libmali-rk-dev
-Section: libdevel
-Architecture: any
-Depends: ${misc:Depends}
-Multi-Arch: same
-Provides: libgbm-dev, libegl1-mesa-dev, libgles2-mesa-dev, opencl-c-headers
-#Conflicts: libgbm-dev, libegl1-mesa-dev, libgles2-mesa-dev, opencl-c-headers
-Replaces: libgbm-dev, libegl1-mesa-dev, libgles2-mesa-dev, opencl-c-headers
-Description: The mali library for Rockchip RK3288.
- .
- This package provides the development environment for compiling programs
- against the GBM library.
+Package: libmali-bifrost-g31-rxp0-gbm
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
 
-Package: libmali-rk-bifrost-g31-rxp0-wayland-gbm
+Package: libmali-bifrost-g31-rxp0-only-cl
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g31-rxp0-wayland
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g31-rxp0-without-cl-wayland
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g31-rxp0-x11
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-g2p0-dummy
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-g2p0-dummy-gbm
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-g2p0-gbm
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-g2p0-wayland
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-g2p0-without-cl-dummy-gbm
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-g2p0-x11
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-r25p0-dummy
+Architecture: arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-r25p0-wayland
+Architecture: arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-bifrost-g52-r25p0-x11
+Architecture: arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t76x-r14p0-r0p0-gbm
 Architecture: armhf
-Depends: ${misc:Depends}, ${shlibs:Depends}
-Multi-Arch: same
-Provides: libegl1-mesa, libegl1, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Replaces: libegl1-mesa, libegl1-x11, libgles2-mesa, libgbm1, libwayland-egl1-mesa
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
 
-Package: libmali-rk-midgard-t86x-r14p0
+Package: libmali-midgard-t76x-r14p0-r0p0-wayland
 Architecture: armhf
-Depends: ${misc:Depends}, ${shlibs:Depends}
-Multi-Arch: same
-Provides: libegl1-mesa, libegl1, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Replaces: libegl1-mesa, libegl1-x11, libgles2-mesa, libgbm1
-Description: The mali library for Rockchip RK3399 (32bit).
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
 
-Package: libmali-rk-midgard-t76x-r14p0-r1p0
+Package: libmali-midgard-t76x-r14p0-r0p0-x11
 Architecture: armhf
-Depends: ${misc:Depends}, ${shlibs:Depends}
-Multi-Arch: same
-Provides: libegl1-mesa, libegl1, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Replaces: libegl1-mesa, libegl1-x11, libgles2-mesa, libgbm1
-Description: The mali library for Rockchip RK3288W.
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
 
-Package: libmali-rk-midgard-t76x-r14p0-r0p0
+Package: libmali-midgard-t76x-r14p0-r1p0-gbm
 Architecture: armhf
-Depends: ${misc:Depends}, ${shlibs:Depends}
-Multi-Arch: same
-Provides: libegl1-mesa, libegl1, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Replaces: libegl1-mesa, libegl1-x11, libgles2-mesa, libgbm1
-Description: The mali library for Rockchip RK3288(not included RK3288W).
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
 
-Package: libmali-rk-midgard-t76x-r14p0-r0p0-wayland
+Package: libmali-midgard-t76x-r14p0-r1p0-wayland
 Architecture: armhf
-Depends: ${misc:Depends}, ${shlibs:Depends}
-Multi-Arch: same
-Provides: libegl1-mesa, libegl1, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Replaces: libegl1-mesa, libegl1-x11, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Description: The mali library for Rockchip RK3288(not included RK3288W).
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
 
-Package: libmali-rk-utgard-450-r7p0
+Package: libmali-midgard-t76x-r14p0-r1p0-x11
 Architecture: armhf
-Depends: ${misc:Depends}, ${shlibs:Depends}
-Multi-Arch: same
-Provides: libegl1-mesa, libegl1, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Replaces: libegl1-mesa, libegl1-x11, libgles2-mesa, libgbm1
-Description: The mali library for Rockchip RK3328 (32bit).
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
 
-Package: libmali-rk-utgard-400-r7p0
+Package: libmali-midgard-t76x-r18p0-r0p0-gbm
 Architecture: armhf
-Depends: ${misc:Depends}, ${shlibs:Depends}
-Multi-Arch: same
-Provides: libegl1-mesa, libegl1, libgles2-mesa, libgbm1, libwayland-egl1-mesa
-Replaces: libegl1-mesa, libegl1-x11, libgles2-mesa, libgbm1
-Description: The mali library for Rockchip RK30 serial.
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t76x-r18p0-r0p0-wayland
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t76x-r18p0-r0p0-x11
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t76x-r18p0-r1p0-gbm
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t76x-r18p0-r1p0-wayland
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t76x-r18p0-r1p0-x11
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t86x-r14p0-gbm
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t86x-r14p0-wayland
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t86x-r14p0-x11
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t86x-r18p0-gbm
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t86x-r18p0-wayland
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-midgard-t86x-r18p0-x11
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-utgard-400-r7p0-r1p1-gbm
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-utgard-400-r7p0-r1p1-wayland
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-utgard-400-r7p0-r1p1-x11
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-utgard-400-r7p0-r3p0-wayland
+Architecture: armhf
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-utgard-450-r7p0-gbm
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-utgard-450-r7p0-wayland
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers
+
+Package: libmali-utgard-450-r7p0-x11
+Architecture: armhf arm64
+Provides: libmali
+Conflicts: libmali
+Replaces: libmali
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Mali GPU User-Space Binary Drivers

@@ -23,12 +23,15 @@
 #include "settings_processor.h"
 #include "x3a_analyzer_rkiq.h"
 #include "isp_poll_thread.h"
-#include <base/log.h>
+#include "rkcamera_vendor_tags.h"
+#include <base/xcam_log.h>
 
 using namespace XCam;
 
 RkispDeviceManager::RkispDeviceManager(const cl_result_callback_ops_t *cb)
     : mCallbackOps (cb)
+    , _isp_controller(nullptr)
+    , _cur_settings(nullptr)
 {
     _settingsProcessor = new SettingsProcessor();
     _settings.clear();
@@ -40,6 +43,7 @@ RkispDeviceManager::~RkispDeviceManager()
     if(_settingsProcessor)
         delete _settingsProcessor;
     _settings.clear();
+    _fly_settings.clear();
 }
 
 void
@@ -93,19 +97,14 @@ RkispDeviceManager::x3a_calculation_done (XAnalyzer *analyzer, X3aResultList &re
     /* meta_result->dump(); */
     {
         SmartLock lock(_settingsMutex);
-        if (!_settings.empty()) {
-            // 3a algo may use the old param to calculate if the setting param
-            // comes late. in this case, just ignore the results for there no
-            // need to report twice for same reqId
-            if(id == (*_settings.begin())->reqId)
-                _settings.erase(_settings.begin());
-            else
-                goto done;
+        if (!_fly_settings.empty())
+            LOGI("@%s %d: flying id %d", __FUNCTION__, __LINE__, (*_fly_settings.begin())->reqId);
+        if (!_fly_settings.empty() && (id == (*_fly_settings.begin())->reqId)) {
+            _fly_settings.erase(_fly_settings.begin());
         } else {
-            LOGW("@%s %d: No settting when results comes!!", __FUNCTION__, __LINE__);
-#ifdef ANDROID_PLATEFORM
-                goto done;
-#endif
+            // return every meta result, we use meta to do extra work, eg.
+            // flash stillcap synchronization
+            id = -1;
         }
     }
     LOGI("@%s %d: result %d has %d metadata entries", __FUNCTION__, __LINE__,
@@ -127,8 +126,16 @@ RkispDeviceManager::set_control_params(const int request_frame_id,
                               const camera_metadata_t *metas)
 {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    static bool stillcap_sync_cmd_end_delay = false;
+    bool need_alloc = true;
+    XCam::SmartPtr<AiqInputParams> inputParams;
 
-    XCam::SmartPtr<AiqInputParams> inputParams = new AiqInputParams();
+    SmartLock lock(_settingsMutex);
+    if (!_settings.empty()) {
+        inputParams = *_settings.begin();
+        need_alloc = false;
+    } else
+        inputParams = new AiqInputParams();
     inputParams->reqId = request_frame_id;
     inputParams->settings = metas;
     inputParams->staticMeta = &RkispDeviceManager::staticMeta;
@@ -156,10 +163,51 @@ RkispDeviceManager::set_control_params(const int request_frame_id,
          aectl.aeAntibanding, aectl.evCompensation,
          aectl.aeTargetFpsRange[0], aectl.aeTargetFpsRange[1]);
     LOGI("@%s : reqId %d, afMode %d, afTrigger %d", __FUNCTION__, request_frame_id, afctl.afMode, afctl.afTrigger);
+    LOGI("@%s : reqId %d, frame usecase %d, flash_mode %d, stillCapSyncCmd %d",
+         __FUNCTION__, request_frame_id, inputParams->frameUseCase,
+         aeparams.flash_mode, inputParams->stillCapSyncCmd);
     {
-        SmartLock lock(_settingsMutex);
-        _settings.push_back(inputParams);
+        // to speed up flash off routine
+        if (inputParams->stillCapSyncCmd == RKCAMERA3_PRIVATEDATA_STILLCAP_SYNC_CMD_SYNCEND) {
+            float power[2] = {0.0f, 0.0f};
+            if (_isp_controller.ptr()) {
+                _isp_controller->set_3a_fl (RKISP_FLASH_MODE_OFF, power, 0, 0);
+                LOGD("reqId %d, stillCapSyncCmd %d, flash off",
+                     request_frame_id, inputParams->stillCapSyncCmd);
+            }
+        }
+
+        // we use id -1 request to do special work, eg. flash stillcap sync
+        if (request_frame_id != -1) {
+            if (stillcap_sync_cmd_end_delay) {
+                stillcap_sync_cmd_end_delay = false;
+                inputParams->stillCapSyncCmd = RKCAMERA3_PRIVATEDATA_STILLCAP_SYNC_CMD_SYNCEND;
+            }
+            if (need_alloc)
+                _settings.push_back(inputParams);
+        } else {
+            // merged to next params
+            if (inputParams->stillCapSyncCmd == RKCAMERA3_PRIVATEDATA_STILLCAP_SYNC_CMD_SYNCEND) {
+                if (!_settings.empty()) {
+                    XCam::SmartPtr<AiqInputParams> settings = *_settings.begin();
+                    settings->stillCapSyncCmd = RKCAMERA3_PRIVATEDATA_STILLCAP_SYNC_CMD_SYNCEND;
+                } else {
+                    stillcap_sync_cmd_end_delay = true;
+                }
+            }
+            if (inputParams->aaaControls.ae.aePreCaptureTrigger == ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_START) {
+                if (!_settings.empty()) {
+                    XCam::SmartPtr<AiqInputParams> settings = *_settings.begin();
+                    settings->aaaControls.ae.aePreCaptureTrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_START;
+                    settings->reqId = -1;
+                } else {
+                    _cur_settings->aaaControls.ae.aePreCaptureTrigger = ANDROID_CONTROL_AE_PRECAPTURE_TRIGGER_START;
+                    _cur_settings->reqId = -1;
+                }
+            }
+        }
     }
+
     return ret;
 }
 
@@ -167,8 +215,11 @@ void
 RkispDeviceManager::pause_dequeue ()
 {
     // should stop 3a because isp video stream may have been stopped
+     _3a_analyzer->pause (true);
     if (_poll_thread.ptr())
         _poll_thread->stop();
+    if (_event_subdevice.ptr())
+        _event_subdevice->unsubscribe_event (V4L2_EVENT_FRAME_SYNC);
     if (_isp_params_device.ptr() && _isp_params_device->is_activated())
         _isp_params_device->stop();
     if (_isp_stats_device.ptr() && _isp_stats_device->is_activated())
@@ -182,11 +233,15 @@ RkispDeviceManager::resume_dequeue ()
 {
     SmartPtr<IspPollThread> ispPollThread =  _poll_thread.dynamic_cast_ptr<IspPollThread> ();
 
+    if (_event_subdevice.ptr())
+        _event_subdevice->subscribe_event (V4L2_EVENT_FRAME_SYNC);
+
     if (_isp_params_device.ptr() && !_isp_params_device->is_activated())
         _isp_params_device->start(false);
     if (_isp_stats_device.ptr() && !_isp_stats_device->is_activated())
         _isp_stats_device->start();
 
+    _3a_analyzer->pause (false);
     // for IspController
     ispPollThread->resume();
     // sensor mode may be changed, so we should re-generate the first isp

@@ -13,10 +13,6 @@ if(NOT CMAKE_BUILD_TYPE)
         FORCE)
 endif()
 message(STATUS "cmake version ${CMAKE_VERSION}")
-if(NOT CMAKE_VERSION VERSION_LESS "2.8.12.20131121")
-    cmake_policy(SET CMP0025 OLD) # report Apple's Clang as just Clang
-    cmake_policy(SET CMP0042 OLD) # do not require MACOSX_RPATH
-endif()
 
 # Search packages for host system instead of packages for target system
 # in case of cross compilation these macro should be defined by toolchain file
@@ -65,7 +61,7 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMakeTargets")
 # ----------------------------------------------------------------------------
 # enable test in this project
 # ----------------------------------------------------------------------------
-enable_testing()
+option(BUILD_TEST "enable test binary building)" ON)
 
 # ----------------------------------------------------------------------------
 # System architecture detection
@@ -93,11 +89,11 @@ elseif(${SYSPROC} STREQUAL "armv7-a")
     message(STATUS "Detected ARMv7 system processor")
     set(ARM true)
     set(ARMEABI_V7A true)
-elseif(${SYSPROC} STREQUAL "armv7-a_hardfp")
+elseif(${SYSPROC} STREQUAL "armv7-a_hardfp" OR ${SYSPROC} STREQUAL "armv7l")
     message(STATUS "Detected ARMv7 system processor")
     set(ARM true)
     set(ARMEABI_V7A_HARDFP true)
-elseif(${SYSPROC} STREQUAL "armv8-a")
+elseif(${SYSPROC} STREQUAL "aarch64")
     message(STATUS "Detected ARMv8 system processor")
     set(ARM true)
     set(ARMEABI_V8 true)
@@ -170,40 +166,38 @@ if(GCC)
     add_definitions(-Wno-multichar)
     # add PIC flag
     add_definitions(-fPIC)
+    # disable exception for C++
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
+
+    # for libary linking
+    set(BEGIN_WHOLE_ARCHIVE -Wl,--whole-archive)
+    set(END_WHOLE_ARCHIVE -Wl,--no-whole-archive)
+
+    option(ASAN_CHECK "enable Address Sanitizer (Asan)" OFF)
+    if(ASAN_CHECK)
+        add_definitions(-fsanitize=address -static-libasan -g)
+        set(ASAN_LIB libasan.a dl rt m)
+        set(ASAN_BIN dl rt m)
+    endif(ASAN_CHECK)
 endif(GCC)
-
-# ----------------------------------------------------------------------------
-# Create svn version information
-# ----------------------------------------------------------------------------
-set(HAVE_SVN 0)
-if(EXISTS "${PROJECT_SOURCE_DIR}/.svn/")
-    find_host_package(Subversion)
-    if(Subversion_FOUND)
-        set(HAVE_SVN true)
-    endif(Subversion_FOUND)
-endif(EXISTS "${PROJECT_SOURCE_DIR}/.svn/")
-
-if(${HAVE_SVN})
-    Subversion_WC_INFO(${PROJECT_SOURCE_DIR} Project)
-
-    message(STATUS "Current svn revision is ${Project_WC_REVISION}")
-    set(VERSION_REVISION        ${Project_WC_REVISION})
-    set(VERSION_LAST_AUTHOR     ${Project_WC_LAST_CHANGED_AUTHOR})
-    set(VERSION_LAST_DATE       ${Project_WC_LAST_CHANGED_DATE})
-    set(VERSION_ONE_LINE        "${VERSION_REVISION} author: ${VERSION_LAST_AUTHOR} date: ${VERSION_LAST_DATE}")
-    set(VERSION_VER_NUM         ${VERSION_REVISION})
-else()
-    set(VERSION_REVISION -1)
-endif()
 
 # ----------------------------------------------------------------------------
 # Create git version information
 # ----------------------------------------------------------------------------
+set(VERSION_CNT         0)
+set(VERSION_MAX_CNT     9)
+set(VERSION_INFO        "\"unknown mpp version for missing VCS info\"")
+foreach (CNT RANGE ${VERSION_MAX_CNT})
+    set(VERSION_HISTORY_${CNT} "NULL")
+endforeach(CNT)
+
 if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
     find_host_package(Git)
     if(GIT_FOUND)
-        # get author
-        execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --format=%an
+        # get current version info
+        set(GIT_LOG_FORMAT "%h author: %<|(30)%an %cd %s")
+
+        execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --oneline --date=short --pretty=format:${GIT_LOG_FORMAT}
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
             OUTPUT_VARIABLE EXEC_OUT
             ERROR_VARIABLE EXEC_ERROR
@@ -212,56 +206,39 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
             ERROR_STRIP_TRAILING_WHITESPACE)
 
         if (NOT EXEC_RET)
-            message(STATUS "author: ${EXEC_OUT}")
-            set(VERSION_LAST_AUTHOR ${EXEC_OUT})
+            set(VERSION_INFO ${EXEC_OUT})
+            message(STATUS "current version:")
+            message(STATUS "${VERSION_INFO}")
+            string(REPLACE "\"" "\\\"" VERSION_INFO ${VERSION_INFO})
+            set(VERSION_INFO "\"${VERSION_INFO}\"")
+        else()
+            message(STATUS "git ret ${EXEC_RET}")
+            message(STATUS "${EXEC_ERROR}")
         endif()
 
-        # get date
-        execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --format=%ad
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-            OUTPUT_VARIABLE EXEC_OUT
-            ERROR_VARIABLE EXEC_ERROR
-            RESULT_VARIABLE EXEC_RET
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_STRIP_TRAILING_WHITESPACE)
+        set(GIT_LOG_FORMAT "%h author: %<|(30)%an %cd %s %d")
 
-        if (NOT EXEC_RET)
-            message(STATUS "date  : ${EXEC_OUT}")
-            set(VERSION_LAST_DATE ${EXEC_OUT})
-        endif()
+        # get history version information
+        # setup logs
+        message(STATUS "git version history:")
+        foreach (CNT RANGE ${VERSION_MAX_CNT})
+            execute_process(COMMAND ${GIT_EXECUTABLE} log HEAD~${CNT} -1 --oneline --date=short --pretty=format:${GIT_LOG_FORMAT}
+                WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+                OUTPUT_VARIABLE EXEC_OUT
+                ERROR_VARIABLE EXEC_ERROR
+                RESULT_VARIABLE EXEC_RET
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_STRIP_TRAILING_WHITESPACE)
 
-        # get version hash
-        execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --format=%H
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-            OUTPUT_VARIABLE EXEC_OUT
-            ERROR_VARIABLE EXEC_ERROR
-            RESULT_VARIABLE EXEC_RET
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_STRIP_TRAILING_WHITESPACE)
-
-        if (NOT EXEC_RET)
-            set(VERSION_REVISION ${EXEC_OUT})
-        endif()
-
-        # get one line version information
-        execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --pretty=format:"%h author: %an %s"
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-            OUTPUT_VARIABLE EXEC_OUT
-            ERROR_VARIABLE EXEC_ERROR
-            RESULT_VARIABLE EXEC_RET
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_STRIP_TRAILING_WHITESPACE)
-
-        if (NOT EXEC_RET)
-            message(STATUS "git version: ${EXEC_OUT}")
-            set(VERSION_ONE_LINE ${EXEC_OUT})
-            string(REPLACE "\"" "" VERSION_ONE_LINE ${VERSION_ONE_LINE})
-        endif()
-
-        set(VERSION_VER_NUM -1)
-    else(GIT_FOUND)
-        set(VERSION_ONE_LINE "Missing VCS info")
-        set(VERSION_LAST_AUTHOR "Unknown")
+            if (NOT EXEC_RET)
+                set(VERSION_LOG ${EXEC_OUT})
+                string(REPLACE "\"" "\\\"" VERSION_LOG ${VERSION_LOG})
+                message(STATUS ${VERSION_LOG})
+                set(VERSION_HISTORY_${CNT} "\"${VERSION_LOG}\"")
+                math(EXPR VERSION_CNT "${VERSION_CNT}+1")
+            endif()
+        endforeach(CNT)
+        message(STATUS "total ${VERSION_CNT} git version recorded")
     endif()
 
     # add git hooks
@@ -273,10 +250,6 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
             message(STATUS "Install git hooks done")
         endif(EXISTS "${PROJECT_SOURCE_DIR}/.git/hooks")
     endif(EXISTS "${PROJECT_SOURCE_DIR}/tools/hooks/")
-
-else(EXISTS "${PROJECT_SOURCE_DIR}/.git")
-    set(VERSION_ONE_LINE "Without VCS info")
-    set(VERSION_LAST_AUTHOR "Unknown")
 endif(EXISTS "${PROJECT_SOURCE_DIR}/.git")
 
 configure_file(

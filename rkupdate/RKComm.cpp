@@ -24,20 +24,20 @@ CRKUsbComm::CRKUsbComm(CRKLog *pLog):CRKComm(pLog)
 	//	m_bEmmc = true;
 	//else
 	//	m_bEmmc = false;
-    char *emmc_point = getenv(EMMC_POINT_NAME);
-    m_hLbaDev = open(emmc_point, O_RDWR|O_SYNC,0);
-    if (m_hLbaDev<0){
-        if (pLog)
-            pLog->Record(_T("INFO:is nand devices..."));
-        m_bEmmc = false;
-    }else{
-        if (pLog)
-            pLog->Record(_T("INFO:is emmc devices..."));
-        m_bEmmc = true;
-        close(m_hLbaDev);
-    }
+	char *emmc_point = getenv(EMMC_POINT_NAME);
+	m_hLbaDev = open(emmc_point, O_RDWR|O_SYNC,0);
+	if (m_hLbaDev<0){
+		if (pLog)
+			pLog->Record(_T("INFO:is nand devices..."));
+		m_bEmmc = false;
+	}else{
+		if (pLog)
+			pLog->Record(_T("INFO:is emmc devices..."));
+		m_bEmmc = true;
+		close(m_hLbaDev);
+	}
 
-    m_log = pLog;
+	m_log = pLog;
 
 	if (m_bEmmc)
 	{
@@ -48,29 +48,29 @@ CRKUsbComm::CRKUsbComm(CRKLog *pLog):CRKComm(pLog)
 		{
 			if (pLog){
 				pLog->Record(_T("ERROR:CRKUsbComm-->open %s failed,err=%s"),EMMC_DRIVER_DEV_VENDOR, strerror(errno));
-			    pLog->Record(_T("ERROR:CRKUsbComm-->try to read %s."),EMMC_DRIVER_DEV);
-            }
+				pLog->Record(_T("ERROR:CRKUsbComm-->try to read %s."),EMMC_DRIVER_DEV);
+			}
 
-		    m_hDev = open(EMMC_DRIVER_DEV,O_RDWR,0);
-            if(m_hDev<0){
-			    if (pLog){
-				    pLog->Record(_T("ERROR:CRKUsbComm-->open %s failed,err=%s"),EMMC_DRIVER_DEV, strerror(errno));
-				    pLog->Record(_T("ERROR:CRKUsbComm-->please to check drmboot.ko."));
-                }
-            }
-            else
-            {
-                if (pLog)
-                    pLog->Record(_T("INFO:CRKUsbComm-->%s=%d"),EMMC_DRIVER_DEV,m_hDev);
-            }
+			m_hDev = open(EMMC_DRIVER_DEV,O_RDWR,0);
+			if(m_hDev<0){
+				if (pLog){
+					pLog->Record(_T("ERROR:CRKUsbComm-->open %s failed,err=%s"),EMMC_DRIVER_DEV, strerror(errno));
+					pLog->Record(_T("ERROR:CRKUsbComm-->please to check drmboot.ko."));
+				}
+			}
+			else
+			{
+				if (pLog)
+					pLog->Record(_T("INFO:CRKUsbComm-->%s=%d"),EMMC_DRIVER_DEV,m_hDev);
+			}
 		}
 		else
 		{
 			if (pLog)
 				pLog->Record(_T("INFO:CRKUsbComm-->%s=%d"),EMMC_DRIVER_DEV_VENDOR,m_hDev);
 		}
-        //get EMMC_DRIVER_DEV_LBA from
-        m_hLbaDev= open(emmc_point, O_RDWR|O_SYNC,0);
+		//get EMMC_DRIVER_DEV_LBA from
+		m_hLbaDev= open(emmc_point, O_RDWR|O_SYNC,0);
 		if (m_hLbaDev<0)
 		{
 			if (pLog)
@@ -92,14 +92,14 @@ CRKUsbComm::CRKUsbComm(CRKLog *pLog):CRKComm(pLog)
 			if (pLog){
 				pLog->Record(_T("ERROR:CRKUsbComm-->open %s failed,err=%d"),NAND_DRIVER_DEV_VENDOR,strerror(errno));
 				pLog->Record(_T("ERROR:CRKUsbComm-->try to read from %s."),NAND_DRIVER_DEV_VENDOR);
-            }
-		    m_hDev = open(NAND_DRIVER_DEV,O_RDWR,0);
+			}
+			m_hDev = open(NAND_DRIVER_DEV,O_RDWR,0);
 			if (pLog){
 				pLog->Record(_T("ERROR:CRKUsbComm-->open %s failed,err=%d"),NAND_DRIVER_DEV,strerror(errno));
-            }else{
-                if (pLog)
-                    pLog->Record(_T("INFO:CRKUsbComm-->%s=%d"),NAND_DRIVER_DEV,m_hDev);
-            }
+			}else{
+				if (pLog)
+					pLog->Record(_T("INFO:CRKUsbComm-->%s=%d"),NAND_DRIVER_DEV,m_hDev);
+			}
 		}
 		else
 		{
@@ -165,6 +165,10 @@ int CRKUsbComm::RKU_ShowNandLBADevice()
 	return iRet;
 }
 
+bool CRKUsbComm::RKU_IsEmmcFlash()
+{
+    return m_bEmmc ? true : false;
+}
 
 CRKUsbComm::~CRKUsbComm()
 {
@@ -196,11 +200,11 @@ int CRKUsbComm::RKU_ReadFlashID(BYTE* lpBuffer)
 
 void rknand_print_hex_data(char *s,unsigned int * buf,unsigned int len)
 {
-        unsigned int i,j,count;
+		unsigned int i,j,count;
 
-        printf("%s\n",s);
-        for(i=0;i<len;i+=4)
-                printf("%08x %08x %08x %08x\n",buf[i],buf[i+1],buf[i+2],buf[i+3]);
+		printf("%s\n",s);
+		for(i=0;i<len;i+=4)
+				printf("%08x %08x %08x %08x\n",buf[i],buf[i+1],buf[i+2],buf[i+3]);
 }
 
 
@@ -223,67 +227,70 @@ int CRKUsbComm::RKU_ReadFlashInfo(BYTE* lpBuffer,UINT *puiRead)
 #else
 /////////////////////////////////////////////////////////////////
 // get flashsize directly
-    if ( m_hLbaDev < 0)
-    {
-         m_hLbaDev = open(NAND_DRIVER_DEV_LBA,O_RDWR|O_SYNC,0);
-        if ( m_hLbaDev < 0)
-        {
-            if (m_log)
-                m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->open %s failed,err=%d"),NAND_DRIVER_DEV_LBA,errno);
-            return ERR_FAILED;
-        }
-        else
-        {
-            if (m_log)
-                m_log->Record(_T("INFO:RKU_ReadFlashInfo-->open %s ok,handle=%d"),NAND_DRIVER_DEV_LBA, m_hLbaDev);
+    m_log->Record(_T("INFO: m_bEmmc = %d, m_hLbaDev = %d"),m_bEmmc, m_hLbaDev);
 
-            ret = lseek64(m_hLbaDev, 0, SEEK_END);
+	if ( m_hLbaDev < 0)
+	{
+		m_hLbaDev = open(NAND_DRIVER_DEV_LBA,O_RDWR|O_SYNC,0);
+		if ( m_hLbaDev < 0)
+		{
+			if (m_log)
+				m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->open %s failed,err=%d"),NAND_DRIVER_DEV_LBA,errno);
+			return ERR_FAILED;
+		}
+		else
+		{
+			if (m_log)
+				m_log->Record(_T("INFO:RKU_ReadFlashInfo-->open %s ok,handle=%d"),NAND_DRIVER_DEV_LBA, m_hLbaDev);
 
-            if (ret < 0)
-            {
-                if (m_log)
-                    m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->get %s file length fail"),NAND_DRIVER_DEV_LBA);
-                return ERR_FAILED;
-            }
-            else
-            {
-                char str[20] = {0};
-                lseek64( m_hLbaDev, 0, SEEK_SET); //reset the cfo to begin
-                snprintf(str, sizeof(str), "%d", ret / 1024);
-                *(UINT*)lpBuffer = (ret / 1024);
-            }
-        }
-    }
-    else
-    {
-        ret = lseek64(m_hLbaDev, 0, SEEK_END);
-        if (ret < 0)
-        {
-            if (m_log) {
-                if (m_bEmmc)
-                    m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->get %s file length fail"),
-                                getenv(EMMC_POINT_NAME));
-                else
-                    m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->get %s file length fail"),
-                                NAND_DRIVER_DEV_LBA);
-            }
-            return ERR_FAILED;
-        }
-        else
-        {
-            char str[20] = {0};
-            lseek64(m_hLbaDev, 0, SEEK_SET); //reset the cfo to begin
-            snprintf(str, sizeof(str), "%d", ret / 1024);
-            *(UINT*)lpBuffer = (ret / 1024);
-        }
-    }
+			ret = lseek64(m_hLbaDev, 0, SEEK_END);
+
+			if (ret < 0)
+			{
+				if (m_log)
+					m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->get %s file length fail"),NAND_DRIVER_DEV_LBA);
+				return ERR_FAILED;
+			}
+			else
+			{
+				char str[20] = {0};
+				lseek64( m_hLbaDev, 0, SEEK_SET); //reset the cfo to begin
+				snprintf(str, sizeof(str), "%d", ret / 1024);
+				*(UINT*)lpBuffer = (ret / 1024);
+			}
+		}
+	}
+	else
+	{
+		ret = lseek64(m_hLbaDev, 0, SEEK_END);
+        m_log->Record(_T("INFO: lseek64 result = %lld"),ret);
+		if (ret < 0)
+		{
+			if (m_log) {
+				if (m_bEmmc)
+					m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->get %s file length fail"),
+								getenv(EMMC_POINT_NAME));
+				else
+					m_log->Record(_T("ERROR:RKU_ReadFlashInfo-->get %s file length fail"),
+								NAND_DRIVER_DEV_LBA);
+			}
+			return ERR_FAILED;
+		}
+		else
+		{
+			char str[20] = {0};
+			lseek64(m_hLbaDev, 0, SEEK_SET); //reset the cfo to begin
+			snprintf(str, sizeof(str), "%d", ret / 1024);
+			*(UINT*)lpBuffer = (ret / 1024);
+		}
+	}
 #endif
 	return ERR_SUCCESS;
 }
 int CRKUsbComm::RKU_ReadLBA(DWORD dwPos,DWORD dwCount,BYTE* lpBuffer,BYTE bySubCode)
 {
-    long long ret;
-    long long dwPosBuf;
+	long long ret;
+	long long dwPosBuf;
 	if (m_hLbaDev<0)
 	{
 		if (!m_bEmmc)
@@ -307,15 +314,15 @@ int CRKUsbComm::RKU_ReadLBA(DWORD dwPos,DWORD dwCount,BYTE* lpBuffer,BYTE bySubC
 	if (m_bEmmc && !CRKAndroidDevice::bGptFlag)
 		dwPos += 8192;
 
-    dwPosBuf = dwPos;
+	dwPosBuf = dwPos;
 
 	ret = lseek64(m_hLbaDev,(off64_t)dwPosBuf*512,SEEK_SET);
 	if (ret<0)
 	{
 		if (m_log){
 			m_log->Record(_T("ERROR:RKU_ReadLBA seek failed,err=%d,ret=%lld."),errno,ret);
-            m_log->Record(_T("the dwPosBuf = dwPosBuf*512,dwPosBuf:%lld!"), dwPosBuf*512);
-        }
+			m_log->Record(_T("the dwPosBuf = dwPosBuf*512,dwPosBuf:%lld!"), dwPosBuf*512);
+		}
 		return ERR_FAILED;
 	}
 	ret = read(m_hLbaDev,lpBuffer,dwCount*512);
@@ -377,7 +384,7 @@ int CRKUsbComm::RKU_TestDeviceReady(DWORD *dwTotal,DWORD *dwCurrent,BYTE bySubCo
 int CRKUsbComm::RKU_WriteLBA(DWORD dwPos,DWORD dwCount,BYTE* lpBuffer,BYTE bySubCode)
 {
 	long long ret;
-    long long dwPosBuf;
+	long long dwPosBuf;
 	if (m_hLbaDev<0)
 	{
 		if (!m_bEmmc)
@@ -402,15 +409,15 @@ int CRKUsbComm::RKU_WriteLBA(DWORD dwPos,DWORD dwCount,BYTE* lpBuffer,BYTE bySub
 	if (m_bEmmc && !CRKAndroidDevice::bGptFlag)
 		dwPos += 8192;
 
-    dwPosBuf = dwPos;
+	dwPosBuf = dwPos;
 
 	ret = lseek64(m_hLbaDev,(off64_t)dwPosBuf*512,SEEK_SET);
 	if (ret<0)
 	{
 		if (m_log){
 			m_log->Record(_T("ERROR:RKU_WriteLBA seek failed,err=%d,ret:%lld"),errno, ret);
-            m_log->Record(_T("the dwPosBuf = dwPosBuf*512,dwPosBuf:%lld!"), dwPosBuf*512);
-        }
+			m_log->Record(_T("the dwPosBuf = dwPosBuf*512,dwPosBuf:%lld!"), dwPosBuf*512);
+		}
 
 		return ERR_FAILED;
 	}
@@ -430,7 +437,7 @@ int CRKUsbComm::RKU_WriteLBA(DWORD dwPos,DWORD dwCount,BYTE* lpBuffer,BYTE bySub
 int CRKUsbComm::RKU_LoaderWriteLBA(DWORD dwPos,DWORD dwCount,BYTE* lpBuffer,BYTE bySubCode)
 {
 	long long ret;
-    long long dwPosBuf;
+	long long dwPosBuf;
 	if (m_hLbaDev<0)
 	{
 		if (!m_bEmmc)
@@ -453,17 +460,17 @@ int CRKUsbComm::RKU_LoaderWriteLBA(DWORD dwPos,DWORD dwCount,BYTE* lpBuffer,BYTE
 		}
 	}
 
-    dwPosBuf = dwPos;
-    //if (m_log)
-    //    m_log->Record(_T("INFO: dwPosBuf = %d ,will seek to pos = 0x%08x"), dwPosBuf, dwPosBuf*512);
+	dwPosBuf = dwPos;
+	//if (m_log)
+	//    m_log->Record(_T("INFO: dwPosBuf = %d ,will seek to pos = 0x%08x"), dwPosBuf, dwPosBuf*512);
 
 	ret = lseek64(m_hLbaDev,(off64_t)dwPosBuf*512,SEEK_SET);
 	if (ret<0)
 	{
 		if (m_log){
 			m_log->Record(_T("ERROR:RKU_WriteLBA seek failed,err=%d,ret:%lld"),errno, ret);
-            m_log->Record(_T("the dwPosBuf = dwPosBuf*512,dwPosBuf:%lld!"), dwPosBuf*512);
-        }
+			m_log->Record(_T("the dwPosBuf = dwPosBuf*512,dwPosBuf:%lld!"), dwPosBuf*512);
+		}
 
 		return ERR_FAILED;
 	}

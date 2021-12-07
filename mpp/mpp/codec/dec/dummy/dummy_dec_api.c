@@ -79,7 +79,7 @@ MPP_RET dummy_dec_init(void *dec, ParserCfg *cfg)
     p = (DummyDec *)dec;
     p->frame_slots  = cfg->frame_slots;
     p->packet_slots = cfg->packet_slots;
-    p->task_count   = cfg->task_count = 2;
+    p->task_count   = 2;
     p->stream       = stream;
     p->stream_size  = stream_size;
     p->task_pkt     = task_pkt;
@@ -125,7 +125,7 @@ MPP_RET dummy_dec_flush(void *dec)
 }
 
 
-MPP_RET dummy_dec_control(void *dec, RK_S32 cmd_type, void *param)
+MPP_RET dummy_dec_control(void *dec, MpiCmd cmd_type, void *param)
 {
     if (NULL == dec) {
         mpp_err_f("found NULL intput\n");

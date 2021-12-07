@@ -25,8 +25,6 @@
 
 #if defined(ARMLINUX)
 #include <ion.h>
-#elif defined(ANDROID)
-#include <linux/ion.h>
 #else
 #include "ion.h"
 #endif
@@ -206,13 +204,15 @@ static RK_S32 find_dir_in_path(char *path, const char *dir_name,
     return new_path_len;
 }
 
+#define MAX_PATH_NAME_SIZE  256
+
 static RK_S32 check_sysfs_iommu()
 {
     RK_U32 i = 0;
     RK_U32 dts_info_found = 0;
     RK_U32 ion_info_found = 0;
     RK_S32 ret = ION_DETECT_IOMMU_DISABLE;
-    char path[256];
+    char path[MAX_PATH_NAME_SIZE];
     static char *dts_devices[] = {
         "vpu_service",
         "hevc_service",
@@ -278,7 +278,7 @@ typedef struct {
 
 static const char *dev_ion = "/dev/ion";
 static RK_S32 ion_heap_id = -1;
-static RK_U32 ion_heap_mask = ION_HEAP_SYSTEM_MASK;
+static RK_U32 ion_heap_mask = (1 << ION_HEAP_TYPE_SYSTEM);
 static pthread_mutex_t lock;
 
 static MPP_RET allocator_ion_open(void **ctx, MppAllocatorCfg *cfg)
@@ -293,7 +293,7 @@ static MPP_RET allocator_ion_open(void **ctx, MppAllocatorCfg *cfg)
 
     *ctx = NULL;
 
-    fd = open(dev_ion, O_RDWR);
+    fd = open(dev_ion, O_RDWR | O_CLOEXEC);
     if (fd < 0) {
         mpp_err("open %s failed!\n", dev_ion);
         return MPP_ERR_UNKNOW;

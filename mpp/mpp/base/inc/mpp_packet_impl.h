@@ -22,7 +22,22 @@
 #define MPP_PACKET_FLAG_EOS             (0x00000001)
 #define MPP_PACKET_FLAG_EXTRA_DATA      (0x00000002)
 #define MPP_PACKET_FLAG_INTERNAL        (0x00000004)
-#define MPP_PACKET_FLAG_INTRA           (0x00000008)
+
+typedef union MppPacketStatus_t {
+    RK_U32  val;
+    struct {
+        RK_U32  eos         : 1;
+        RK_U32  extra_data  : 1;
+        RK_U32  internal    : 1;
+        /* packet is inputed on reset mark as discard */
+        RK_U32  discard     : 1;
+
+        /* for slice input output */
+        RK_U32  partition   : 1;
+        RK_U32  soi         : 1;
+        RK_U32  eoi         : 1;
+    };
+} MppPacketStatus;
 
 /*
  * mpp_packet_imp structure
@@ -35,28 +50,40 @@
  * dts      : packet dts
  */
 typedef struct MppPacketImpl_t {
-    const char  *name;
+    const char      *name;
 
-    void        *data;
-    void        *pos;
-    size_t      size;
-    size_t      length;
+    void            *data;
+    void            *pos;
+    size_t          size;
+    size_t          length;
 
-    RK_S64      pts;
-    RK_S64      dts;
+    RK_S64          pts;
+    RK_S64          dts;
 
-    RK_U32      flag;
+    MppPacketStatus status;
+    RK_U32          flag;
 
-    MppBuffer   buffer;
-    MppMeta     meta;
+    MppBuffer       buffer;
+    MppMeta         meta;
 } MppPacketImpl;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /*
  * mpp_packet_reset is only used internelly and should NOT be used outside
  */
 MPP_RET mpp_packet_reset(MppPacketImpl *packet);
+MPP_RET mpp_packet_copy(MppPacket dst, MppPacket src);
+MPP_RET mpp_packet_append(MppPacket dst, MppPacket src);
+MPP_RET mpp_packet_set_status(MppPacket packet, MppPacketStatus status);
+MPP_RET mpp_packet_get_status(MppPacket packet, MppPacketStatus *status);
 
 /* pointer check function */
 MPP_RET check_is_mpp_packet(void *ptr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /*__MPP_PACKET_IMPL_H__*/

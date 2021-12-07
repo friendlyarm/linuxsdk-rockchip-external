@@ -17,8 +17,6 @@
 #ifndef __HAL_VP8E_TABLE_H__
 #define __HAL_VP8E_TABLE_H__
 
-#include "rk_type.h"
-
 #include "hal_vp8e_base.h"
 #include "hal_vp8e_putbit.h"
 
@@ -58,7 +56,7 @@ extern RK_S32 const intra4_mode_tree_penalty_tbl[];
 
 extern RK_S32 const intra16_mode_tree_penalty_tbl[];
 
-const RK_S32 const inter_level_tbl[128];
+extern const RK_S32 inter_level_tbl[128];
 
 extern RK_S32 const offset_tbl[];
 

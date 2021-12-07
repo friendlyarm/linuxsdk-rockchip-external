@@ -45,6 +45,7 @@ public:
 
     void set_sensor_subdev (SmartPtr<V4l2SubDevice> &subdev);
     void set_vcm_subdev (SmartPtr<V4l2SubDevice> &subdev);
+    void set_fl_subdev (SmartPtr<V4l2SubDevice> subdev[]);
     void set_isp_stats_device(SmartPtr<V4l2Device> &dev);
     void set_isp_params_device(SmartPtr<V4l2Device> &dev);
     void set_isp_ver(int isp_ver) { _isp_ver = isp_ver; }
@@ -60,24 +61,29 @@ public:
     XCamReturn get_sensor_mode_data (struct isp_supplemental_sensor_mode_data &sensor_mode_data,
                                      int frame_id = -1);
     XCamReturn get_isp_parameter (struct rkisp_parameters& parameters, int frame_id = -1);
+    XCamReturn get_flash_status (rkisp_flash_setting_t& flash_settings, int frame_id = -1);
     XCamReturn get_frame_softime (int64_t &sof_tim);
     XCamReturn get_vcm_time (struct rk_cam_vcm_tim *vcm_tim);
 
     XCamReturn get_3a_statistics (SmartPtr<X3aIspStatistics> &stats);
-    XCamReturn set_3a_config (X3aIspConfig *config);
+    XCamReturn set_3a_config (X3aIspConfig *config, bool first = false);
 
-    void push_3a_exposure (X3aIspExposureResult *res);
-    void push_3a_exposure (struct rkisp_exposure isp_exposure);
+    void push_3a_exposure (X3aIspExposureResult *res, bool first = false);
+    void push_3a_exposure (struct rkisp_exposure isp_exposure, bool first = false);
 
     XCamReturn set_3a_exposure (X3aIspExposureResult *res);
     XCamReturn set_3a_exposure (struct rkisp_exposure isp_exposure);
-    XCamReturn set_3a_focus (X3aIspFocusResult *res);
+    XCamReturn set_3a_focus (X3aIspFocusResult *res, bool first = false);
 
-    void exposure_delay(struct rkisp_exposure isp_exposure);
+    void exposure_delay(struct rkisp_exposure isp_exposure, bool first = false);
 #if RKISP
     void dump_isp_config(struct rkisp1_isp_params_cfg* isp_params,
                                 struct rkisp_parameters *isp_cfg);
 #endif
+#define ISP_CONTRLLER_FLASH_MAX_NUM 2
+    XCamReturn set_3a_fl (int fl_mode, float fl_intensity[ISP_CONTRLLER_FLASH_MAX_NUM],
+                          int fl_timeout, int fl_on);
+    int get_flash_info ();
 
 private:
 
@@ -87,7 +93,6 @@ private:
                              struct rkisp1_isp_params_cfg *full_params);
     XCamReturn set_3a_config_sync ();
     XCamReturn apply_otp_config (struct rkisp_parameters *isp_cfg);
-
 private:
     volatile bool            _is_exit;
     /* rkisp1x */
@@ -103,6 +108,8 @@ private:
     SmartPtr<V4l2Device>     _isp_params_device;
 
     SmartPtr<V4l2SubDevice>  _vcm_device;
+    SmartPtr<V4l2SubDevice>  _fl_device[ISP_CONTRLLER_FLASH_MAX_NUM];
+    int                      _active_fl_num;
     bool                     _is_bw_sensor;
     /* frame sync */
 #define EXPOSURE_GAIN_DELAY 3
@@ -114,6 +121,8 @@ private:
     /* exposure syncronization */
     struct rkisp_exposure *_exposure_queue;
     int                   _cur_apply_index;
+    int                   _max_exp_que_len;
+    int                   _used_exp_que_len;
 
     Mutex             _mutex;
     XCam::Cond        _frame_sequence_cond;
@@ -125,11 +134,29 @@ private:
         struct rkisp1_isp_params_cfg isp_params;
         struct rkisp_awb_algo awb_algo_results;
         int64_t frame_sof_ts;
+        rkisp_flash_setting_t flash_settings;
     };
     std::map<int, struct rkisp_effect_params> _effecting_ispparm_map;
     std::vector<struct rkisp_parameters> _pending_ispparams_queue;
     int _isp_acq_out_width;
     int _isp_acq_out_height;
+    rkisp_flash_setting_t _flash_settings;
+
+    enum RKISP_V4L_FLASH_QUERY_TYPE_E {
+       RKISP_V4L_FLASH_QUERY_TYPE_E_MIN,
+       RKISP_V4L_FLASH_QUERY_TYPE_E_MAX,
+       RKISP_V4L_FLASH_QUERY_TYPE_E_DEFAULT,
+       RKISP_V4L_FLASH_QUERY_TYPE_E_STEP,
+       RKISP_V4L_FLASH_QUERY_TYPE_E_LAST,
+    };
+
+    struct rkisp_v4l_flash_info_s {
+      // [min, max, default, step]
+      int torch_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_LAST];
+      int flash_power_info[RKISP_V4L_FLASH_QUERY_TYPE_E_LAST];
+    };
+
+    struct rkisp_v4l_flash_info_s _v4l_flash_info[ISP_CONTRLLER_FLASH_MAX_NUM];
 };
 
 };

@@ -26,6 +26,7 @@
 #include <gio/gio.h>
 
 #include "bluez.h"
+#include "bluez-a2dp.h"
 #include "shared/ctl-proto.h"
 
 /* Maximal number of clients connected to the controller. */
@@ -91,22 +92,40 @@ struct ba_config {
 		int features_rfcomm_ag;
 	} hfp;
 
+	struct {
+
+		/* NULL-terminated list of available A2DP codecs */
+		const struct bluez_a2dp_codec **codecs;
+
+		/* Control audio volume natively by the connected device. The disadvantage
+		 * of this control type is a monophonic volume change. */
+		bool volume;
+
+		/* Support for monophonic sound in the A2DP profile is mandatory for
+		 * sink and semi-mandatory for source. So, if one wants only the bare
+		 * minimum, it would be possible - e.g. due to bandwidth limitations. */
+		bool force_mono;
+		/* The sampling rates of 44.1 kHz (aka Audio CD) and 48 kHz are mandatory
+		 * for sink endpoint and semi-mandatory for source. It is then possible
+		 * to force lower sampling in order to save Bluetooth bandwidth. */
+		bool force_44100;
+
+		/* The number of seconds for keeping A2DP transport alive after PCM has
+		 * been closed. One might set this value to negative number for infinite
+		 * time. This option applies for the source profile only. */
+		int keep_alive;
+
+	} a2dp;
+
 #if ENABLE_AAC
 	bool aac_afterburner;
 	uint8_t aac_vbr_mode;
 #endif
 
-	/* Support for monophonic sound in the A2DP profile is mandatory for
-	 * sink and semi-mandatory for source. So, if one wants only the bare
-	 * minimum, it would be possible - e.g. due to bandwidth limitations. */
-	bool a2dp_force_mono;
-	/* The sampling rates of 44.1 kHz (aka Audio CD) and 48 kHz are mandatory
-	 * for sink endpoint and semi-mandatory for source. It is then possible
-	 * to force lower sampling in order to save Bluetooth bandwidth. */
-	bool a2dp_force_44100;
-	/* Control audio volume natively by the connected device. The disadvantage
-	 * of this control type is a monophonic volume change. */
-	bool a2dp_volume;
+#if ENABLE_LDAC
+	bool ldac_abr;
+	uint8_t ldac_eqmid;
+#endif
 
 };
 

@@ -16,6 +16,47 @@ if (DEFINED  PCBA_3229GVA)
 add_definitions("-DPCBA_3229GVA")
 endif()
 
+if (DEFINED  PCBA_3326)
+add_definitions("-DPCBA_3326")
+endif()
+
+if (DEFINED  PCBA_1808)
+add_definitions("-DPCBA_1808")
+endif()
+
+if (DEFINED  PCBA_PX30)
+add_definitions("-DPCBA_PX30")
+endif()
+
+if (DEFINED  PCBA_3288)
+add_definitions("-DPCBA_3288")
+endif()
+
+if (DEFINED  PCBA_3328)
+add_definitions("-DPCBA_3328")
+endif()
+
+if (DEFINED  PCBA_3399)
+add_definitions("-DPCBA_3399")
+endif()
+
+if (DEFINED  PCBA_3399PRO)
+add_definitions("-DPCBA_3399PRO")
+endif()
+
+if (DEFINED  PCBA_1126_1109)
+add_definitions("-DPCBA_1126_1109")
+endif()
+
+if (DEFINED  PCBA_356X)
+add_definitions("-DPCBA_356X")
+endif()
+
+if (DEFINED  PCBA_3588)
+add_definitions("-DPCBA_3588")
+endif()
+
+
 set(INSTALL_TARGET_DIR /data)
 
 set(SRC_LIST
@@ -53,6 +94,7 @@ set(SRC_LIST mic_test_Linux/record_test.c mic_test_Linux/vibrate_test.c)
 add_library(mictest ${SRC_LIST})
 set_property(TARGET mictest PROPERTY POSITION_INDEPENDENT_CODE ON)
 
+set(RINGTEST Y)
 set(SRC_LIST echo_ringmic_test.c)
 add_executable( echo_ringmic_test ${SRC_LIST} )
 target_link_libraries(echo_ringmic_test mictest)
@@ -71,6 +113,8 @@ endif()
 
 if (DEFINED  PCBA_PX3SE)
 MESSAGE(${CMAKE_CURRENT_SOURCE_DIR} "  ====== SOURCE_DIR PCBA_PX3SE ========  ")
+
+set(RINGTEST Y)
 set(SRC_LIST echo_ringmic_test.c)
 link_libraries(${CMAKE_CURRENT_SOURCE_DIR}/rk_pcba_test/libmictest.so)
 add_executable( echo_ringmic_test ${SRC_LIST} )
@@ -82,7 +126,24 @@ MESSAGE(${CMAKE_CURRENT_SOURCE_DIR} "==CMAKE_CURRENT_SOURCE_DIR=")
 MESSAGE(${CMAKE_STRIP}  "== CMAKE_STRIP")
 MESSAGE(${CMAKE_C_COMPILER} "==CMAKE_C_COMPILER")
 
+if (RINGTEST)
 install(TARGETS echo_pcbatest_server echo_ringmic_test DESTINATION ${INSTALL_TARGET_DIR})
+else()
+install(TARGETS echo_pcbatest_server DESTINATION ${INSTALL_TARGET_DIR})
+endif()
+
+if (DEFINED  PCBA_1808)
+MESSAGE(${CMAKE_CURRENT_SOURCE_DIR} "  ====== SOURCE_DIR PCBA_1808 ========  ")
+set(SRC_LIST echo_npu_usb_screen_test.c)
+add_executable( echo_npu_usb_screen_test ${SRC_LIST} )
+install(TARGETS echo_npu_usb_screen_test DESTINATION ${INSTALL_TARGET_DIR})
+endif()
+
+if (DEFINED PCBA_356X)
+MESSAGE(${CMAKE_CURRENT_SOURCE_DIR} "  ===========SOURCE DIR PCBA_356X ===========")
+else()
+message(${CMAKE_CURRENT_SOURCE_DIR} " #Error: not find define PCBA_356X")
+endif()
 
 # pcba with ui
 if (DEFINED  PCBA_WITH_UI)

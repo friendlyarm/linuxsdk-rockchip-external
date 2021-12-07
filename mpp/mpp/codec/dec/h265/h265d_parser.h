@@ -33,10 +33,13 @@
 #include <string.h>
 
 #include "mpp_mem.h"
-#include "mpp_dec.h"
 #include "mpp_bitread.h"
+#include "mpp_buf_slot.h"
+#include "mpp_mem_pool.h"
 
+#include "hal_task.h"
 #include "h265d_codec.h"
+#include "h265_syntax.h"
 
 extern RK_U32 h265d_debug;
 
@@ -53,108 +56,7 @@ extern RK_U32 h265d_debug;
 
 #define h265d_dbg(flag, fmt, ...) _mpp_dbg(h265d_debug, flag, fmt, ## __VA_ARGS__)
 
-#define MAX_WIDTH    (4096)
-#define MAX_HEIGHT   (2304)
-
-#define MAX_DPB_SIZE 17 // A.4.1
-#define MAX_REFS 16
-
-/**
- * 7.4.2.1
- */
-#define MAX_SUB_LAYERS 7
-#define MAX_VPS_COUNT 16
-#define MAX_SPS_COUNT 16
-#define MAX_PPS_COUNT 64
-#define MAX_SHORT_TERM_RPS_COUNT 64
-#define MAX_CU_SIZE 128
-
-//TODO: check if this is really the maximum
-#define MAX_TRANSFORM_DEPTH 5
-
-#define MAX_TB_SIZE 32
-#define MAX_PB_SIZE 64
-#define MAX_LOG2_CTB_SIZE 6
-#define MAX_QP 51
-#define DEFAULT_INTRA_TC_OFFSET 2
-
-#define HEVC_CONTEXTS 183
-
-#define MRG_MAX_NUM_CANDS     5
-
-#define L0 0
-#define L1 1
-
-#define EPEL_EXTRA_BEFORE 1
-#define EPEL_EXTRA_AFTER  2
-#define EPEL_EXTRA        3
-#define QPEL_EXTRA_BEFORE 3
-#define QPEL_EXTRA_AFTER  4
-#define QPEL_EXTRA        7
-
-#define EDGE_EMU_BUFFER_STRIDE 80
-
 #define MAX_FRAME_SIZE 2048000
-#define MPP_INPUT_BUFFER_PADDING_SIZE 8
-
-#define MPP_PROFILE_HEVC_MAIN                        1
-#define MPP_PROFILE_HEVC_MAIN_10                     2
-#define MPP_PROFILE_HEVC_MAIN_STILL_PICTURE          3
-
-
-/**
- * Value of the luma sample at position (x, y) in the 2D array tab.
- */
-#define IS_IDR(s) (s->nal_unit_type == NAL_IDR_W_RADL || s->nal_unit_type == NAL_IDR_N_LP)
-#define IS_BLA(s) (s->nal_unit_type == NAL_BLA_W_RADL || s->nal_unit_type == NAL_BLA_W_LP || \
-                   s->nal_unit_type == NAL_BLA_N_LP)
-#define IS_IRAP(s) (s->nal_unit_type >= 16 && s->nal_unit_type <= 23)
-
-/**
- * Table 7-3: NAL unit type codes
- */
-enum NALUnitType {
-    NAL_TRAIL_N    = 0,
-    NAL_TRAIL_R    = 1,
-    NAL_TSA_N      = 2,
-    NAL_TSA_R      = 3,
-    NAL_STSA_N     = 4,
-    NAL_STSA_R     = 5,
-    NAL_RADL_N     = 6,
-    NAL_RADL_R     = 7,
-    NAL_RASL_N     = 8,
-    NAL_RASL_R     = 9,
-    NAL_BLA_W_LP   = 16,
-    NAL_BLA_W_RADL = 17,
-    NAL_BLA_N_LP   = 18,
-    NAL_IDR_W_RADL = 19,
-    NAL_IDR_N_LP   = 20,
-    NAL_CRA_NUT    = 21,
-    NAL_VPS        = 32,
-    NAL_SPS        = 33,
-    NAL_PPS        = 34,
-    NAL_AUD        = 35,
-    NAL_EOS_NUT    = 36,
-    NAL_EOB_NUT    = 37,
-    NAL_FD_NUT     = 38,
-    NAL_SEI_PREFIX = 39,
-    NAL_SEI_SUFFIX = 40,
-};
-
-enum RPSType {
-    ST_CURR_BEF = 0,
-    ST_CURR_AFT,
-    ST_FOLL,
-    LT_CURR,
-    LT_FOLL,
-    NB_RPS_TYPE,
-};
-
-enum SliceType {
-    B_SLICE = 0,
-    P_SLICE = 1,
-    I_SLICE = 2,
-};
 
 typedef struct ShortTermRPS {
     RK_U32 num_negative_pics;
@@ -428,6 +330,7 @@ typedef struct HEVCPPS {
     RK_U8 slice_header_extension_present_flag;
 
     RK_U8 pps_extension_flag;
+    RK_U8 pps_range_extensions_flag;
     RK_U8 pps_extension_data_flag;
     // Inferred parameters
     RK_U32 *column_width;  ///< ColumnWidth
@@ -443,7 +346,7 @@ typedef struct SliceHeader {
     ///< address (in raster order) of the first block in the current slice
     RK_U32   slice_addr;
 
-    enum SliceType slice_type;
+    SliceType slice_type;
 
     RK_S32 pic_order_cnt_lsb;
 
@@ -570,7 +473,7 @@ typedef struct HEVCLocalContext {
 
 
 typedef struct REF_PIC_DEC_INFO {
-    RK_U8          dbp_index;
+    RK_U8          dpb_index;
     RK_U8          is_long_term;
 } REF_PIC_DEC_INFO;
 
@@ -587,6 +490,8 @@ typedef struct HEVCContext {
     RK_U8 *vps_list[MAX_VPS_COUNT];
     RK_U8 *sps_list[MAX_SPS_COUNT];
     RK_U8 *pps_list[MAX_PPS_COUNT];
+
+    MppMemPool sps_pool;
 
     SliceHeader sh;
 
@@ -659,17 +564,17 @@ typedef struct HEVCContext {
     RK_U8     sps_list_of_updated[MAX_SPS_COUNT];///< zrh add
     RK_U8     pps_list_of_updated[MAX_PPS_COUNT];///< zrh add
 
-    RK_S32         rps_used[16];
-    RK_S32         nb_rps_used;
+    RK_S32    rps_used[16];
+    RK_S32    nb_rps_used;
     REF_PIC_DEC_INFO rps_pic_info[600][2][15];      // zrh add
     RK_U8     lowdelay_flag[600];
     RK_U8     rps_bit_offset[600];
     RK_U8     rps_bit_offset_st[600];
     RK_U8     slice_nb_rps_poc[600];
 
-    RK_S32        frame_size;
+    RK_S32    frame_size;
 
-    RK_S32         framestrid;
+    RK_S32    framestrid;
 
     RK_U32    nb_frame;
 
@@ -692,7 +597,15 @@ typedef struct HEVCContext {
     RK_S64 pts;
     RK_U8  has_get_eos;
     RK_U8  miss_ref_flag;
-    IOInterruptCB notify_cb;
+    RK_U8  pre_pps_id;
+    RK_U8  ps_need_upate;
+
+    /*temporary storage for slice_cut_param*/
+    RK_U32  start_bit;
+    RK_U32  end_bit;
+    void   *pre_pps_data;
+    RK_S32  pps_len;
+    RK_S32  pps_buf_size;
 } HEVCContext;
 
 RK_S32 mpp_hevc_decode_short_term_rps(HEVCContext *s, ShortTermRPS *rps,

@@ -18,177 +18,34 @@
 #ifndef __HAL_TASK__
 #define __HAL_TASK__
 
-#include "rk_mpi.h"
+#include "mpp_err.h"
+#include "hal_dec_task.h"
+#include "hal_enc_task.h"
 
-#define MAX_DEC_REF_NUM     17
-
-typedef enum HalTaskStatus_e {
-    TASK_IDLE,
-    TASK_PREPARE,
-    TASK_WAIT_PROC,
-    TASK_PROCESSING,
-    TASK_PROC_DONE,
-    TASK_BUTT,
-} HalTaskStatus;
-
-typedef struct IOInterruptCB {
-    MPP_RET (*callBack)(void*, void*);
-    void   *opaque;
-} IOInterruptCB;
-
-typedef struct IOCallbackCtx_t {
-    RK_U32      device_id;
-    void        *task;
-    RK_U32      *regs;
-    RK_U32       hard_err;
-} IOCallbackCtx;
-
-/*
- * modified by parser
- *
- * number   : the number of the data pointer array element
- * data     : the address of the pointer array, parser will add its data here
- */
-typedef struct MppSyntax_t {
-    RK_U32              number;
-    void                *data;
-} MppSyntax;
-
-/*
- *  HalTask memory layout:
- *
- *  +----^----+ +----------------------+ +----^----+
- *       |      |     context type     |      |
- *       |      +----------------------+      |
- *       +      |      coding type     |      |
- *     header   +----------------------+      |
- *       +      |         size         |      |
- *       |      +----------------------+      |
- *       |      |     pointer count    |      |
- *  +----v----+ +----------------------+      |
- *              |                      |      |
- *              |       pointers       |      |
- *              |                      |      +
- *              +----------------------+    size
- *              |                      |      +
- *              |        data_0        |      |
- *              |                      |      |
- *              +----------------------+      |
- *              |                      |      |
- *              |        data_1        |      |
- *              |                      |      |
- *              +----------------------+      |
- *              |                      |      |
- *              |                      |      |
- *              |        data_2        |      |
- *              |                      |      |
- *              |                      |      |
- *              +----------------------+ +----v----+
- */
-
-#define HAL_ENC_TASK_ERR_INIT         0x00000001
-#define HAL_ENC_TASK_ERR_ALLOC        0x00000010
-#define HAL_ENC_TASK_ERR_EXTRAINFO    0x00000100
-#define HAL_ENC_TASK_ERR_GENREG       0x00001000
-#define HAL_ENC_TASK_ERR_START        0x00010000
-#define HAL_ENC_TASK_ERR_WAIT         0x00100000
-
-
-typedef union HalDecTaskFlag_t {
+typedef union HalDecVprocTaskFlag_t {
     RK_U32          val;
+
     struct {
         RK_U32      eos              : 1;
         RK_U32      info_change      : 1;
-
-        /*
-         * Different error flags for task
-         *
-         * parse_err :
-         * When set it means fatal error happened at parsing stage
-         * This task should not enable hardware just output a empty frame with
-         * error flag.
-         *
-         * ref_err :
-         * When set it means current task is ok but it contains reference frame
-         * with error which will introduce error pixels to this frame.
-         *
-         * used_for_ref :
-         * When set it means this output frame will be used as reference frame
-         * for further decoding. When there is error on decoding this frame
-         * if used_for_ref is set then the frame will set errinfo flag
-         * if used_for_ref is cleared then the frame will set discard flag.
-         */
-        RK_U32      parse_err        : 1;
-        RK_U32      ref_err          : 1;
-        RK_U32      used_for_ref     : 1;
-
-        RK_U32      wait_done        : 1;
     };
-} HalDecTaskFlag;
+} HalDecVprocTaskFlag;
 
-typedef struct HalEncTaskFlag_t {
-    RK_U32 err;
-} HalEncTaskFlag;
+typedef struct HalDecVprocTask_t {
+    // input slot index for post-process
+    HalDecVprocTaskFlag     flags;
 
-typedef struct HalDecTask_t {
-    // set by parser to signal that it is valid
-    RK_U32          valid;
-    HalDecTaskFlag  flags;
-
-    // previous task hardware working status
-    // when hardware error happen status is not zero
-    RK_U32          prev_status;
-    // current tesk protocol syntax information
-    MppSyntax       syntax;
-
-    // packet need to be copied to hardware buffer
-    // parser will create this packet and mpp_dec will copy it to hardware bufffer
-    MppPacket       input_packet;
-
-    // current task input slot index
-    RK_S32          input;
-
-    RK_S32          reg_index;
-    // for test purpose
-    // current tesk output slot index
-    RK_S32          output;
-
-    // current task reference slot index, -1 for unused
-    RK_S32          refer[MAX_DEC_REF_NUM];
-} HalDecTask;
-
-typedef struct HalEncTask_t {
-    RK_U32          valid;
-
-    // current tesk protocol syntax information
-    MppSyntax       syntax;
-
-    // current tesk output stream buffer
-    MppBuffer       output;
-    RK_U32          length;
-
-    // current tesk input slot buffer
-    MppBuffer       input;
-
-    // current mv info output buffer
-    MppBuffer       mv_info;
-
-    RK_U32          is_intra;
-
-    HalEncTaskFlag  flags;
-
-} HalEncTask;
-
+    RK_S32                  input;
+} HalDecVprocTask;
 
 typedef struct HalTask_u {
+    HalTaskHnd              hnd;
     union {
-        HalDecTask  dec;
-        HalEncTask  enc;
+        HalDecTask          dec;
+        HalEncTask          enc;
+        HalDecVprocTask     dec_vproc;
     };
 } HalTaskInfo;
-
-typedef void* HalTaskHnd;
-typedef void* HalTaskGroup;
 
 #ifdef __cplusplus
 extern "C" {
@@ -200,7 +57,7 @@ extern "C" {
  * NOTE: use mpp_list to implement
  *       the count means the max task waiting for process
  */
-MPP_RET hal_task_group_init(HalTaskGroup *group, MppCtxType type, RK_S32 count);
+MPP_RET hal_task_group_init(HalTaskGroup *group, RK_S32 count);
 MPP_RET hal_task_group_deinit(HalTaskGroup group);
 
 /*

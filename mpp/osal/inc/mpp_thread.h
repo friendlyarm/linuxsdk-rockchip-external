@@ -86,10 +86,18 @@ public:
     class Autolock
     {
     public:
-        inline Autolock(Mutex& mutex) : mLock(mutex)  { mLock.lock(); }
-        inline Autolock(Mutex* mutex) : mLock(*mutex) { mLock.lock(); }
-        inline ~Autolock() { mLock.unlock(); }
+        inline Autolock(Mutex* mutex, RK_U32 enable = 1) :
+            mEnabled(enable),
+            mLock(*mutex) {
+            if (mEnabled)
+                mLock.lock();
+        }
+        inline ~Autolock() {
+            if (mEnabled)
+                mLock.unlock();
+        }
     private:
+        RK_S32 mEnabled;
         Mutex& mLock;
     };
 
@@ -144,6 +152,7 @@ public:
     RK_S32 timedwait(Mutex& mutex, RK_S64 timeout);
     RK_S32 timedwait(Mutex* mutex, RK_S64 timeout);
     RK_S32 signal();
+    RK_S32 broadcast();
 
 private:
     pthread_cond_t mCond;
@@ -187,6 +196,10 @@ inline RK_S32 Condition::signal()
 {
     return pthread_cond_signal(&mCond);
 }
+inline RK_S32 Condition::broadcast()
+{
+    return pthread_cond_broadcast(&mCond);
+}
 
 class MppMutexCond
 {
@@ -194,11 +207,14 @@ public:
     MppMutexCond() {};
     ~MppMutexCond() {};
 
-    void lock()     { mLock.lock(); }
-    void unlock()   { mLock.unlock(); }
-    void wait()     { mCondition.wait(mLock); }
-    void signal()   { mCondition.signal(); }
-    Mutex *mutex()  { return &mLock; }
+    void    lock()      { mLock.lock(); }
+    void    unlock()    { mLock.unlock(); }
+    void    trylock()   { mLock.trylock(); }
+    void    wait()      { mCondition.wait(mLock); }
+    RK_S32  wait(RK_S64 timeout) { return mCondition.timedwait(mLock, timeout); }
+    void    signal()    { mCondition.signal(); }
+    void    broadcast() { mCondition.broadcast(); }
+    Mutex   *mutex()    { return &mLock; }
 
 private:
     Mutex           mLock;

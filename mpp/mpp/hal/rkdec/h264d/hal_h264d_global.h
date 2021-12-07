@@ -22,6 +22,7 @@
 #include "mpp_hal.h"
 #include "mpp_log.h"
 #include "mpp_device.h"
+#include "hal_bufs.h"
 
 #include "dxva_syntax.h"
 #include "h264d_syntax.h"
@@ -35,37 +36,37 @@
 
 #define H264D_DBG_HARD_MODE         (0x00000010)
 
-extern RK_U32 rkv_h264d_hal_debug;
+extern RK_U32 hal_h264d_debug;
 
 
 #define H264D_DBG(level, fmt, ...)\
 do {\
-    if (level & rkv_h264d_hal_debug)\
+    if (level & hal_h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
 
 #define H264D_ERR(fmt, ...)\
 do {\
-    if (H264D_DBG_ERROR & rkv_h264d_hal_debug)\
+    if (H264D_DBG_ERROR & hal_h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
 #define ASSERT(val)\
 do {\
-    if (H264D_DBG_ASSERT & rkv_h264d_hal_debug)\
+    if (H264D_DBG_ASSERT & hal_h264d_debug)\
         { mpp_assert(val); }\
 } while (0)
 
 #define H264D_WARNNING(fmt, ...)\
 do {\
-    if (H264D_DBG_WARNNING & rkv_h264d_hal_debug)\
+    if (H264D_DBG_WARNNING & hal_h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
 #define H264D_LOG(fmt, ...)\
 do {\
-    if (H264D_DBG_LOG & rkv_h264d_hal_debug)\
+    if (H264D_DBG_LOG & hal_h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
@@ -121,14 +122,16 @@ typedef struct h264d_hal_ctx_t {
     HalDecTask               *in_task;
     MppBufSlots              frame_slots;
     MppBufSlots              packet_slots;
+    MppDecCfgSet             *cfg;
     MppBufferGroup           buf_group;
+    HalBufs                  cmv_bufs;
+    RK_S32                   mv_size;
+    RK_S32                   mv_count;
 
-    IOInterruptCB            init_cb;
-    MppDevCtx                dev_ctx;
+    MppCbCtx                 *dec_cb;
+    MppDev                   dev;
     void                     *reg_ctx;
     RK_U32                   fast_mode;
 } H264dHalCtx_t;
-
-
 
 #endif /*__HAL_H264D_GLOBAL_H__*/

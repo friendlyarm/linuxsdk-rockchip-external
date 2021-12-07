@@ -272,6 +272,10 @@
 /* Define if include IMPS2 mouse subdriver */
 #cmakedefine _MGCONSOLE_IMPS2      1
 
+/* Define if include USB mouse subdriver */
+#cmakedefine _MGCONSOLE_USB        1
+
+
 /* Define if include MS mouse subdriver */
 #cmakedefine _MGCONSOLE_MS         1
 

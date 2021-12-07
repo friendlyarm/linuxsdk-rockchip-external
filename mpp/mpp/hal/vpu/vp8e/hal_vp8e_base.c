@@ -27,6 +27,7 @@
 #include "hal_vp8e_putbit.h"
 #include "hal_vp8e_table.h"
 #include "hal_vp8e_debug.h"
+#include "vepu_common.h"
 
 static MPP_RET set_frame_params(void *hal)
 {
@@ -440,12 +441,8 @@ static MPP_RET set_new_frame(void *hal)
     hw_cfg->output_strm_size &= (~0x07);
 
     {
-        RK_S32 offset = hw_cfg->output_strm_base >> 10;
-        RK_S32 fd = hw_cfg->output_strm_base & 0x3ff;
-
-        offset += ctx->bitbuf[1].byte_cnt;
-        hw_cfg->output_strm_base = fd | ((offset & (~7)) << 10);
-        hw_cfg->first_free_bit = (offset & 0x07) * 8;
+        hw_cfg->output_strm_offset += ctx->bitbuf[1].byte_cnt;
+        hw_cfg->first_free_bit = (hw_cfg->output_strm_offset & 0x07) * 8;
     }
 
     if (hw_cfg->first_free_bit != 0) {
@@ -979,10 +976,7 @@ static MPP_RET set_parameter(void *hal)
 
     ctx->mb_per_frame = width / 16 * height / 16;
     ctx->mb_per_row = width / 16;
-    ctx->mb_per_col = width / 16;
-
-    ctx->gop_len = ctx->cfg->rc.gop;
-    ctx->bit_rate = ctx->cfg->rc.bps_target;
+    ctx->mb_per_col = height / 16;
 
     sps->pic_width_in_pixel    = width;
     sps->pic_height_in_pixel   = height;
@@ -1113,84 +1107,14 @@ static MPP_RET set_parameter(void *hal)
     }
 
     hw_cfg->r_mask_msb = hw_cfg->g_mask_msb = hw_cfg->b_mask_msb = 0;
-    switch (set->format) {
-    case MPP_FMT_YUV420P:
-        hw_cfg->input_format = INPUT_YUV420PLANAR;
-        break;
-    case MPP_FMT_YUV420SP:
-        hw_cfg->input_format = INPUT_YUV420SEMIPLANAR;
-        break;
-    case MPP_FMT_YUV422_YUYV:
-        hw_cfg->input_format = INPUT_YUYV422INTERLEAVED;
-        break;
-    case MPP_FMT_YUV422_UYVY:
-        hw_cfg->input_format = INPUT_UYVY422INTERLEAVED;
-        break;
-    case MPP_FMT_RGB565:
-        hw_cfg->input_format = INPUT_RGB565;
-        hw_cfg->r_mask_msb = 15;
-        hw_cfg->g_mask_msb = 10;
-        hw_cfg->b_mask_msb = 4;
-        break;
-    case MPP_FMT_BGR565:
-        hw_cfg->input_format = INPUT_RGB565;
-        hw_cfg->b_mask_msb = 15;
-        hw_cfg->g_mask_msb = 10;
-        hw_cfg->r_mask_msb = 4;
-        break;
-    case MPP_FMT_RGB555:
-        hw_cfg->input_format = INPUT_RGB555;
-        hw_cfg->r_mask_msb = 14;
-        hw_cfg->g_mask_msb = 9;
-        hw_cfg->b_mask_msb = 4;
-        break;
-    case MPP_FMT_BGR555:
-        hw_cfg->input_format = INPUT_RGB555;
-        hw_cfg->b_mask_msb = 14;
-        hw_cfg->g_mask_msb = 9;
-        hw_cfg->r_mask_msb = 4;
-        break;
-    case MPP_FMT_RGB444:
-        hw_cfg->input_format = INPUT_RGB444;
-        hw_cfg->r_mask_msb = 11;
-        hw_cfg->g_mask_msb = 7;
-        hw_cfg->b_mask_msb = 3;
-        break;
-    case MPP_FMT_BGR444:
-        hw_cfg->input_format = INPUT_RGB444;
-        hw_cfg->b_mask_msb = 11;
-        hw_cfg->g_mask_msb = 7;
-        hw_cfg->r_mask_msb = 3;
-        break;
-    case MPP_FMT_RGB888:
-        hw_cfg->input_format = INPUT_RGB888;
-        hw_cfg->r_mask_msb = 23;
-        hw_cfg->g_mask_msb = 15;
-        hw_cfg->b_mask_msb = 7;
-        break;
-    case MPP_FMT_BGR888:
-        hw_cfg->input_format = INPUT_RGB888;
-        hw_cfg->b_mask_msb = 23;
-        hw_cfg->g_mask_msb = 15;
-        hw_cfg->r_mask_msb = 7;
-        break;
-    case MPP_FMT_RGB101010:
-        hw_cfg->input_format = INPUT_RGB101010;
-        hw_cfg->r_mask_msb = 29;
-        hw_cfg->g_mask_msb = 19;
-        hw_cfg->b_mask_msb = 9;
-        break;
-    case MPP_FMT_BGR101010:
-        hw_cfg->input_format = INPUT_RGB101010;
-        hw_cfg->b_mask_msb = 29;
-        hw_cfg->g_mask_msb = 19;
-        hw_cfg->r_mask_msb = 9;
-        break;
-    default:
-        mpp_err("unsupported color format %d", set->format);
+    VepuFormatCfg fmt_cfg;
+    if (!get_vepu_fmt(&fmt_cfg, set->format)) {
+        hw_cfg->input_format = fmt_cfg.format;
+        hw_cfg->r_mask_msb = fmt_cfg.r_mask;
+        hw_cfg->g_mask_msb = fmt_cfg.g_mask;
+        hw_cfg->b_mask_msb = fmt_cfg.b_mask;
+    } else
         return MPP_NOK;
-        break;
-    }
 
     return MPP_OK;
 }
@@ -1261,7 +1185,7 @@ static MPP_RET alloc_buffer(void *hal)
 
     //add 128 bytes to avoid kernel crash
     ret = mpp_buffer_get(buffers->hw_buf_grp, &buffers->hw_luma_buf,
-                         mb_total * (16 * 16) + 128);
+                         MPP_ALIGN(mb_total * (16 * 16), SZ_4K) + SZ_4K);
     if (ret) {
         mpp_err("hw_luma_buf get failed ret %d\n", ret);
         goto __ERR_RET;
@@ -1271,7 +1195,7 @@ static MPP_RET alloc_buffer(void *hal)
         for (i = 0; i < 2; i++) {
             //add 128 bytes to avoid kernel crash
             ret = mpp_buffer_get(buffers->hw_buf_grp, &buffers->hw_cbcr_buf[i],
-                                 mb_total * (2 * 8 * 8) + 128);
+                                 MPP_ALIGN(mb_total * (2 * 8 * 8), SZ_4K) + SZ_4K);
             if (ret) {
                 mpp_err("hw_cbcr_buf[%d] get failed ret %d\n", i, ret);
                 goto __ERR_RET;
@@ -1392,7 +1316,7 @@ __ERR_RET:
     return ret;
 }
 
-MPP_RET hal_vp8e_enc_strm_code(void *hal, HalTaskInfo *task)
+MPP_RET hal_vp8e_enc_strm_code(void *hal, HalEncTask *task)
 {
     HalVp8eCtx  *ctx  = (HalVp8eCtx *)hal;
     Vp8eHwCfg *hw_cfg = &ctx->hw_cfg;
@@ -1409,14 +1333,16 @@ MPP_RET hal_vp8e_enc_strm_code(void *hal, HalTaskInfo *task)
     }
 
     {
-        HalEncTask *enc_task = &task->enc;
+        HalEncTask *enc_task = task;
         RK_U32 hor_stride = MPP_ALIGN(prep->width, 16);
         RK_U32 ver_stride = MPP_ALIGN(prep->height, 16);
         RK_U32 offset_uv  = hor_stride * ver_stride;
 
         hw_cfg->input_lum_base = mpp_buffer_get_fd(enc_task->input);
-        hw_cfg->input_cb_base  = hw_cfg->input_lum_base + (offset_uv << 10);
-        hw_cfg->input_cr_base  = hw_cfg->input_cb_base + (offset_uv << 8);
+        hw_cfg->input_cb_base  = hw_cfg->input_lum_base;
+        hw_cfg->input_cb_offset = offset_uv;
+        hw_cfg->input_cr_base  = hw_cfg->input_cb_base;
+        hw_cfg->input_cr_offset  = offset_uv * 5 / 4;
     }
 
     // split memory for vp8 partition
@@ -1434,7 +1360,8 @@ MPP_RET hal_vp8e_enc_strm_code(void *hal, HalTaskInfo *task)
         vp8e_set_buffer(&ctx->bitbuf[0], p_start, p_end - p_start);
 
         offset = p_end - p_start;
-        hw_cfg->output_strm_base = bus_addr + (offset << 10);
+        hw_cfg->output_strm_base = bus_addr;
+        hw_cfg->output_strm_offset = offset;
 
         p_start = p_end;
         p_end = p_start + buf_size / 10;
@@ -1442,7 +1369,8 @@ MPP_RET hal_vp8e_enc_strm_code(void *hal, HalTaskInfo *task)
         vp8e_set_buffer(&ctx->bitbuf[1], p_start, p_end - p_start);
 
         offset += p_end - p_start;
-        hw_cfg->partition_Base[0] = bus_addr | (offset << 10);
+        hw_cfg->partition_Base[0] = bus_addr;
+        hw_cfg->partition_offset[0] = offset;
 
         p_start = p_end;
         p_end = mpp_buffer_get_ptr(buffers->hw_out_buf) + buf_size;
@@ -1450,7 +1378,8 @@ MPP_RET hal_vp8e_enc_strm_code(void *hal, HalTaskInfo *task)
         vp8e_set_buffer(&ctx->bitbuf[2], p_start, p_end - p_start);
 
         offset += p_end - p_start;
-        hw_cfg->partition_Base[1] = bus_addr | (offset << 10);
+        hw_cfg->partition_Base[1] = bus_addr;
+        hw_cfg->partition_offset[1] = offset;
         hw_cfg->output_strm_size = p_end - p_start;
 
         p_start = p_end;
@@ -1549,7 +1478,7 @@ MPP_RET hal_vp8e_init_qp_table(void *hal)
     return MPP_OK;
 }
 
-MPP_RET hal_vp8e_update_buffers(void *hal, HalTaskInfo *task)
+MPP_RET hal_vp8e_update_buffers(void *hal, HalEncTask *task)
 {
     HalVp8eCtx *ctx = (HalVp8eCtx *)hal;
 
@@ -1590,21 +1519,24 @@ MPP_RET hal_vp8e_update_buffers(void *hal, HalTaskInfo *task)
 
     update_picbuf(&ctx->picbuf);
     {
-        HalEncTask *enc_task = &task->enc;
+        HalEncTask *enc_task = task;
         RK_U8 *p_out = mpp_buffer_get_ptr(enc_task->output);
+        RK_S32 disable_ivf = ctx->cfg->codec.vp8.disable_ivf;
 
-        if (ctx->frame_cnt == 0) {
-            write_ivf_header(hal, p_out);
+        if (!disable_ivf) {
+            if (ctx->frame_cnt == 0) {
+                write_ivf_header(hal, p_out);
 
-            p_out += IVF_HDR_BYTES;
-            enc_task->length += IVF_HDR_BYTES;
-        }
+                p_out += IVF_HDR_BYTES;
+                enc_task->length += IVF_HDR_BYTES;
+            }
 
-        if (ctx->frame_size) {
-            write_ivf_frame(ctx, p_out);
+            if (ctx->frame_size) {
+                write_ivf_frame(ctx, p_out);
 
-            p_out += IVF_FRM_BYTES;
-            enc_task->length += IVF_FRM_BYTES;
+                p_out += IVF_FRM_BYTES;
+                enc_task->length += IVF_FRM_BYTES;
+            }
         }
 
         memcpy(p_out, ctx->p_out_buf[0], ctx->stream_size[0]);

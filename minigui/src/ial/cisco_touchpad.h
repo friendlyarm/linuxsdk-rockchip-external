@@ -51,7 +51,6 @@ extern "C" {
 
 BOOL    InitCiscoTouchpadInput (INPUT* input, const char* mdev, const char* mtype);
 void    TermCiscoTouchpadInput (void);
-void    mg_ial_ioctl(unsigned int cmd, unsigned int value);
 
 #ifdef __cplusplus
 }

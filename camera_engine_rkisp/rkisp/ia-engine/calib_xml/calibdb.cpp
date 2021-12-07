@@ -26,7 +26,7 @@
 #include "calib_xml/calibdb.h"
 #include "calibtags.h"
 #include "xmltags.h"
-#include <base/log.h>
+#include <base/xcam_log.h>
 
 
 #include   <fstream>
@@ -64,28 +64,43 @@
 //		  2. add Dynamic value for OEROI/DarkROI
 //v0.2.2:  XML FOR BW ISP OUTPUT
 //                 1. add isp output type configuration in XML header
-//                 2. add lsc ccm wb module cofiguration for BW illuminant in  in XML 
+//                 2. add lsc ccm wb module cofiguration for BW illuminant in  in XML
 //v0.2.3:  add otp info in iq xml
 //             modify rk ie sharp parameters type
 //v0.2.4:  modify ie sharp, add gain and lap mat coe paras for control
 //            modify demosaiclp, change thgrid_r_fct....from 1 to 6 to change with the gain value
 //v0.2.5:  XML FOR AF
 //         1. add af window configuration in xml
-//         2. add af trigger thershold configuration in XML 
+//         2. add af trigger thershold configuration in XML
 //v1.0.0:  add xml check & magic version code 635075
 //		  start from this version, like va.b.c
 //			a: show the big change version
 //                b: show the little change version
 //	             c: show that the content of xml is not changed, but fix some parse bugs.
+//v1.1.0:  add xml check & magic version code 675496
+//		  add flash ctrl parameters in iq xml file.
+//v1.2.0:  add xml check & magic version code 692267
+//		  add awb flash  parameters in iq xml file.
+//v1.3.0:  add xml check & magic version code 702671
+//		  modify backlight AEC-->BackLight_Config, including 2 modes
+//v1.4.0:  add xml check & magic version code 704841
+//		  modify HdrAE params in AEC-->HdrCtrl
+//		  a:add params for BackLight prob calculation
+//		  b:modify M2S_Ratio/L2M_Ration as dynamic value
+//v1.5.0:  magic version code 706729
+//		  a:add magic code in xml file for tool
+
 /*************************************************************************/
 /*************************************************************************/
 
 
 
 
-#define CODE_XML_PARSE_VERSION "v1.0.0"
+#define CODE_XML_PARSE_VERSION "v1.5.0"
 
 static std::ofstream redirectOut("/dev/null");
+
+#define IQDATA_LOAD_SPEEDUP
 
 //#define DEBUG_LOG
 
@@ -135,9 +150,9 @@ static std::ofstream redirectOut("/dev/null");
 #define XML_CHECK_TOPTAG_MARK(tag_id, type, size) \
 	XML_CHECK_SET_CUR_ID(tag_id); \
 	XML_CHECK_MARK_IF_NEED(type, size);
-	
-	
-	
+
+
+
 /******************************************************************************
  * Toupper
  *****************************************************************************/
@@ -598,7 +613,7 @@ static int ParseUshortArray
 
   if ((find_start == std::string::npos) || (find_end == std::string::npos)) {
 #ifdef DEBUG_LOG
-    LOGE( "%s(%d): parse error! start:%s end:%s\n", 
+    LOGE( "%s(%d): parse error! start:%s end:%s\n",
 		__FUNCTION__, __LINE__, find_start, find_end);
 #endif
     return -1;
@@ -1070,9 +1085,9 @@ bool CalibDb::CreateCalibDb
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
-  
+
   XML_CHECK_START(CALIB_FILESTART_TAG_ID, CALIB_FILESTART_TAG_ID);
-  
+
   // get and parse header section
   const XMLElement* header = root->FirstChildElement(TAG_NAME(CALIB_HEADER_TAG_ID));
   XmlTag tag = XmlTag(header);
@@ -1082,7 +1097,7 @@ bool CalibDb::CreateCalibDb
       return (res);
     }
 	XML_CHECK_TOPTAG_MARK(CALIB_HEADER_TAG_ID, tag.Type(), tag.Size());
-	
+
   }
 
 
@@ -1095,7 +1110,7 @@ bool CalibDb::CreateCalibDb
       return (res);
     }
 	XML_CHECK_TOPTAG_MARK(CALIB_SENSOR_TAG_ID, tag1.Type(), tag1.Size());
-	
+
   }
 
   // get and parse system section
@@ -1107,11 +1122,11 @@ bool CalibDb::CreateCalibDb
       return (res);
     }
 	XML_CHECK_TOPTAG_MARK(CALIB_SYSTEM_TAG_ID, tag2.Type(), tag2.Size());
-	
+
   }
 
   XML_CHECK_END();
-  
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -1137,6 +1152,11 @@ bool CalibDb::CreateCalibDb
   LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
+#ifdef IQDATA_LOAD_SPEEDUP
+  if (CamCalibDbLoadFile(&m_CalibDbHandle, device) == RET_SUCCESS)
+    return (res);
+#endif
+
   RESULT result = CamCalibDbCreate(&m_CalibDbHandle);
   DCT_ASSERT(result == RET_SUCCESS);
   errorID = doc.LoadFile(device);
@@ -1146,7 +1166,7 @@ bool CalibDb::CreateCalibDb
 #endif
   if (doc.Error()) {
 #if 0
-    LOGD( "%s(%d): Error: Parse error errorID %d\n", 
+    LOGD( "%s(%d): Error: Parse error errorID %d\n",
               __FUNCTION__,__LINE__,errorID);
 #endif
     return (false);
@@ -1159,7 +1179,7 @@ bool CalibDb::CreateCalibDb
   }
 
   XML_CHECK_START(CALIB_FILESTART_TAG_ID, CALIB_FILESTART_TAG_ID);
-  
+
   // parse header section
   XMLElement* pheader = proot->FirstChildElement(TAG_NAME(CALIB_HEADER_TAG_ID));
   XmlTag tag = XmlTag(pheader);
@@ -1170,7 +1190,7 @@ bool CalibDb::CreateCalibDb
       return (res);
     }
 	XML_CHECK_TOPTAG_MARK(CALIB_HEADER_TAG_ID, tag.Type(), tag.Size());
-	
+
   }
 
   // parse sensor section
@@ -1183,7 +1203,7 @@ bool CalibDb::CreateCalibDb
       return (res);
     }
 	XML_CHECK_TOPTAG_MARK(CALIB_SENSOR_TAG_ID, tag1.Type(), tag1.Size());
-	
+
   }
 
   // parse system section
@@ -1196,10 +1216,14 @@ bool CalibDb::CreateCalibDb
       return (res);
     }
 	XML_CHECK_TOPTAG_MARK(CALIB_SYSTEM_TAG_ID, tag2.Type(), tag2.Size());
-	
+
   }
 
   XML_CHECK_END();
+
+#ifdef IQDATA_LOAD_SPEEDUP
+  CamCalibDbDumpFile(m_CalibDbHandle, device);
+#endif
 
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
@@ -1265,19 +1289,19 @@ bool CalibDb::parseEntryCellForCheck(
 	  LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	int cell_size = 0; 
+	int cell_size = 0;
 	CALIB_IQ_TAG_ID_T cur_tag_id = (CALIB_IQ_TAG_ID_T)cur_id;
 	CALIB_IQ_TAG_ID_T parent_tag_id = (CALIB_IQ_TAG_ID_T)parent_id;
-    parseCellNoElement(pelement, noElements, &cell_size); 
+    parseCellNoElement(pelement, noElements, &cell_size);
     XML_CHECK_CELL_SET_SIZE(cell_size);
 
 	if(cell_size != noElements){
 		LOGD("%s(%d): Warning: parent_tagname:%s tag_name:%s define %d cell, but only use %d cells !!!!\n",
-			__FUNCTION__, __LINE__, 
+			__FUNCTION__, __LINE__,
 			TAG_NAME(parent_tag_id), TAG_NAME(cur_tag_id),
 			noElements, cell_size);
   	}
-	
+
 #ifdef DEBUG_LOG
 	  LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -1308,7 +1332,7 @@ bool CalibDb::parseCellNoElement
   }
 
   *RealNo = cnt;
-  
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -1327,12 +1351,12 @@ bool CalibDb::parseEntryCell
     parseCellContent    func,
     void*                param,
     uint32_t	 cur_tag_id,
-    uint32_t	 parent_tag_id			
+    uint32_t	 parent_tag_id
 ) {
 #ifdef DEBUG_LOG
 	  LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
-	
+
 	parseEntryCellForCheck(pelement, noElements, cur_tag_id, parent_tag_id);
 
 	bool res = parseEntryCell(pelement, noElements, func, param);
@@ -1372,11 +1396,11 @@ bool CalibDb::parseEntryHeader
     const char* value = tag.Value();
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-	
+
     if (XML_CHECK_TAGID_COMPARE(CALIB_HEADER_CREATION_DATE_TAG_ID)){
       strncpy(meta_data.cdate, value, sizeof(meta_data.cdate));
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_HEADER_CREATOR_TAG_ID)){
@@ -1388,56 +1412,65 @@ bool CalibDb::parseEntryHeader
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_HEADER_SAMPLE_NAME_TAG_ID)){
       strncpy(meta_data.sid, value, sizeof(meta_data.sid));
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_HEADER_RESOLUTION_TAG_ID)){
-      if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryResolution, NULL, 
+      if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryResolution, NULL,
 	  		(uint32_t)(CALIB_HEADER_RESOLUTION_TAG_ID), (uint32_t)(CALIB_HEADER_TAG_ID))) {
 #if 1
-		LOGE( "%s(%d):parse error in header resolution section (unknow tag: %s)\n", 
+		LOGE( "%s(%d):parse error in header resolution section (unknow tag: %s)\n",
     		__FUNCTION__,__LINE__,tagname.c_str());
 #endif
 
         return (false);
       }
-	  
+
     } else if( XML_CHECK_TAGID_COMPARE(CALIB_HEADER_CODE_XML_PARSE_VERSION_TAG_ID)){
 	  strncpy(meta_data.code_xml_parse_version, value, sizeof(meta_data.code_xml_parse_version));
     } else if( XML_CHECK_TAGID_COMPARE(CALIB_HEADER_ISP_OUTPUT_TYPE_TAG_ID)){
-               
+
 	 std::string s_value(value);
      if(s_value == CALIB_HEADER_ISP_OUTPUT_COLOR_TYPE_TAG){
 		    meta_data.isp_output_type = isp_color_output_type;
-     }else if(s_value == CALIB_HEADER_ISP_OUTPUT_GRAY_TYPE_TAG){     	
+     }else if(s_value == CALIB_HEADER_ISP_OUTPUT_GRAY_TYPE_TAG){
 		 	meta_data.isp_output_type = isp_gray_output_type;
      }else if(s_value == CALIB_HEADER_ISP_OUTPUT_MIXTURE_TYPE_TAG){
 		 	meta_data.isp_output_type = isp_mixture_output_type;
      }else{
-	     
+
 #if 1
-  		LOGD( "%s(%d):parse error in isp_output_type section (unknow tag: %s)\n", 
+  		LOGD( "%s(%d):parse error in isp_output_type section (unknow tag: %s)\n",
     		__FUNCTION__,__LINE__,tagname.c_str());
-#endif		 	
+#endif
 		return (false);
-     }	
+     }
 
 	}else if( XML_CHECK_TAGID_COMPARE(CALIB_HEADER_SDK_IQ_VERIFY_ID)){
 	  strncpy(meta_data.sdk_iq_verify, value, sizeof(meta_data.sdk_iq_verify));
+    }else if( XML_CHECK_TAGID_COMPARE(CALIB_HEADER_XML_MAGIC_VERSION_CODE_ID)){
+	  int no = ParseUintArray(value, &meta_data.magic_version_code, 1);
+	  DCT_ASSERT((no == 1));
     }else {
 #if 1
-	  LOGD( "%s(%d): parse error in header section (unknow tag: %s)\n", 
+	  LOGD( "%s(%d): parse error in header section (unknow tag: %s)\n",
 	  		__FUNCTION__,__LINE__,tagname.c_str());
 #endif
 
       return (false);
     }
 
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   if(strcmp(meta_data.code_xml_parse_version, CODE_XML_PARSE_VERSION)){
-	LOGD("%s(%d): code xml parse version is no match (%s) != (%s) \n", 
+	LOGE("%s(%d): code xml parse version is no match (%s) != (%s) \n",
 		__FUNCTION__, __LINE__, meta_data.code_xml_parse_version, CODE_XML_PARSE_VERSION);
+	return (false);
+  }
+
+  if(meta_data.magic_version_code != m_CalibInfo.IQMagicVerCode){
+	LOGE("%s(%d): magic version is no match (%u) != (%u) \n",
+		__FUNCTION__, __LINE__, meta_data.magic_version_code, m_CalibInfo.IQMagicVerCode);
 	return (false);
   }
 
@@ -1448,7 +1481,7 @@ bool CalibDb::parseEntryHeader
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
 
-  
+
 
 
   return (true);
@@ -1470,20 +1503,20 @@ bool CalibDb::parseEntryResolution
     LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-  
+
   CamResolution_t resolution;
   MEMSET(&resolution, 0, sizeof(resolution));
   ListInit(&resolution.framerates);
 
   XML_CHECK_START(CALIB_HEADER_RESOLUTION_TAG_ID, CALIB_HEADER_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     const char* value = tag.Value();
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -1501,7 +1534,7 @@ bool CalibDb::parseEntryResolution
 		LOGE( "%s(%d):parse error in header resolution(unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
         return (false);
       }
-	  
+
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_HEADER_RESOLUTION_ID_TAG_ID)){
       bool ok;
 
@@ -1516,13 +1549,13 @@ bool CalibDb::parseEntryResolution
       LOGD( "%s(%d): unknown tag: %s\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
 
   }
 
   XML_CHECK_END();
-   
+
   RESULT result = CamCalibDbAddResolution(m_CalibDbHandle, &resolution);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -1564,14 +1597,14 @@ bool CalibDb::parseEntryFramerates
   MEMSET(pFrate, 0, sizeof(*pFrate));
 
   XML_CHECK_START(CALIB_HEADER_RESOLUTION_FRATE_TAG_ID, CALIB_HEADER_RESOLUTION_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     const char* value = tag.Value();
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -1584,17 +1617,17 @@ bool CalibDb::parseEntryFramerates
       DCT_ASSERT((no == 1));
     } else {
 #if 1
-      LOGE( "%s(%d):parse error in framerate section (unknow tag: %s)\n",                                                  
+      LOGE( "%s(%d):parse error in framerate section (unknow tag: %s)\n",
       	__FUNCTION__,__LINE__,tagname.c_str());
 #endif
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   if (pResolution) {
     ListPrepareItem(pFrate);
     ListAddTail(&pResolution->framerates, pFrate);
@@ -1621,13 +1654,13 @@ bool CalibDb::parseEntrySensor
   LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 
   XML_CHECK_START(CALIB_SENSOR_TAG_ID, CALIB_FILESTART_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -1678,7 +1711,7 @@ bool CalibDb::parseEntrySensor
         return (false);
       }
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DEGAMMA_TAG_ID)){
-    
+
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_WDR_TAG_ID)){
       if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryWdr, NULL,
 	  		(uint32_t)(CALIB_SENSOR_WDR_TAG_ID), (uint32_t)(CALIB_SENSOR_TAG_ID))) {
@@ -1746,9 +1779,9 @@ bool CalibDb::parseEntrySensor
       if (!parseEntryOTP(pchild->ToElement())) {
 #if 1
       	LOGE( "%s(%d):parse error in OTP section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
-#endif			
+#endif
         return (false);
-      }	
+      }
     }
 	else {
 #if 1
@@ -1756,12 +1789,12 @@ bool CalibDb::parseEntrySensor
 #endif
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -1784,7 +1817,7 @@ bool CalibDb::parseEntryAfWin
 #endif
 
   XML_CHECK_START((CALIB_IQ_TAG_ID_T)(parent_id), CALIB_SENSOR_AF_TAG_ID);
-  
+
   Cam_Win* pAfwin = (Cam_Win*)param;
 
   if(NULL == pAfwin){
@@ -1797,7 +1830,7 @@ bool CalibDb::parseEntryAfWin
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -1820,7 +1853,7 @@ bool CalibDb::parseEntryAfWin
 	#endif
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
@@ -1853,13 +1886,13 @@ bool CalibDb::parseEntryAfWin
   }
 
   XML_CHECK_START(CALIB_SENSOR_AF_CONTRAST_AF_TAG_ID, CALIB_SENSOR_AF_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -1916,6 +1949,7 @@ bool CalibDb::parseEntryAfWin
       pContrastAf->AdaptRangeTbl = (uint16_t *)malloc(ArraySize * sizeof(uint16_t));
       if(pContrastAf->AdaptRangeTbl == NULL){
 		LOGE("%s(%d): af adaptive range table malloc fail! \n",  __FUNCTION__,__LINE__ );
+		return false;
       }
       MEMSET( pContrastAf->AdaptRangeTbl, 0, (ArraySize * sizeof( uint16_t)) );
       int no = ParseUshortArray( tag.Value(), pContrastAf->AdaptRangeTbl, ArraySize );
@@ -1924,7 +1958,7 @@ bool CalibDb::parseEntryAfWin
       int no = ParseFloatArray(tag.Value(), &pContrastAf->TrigThers, tag.Size());
       DCT_ASSERT((no == tag.Size()));
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AF_TRIG_VALUE_TAG_ID)){
-      int no = ParseUshortArray(tag.Value(), &pContrastAf->TrigValue, tag.Size());	  
+      int no = ParseUshortArray(tag.Value(), &pContrastAf->TrigValue, tag.Size());
       DCT_ASSERT((no == tag.Size()));
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AF_TRIG_FRAMES_TAG_ID)){
       int no = ParseUshortArray(tag.Value(), &pContrastAf->TrigFrames, tag.Size());
@@ -1966,12 +2000,12 @@ bool CalibDb::parseEntryAfWin
       LOGE( "%s(%d):parse error in ContrastAf section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -1996,13 +2030,13 @@ bool CalibDb::parseEntryAfWin
   }
 
   XML_CHECK_START(CALIB_SENSOR_AF_PDAF_TAG_ID, CALIB_SENSOR_AF_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2014,12 +2048,12 @@ bool CalibDb::parseEntryAfWin
       LOGE( "%s(%d):parse error in PDAF section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -2044,13 +2078,13 @@ bool CalibDb::parseEntryAfWin
   }
 
   XML_CHECK_START(CALIB_SENSOR_AF_LASER_AF_TAG_ID, CALIB_SENSOR_AF_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2068,7 +2102,7 @@ bool CalibDb::parseEntryAfWin
       LOGE( "%s(%d):parse error in LaserAf section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
@@ -2101,7 +2135,7 @@ bool CalibDb::parseEntryAf
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2137,7 +2171,7 @@ bool CalibDb::parseEntryAf
       LOGE( "%s(%d):parse error in AF section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
@@ -2168,13 +2202,13 @@ bool CalibDb::parseEntryAecDON
 	}
 
 	XML_CHECK_START(CALIB_SENSOR_AEC_DON_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-  
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2196,15 +2230,16 @@ bool CalibDb::parseEntryAecDON
         } else {
 		  LOGE( "%s(%d):parse error in AEC DON section (unknow tag: %s)\n",
 				  __FUNCTION__,__LINE__,tagname.c_str());
+		  return false;
         }
-		
+
         pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2222,7 +2257,7 @@ bool CalibDb::parseEntryAecFPSSetConfig
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
@@ -2230,13 +2265,13 @@ bool CalibDb::parseEntryAecFPSSetConfig
 	}
 
 	XML_CHECK_START(CALIB_SENSOR_AEC_FPS_FPS_SET_CONFIG_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-	
-	const XMLNode* pchild = pelement->FirstChild();	
+
+	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2259,15 +2294,15 @@ bool CalibDb::parseEntryAecFPSSetConfig
 				  __FUNCTION__,__LINE__,tagname.c_str());
 			 return false;
 		}
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2285,21 +2320,21 @@ bool CalibDb::parseEntryAecHist2Hal
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
 		return false;
 	}
-	
+
 	XML_CHECK_START(CALIB_SENSOR_AEC_HIST_2_HAL_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2311,19 +2346,19 @@ bool CalibDb::parseEntryAecHist2Hal
           int no = ParseUcharArray(tag.Value(), &pAecData->hist2Hal.lowHistBinTh, tag.Size());
           DCT_ASSERT((no == tag.Size()));
     	}else {
-			LOGE( "%s(%d): parse error in AEC_HIST_2_HAL section (unknow tag:%s)\n", 
+			LOGE( "%s(%d): parse error in AEC_HIST_2_HAL section (unknow tag:%s)\n",
 				__FUNCTION__,__LINE__,tagname.c_str());
 			return false;
         }
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2340,21 +2375,21 @@ bool CalibDb::parseEntryAecNLSC
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
 		return false;
 	}
-	
+
 	XML_CHECK_START(CALIB_SENSOR_AEC_NLSC_CONFIG_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2390,19 +2425,19 @@ bool CalibDb::parseEntryAecNLSC
           int no = ParseUcharArray(tag.Value(), &pAecData->NLSC_config.C2B_stable_fps, tag.Size());
           DCT_ASSERT((no == tag.Size()));
 		}else {
-          LOGE( "%s(%d): parse error in AEC_NLSC_Config section (unknow tag:%s)\n", 
+          LOGE( "%s(%d): parse error in AEC_NLSC_Config section (unknow tag:%s)\n",
 		  	__FUNCTION__,__LINE__,tagname.c_str());
 		  return false;
-        }	
-		
+        }
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2420,7 +2455,7 @@ bool CalibDb::parseEntryAecIntervalAdjustStrategy
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
@@ -2428,13 +2463,13 @@ bool CalibDb::parseEntryAecIntervalAdjustStrategy
 	}
 
 	XML_CHECK_START(CALIB_SENSOR_AEC_INTERVAL_ADJUST_STRATEGY_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2456,20 +2491,157 @@ bool CalibDb::parseEntryAecIntervalAdjustStrategy
 		  	  __FUNCTION__,__LINE__,tagname.c_str());
 		  return false;
         }
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
 }
 
+
+
+bool CalibDb::parseEntryAecBackLightWeightMethod
+(
+    const XMLElement*   pelement,
+    void*                param
+)
+{
+#ifdef DEBUG_LOG
+	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
+#endif
+
+
+	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
+	if(NULL == pAecData){
+		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
+		return false;
+	}
+
+	XML_CHECK_START(CALIB_SENSOR_AEC_BACKLIGHT_WEIGHT_METHOD_TAG_ID, CALIB_SENSOR_AEC_BACKLIGHT_CONFIG_TAG_ID);
+
+	const XMLNode* pchild = pelement->FirstChild();
+	while (pchild) {
+		XmlTag tag = XmlTag(pchild->ToElement());
+		std::string tagname(pchild->ToElement()->Name());
+		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
+
+#ifdef DEBUG_LOG
+		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
+#endif
+
+		if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_LUMALOWTH_TAG_ID)){
+          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.lumaLowTh, tag.Size());
+          DCT_ASSERT((no == tag.Size()));
+        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_LUMAHIGHTH_TAG_ID)){
+          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.lumaHighTh, tag.Size());
+          DCT_ASSERT((no == tag.Size()));
+        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_LVTH_TAG_ID)){
+          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.LvTh, tag.Size());
+          DCT_ASSERT((no == tag.Size()));
+        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_WEIGHTMINTH_TAG_ID)){
+          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.weightMinTh, tag.Size());
+          DCT_ASSERT((no == tag.Size()));
+        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_WEIGHTMAXTH_TAG_ID)){
+          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.weightMaxTh, tag.Size());
+          DCT_ASSERT((no == tag.Size()));
+        }else{
+		   LOGE( "%s(%d):parse error in AEC BackLight WeightMethod section (unknow tag: %s)\n",
+			  __FUNCTION__,__LINE__,tagname.c_str());
+		   return false;
+    	}
+
+		pchild = pchild->NextSibling();
+	}
+
+	XML_CHECK_END();
+
+#ifdef DEBUG_LOG
+    LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
+#endif
+
+	return true;
+
+}
+
+
+bool CalibDb::parseEntryAecBackLightDarkROIMethod
+(
+    const XMLElement*   pelement,
+    void*                param
+)
+{
+#ifdef DEBUG_LOG
+	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
+#endif
+
+
+	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
+	if(NULL == pAecData){
+		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
+		return false;
+	}
+
+	XML_CHECK_START(CALIB_SENSOR_AEC_BACKLIGHT_DARKROI_METHOD_TAG_ID,CALIB_SENSOR_AEC_BACKLIGHT_CONFIG_TAG_ID);
+
+	const XMLNode* pchild = pelement->FirstChild();
+	while (pchild) {
+		XmlTag tag = XmlTag(pchild->ToElement());
+		std::string tagname(pchild->ToElement()->Name());
+		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
+
+#ifdef DEBUG_LOG
+		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
+#endif
+
+		if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_OEROI_LOWTH_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.OEROILowTh, tag.Size());
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_LV_LOWTH_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.LvLowTh, tag.Size());
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_LV_HIGHTH_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.LvHightTh, tag.Size());
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_EXPLEVEL_TAG_ID)){
+	      	int i = (sizeof(pAecData->backLightConf.ExpLevel) / sizeof(pAecData->backLightConf.ExpLevel.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->backLightConf.ExpLevel.fCoeff, i);
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_NONOEPDF_HIGHTH_TAG_ID)){
+	      	int i = (sizeof(pAecData->backLightConf.NonOEPdfTh) / sizeof(pAecData->backLightConf.NonOEPdfTh.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->backLightConf.NonOEPdfTh.fCoeff, i);
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_DARKPDF_HIGHTH_TAG_ID)){
+	      	int i = (sizeof(pAecData->backLightConf.DarkPdfTh) / sizeof(pAecData->backLightConf.DarkPdfTh.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->backLightConf.DarkPdfTh.fCoeff, i);
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_DYLOCALSETPOINT_TAG_ID)){
+	      	int i = (sizeof(pAecData->backLightConf.DyLocalSetPoint) / sizeof(pAecData->backLightConf.DyLocalSetPoint.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->backLightConf.DyLocalSetPoint.fCoeff, i);
+	      	DCT_ASSERT((no == tag.Size()));
+		}else{
+		   LOGE( "%s(%d):parse error in AEC BackLight DarkROIMethod section (unknow tag: %s)\n",
+			  __FUNCTION__,__LINE__,tagname.c_str());
+		   return false;
+    	}
+		pchild = pchild->NextSibling();
+	}
+
+	XML_CHECK_END();
+
+#ifdef DEBUG_LOG
+    LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
+#endif
+
+	return true;
+
+}
 
 
 
@@ -2483,21 +2655,21 @@ bool CalibDb::parseEntryAecBacklight
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
 		return false;
 	}
-	
+
 	XML_CHECK_START(CALIB_SENSOR_AEC_BACKLIGHT_CONFIG_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2505,32 +2677,46 @@ bool CalibDb::parseEntryAecBacklight
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_ENABLE_TAG_ID)){
           int no = ParseUcharArray(tag.Value(), &pAecData->backLightConf.enable, tag.Size());
           DCT_ASSERT((no == tag.Size()));
-        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_LUMALOWTH_TAG_ID)){
-          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.lumaLowTh, tag.Size());
-          DCT_ASSERT((no == tag.Size()));
-        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_LUMAHIGHTH_TAG_ID)){
-          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.lumaHighTh, tag.Size());
-          DCT_ASSERT((no == tag.Size()));
-        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_WEIGHTMINTH_TAG_ID)){
-          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.weightMinTh, tag.Size());
-          DCT_ASSERT((no == tag.Size()));
-        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_WEIGHTMAXTH_TAG_ID)){
-          int no = ParseFloatArray(tag.Value(), &pAecData->backLightConf.weightMaxTh, tag.Size());
-          DCT_ASSERT((no == tag.Size()));
-        }else {
+        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_MODE_TAG_ID)){
+	      char* value = Toupper(tag.Value());
+	      std::string s_value(value);
+#ifdef DEBUG_LOG
+		  LOGD( "%s(%d): value: %s\n", __FUNCTION__,__LINE__,value);
+		  LOGD( "%s(%d): s_value: %s\n", __FUNCTION__,__LINE__,s_value.c_str());
+#endif
+		  if (s_value == CALIB_SENSOR_AEC_BACKLIGHT_MODE_WEIGHT) {
+			pAecData->backLightConf.Mode= AEC_BACKLIT_MODE_WEIGHT_METHOD;
+		  } else if (s_value == CALIB_SENSOR_AEC_BACKLIGHT_MODE_DARKROI) {
+			pAecData->backLightConf.Mode = AEC_BACKLIT_MODE_DARKROI_METHOD;
+		  } else {
+			pAecData->backLightConf.Mode= AEC_BACKLIT_MODE_INVALID;
+			LOGE("%s(%d): invalid AEC BackLight Mode: %s \n", __FUNCTION__, __LINE__, s_value.c_str());
+			return (false);
+		  }
+    	}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_WEIGHT_METHOD_TAG_ID)){
+	      if (!parseEntryAecBackLightWeightMethod(pchild->ToElement(), pAecData)){
+			LOGE( "%s(%d): parse error in BackLight WeightMethod section\n",__FUNCTION__,__LINE__);
+			return (false);
+		  }
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_BACKLIGHT_DARKROI_METHOD_TAG_ID)){
+	      if (!parseEntryAecBackLightDarkROIMethod(pchild->ToElement(), pAecData)){
+			LOGE( "%s(%d): parse error in BackLight DarkROIMethod section\n",__FUNCTION__,__LINE__);
+			return (false);
+		  }
+		}else {
           LOGE( "%s(%d): parse error in AEC_backlight section (unknow tag:%s)\n",
 		  	 __FUNCTION__,__LINE__,tagname.c_str());
 		  return false;
         }
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2546,21 +2732,21 @@ bool CalibDb::parseEntryAecLockAE
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
 		return false;
 	}
-	
+
 	XML_CHECK_START(CALIB_SENSOR_LOCK_AE_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2581,15 +2767,15 @@ bool CalibDb::parseEntryAecLockAE
 			__FUNCTION__,__LINE__,tagname.c_str());
 		  return false;
         }
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2606,7 +2792,7 @@ bool CalibDb::parseEntryAecHdrCtrlLframe
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
@@ -2620,16 +2806,21 @@ bool CalibDb::parseEntryAecHdrCtrlLframe
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
 
-		if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_LGAINS_TAG_ID)){
-	      	int i = (sizeof(pAecData->HdrCtrl.Lgains) / sizeof(pAecData->HdrCtrl.Lgains.fCoeff[0]));
-	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.Lgains.fCoeff, i);
-	      	DCT_ASSERT((no == tag.Size()));
-		}else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_LEXPLEVEL_TAG_ID)){
+		if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_OEROI_LOWTH_TAG_ID)) {
+			int no = ParseFloatArray(tag.Value(), &pAecData->HdrCtrl.OEROILowTh, tag.Size());
+			DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_LV_HIGHTH_TAG_ID)) {
+			int no = ParseFloatArray(tag.Value(), &pAecData->HdrCtrl.LvHightTh, tag.Size());
+			DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_LV_LOWTH_TAG_ID)) {
+			int no = ParseFloatArray(tag.Value(), &pAecData->HdrCtrl.LvLowTh, tag.Size());
+			DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_LEXPLEVEL_TAG_ID)){
 	      	int i = (sizeof(pAecData->HdrCtrl.LExpLevel) / sizeof(pAecData->HdrCtrl.LExpLevel.fCoeff[0]));
 	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.LExpLevel.fCoeff, i);
 	      	DCT_ASSERT((no == tag.Size()));
@@ -2641,19 +2832,36 @@ bool CalibDb::parseEntryAecHdrCtrlLframe
 	      	int i = (sizeof(pAecData->HdrCtrl.TargetDarkROILuma) / sizeof(pAecData->HdrCtrl.TargetDarkROILuma.fCoeff[0]));
 	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.TargetDarkROILuma.fCoeff, i);
 	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_NONOEPDF_TH_TAG_ID)){
+	      	int i = (sizeof(pAecData->HdrCtrl.NonOEPdfTh) / sizeof(pAecData->HdrCtrl.NonOEPdfTh.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.NonOEPdfTh.fCoeff, i);
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_DARKPDF_TH_TAG_ID)){
+	      	int i = (sizeof(pAecData->HdrCtrl.DarkPdfTh) / sizeof(pAecData->HdrCtrl.DarkPdfTh.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.DarkPdfTh.fCoeff, i);
+	      	DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_M2S_Ratio_TAG_ID)){
+	        int i = (sizeof(pAecData->HdrCtrl.M2S_Ratio) / sizeof(pAecData->HdrCtrl.M2S_Ratio.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.M2S_Ratio.fCoeff, i);
+		  DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_L2M_Ratio_TAG_ID)){
+	       int i = (sizeof(pAecData->HdrCtrl.L2M_Ratio) / sizeof(pAecData->HdrCtrl.L2M_Ratio.fCoeff[0]));
+	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.L2M_Ratio.fCoeff, i);
+		  DCT_ASSERT((no == tag.Size()));
 		}else{
 		   LOGE( "%s(%d):parse error in AEC HDRAE LframeCtrl section (unknow tag: %s)\n",
 			  __FUNCTION__,__LINE__,tagname.c_str());
+		   return false;
     	}
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2669,30 +2877,26 @@ bool CalibDb::parseEntryAecHdrCtrlSframe
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
 		return false;
 	}
-	
+
 	XML_CHECK_START(CALIB_SENSOR_HDRCTRL_SFRAMECTRL_TAG_ID, CALIB_SENSOR_HDRCTRL_TAG_ID);
-	
-	const XMLNode* pchild = pelement->FirstChild();	
+
+	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
 
-		if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_SGAINS_TAG_ID)){
-	      	int i = (sizeof(pAecData->HdrCtrl.Sgains) / sizeof(pAecData->HdrCtrl.Sgains.fCoeff[0]));
-	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.Sgains.fCoeff, i);
-	      	DCT_ASSERT((no == tag.Size()));
-		}else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_SEXPLEVEL_TAG_ID)){
+		if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_SEXPLEVEL_TAG_ID)){
 	      	int i = (sizeof(pAecData->HdrCtrl.SExpLevel) / sizeof(pAecData->HdrCtrl.SExpLevel.fCoeff[0]));
 	      	int no = ParseFloatArray(tag.Value(), pAecData->HdrCtrl.SExpLevel.fCoeff, i);
 	      	DCT_ASSERT((no == tag.Size()));
@@ -2716,15 +2920,15 @@ bool CalibDb::parseEntryAecHdrCtrlSframe
 			  __FUNCTION__,__LINE__,tagname.c_str());
 		  return false;
     	}
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -2741,21 +2945,21 @@ bool CalibDb::parseEntryAecHdrCtrl
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
 	if(NULL == pAecData){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
 		return false;
 	}
-	
+
 	XML_CHECK_START(CALIB_SENSOR_HDRCTRL_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2777,6 +2981,7 @@ bool CalibDb::parseEntryAecHdrCtrl
 	      } else {
 	        pAecData->HdrCtrl.Mode= AEC_HDR_MODE_INVALID;
 			LOGE("%s(%d): invalid AEC HdrMode: %s \n", __FUNCTION__, __LINE__, s_value.c_str());
+			return false;
 	      }
     	}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_FRAMENUM_TAG_ID)){
 	      	int no = ParseUcharArray(tag.Value(), &pAecData->HdrCtrl.FrameNum, 1);
@@ -2784,13 +2989,7 @@ bool CalibDb::parseEntryAecHdrCtrl
 	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_DCG_Ratio_TAG_ID)){
 	      	int no = ParseFloatArray(tag.Value(), &pAecData->HdrCtrl.DCG_Ratio, 1);
 			DCT_ASSERT((no == tag.Size()));
-	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_M2S_Ratio_TAG_ID)){
-	      int no = ParseFloatArray(tag.Value(), &pAecData->HdrCtrl.M2S_Ratio, 1);
-		  DCT_ASSERT((no == tag.Size()));
-		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_L2M_Ratio_TAG_ID)){
-	      int no = ParseFloatArray(tag.Value(), &pAecData->HdrCtrl.L2M_Ratio, 1);
-		  DCT_ASSERT((no == tag.Size()));
-		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_LFRAMECTRL_TAG_ID)){
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_HDRCTRL_LFRAMECTRL_TAG_ID)){
 	      if (!parseEntryAecHdrCtrlLframe(pchild->ToElement(), pAecData)){
 			LOGE( "%s(%d): parse error in hdr ctrl Lfrmae section\n",__FUNCTION__,__LINE__);
 			return (false);
@@ -2803,21 +3002,139 @@ bool CalibDb::parseEntryAecHdrCtrl
 		}else {
 		  LOGE( "%s(%d):parse error in AEC HdrCtrl section (unknow tag: %s)\n",
 				  __FUNCTION__,__LINE__,tagname.c_str());
+		  return false;
         }
-		
+
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
 }
 
+bool CalibDb::parseEntryAecFlashCtrl
+(
+    const XMLElement*   pelement,
+    void*                param
+)
+{
+#ifdef DEBUG_LOG
+	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
+#endif
+
+	CamCalibAecGlobal_t *pAecData= (CamCalibAecGlobal_t *)param;
+	if(NULL == pAecData){
+		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
+		return false;
+	}
+
+	XML_CHECK_START(CALIB_SENSOR_FLASHCTRL_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
+
+	const XMLNode* pchild = pelement->FirstChild();
+	while (pchild) {
+		XmlTag tag = XmlTag(pchild->ToElement());
+		std::string tagname(pchild->ToElement()->Name());
+		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
+
+#ifdef DEBUG_LOG
+		LOGD( "%s(%d): tag:%s \n value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
+#endif
+
+		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_FLASH_TRIGGER_TH_TAG_ID)){
+			int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.flash_trigger_th, 1);
+			DCT_ASSERT((no == tag.Size()));
+		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_CURRENT_PCT_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_current_pct, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_MAINFLASH_CURRENT_PCT_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.mainflash_current_pct, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_FLASHLIGHT_RATIO_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.flashlight_ratio, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_EN_TAG_ID)){
+	      	int no = ParseUcharArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_en, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_EXP_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_exp, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_DIFFH_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_diffH, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_DIFFL_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_diffL, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_FACH_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_facH, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_FACL_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_facL, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_MEANLUMA_TH_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_meanluma_th, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_STARTUP_AFFECT_LIMIT_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_startup_affect_limit, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_EXP_SEPARATE_MODE_TAG_ID)){
+	       	char* value = Toupper(tag.Value());
+	      	std::string s_value(value);
+#ifdef DEBUG_LOG
+		    LOGD( "%s(%d): value: %s\n", __FUNCTION__,__LINE__,value);
+		  	LOGD( "%s(%d): s_value: %s\n", __FUNCTION__,__LINE__,s_value.c_str());
+#endif
+ 		  	if (s_value == CALIB_SENSOR_EXP_SEPARATE_MODE_USE_GAIN_FIRST) {
+ 		    	pAecData->flashCtrl.exp_separate_mode = EXP_SEPARATE_MODE_USE_GAIN_FIRST;
+ 		  	} else if (s_value == CALIB_SENSOR_EXP_SEPARATE_MODE_USE_TIME_FIRST) {
+ 		    	pAecData->flashCtrl.exp_separate_mode = EXP_SEPARATE_MODE_USE_TIME_FIRST;
+ 		  	} else if (s_value == CALIB_SENSOR_EXP_SEPARATE_MODE_USE_IQ_FIRST) {
+ 		    	pAecData->flashCtrl.exp_separate_mode = EXP_SEPARATE_MODE_USE_IQ;
+ 		  	} else if (s_value == CALIB_SENSOR_EXP_SEPARATE_MODE_USE_SETTING_FIRST) {
+ 		    	pAecData->flashCtrl.exp_separate_mode = EXP_SEPARATE_MODE_USE_SETTING;
+ 		  	} else {
+ 		    	pAecData->flashCtrl.exp_separate_mode= EXP_SEPARATE_MODE_INVALID;
+ 				LOGE("%s(%d): invalid flash exp separate mode: %s \n", __FUNCTION__, __LINE__, s_value.c_str());
+				return false;
+ 		  	}
+
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_DUMP_OVERTGT_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_dump_overTgt, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_DUMP_UNDERTGT_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_dump_underTgt, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_DUMP_OVEREXP_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_dump_overExp, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_MEANLUMA_OE_THL_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_meanluma_OE_thL, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_PREFLASH_MEANLUMA_OE_THH_TAG_ID)){
+	      	int no = ParseFloatArray(tag.Value(), &pAecData->flashCtrl.preflash_meanluma_OE_thH, 1);
+			DCT_ASSERT((no == tag.Size()));
+	    }else{
+			LOGE( "%s(%d):parse error in AEC FlashCtrl section (unknow tag: %s)\n",
+				  __FUNCTION__,__LINE__,tagname.c_str());
+		  	return false;
+	    }
+
+		pchild = pchild->NextSibling();
+	}
+
+	XML_CHECK_END();
+
+#ifdef DEBUG_LOG
+    LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
+#endif
+
+	return true;
+}
 /******************************************************************************
  * CalibDb::parseEntryAec
  *****************************************************************************/
@@ -2838,13 +3155,13 @@ bool CalibDb::parseEntryAec
   ListInit(&aec_data.ExpSeparateList);
 
   XML_CHECK_START(CALIB_SENSOR_AEC_TAG_ID, CALIB_SENSOR_TAG_ID);
-	
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -2860,6 +3177,7 @@ bool CalibDb::parseEntryAec
 	  aec_data.GainRange.pGainRange = (float *)malloc(i*sizeof(float));
 	  if(aec_data.GainRange.pGainRange == NULL){
 		LOGD( "%s(%d): aec gain range malloc fail!\n", __FUNCTION__, __LINE__);
+		return false;
 	  }
       int no = ParseFloatArray(tag.Value(), aec_data.GainRange.pGainRange, i);
       DCT_ASSERT((no == tag.Size()));
@@ -2875,6 +3193,7 @@ bool CalibDb::parseEntryAec
       pWeight = (uint8_t *)malloc(arraySize * sizeof(uint8_t));
 	  if(pWeight == NULL){
 		LOGE( "%s(%d): aec gridWeight malloc fail!\n", __FUNCTION__, __LINE__);
+		return false;
 	  }
       MEMSET( pWeight, 0, (arraySize * sizeof( uint8_t )) );
       int no = ParseUcharArray( tag.Value(), pWeight, arraySize );
@@ -2889,6 +3208,7 @@ bool CalibDb::parseEntryAec
       pNightWeight = (uint8_t *)malloc(nightArraySize * sizeof(uint8_t));
 	  if(pNightWeight == NULL){
 		LOGE( "%s(%d): aec gridWeight malloc fail!\n", __FUNCTION__, __LINE__);
+		return false;
 	  }
       MEMSET( pNightWeight, 0, (nightArraySize * sizeof( uint8_t )) );
       int no = ParseUcharArray( tag.Value(), pNightWeight, nightArraySize );
@@ -2937,6 +3257,7 @@ bool CalibDb::parseEntryAec
       } else {
         aec_data.CamerIcIspHistMode = CAM_HIST_MODE_INVALID;
 		LOGE( "%s(%d): invalid AEC CamerIcIspHistMode: %s\n", __FUNCTION__,__LINE__,s_value.c_str());
+		return false;
       }
     }
     else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_CAMERICISPEXPMEASURINGMODE_TAG_ID)){
@@ -2974,6 +3295,7 @@ bool CalibDb::parseEntryAec
       } else {
         aec_data.CamerIcIspExpMeasuringMode = CAM_EXP_MEASURING_MODE_INVALID;
 		LOGE( "%s(%d): invalid CamerIcIspExpMeasuringMode: %s\n", __FUNCTION__,__LINE__,s_value.c_str());
+		return false;
       }
     }
     else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_CLM_TOLERANCE_TAG_ID)){
@@ -3061,7 +3383,7 @@ bool CalibDb::parseEntryAec
 	{
 		if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseAECDySetpoint, &aec_data,
 				(uint32_t)(CALIB_SENSOR_AEC_DYNAMIC_SETPOINT_TAG_ID), (uint32_t)(CALIB_SENSOR_AEC_TAG_ID))) {
-			LOGE( "%s(%d): parse error in AEC_DYNAMIC_SETPOINT section (unknow tag:%s)\n", 
+			LOGE( "%s(%d): parse error in AEC_DYNAMIC_SETPOINT section (unknow tag:%s)\n",
 				__FUNCTION__,__LINE__,tagname.c_str());
 			return (false);
 	  	}
@@ -3070,7 +3392,7 @@ bool CalibDb::parseEntryAec
 	{
 		if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseAECExpSeparate, &aec_data,
 				(uint32_t)(CALIB_SENSOR_AEC_EXP_SEPARATE_TAG_ID), (uint32_t)(CALIB_SENSOR_AEC_TAG_ID))) {
-			LOGE( "%s(%d): parse error in AEC_EXP_SEPARATE section (unknow tag:%s)\n", 
+			LOGE( "%s(%d): parse error in AEC_EXP_SEPARATE section (unknow tag:%s)\n",
 				__FUNCTION__,__LINE__,tagname.c_str());
 			return (false);
 	  	}
@@ -3091,26 +3413,31 @@ bool CalibDb::parseEntryAec
 		LOGE( "%s(%d): parse error in aec hist2Hal section\n",__FUNCTION__,__LINE__);
 		return (false);
 	  }
+	}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_FLASHCTRL_TAG_ID)){
+	  if (!parseEntryAecFlashCtrl(pchild->ToElement(), &aec_data)){
+		LOGE( "%s(%d): parse error in aec flashctrl section\n",__FUNCTION__,__LINE__);
+		return (false);
+	  }
 	}
 	else {
 #if 1
-	  LOGE( "%s(%d): parse error in AEC section (unknow tag:%s)\n", 
+	  LOGE( "%s(%d): parse error in AEC section (unknow tag:%s)\n",
 	  	__FUNCTION__,__LINE__,tagname.c_str());
 #endif
 
       return ( false );
     }
-	
+
     pchild = pchild->NextSibling();
   }
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddAecGlobal(m_CalibDbHandle, &aec_data);
   ClearDySetpointList(&aec_data.DySetpointList);
   ClearExpSeparateList(&aec_data.ExpSeparateList);
 
 #ifdef DEBUG_LOG
-  LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);    
+  LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -3131,21 +3458,21 @@ bool CalibDb::parseEntryAecEcm
   (void)param;
 
 #ifdef DEBUG_LOG
-    LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);    
+    LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
   CamEcmProfile_t EcmProfile;
   MEMSET(&EcmProfile, 0, sizeof(EcmProfile));
   ListInit(&EcmProfile.ecm_scheme);
-  
+
   XML_CHECK_START(CALIB_SENSOR_AEC_ECM_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-  
+
   const XMLNode* pchild = plement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3168,12 +3495,12 @@ bool CalibDb::parseEntryAecEcm
 
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddEcmProfile(m_CalibDbHandle, &EcmProfile);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -3215,13 +3542,13 @@ bool CalibDb::parseEntryAecEcmPriorityScheme
   MEMSET(pEcmScheme, 0, sizeof(*pEcmScheme));
 
   XML_CHECK_START(CALIB_SENSOR_AEC_ECM_SCHEMES_TAG_ID, CALIB_SENSOR_AEC_ECM_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3245,12 +3572,12 @@ bool CalibDb::parseEntryAecEcmPriorityScheme
 
       return ( false );
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   if (pEcmScheme) {
     ListPrepareItem(pEcmScheme);
     ListAddTail(&pEcmProfile->ecm_scheme, pEcmScheme);
@@ -3286,7 +3613,7 @@ bool CalibDb::parseAECDySetpoint
   MEMSET(pDySetpointFile, 0, sizeof(*pDySetpointFile));
 
   XML_CHECK_START(CALIB_SENSOR_AEC_DYNAMIC_SETPOINT_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-  
+
   int nExpValue = 0;
   int nDysetpoint = 0;
 
@@ -3295,7 +3622,7 @@ bool CalibDb::parseAECDySetpoint
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3332,15 +3659,20 @@ bool CalibDb::parseAECDySetpoint
 	      DCT_ASSERT((no == tag.Size()));
 		  nDysetpoint = no;
   	  }
+	}else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AEC_DYNAMIC_SETPOINT_FILTER_FAC_TAG_ID))
+	{
+		int no = ParseFloatArray(tag.Value(), &pDySetpointFile->filter_fac, 1);
+		DCT_ASSERT((no == 1));
 	}else{
 		LOGE( "%s(%d): parse error inDynamic Setpoint (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());
+		return false;
 	}
-	
+
 	pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   DCT_ASSERT((nDysetpoint == nExpValue));
   pDySetpointFile->array_size = nDysetpoint;
 
@@ -3387,13 +3719,13 @@ bool CalibDb::parseAECExpSeparate
   int nSGainDot = 0;
 
   XML_CHECK_START(CALIB_SENSOR_AEC_EXP_SEPARATE_TAG_ID, CALIB_SENSOR_AEC_TAG_ID);
-  
+
   const XMLNode* pchild = plement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3440,12 +3772,12 @@ bool CalibDb::parseAECExpSeparate
 	  LOGE( "%s(%d): parse error AEC_EXP_SEPARATE Setpoint (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 	  return false;
 	}
-	
+
 	pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   DCT_ASSERT((nGainDot == nTimeDot));
   DCT_ASSERT((nGainDot == nLTimeDot));
   DCT_ASSERT((nGainDot == nSTimeDot));
@@ -3477,7 +3809,7 @@ bool CalibDb::parseEntryAwb
   (void)param;
 
 #ifdef DEBUG_LOG
-    LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);    
+    LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
   CAM_AwbVersion_t vName;
 
@@ -3488,7 +3820,7 @@ bool CalibDb::parseEntryAwb
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3511,7 +3843,7 @@ bool CalibDb::parseEntryAwb
 		DCT_ASSERT(result == RET_SUCCESS);
 	} else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_VERSION_11_TAG_ID)){
       if (!parseEntryAwb_V11_Para(pchild->ToElement())) {
-#if 1	  	
+#if 1
 	  	LOGE("%s(%d): parse error in AWB version_11 para:%s\n", __FUNCTION__, __LINE__, tagname.c_str());
 #endif
         return (false);
@@ -3523,18 +3855,25 @@ bool CalibDb::parseEntryAwb
 #endif
         return (false);
       }
+    }  else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_PARA_TAG_ID)){
+      if(!parseEntryAwb_Flash_Para(pchild->ToElement())) {
+#if 1
+    	LOGE("%s(%d): parse error in AWB flash para:%s\n", __FUNCTION__, __LINE__, tagname.c_str());
+#endif
+        return (false);
+      }
     } else {
 #if 1
       LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
       return ( false );
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -3564,13 +3903,13 @@ bool CalibDb::parseEntryAwb_V10_IIR
     }
 
     XML_CHECK_START(CALIB_SENSOR_AWB_V10_GLOBALS_IIR_ID, CALIB_SENSOR_AWB_V10_GLOBALS_TAG_ID);
-  
+
 	const XMLNode* pchild = pelement->FirstChild();
   	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3597,24 +3936,24 @@ bool CalibDb::parseEntryAwb_V10_IIR
 		  int no = ParseUshortArray(tag.Value(), &pAwbData->IIR.IIRFilterSize, 1);
 		  DCT_ASSERT((no == tag.Size()));
 		}  else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_GLOBALS_IIR_EXP_PRIOR_FILTER_SIZE_MIN_TAG_ID)){
-		  
+
 		}else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_GLOBALS_IIR_EXP_PRIOR_MIDDLE_TAG_ID)){
 		  int no = ParseFloatArray(tag.Value(), &pAwbData->IIR.fIIRFilterInitValue, 1);
 		  DCT_ASSERT((no == tag.Size()));
 		} else {
 #if 1
-		  LOGE( "%s(%d): parse error in AWB GLOBALS - IIR section (unknow tag: %s)\n", 
+		  LOGE( "%s(%d): parse error in AWB GLOBALS - IIR section (unknow tag: %s)\n",
 		   		__FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		  return (false);
-		}		
+		}
     	pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 }
@@ -3642,13 +3981,13 @@ bool CalibDb::parseEntryAwb_V11_IIR
     }
 
     XML_CHECK_START(CALIB_SENSOR_AWB_V10_GLOBALS_IIR_ID, CALIB_SENSOR_AWB_V11_GLOBALS_TAG_ID);
-  
+
 	const XMLNode* pchild = pelement->FirstChild();
   	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3675,24 +4014,24 @@ bool CalibDb::parseEntryAwb_V11_IIR
 		  int no = ParseUshortArray(tag.Value(), &pAwbData->IIR.IIRFilterSize, 1);
 		  DCT_ASSERT((no == tag.Size()));
 		} else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_GLOBALS_IIR_EXP_PRIOR_FILTER_SIZE_MIN_TAG_ID)){
-		  
+
 		} else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_GLOBALS_IIR_EXP_PRIOR_MIDDLE_TAG_ID)){
 		  int no = ParseFloatArray(tag.Value(), &pAwbData->IIR.fIIRFilterInitValue, 1);
 		  DCT_ASSERT((no == tag.Size()));
 		} else {
 #if 1
-		  LOGE( "%s(%d): parse error in AWB GLOBALS - IIR section (unknow tag: %s)\n", 
+		  LOGE( "%s(%d): parse error in AWB GLOBALS - IIR section (unknow tag: %s)\n",
 		   		__FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		  return (false);
-		}		
+		}
     	pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 }
@@ -3713,13 +4052,13 @@ bool CalibDb::parseEntryAwb_V10_Para
 #endif
   CAM_AwbVersion_t vName;
   XML_CHECK_START(CALIB_SENSOR_AWB_VERSION_10_TAG_ID, CALIB_SENSOR_AWB_TAG_ID);
-	
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3743,10 +4082,10 @@ bool CalibDb::parseEntryAwb_V10_Para
 		}
 	}else{
 #if 1
-        LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());         
+        LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		return (false);
-	}	
+	}
 	pchild = pchild->NextSibling();
 
   }
@@ -3781,7 +4120,7 @@ bool CalibDb::parseEntryAwb_V11_Para
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -3804,16 +4143,16 @@ bool CalibDb::parseEntryAwb_V11_Para
 		}
 	}else{
 #if 1
-        	LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());         
+        	LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
 			return (false);
-	}	
+	}
 	pchild = pchild->NextSibling();
 
   }
 
   XML_CHECK_END();
-  
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
@@ -3884,14 +4223,14 @@ bool CalibDb::parseEntryAwb_V11_Globals
   int nRefCb = 0;
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V11_GLOBALS_TAG_ID, CALIB_SENSOR_AWB_VERSION_11_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     const char* value = tag.Value();
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -4100,15 +4439,15 @@ bool CalibDb::parseEntryAwb_V11_Globals
 	  }
     } else {
 #if 1
-      LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());    
+      LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   DCT_ASSERT((nRg1 == nMaxDist1));
   DCT_ASSERT((nRg2 == nMaxDist2));
 
@@ -4263,14 +4602,14 @@ bool CalibDb::parseEntryAwb_V10_Globals
   int nRefCb = 0;
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V10_GLOBALS_TAG_ID, CALIB_SENSOR_AWB_VERSION_10_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     const char* value = tag.Value();
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -4418,7 +4757,7 @@ bool CalibDb::parseEntryAwb_V10_Globals
 
       int no = ParseFloatArray(tag.Value(), pMinCRegionMin, nMinCRegionMin);
       DCT_ASSERT((no == nMinCRegionMin));
-    } else if ((XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_GLOBALS_MAXY_REGIONMAX_TAG_ID))               
+    } else if ((XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_GLOBALS_MAXY_REGIONMAX_TAG_ID))
     		&& (NULL == pMaxYRegionMax)) {
       nMaxYRegionMax = tag.Size();
       pMaxYRegionMax = (float*)malloc(sizeof(float) * nMaxYRegionMax);
@@ -4517,12 +4856,12 @@ bool CalibDb::parseEntryAwb_V10_Globals
 #endif
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   DCT_ASSERT((nRg1 == nMaxDist1));
   DCT_ASSERT((nRg2 == nMaxDist2));
 
@@ -4616,7 +4955,15 @@ bool CalibDb::parseEntryAwb_V10_Globals
   return (true);
 }
 
-
+static void strtrim(char *p, int size)
+{
+    for(int i=0; i<size; i++){
+        if((p[i] ==  10) || (p[i] ==  32)){
+            p[i] = 0;
+            break;
+        }
+    }
+}
 
 
 
@@ -4641,13 +4988,13 @@ bool CalibDb::parseEntryAwb_V10_IlluminationGMM
     }
 
     XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_GMM_TAG_ID, CALIB_SENSOR_AWB_V10_ILLUMINATION_TAG_ID);
-  
+
 	const XMLNode* pchild = pelement->FirstChild();
   	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -4670,19 +5017,19 @@ bool CalibDb::parseEntryAwb_V10_IlluminationGMM
           DCT_ASSERT((no == tag.Size()));
         } else {
 #if 1
-		  LOGE( "%s(%d): parse error in AWB illumination GMM section (unknow tag: %s)\n", 
+		  LOGE( "%s(%d): parse error in AWB illumination GMM section (unknow tag: %s)\n",
 		  		__FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		  return (false);
-		}		
+		}
     	pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 return true;
 
@@ -4704,7 +5051,7 @@ bool CalibDb::parseEntryAwb_V10_IlluminationSat
     int n_gains     = 0;
     float* afSat    = NULL;
     int n_sats      = 0;
-	  
+
     CamSaturationCurve_t *pSaturationCurve= (CamSaturationCurve_t *)param;
     if(NULL == pSaturationCurve){
 		LOGD("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
@@ -4712,13 +5059,13 @@ bool CalibDb::parseEntryAwb_V10_IlluminationSat
     }
 
     XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_SAT_CT_TAG_ID, CALIB_SENSOR_AWB_V10_ILLUMINATION_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
   	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -4743,25 +5090,25 @@ bool CalibDb::parseEntryAwb_V10_IlluminationSat
           DCT_ASSERT((no == n_sats));
         } else {
 #if 1
-		  LOGE( "%s(%d): parse error in awb illumination sat section (unknow tag: %s)\n", 
+		  LOGE( "%s(%d): parse error in awb illumination sat section (unknow tag: %s)\n",
 		  __FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		  return (false);
-		}		
+		}
     	pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 	DCT_ASSERT((n_gains == n_sats));
     pSaturationCurve->ArraySize      = n_gains;
     pSaturationCurve->pSensorGain    = afGain;
     pSaturationCurve->pSaturation    = afSat;
-	  
+
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -4784,7 +5131,7 @@ bool CalibDb::parseEntryAwb_V11_IlluminationSat
     int n_gains     = 0;
     float* afSat    = NULL;
     int n_sats      = 0;
-	  
+
     CamSaturationCurve_t *pSaturationCurve= (CamSaturationCurve_t *)param;
     if(NULL == pSaturationCurve){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
@@ -4792,13 +5139,13 @@ bool CalibDb::parseEntryAwb_V11_IlluminationSat
     }
 
     XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_SAT_CT_TAG_ID, CALIB_SENSOR_AWB_V11_ILLUMINATION_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
   	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -4823,25 +5170,25 @@ bool CalibDb::parseEntryAwb_V11_IlluminationSat
           DCT_ASSERT((no == n_sats));
         } else {
 #if 1
-		  LOGE( "%s(%d): parse error in awb illumination sat section (unknow tag: %s)\n", 
+		  LOGE( "%s(%d): parse error in awb illumination sat section (unknow tag: %s)\n",
 		  __FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		  return (false);
-		}		
+		}
     	pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 	DCT_ASSERT((n_gains == n_sats));
     pSaturationCurve->ArraySize      = n_gains;
     pSaturationCurve->pSensorGain    = afGain;
     pSaturationCurve->pSaturation    = afSat;
-	  
+
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -4861,7 +5208,7 @@ bool CalibDb::parseEntryAwb_V10_IlluminationVig
     int n_gains     = 0;
     float* afVig    = NULL;
     int n_vigs      = 0;
-	  
+
     CamVignettingCurve_t *pVignettingCurve= (CamVignettingCurve_t *)param;
     if(NULL == pVignettingCurve){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
@@ -4869,13 +5216,13 @@ bool CalibDb::parseEntryAwb_V10_IlluminationVig
     }
 
     XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_VIG_CT_TAG_ID, CALIB_SENSOR_AWB_V10_ILLUMINATION_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
   	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -4900,25 +5247,25 @@ bool CalibDb::parseEntryAwb_V10_IlluminationVig
           DCT_ASSERT((no == n_vigs));
         } else {
 #if 1
-		  LOGE( "%s(%d): parse error in awb illumination vig section (unknow tag: %s)\n", 
+		  LOGE( "%s(%d): parse error in awb illumination vig section (unknow tag: %s)\n",
 		  __FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		  return (false);
-		}		
+		}
     	pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 	DCT_ASSERT((n_gains == n_vigs));
     pVignettingCurve->ArraySize      = n_gains;
     pVignettingCurve->pSensorGain    = afGain;
     pVignettingCurve->pVignetting    = afVig;
-	  
+
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -4939,7 +5286,7 @@ bool CalibDb::parseEntryAwb_V11_IlluminationVig
     int n_gains     = 0;
     float* afVig    = NULL;
     int n_vigs      = 0;
-	  
+
     CamVignettingCurve_t *pVignettingCurve= (CamVignettingCurve_t *)param;
     if(NULL == pVignettingCurve){
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
@@ -4947,13 +5294,13 @@ bool CalibDb::parseEntryAwb_V11_IlluminationVig
     }
 
     XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_VIG_CT_TAG_ID, CALIB_SENSOR_AWB_V11_ILLUMINATION_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
   	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -4978,25 +5325,25 @@ bool CalibDb::parseEntryAwb_V11_IlluminationVig
           DCT_ASSERT((no == n_vigs));
         } else {
 #if 1
-		  LOGE( "%s(%d): parse error in awb illumination vig section (unknow tag: %s)\n", 
+		  LOGE( "%s(%d): parse error in awb illumination vig section (unknow tag: %s)\n",
 		  __FUNCTION__,__LINE__,tagname.c_str());
 #endif
 		  return (false);
-		}		
+		}
     	pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 	DCT_ASSERT((n_gains == n_vigs));
     pVignettingCurve->ArraySize      = n_gains;
     pVignettingCurve->pSensorGain    = afGain;
     pVignettingCurve->pVignetting    = afVig;
-	  
+
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -5020,13 +5367,13 @@ bool CalibDb::parseEntryAwb_V10_Illumination
   MEMSET(&illu, 0, sizeof(illu));
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_TAG_ID, CALIB_SENSOR_AWB_VERSION_10_TAG_ID);
-    
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5034,6 +5381,7 @@ bool CalibDb::parseEntryAwb_V10_Illumination
     if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_ILLUMINATION_NAME_TAG_ID)){
       char* value = Toupper(tag.Value());
       strncpy(illu.name, value, sizeof(illu.name));
+      strtrim(illu.name,sizeof(illu.name));
 #ifdef DEBUG_LOG
       LOGE( "%s(%d): tag: %s\n", __FUNCTION__,__LINE__,value);
 #endif
@@ -5049,6 +5397,7 @@ bool CalibDb::parseEntryAwb_V10_Illumination
         illu.DoorType = CAM_DOOR_TYPE_OUTDOOR;
       } else {
         LOGE( "%s(%d): invalid illumination doortype (%s)\n", __FUNCTION__,__LINE__,s_value.c_str());
+		return false;
       }
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_ILLUMINATION_AWB_TYPE_TAG_ID)){
       char* value = Toupper(tag.Value());
@@ -5062,6 +5411,7 @@ bool CalibDb::parseEntryAwb_V10_Illumination
         illu.AwbType = CAM_AWB_TYPE_AUTO;
       } else {
         LOGE( "%s(%d): invalid AWB type (%s)\n", __FUNCTION__,__LINE__,s_value.c_str());
+		return false;
       }
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_ILLUMINATION_MANUAL_WB_TAG_ID)){
       int i = (sizeof(illu.ComponentGain) / sizeof(illu.ComponentGain.fCoeff[0]));
@@ -5094,7 +5444,7 @@ bool CalibDb::parseEntryAwb_V10_Illumination
       if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryAwb_V10_IlluminationAlsc, &illu,
 	  		(uint32_t)(CALIB_SENSOR_AWB_V10_ILLUMINATION_ALSC_TAG_ID), (uint32_t)(CALIB_SENSOR_AWB_V10_ILLUMINATION_TAG_ID))) {
 #if 1
-        LOGE( "%s(%d): parse error in AWB aLSC (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());    
+        LOGE( "%s(%d): parse error in AWB aLSC (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
         return (false);
       }
@@ -5108,12 +5458,12 @@ bool CalibDb::parseEntryAwb_V10_Illumination
       LOGE( "%s(%d): parse error in AWB illumination section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddAwb_V10_Illumination(m_CalibDbHandle, &illu);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -5150,13 +5500,13 @@ bool CalibDb::parseEntryAwb_V11_Illumination
   MEMSET(&illu, 0, sizeof(illu));
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V11_ILLUMINATION_TAG_ID, CALIB_SENSOR_AWB_VERSION_11_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5164,6 +5514,7 @@ bool CalibDb::parseEntryAwb_V11_Illumination
     if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_V10_ILLUMINATION_NAME_TAG_ID)){
       char* value = Toupper(tag.Value());
       strncpy(illu.name, value, sizeof(illu.name));
+      strtrim(illu.name,sizeof(illu.name));
 #ifdef DEBUG_LOG
  	  LOGD( "%s(%d): tag: %s\n", __FUNCTION__,__LINE__,value);
 #endif
@@ -5184,7 +5535,7 @@ bool CalibDb::parseEntryAwb_V11_Illumination
       char* value = Toupper(tag.Value());
       std::string s_value(value);
 #ifdef DEBUG_LOG
-      LOGD( "%s(%d): value: %s\n", __FUNCTION__,__LINE__,s_value.c_str());                  
+      LOGD( "%s(%d): value: %s\n", __FUNCTION__,__LINE__,s_value.c_str());
 #endif
       if (s_value == CALIB_SENSOR_AWB_ILLUMINATION_AWB_TYPE_MANUAL) {
         illu.AwbType = CAM_AWB_TYPE_MANUAL;
@@ -5223,7 +5574,7 @@ bool CalibDb::parseEntryAwb_V11_Illumination
       if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryAwb_V11_IlluminationAlsc, &illu,
 	  	(uint32_t)(CALIB_SENSOR_AWB_V10_ILLUMINATION_ALSC_TAG_ID), (uint32_t)(CALIB_SENSOR_AWB_V11_ILLUMINATION_TAG_ID))) {
 #if 1
-        LOGE( "%s(%d): parse error in AWB aLSC (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());    
+        LOGE( "%s(%d): parse error in AWB aLSC (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
         return (false);
       }
@@ -5234,15 +5585,15 @@ bool CalibDb::parseEntryAwb_V11_Illumination
 	  }
     } else {
 #if 1
-      LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());         
+      LOGE( "%s(%d): parse error in AWB section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddAwb_V11_Illumination(m_CalibDbHandle, &illu);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -5280,13 +5631,13 @@ bool CalibDb::parseEntryAwb_V10_IlluminationAlsc
   int resIdx = -1;
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_ALSC_TAG_ID, CALIB_SENSOR_AWB_V10_ILLUMINATION_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
-	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());	
-	
+	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5303,7 +5654,7 @@ bool CalibDb::parseEntryAwb_V10_IlluminationAlsc
     } else {
       LOGE( "%s(%d): unknown awb v11 aLSC tag: (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
@@ -5347,13 +5698,13 @@ bool CalibDb::parseEntryAwb_V11_IlluminationAlsc
   int resIdx = -1;
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_ALSC_TAG_ID, CALIB_SENSOR_AWB_V11_ILLUMINATION_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5368,14 +5719,14 @@ bool CalibDb::parseEntryAwb_V11_IlluminationAlsc
       RESULT result = CamCalibDbGetResolutionIdxByName(m_CalibDbHandle, value, &resIdx);
       DCT_ASSERT(result == RET_SUCCESS);
     } else {
-      LOGE( "%s(%d): unknown awb v11 aLSC tag:  %s\n", __FUNCTION__,__LINE__,tagname.c_str());    
+      LOGE( "%s(%d): unknown awb v11 aLSC tag:  %s\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   DCT_ASSERT(resIdx != -1);
 
   int no = ParseLscProfileArray(lsc_profiles, pIllu->lsc_profiles[resIdx], CAM_NO_LSC_PROFILES);
@@ -5412,14 +5763,14 @@ bool CalibDb::parseEntryAwb_V10_IlluminationAcc
   }
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_ACC_TAG_ID, CALIB_SENSOR_AWB_V10_ILLUMINATION_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
-#ifdef DEBUG_LOG        
+
+#ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
 
@@ -5432,12 +5783,12 @@ bool CalibDb::parseEntryAwb_V10_IlluminationAcc
       LOGE( "%s(%d): unknown awb v10 aCC tag: %s\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -5466,14 +5817,14 @@ bool CalibDb::parseEntryAwb_V11_IlluminationAcc
   }
 
   XML_CHECK_START(CALIB_SENSOR_AWB_V10_ILLUMINATION_ACC_TAG_ID, CALIB_SENSOR_AWB_V11_ILLUMINATION_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
-#ifdef DEBUG_LOG    
+
+#ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
 
@@ -5486,12 +5837,12 @@ bool CalibDb::parseEntryAwb_V11_IlluminationAcc
       LOGE( "%s(%d): unknown aCC tag: %s\n", __FUNCTION__,__LINE__,tagname.c_str());
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
 #endif
@@ -5499,6 +5850,98 @@ bool CalibDb::parseEntryAwb_V11_IlluminationAcc
   return (true);
 }
 
+/******************************************************************************
+ * CalibDb::parseEntryAwb_Flash_Para
+ *****************************************************************************/
+bool CalibDb::parseEntryAwb_Flash_Para
+(
+    const XMLElement*   pelement,
+    void*                param
+){
+    (void)param;
+
+#ifdef DEBUG_LOG
+    LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
+#endif
+    CamAwbPara_Flash_t FlashPara;
+
+    XML_CHECK_START(CALIB_SENSOR_AWB_FLASH_PARA_TAG_ID, CALIB_SENSOR_AWB_TAG_ID);
+
+    const XMLNode* pchild = pelement->FirstChild();
+    while (pchild) {
+        XmlTag tag = XmlTag(pchild->ToElement());
+        std::string tagname(pchild->ToElement()->Name());
+        XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
+
+#ifdef DEBUG_LOG
+        LOGD( "%s(%d): tag:%s \n value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
+#endif
+
+        if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_FLASHTYPE_TAG_ID)){
+            int i = tag.Size();
+            float tmp;
+            int no = ParseFloatArray(tag.Value(), &tmp, i);
+            DCT_ASSERT((no == tag.Size()));
+            FlashPara.FlashType= (CamAwbPara_Flash_Type_t)((int)tmp);
+        }else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_LVVALUES_TAG_ID)){
+            int i = (sizeof(FlashPara.LvValues) / sizeof(FlashPara.LvValues[0]));
+            int no = ParseFloatArray(tag.Value(), FlashPara.LvValues, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_PREFLASHWEIGHTS1_TAG_ID)){
+            int i = (sizeof(FlashPara.PreFlshWeighs1) / sizeof(FlashPara.PreFlshWeighs1[0]));
+            int no = ParseFloatArray(tag.Value(), FlashPara.PreFlshWeighs1, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_LVFLASHTH1_TAG_ID)){
+            int i = tag.Size();
+            int no = ParseFloatArray(tag.Value(), &FlashPara.LvFlashTh1, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_LVVALRATIO_TAG_ID)){
+            int i = (sizeof(FlashPara.LvValRatio) / sizeof(FlashPara.LvValRatio[0]));
+            int no = ParseFloatArray(tag.Value(), FlashPara.LvValRatio, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_PREFLASHWEIGHTS2_TAG_ID)){
+            int i = (sizeof(FlashPara.PreFlshWeighs2) / sizeof(FlashPara.PreFlshWeighs2[0]));
+            int no = ParseFloatArray(tag.Value(), FlashPara.PreFlshWeighs2, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_LVFLASHTH2_TAG_ID)){
+            int i = tag.Size();
+            int no = ParseFloatArray(tag.Value(), &FlashPara.LvFlashTh2, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_LVVALRATIO3_TAG_ID)){
+            int i = (sizeof(FlashPara.LvValRatio3) / sizeof(FlashPara.LvValRatio3[0]));
+            int no = ParseFloatArray(tag.Value(), FlashPara.LvValRatio3, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_MAINFLASHWEIGHTS_TAG_ID)){
+            int i = (sizeof(FlashPara.MainFlshWeighs) / sizeof(FlashPara.MainFlshWeighs[0]));
+            int no = ParseFloatArray(tag.Value(), FlashPara.MainFlshWeighs, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_LVVALUEIIRSIZE_TAG_ID)){
+            int i = tag.Size();
+            float tmp;
+            int no = ParseFloatArray(tag.Value(), &tmp, i);
+            DCT_ASSERT((no == tag.Size()));
+            FlashPara.LvValueIIRSize = (int)tmp;
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_DAMPFACTOR_TAG_ID)){
+            int i = tag.Size();
+            int no = ParseFloatArray(tag.Value(), &FlashPara.dampfactor, i);
+            DCT_ASSERT((no == tag.Size()));
+        }else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_AWB_FLASH_AECCONVERGETH_TAG_ID)){
+            int i = tag.Size();
+            int no = ParseFloatArray(tag.Value(), &FlashPara.AeConvergeTh, i);
+            DCT_ASSERT((no == tag.Size()));
+        }
+        pchild = pchild->NextSibling();
+    }
+
+    XML_CHECK_END();
+    RESULT result = CamCalibDbAddAwb_FlashProfiles(m_CalibDbHandle, FlashPara);
+    DCT_ASSERT(result == RET_SUCCESS);
+
+#ifdef DEBUG_LOG
+    LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
+#endif
+    return true;
+}
 /******************************************************************************
  * CalibDb::parseEntryLsc
  *****************************************************************************/
@@ -5515,13 +5958,13 @@ bool CalibDb::parseEntryLsc
   MEMSET(&lsc_profile, 0, sizeof(lsc_profile));
 
   XML_CHECK_START(CALIB_SENSOR_LSC_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5588,7 +6031,7 @@ bool CalibDb::parseEntryLsc
 #endif
 
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
@@ -5623,13 +6066,13 @@ bool CalibDb::parseEntryCc
   MEMSET(&cc_profile, 0, sizeof(cc_profile));
 
   XML_CHECK_START(CALIB_SENSOR_CC_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5658,12 +6101,12 @@ bool CalibDb::parseEntryCc
 #endif
 
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddCcProfile(m_CalibDbHandle, &cc_profile);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -5694,13 +6137,13 @@ bool CalibDb::parseEntryBls
   MEMSET(&bls_profile, 0, sizeof(bls_profile));
 
   XML_CHECK_START(CALIB_SENSOR_BLS_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5721,12 +6164,12 @@ bool CalibDb::parseEntryBls
 #endif
 
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddBlsProfile(m_CalibDbHandle, &bls_profile);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -5757,13 +6200,13 @@ bool CalibDb::parseEntryCac
   MEMSET(&cac_profile, 0, sizeof(cac_profile));
 
   XML_CHECK_START(CALIB_SENSOR_CAC_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -5805,12 +6248,12 @@ bool CalibDb::parseEntryCac
 #endif
 
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddCacProfile(m_CalibDbHandle, &cac_profile);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -5836,7 +6279,7 @@ bool CalibDb::parseEntryFilterDemosiacTH
     float* afThlevel	 = NULL;
     int n_Thlevels 	 = 0;
     int index = 0;
-	  
+
 	CamFilterProfile_t* pFilter = (CamFilterProfile_t*)param;
     if (NULL == pFilter) {
 		LOGD("%s(%d):  null pointer (exit)\n", __FUNCTION__, __LINE__);
@@ -5844,17 +6287,17 @@ bool CalibDb::parseEntryFilterDemosiacTH
     }
 
   	XML_CHECK_START(CALIB_SENSOR_DPF_FILT_DEMOSAIC_TH_CONF_TAG_ID, CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID);
-  
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
-#endif		
-		
+#endif
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_FILT_DEMOSAIC_TH_GAIN_TAG_ID)){
     	  if (!afGain) {
     		n_gains = tag.Size();
@@ -5873,17 +6316,18 @@ bool CalibDb::parseEntryFilterDemosiacTH
 
     	  int no = ParseFloatArray(tag.Value(), afThlevel, n_Thlevels);
     	  DCT_ASSERT((no == n_Thlevels));
-    	} else {		
+    	} else {
 #if 1
-          LOGE( "%s(%d): parse error in filter demosaicTH section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in filter demosaicTH section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
     DCT_ASSERT((n_gains == n_Thlevels));
     pFilter->DemosaicThCurve.ArraySize	  = n_gains;
     pFilter->DemosaicThCurve.pSensorGain	  = afGain;
@@ -5892,10 +6336,10 @@ bool CalibDb::parseEntryFilterDemosiacTH
   		pFilter->DemosaicThCurve.pThlevel[index] = (uint8_t)((int)afThlevel[index]);
     }
     free(afThlevel);
-	  
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -5917,7 +6361,7 @@ bool CalibDb::parseEntryFilterSharpLevel
     float* afSlevel	 = NULL;
     int n_Slevels 	 = 0;
     int index = 0;
-	  
+
 	CamFilterProfile_t* pFilter = (CamFilterProfile_t*)param;
     if (NULL == pFilter) {
 		LOGD("%s(%d):  null pointer (exit)\n", __FUNCTION__, __LINE__);
@@ -5925,18 +6369,18 @@ bool CalibDb::parseEntryFilterSharpLevel
     }
 
   	XML_CHECK_START(CALIB_SENSOR_DPF_SHARPENINGLEVEL_TAG_ID, CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-		
-		
+
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_SHARPENINGLEVEL_GAINS_TAG_ID)){
 		  if (!afGain) {
 			n_gains = tag.Size();
@@ -5955,18 +6399,19 @@ bool CalibDb::parseEntryFilterSharpLevel
 
 		  int no = ParseFloatArray(tag.Value(), afSlevel, n_Slevels);
 		  DCT_ASSERT((no == n_Slevels));
-		} else {		
+		} else {
 #if 1
-          LOGE( "%s(%d): parse error in filter SharpLevel section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in filter SharpLevel section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
+		  return false;
 		}
-		
+
         pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
     DCT_ASSERT((n_gains == n_Slevels));
     pFilter->SharpeningLevelCurve.ArraySize	  = n_gains;
     pFilter->SharpeningLevelCurve.pSensorGain	  = afGain;
@@ -5976,10 +6421,10 @@ bool CalibDb::parseEntryFilterSharpLevel
   		pFilter->SharpeningLevelCurve.pSlevel[index] = (CamerIcIspFltSharpeningLevel_t)((int)afSlevel[index] + 1);
     }
     free(afSlevel);
-	  
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -6002,7 +6447,7 @@ bool CalibDb::parseEntryFilterDenoiseLevel
     float* afDlevel	 = NULL;
     int n_Dlevels 	 = 0;
     int index = 0;
-	  
+
 	CamFilterProfile_t* pFilter = (CamFilterProfile_t*)param;
     if (NULL == pFilter) {
 		LOGE("%s(%d):  null pointer (exit)\n", __FUNCTION__, __LINE__);
@@ -6010,17 +6455,17 @@ bool CalibDb::parseEntryFilterDenoiseLevel
     }
 
   	XML_CHECK_START(CALIB_SENSOR_DPF_DENOISELEVEL_TAG_ID, CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-		
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_DENOISELEVEL_GAINS_TAG_ID)){
 		  if (!afGain) {
 			n_gains = tag.Size();
@@ -6039,31 +6484,32 @@ bool CalibDb::parseEntryFilterDenoiseLevel
 
 		  int no = ParseFloatArray(tag.Value(), afDlevel, n_Dlevels);
 		  DCT_ASSERT((no == n_Dlevels));
-		} else {		
+		} else {
 #if 1
-          LOGE( "%s(%d): parse error in filter DenoiseLevel section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in filter DenoiseLevel section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
 	}
 
 	 XML_CHECK_END();
-	 
+
 	 DCT_ASSERT((n_gains == n_Dlevels));
      pFilter->DenoiseLevelCurve.ArraySize	   = n_gains;
      pFilter->DenoiseLevelCurve.pSensorGain    = afGain;
      pFilter->DenoiseLevelCurve.pDlevel = (CamerIcIspFltDeNoiseLevel_t*)malloc((n_Dlevels * sizeof(CamerIcIspFltDeNoiseLevel_t)));
-   
+
      for (index = 0; index < pFilter->DenoiseLevelCurve.ArraySize; index++) {
    		pFilter->DenoiseLevelCurve.pDlevel[index] = (CamerIcIspFltDeNoiseLevel_t)((int)afDlevel[index] + 1);
      }
-   
+
      free(afDlevel);
-	  
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -6080,7 +6526,7 @@ bool CalibDb::parseEntryFilterRegConfig
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	
+
 	CamFilterProfile_t* pFilter = (CamFilterProfile_t*)param;
     if (NULL == pFilter) {
     	LOGE("%s(%d):  null pointer (exit)\n", __FUNCTION__, __LINE__);
@@ -6088,14 +6534,14 @@ bool CalibDb::parseEntryFilterRegConfig
     }
 
   	XML_CHECK_START(CALIB_SENSOR_DPF_FILT_LEVEL_REG_CONF_TAG_ID, CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID);
-  	
+
 	const XMLNode* pchild = pelement->FirstChild();
-	
+
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -6118,7 +6564,7 @@ bool CalibDb::parseEntryFilterRegConfig
 
 			for(int i=0; i < no; i++){
 				if(p_FiltLevel[i] > 10){
-					LOGD( "%s(%d): filter level only support 10 level, %d > 10 is invalid \n", 
+					LOGD( "%s(%d): filter level only support 10 level, %d > 10 is invalid \n",
 						__FUNCTION__, __LINE__, p_FiltLevel[i]);
 					p_FiltLevel[i] = 10;
 				}
@@ -6136,7 +6582,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_grn_stage1 = p_grn_stage1;
 			for(int i=0; i < no; i++){
 				if(p_grn_stage1[i] > 8){
-					LOGD( "%s(%d): grn_stage1 only support 0-8, %d > 8 is invalid \n", 
+					LOGD( "%s(%d): grn_stage1 only support 0-8, %d > 8 is invalid \n",
 						__FUNCTION__, __LINE__, p_grn_stage1[i]);
 					p_grn_stage1[i] = 8;
 				}
@@ -6154,7 +6600,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_chr_h_mode = p_chr_h_mode;
 			for(int i=0; i < no; i++){
 				if(p_chr_h_mode[i] > 3){
-					LOGD( "%s(%d): chr_h_mode only support 0-3, %d > 3 is invalid \n", 
+					LOGD( "%s(%d): chr_h_mode only support 0-3, %d > 3 is invalid \n",
 						__FUNCTION__, __LINE__, p_chr_h_mode[i]);
 					p_chr_h_mode[i] = 3;
 				}
@@ -6172,7 +6618,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_chr_v_mode = p_chr_v_mode;
 			for(int i=0; i < no; i++){
 				if(p_chr_v_mode[i] > 3){
-					LOGD( "%s(%d): chr_h_mode only support 0-3, %d > 3 is invalid \n", 
+					LOGD( "%s(%d): chr_h_mode only support 0-3, %d > 3 is invalid \n",
 						__FUNCTION__, __LINE__, p_chr_v_mode[i]);
 					p_chr_v_mode[i] = 3;
 				}
@@ -6190,7 +6636,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_thresh_bl0 = p_thresh_bl0;
 			for(int i=0; i < no; i++){
 				if(p_thresh_bl0[i] > 1023){
-					LOGD( "%s(%d): thresh_bl0 only support 0-1023, %d > 1023 is invalid \n", 
+					LOGD( "%s(%d): thresh_bl0 only support 0-1023, %d > 1023 is invalid \n",
 						__FUNCTION__, __LINE__, p_thresh_bl0[i]);
 					p_thresh_bl0[i] = 1023;
 				}
@@ -6208,7 +6654,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_thresh_bl1 = p_thresh_bl1;
 			for(int i=0; i < no; i++){
 				if(p_thresh_bl1[i] > 1023){
-					LOGD( "%s(%d): thresh_bl1 only support 0-1023, %d > 1023 is invalid \n", 
+					LOGD( "%s(%d): thresh_bl1 only support 0-1023, %d > 1023 is invalid \n",
 						__FUNCTION__, __LINE__, p_thresh_bl1[i]);
 					p_thresh_bl1[i] = 1023;
 				}
@@ -6226,7 +6672,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_fac_bl0 = p_fac_bl0;
 			for(int i=0; i < no; i++){
 				if(p_fac_bl0[i] > 63){
-					LOGD( "%s(%d): fac_bl0 only support 0-63, %d > 63 is invalid \n", 
+					LOGD( "%s(%d): fac_bl0 only support 0-63, %d > 63 is invalid \n",
 						__FUNCTION__, __LINE__, p_fac_bl0[i]);
 					p_fac_bl0[i] = 63;
 				}
@@ -6244,7 +6690,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_fac_bl1 = p_fac_bl1;
 			for(int i=0; i < no; i++){
 				if(p_fac_bl1[i] > 63){
-					LOGD( "%s(%d): fac_bl1 only support 0-63, %d > 63 is invalid \n", 
+					LOGD( "%s(%d): fac_bl1 only support 0-63, %d > 63 is invalid \n",
 						__FUNCTION__, __LINE__, p_fac_bl1[i]);
 					p_fac_bl1[i] = 63;
 				}
@@ -6262,7 +6708,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_thresh_sh0 = p_thresh_sh0;
 			for(int i=0; i < no; i++){
 				if(p_thresh_sh0[i] > 1023){
-					LOGD( "%s(%d): thresh_sh0 only support 0-1023, %d > 1023 is invalid \n", 
+					LOGD( "%s(%d): thresh_sh0 only support 0-1023, %d > 1023 is invalid \n",
 						__FUNCTION__, __LINE__, p_thresh_sh0[i]);
 					p_thresh_sh0[i] = 1023;
 				}
@@ -6280,7 +6726,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_thresh_sh1 = p_thresh_sh1;
 			for(int i=0; i < no; i++){
 				if(p_thresh_sh1[i] > 1023){
-					LOGD( "%s(%d): thresh_sh2 only support 0-1023, %d > 1023 is invalid \n", 
+					LOGD( "%s(%d): thresh_sh2 only support 0-1023, %d > 1023 is invalid \n",
 						__FUNCTION__, __LINE__, p_thresh_sh1[i]);
 					p_thresh_sh1[i] = 1023;
 				}
@@ -6298,7 +6744,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_fac_sh0 = p_fac_sh0;
 			for(int i=0; i < no; i++){
 				if(p_fac_sh0[i] > 63){
-					LOGD( "%s(%d): fac_sh0 only support 0-63, %d > 63 is invalid \n", 
+					LOGD( "%s(%d): fac_sh0 only support 0-63, %d > 63 is invalid \n",
 						__FUNCTION__, __LINE__, p_fac_sh0[i]);
 					p_fac_sh0[i] = 63;
 				}
@@ -6316,7 +6762,7 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_fac_sh1 = p_fac_sh1;
 			for(int i=0; i < no; i++){
 				if(p_fac_sh1[i] > 63){
-					LOGD( "%s(%d): fac_sh1 only support 0-63, %d > 63 is invalid \n", 
+					LOGD( "%s(%d): fac_sh1 only support 0-63, %d > 63 is invalid \n",
 						__FUNCTION__, __LINE__, p_fac_sh1[i]);
 					p_fac_sh1[i] = 63;
 				}
@@ -6334,25 +6780,26 @@ bool CalibDb::parseEntryFilterRegConfig
 			pFilter->FiltLevelRegConf.p_fac_mid = p_fac_mid;
 			for(int i=0; i < no; i++){
 				if(p_fac_mid[i] > 63){
-					LOGD( "%s(%d): fac_mid only support 0-63, %d > 63 is invalid \n", 
+					LOGD( "%s(%d): fac_mid only support 0-63, %d > 63 is invalid \n",
 						__FUNCTION__, __LINE__, p_fac_mid[i]);
 					p_fac_mid[i] = 63;
 				}
 			}
 		}else {
 #if 1
-        	LOGE( "%s(%d): parse error in filter level reg conf section (unknow tag: %s)\n", 
+        	LOGE( "%s(%d): parse error in filter level reg conf section (unknow tag: %s)\n",
         	__FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+			return false;
+		}
 		pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -6382,13 +6829,13 @@ bool CalibDb::parseEntryFilter
   MEMSET(pFilter, 0, sizeof(*pFilter));
 
   XML_CHECK_START(CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID, CALIB_SENSOR_DPF_TAG_ID);
-	
+
   const XMLNode* pchild = plement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -6431,15 +6878,16 @@ bool CalibDb::parseEntryFilter
 	  }
 	}else{
 #if 1
-      LOGE( "%s(%d): parse error in filter section (unknow tag: %s)\n", 
+      LOGE( "%s(%d): parse error in filter section (unknow tag: %s)\n",
         	__FUNCTION__,__LINE__,tagname.c_str());
 #endif
-	}	
+	  return false;
+	}
 	pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   if (pFilter) {
 	 ListPrepareItem(pFilter);
 	 ListAddTail(&pdpf_profile->FilterList, pFilter);
@@ -6463,7 +6911,7 @@ bool CalibDb::parseEntryNew3DnrYnr
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
-	  
+
 	CamNewDsp3DNRProfile_t* pNew3Dnr= (CamNewDsp3DNRProfile_t*)param;
     if (NULL == pNew3Dnr) {
 		LOGE("%s(%d): invalia pointer (exit)\n", __FUNCTION__, __LINE__);
@@ -6474,17 +6922,17 @@ bool CalibDb::parseEntryNew3DnrYnr
     int nYnrSpaceLevel = 0;
 
   	XML_CHECK_START(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_YNR_SETTING_TAG_ID, CALIB_SENSOR_NEW_DSP_3DNR_SETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-				
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_YNR_ENABLE_TAG_ID)){
           int no = ParseUintArray(tag.Value(), &pNew3Dnr->ynr.enable_ynr, 1);
           DCT_ASSERT((no == tag.Size()));
@@ -6515,23 +6963,24 @@ bool CalibDb::parseEntryNew3DnrYnr
 	          DCT_ASSERT((no == tag.Size()));
 			  nYnrSpaceLevel = no;
 	  	  }
-        }else {		
+        }else {
 #if 1
-          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-	
+
     DCT_ASSERT((nYnrSpaceLevel == nYnrTimeLevel));
-   
+
 	pNew3Dnr->ArraySize = nYnrSpaceLevel;
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -6556,17 +7005,17 @@ bool CalibDb::parseEntryNew3DnrUVnr
 	int nUVnrLevel = 0;
 
   	XML_CHECK_START(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_UVNR_SETTING_TAG_ID, CALIB_SENSOR_NEW_DSP_3DNR_SETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-				
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_UVNR_ENABLE_TAG_ID)){
           int no = ParseUintArray(tag.Value(), &pNew3Dnr->uvnr.enable_uvnr, 1);
           DCT_ASSERT((no == tag.Size()));
@@ -6581,21 +7030,22 @@ bool CalibDb::parseEntryNew3DnrUVnr
 	          DCT_ASSERT((no == tag.Size()));
 			  nUVnrLevel = no;
 	  	  }
-        }else {		
+        }else {
 #if 1
-          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-   
+
 	pNew3Dnr->ArraySize = nUVnrLevel;
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -6612,7 +7062,7 @@ bool CalibDb::parseEntryNew3DnrSharp
 	LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
 #endif
 
-	  
+
 	CamNewDsp3DNRProfile_t* pNew3Dnr= (CamNewDsp3DNRProfile_t*)param;
     if (NULL == pNew3Dnr) {
 		LOGE("%s(%d):  null pointer (exit)\n", __FUNCTION__, __LINE__);
@@ -6620,19 +7070,19 @@ bool CalibDb::parseEntryNew3DnrSharp
     }
 
 	int nSharpLevel = 0;
-  
+
   	XML_CHECK_START(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_SHARP_SETTING_TAG_ID, CALIB_SENSOR_NEW_DSP_3DNR_SETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-				
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_SHARP_ENABLE_TAG_ID)){
           int no = ParseUintArray(tag.Value(), &pNew3Dnr->sharp.enable_sharp, 1);
           DCT_ASSERT((no == tag.Size()));
@@ -6647,21 +7097,22 @@ bool CalibDb::parseEntryNew3DnrSharp
 	          DCT_ASSERT((no == tag.Size()));
 			  nSharpLevel = no;
 	  	  }
-        }else {		
+        }else {
 #if 1
-          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+	 	  return false;
+		}
         pchild = pchild->NextSibling();
 	}
 
 	XML_CHECK_END();
-   
+
 	pNew3Dnr->ArraySize = nSharpLevel;
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -6698,13 +7149,13 @@ bool CalibDb::parseEntryNew3DNR
   MEMSET(pNewDsp3DNRProfile, 0, sizeof(*pNewDsp3DNRProfile));
 
   XML_CHECK_START(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_TAG_ID, CALIB_SENSOR_DPF_TAG_ID);
-  
+
   const XMLNode* pchild = plement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -6751,17 +7202,17 @@ bool CalibDb::parseEntryNew3DNR
 	 }
 	 else{
 #if 1
-	   LOGD( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+	   LOGD( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
 	   __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-
-	 }	 
+	   return false;
+	 }
 	 pchild = pchild->NextSibling();
 
    }
 
    XML_CHECK_END();
-   
+
    DCT_ASSERT(nGainLevel == nYnrTimeLevel);
    DCT_ASSERT(nGainLevel == nYnrSpaceLevel);
    DCT_ASSERT(nGainLevel == nUVnrLevel);
@@ -6799,25 +7250,25 @@ bool CalibDb::parseEntry3DnrLevel
     int nChrmSpNrLevel = 0;
     int nChrmTeNrLevel = 0;
     int nShpLevel = 0;
-	  
+
 	CamDsp3DNRSettingProfile_t* p3Dnr= (CamDsp3DNRSettingProfile_t*)param;
     if (NULL == p3Dnr) {
 		LOGE("%s(%d):  null pointer (exit)\n", __FUNCTION__, __LINE__);
       	return false;
     }
-  
+
   	XML_CHECK_START(CALIB_SENSOR_DSP_3DNR_SETTING_LEVEL_SETTING_TAG_ID, CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-				
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DSP_3DNR_SETTING_LUMA_SP_NR_EN_TAG_ID)){
           int no = ParseUcharArray(tag.Value(), &p3Dnr->sDefaultLevelSetting.luma_sp_nr_en, 1);
           DCT_ASSERT((no == tag.Size()));
@@ -6883,12 +7334,13 @@ bool CalibDb::parseEntry3DnrLevel
 			  DCT_ASSERT((no == tag.Size()));
 			  nShpLevel = no;
 	  	  }
-        }else {		
+        }else {
 #if 1
-          LOGD( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+          LOGD( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
     }
 
@@ -6903,7 +7355,7 @@ bool CalibDb::parseEntry3DnrLevel
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -6926,25 +7378,25 @@ bool CalibDb::parseEntry3DnrLuma
     int nLumaTeMaxBiNum = 0;
 	int nLumaWeight[CAM_CALIBDB_3DNR_WEIGHT_NUM];
 	MEMSET(nLumaWeight, 0x00, CAM_CALIBDB_3DNR_WEIGHT_NUM*sizeof(int));
-	
+
 	CamDsp3DNRSettingProfile_t* p3Dnr= (CamDsp3DNRSettingProfile_t*)param;
     if (NULL == p3Dnr) {
 		LOGE("%s(%d):  invalid pointer (exit)\n", __FUNCTION__, __LINE__);
       	return false;
     }
-  
+
   	XML_CHECK_START(CALIB_SENSOR_DSP_3DNR_SETTING_LUMA_SETTING_TAG_ID, CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-				
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DSP_3DNR_SETTING_LUMA_DEFAULT_TAG_ID)){
           int no = ParseUcharArray(tag.Value(), &p3Dnr->sLumaSetting.luma_default, 1);
           DCT_ASSERT((no == tag.Size()));
@@ -6990,12 +7442,13 @@ bool CalibDb::parseEntry3DnrLuma
 				  nLumaWeight[idx] = no;
    		  	    }
 			}
-        }else {		
+        }else {
 #if 1
-          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
     }
 
@@ -7009,7 +7462,7 @@ bool CalibDb::parseEntry3DnrLuma
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -7030,25 +7483,25 @@ bool CalibDb::parseEntry3DnrChrm
     int nChrmTeMaxBiNum = 0;
     int nChrmWeight[CAM_CALIBDB_3DNR_WEIGHT_NUM];
 	MEMSET(nChrmWeight, 0x00, CAM_CALIBDB_3DNR_WEIGHT_NUM*sizeof(int));
-	  
+
 	CamDsp3DNRSettingProfile_t* p3Dnr= (CamDsp3DNRSettingProfile_t*)param;
     if (NULL == p3Dnr) {
 		LOGE("%s(%d): inavlid pointer (exit)\n", __FUNCTION__, __LINE__);
       	return false;
     }
-  
+
   	XML_CHECK_START(CALIB_SENSOR_DSP_3DNR_SETTING_CHRM_SETTING_TAG_ID, CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-				
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DSP_3DNR_SETTING_CHRM_DEFAULT_TAG_ID)){
           int no = ParseUcharArray(tag.Value(), &p3Dnr->sChrmSetting.chrm_default, 1);
           DCT_ASSERT((no == tag.Size()));
@@ -7095,12 +7548,13 @@ bool CalibDb::parseEntry3DnrChrm
 				  nChrmWeight[idx] = no;
    		  	    }
 			}
-        }else {		
+        }else {
 #if 1
-          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
     }
 
@@ -7110,12 +7564,12 @@ bool CalibDb::parseEntry3DnrChrm
 	for(int i=0; i<CAM_CALIBDB_3DNR_WEIGHT_NUM; i++){
 		DCT_ASSERT(nChrmSpRad == nChrmWeight[i]);
 	}
-	
+
 	p3Dnr->ArraySize = nChrmSpRad;
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -7137,25 +7591,25 @@ bool CalibDb::parseEntry3DnrSharp
   	int nSrcShpC = 0;
   	int nSrcShpWeight[CAM_CALIBDB_3DNR_WEIGHT_NUM];
 	MEMSET(nSrcShpWeight, 0x00, CAM_CALIBDB_3DNR_WEIGHT_NUM*sizeof(int));
-	  
+
 	CamDsp3DNRSettingProfile_t* p3Dnr= (CamDsp3DNRSettingProfile_t*)param;
     if (NULL == p3Dnr) {
 		LOGE("%s(%d):  invalid pointer (exit)\n", __FUNCTION__, __LINE__);
       	return false;
     }
-  
+
   	XML_CHECK_START(CALIB_SENSOR_DSP_3DNR_SETTING_SHP_SETTING_TAG_ID, CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID);
-	
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-				
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DSP_3DNR_SETTING_SHP_DEFAULT_TAG_ID)){
           int no = ParseUcharArray(tag.Value(), &p3Dnr->sSharpSetting.shp_default, 1);
           DCT_ASSERT((no == tag.Size()));
@@ -7222,13 +7676,14 @@ bool CalibDb::parseEntry3DnrSharp
 				  nSrcShpWeight[idx] = no;
    		  	    }
 			}
-        
-        }else {		
+
+        }else {
 #if 1
-          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n", 
+          LOGE( "%s(%d): parse error in new 3dnr ynr section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-		}		
+		  return false;
+		}
         pchild = pchild->NextSibling();
     }
 
@@ -7244,7 +7699,7 @@ bool CalibDb::parseEntry3DnrSharp
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -7282,13 +7737,13 @@ bool CalibDb::parseEntry3DNR
   MEMSET(pDsp3DNRProfile, 0, sizeof(*pDsp3DNRProfile));
 
   XML_CHECK_START(CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID, CALIB_SENSOR_DPF_TAG_ID);
-  
+
   const XMLNode* pchild = plement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -7346,20 +7801,21 @@ bool CalibDb::parseEntry3DNR
    		LOGE("%s(%d): parse in 3dnr chrm section\n", __FUNCTION__, __LINE__);
    		return false;
       }
-      nChrmSpRad = pDsp3DNRProfile->ArraySize;  	
+      nChrmSpRad = pDsp3DNRProfile->ArraySize;
  	}
 	else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DSP_3DNR_SETTING_SHP_SETTING_TAG_ID)){
       if(!parseEntry3DnrSharp(pchild->ToElement(), pDsp3DNRProfile)){
    		LOGE("%s(%d): parse in 3dnr sharp section\n", __FUNCTION__, __LINE__);
    		return false;
       }
-      nSrcShpDiv = pDsp3DNRProfile->ArraySize;	  
+      nSrcShpDiv = pDsp3DNRProfile->ArraySize;
 	}else{
 #if 1
-    LOGE( "%s(%d): parse error in filter section (unknow tag: %s)\n", 
+    LOGE( "%s(%d): parse error in filter section (unknow tag: %s)\n",
         	__FUNCTION__,__LINE__,tagname.c_str());
 #endif
-	}	
+	  return false;
+	}
 	pchild = pchild->NextSibling();
  }
 
@@ -7447,13 +7903,13 @@ bool CalibDb::parseEntryDemosaicLPConfig
 	MEMSET(pDemosaicLpConf, 0, sizeof(*pDemosaicLpConf));
 
     XML_CHECK_START(CALIB_SENSOR_DPF_DEMOSAIC_LP_CONF_TAG_ID, CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID);
-  
+
 	const XMLNode* pchild = plement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -7735,85 +8191,85 @@ bool CalibDb::parseEntryDemosaicLPConfig
             n_varTh_divided4 = no;
             pDemosaicLpConf->varTh_divided4 = var_divided4;
         }
-        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THGRAD_R_FCT_TAG_ID))     
+        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THGRAD_R_FCT_TAG_ID))
 		{
         	float* thgrad_r_fct = NULL;
             thgrad_r_fct = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((thgrad_r_fct != NULL));
             MEMSET(thgrad_r_fct, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), thgrad_r_fct, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_thgrad_r_fct = no;
             pDemosaicLpConf->thgrad_r_fct = thgrad_r_fct;
     	}
-        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THDIFF_R_FCT_TAG_ID))      
-		{	
+        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THDIFF_R_FCT_TAG_ID))
+		{
         	float* thdiff_r_fct = NULL;
             thdiff_r_fct = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((thdiff_r_fct != NULL));
             MEMSET(thdiff_r_fct, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), thdiff_r_fct, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_thdiff_r_fct = no;
             pDemosaicLpConf->thdiff_r_fct = thdiff_r_fct;
         }
-        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THVAR_R_FCT_TAG_ID))       
+        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THVAR_R_FCT_TAG_ID))
 		{
         	float* thvar_r_fct = NULL;
             thvar_r_fct = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((thvar_r_fct != NULL));
             MEMSET(thvar_r_fct, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), thvar_r_fct, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_thvar_r_fct = no;
             pDemosaicLpConf->thvar_r_fct = thvar_r_fct;
         }
-        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THGRAD_B_FCT_TAG_ID))      
+        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THGRAD_B_FCT_TAG_ID))
 		{
         	float* thgrad_b_fct = NULL;
             thgrad_b_fct = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((thgrad_b_fct != NULL));
             MEMSET(thgrad_b_fct, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), thgrad_b_fct, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_thgrad_b_fct = no;
             pDemosaicLpConf->thgrad_b_fct = thgrad_b_fct;
         }
-        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THDIFF_B_FCT_TAG_ID))     
+        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THDIFF_B_FCT_TAG_ID))
 		{
         	float* thdiff_b_fct = NULL;
             thdiff_b_fct = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((thdiff_b_fct != NULL));
             MEMSET(thdiff_b_fct, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), thdiff_b_fct, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_thdiff_b_fct = no;
             pDemosaicLpConf->thdiff_b_fct = thdiff_b_fct;
         }
-        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THVAR_B_FCT_TAG_ID))      
+        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_THVAR_B_FCT_TAG_ID))
 		{
         	float* thvar_b_fct = NULL;
             thvar_b_fct = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((thvar_b_fct != NULL));
             MEMSET(thvar_b_fct, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), thvar_b_fct, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_thvar_b_fct = no;
             pDemosaicLpConf->thvar_b_fct = thvar_b_fct;
         }
-        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_SIMILARITY_TH_TAG_ID))    
+        else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_LP_SIMILARITY_TH_TAG_ID))
 		{
         	float* similarity_th = NULL;
             similarity_th = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((similarity_th != NULL));
             MEMSET(similarity_th, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), similarity_th, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_similarity_th = no;
@@ -7845,7 +8301,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
             th_grad = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((th_grad != NULL));
             MEMSET(th_grad, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), th_grad, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_th_grad = no;
@@ -7857,7 +8313,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
             th_diff = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((th_diff != NULL));
             MEMSET(th_diff, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), th_diff, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_th_diff = no;
@@ -7869,7 +8325,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
             th_csc = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((th_csc != NULL));
             MEMSET(th_csc, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), th_csc, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_th_csc = no;
@@ -7881,7 +8337,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
             th_var = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((th_var != NULL));
             MEMSET(th_var, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), th_var, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_th_var = no;
@@ -7893,7 +8349,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
             flat_level_sel = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((flat_level_sel != NULL));
             MEMSET(flat_level_sel, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), flat_level_sel, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_flat_level_sel = no;
@@ -7905,7 +8361,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
             pattern_level_sel = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((pattern_level_sel != NULL));
             MEMSET(pattern_level_sel, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), pattern_level_sel, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_pattern_level_sel = no;
@@ -7917,7 +8373,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
             edge_level_sel = (float*)malloc(tag.Size()*sizeof(float));
             DCT_ASSERT((edge_level_sel != NULL));
             MEMSET(edge_level_sel, 0, (tag.Size()*sizeof(float)));
-			
+
             int no = ParseFloatArray(tag.Value(), edge_level_sel, tag.Size());
             DCT_ASSERT((no == tag.Size()));
 			n_edge_level_sel = no;
@@ -7926,15 +8382,15 @@ bool CalibDb::parseEntryDemosaicLPConfig
         else
         {
 #if 1
-			LOGE( "%s(%d): parse error in demosaiclp section (unknow tag: %s)\n", 
+			LOGE( "%s(%d): parse error in demosaiclp section (unknow tag: %s)\n",
 				__FUNCTION__,__LINE__,tagname.c_str());
 #endif
         	return (false);
-        }		
+        }
         pchild = pchild->NextSibling();
    }
    XML_CHECK_END();
-   
+
    DCT_ASSERT(n_gains_level == n_thH_divided0);
    DCT_ASSERT(n_gains_level == n_thH_divided1);
    DCT_ASSERT(n_gains_level == n_thH_divided2);
@@ -7955,7 +8411,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
    DCT_ASSERT(n_gains_level == n_varTh_divided2);
    DCT_ASSERT(n_gains_level == n_varTh_divided3);
    DCT_ASSERT(n_gains_level == n_varTh_divided4);
-	
+
    DCT_ASSERT(n_gains_level == n_thgrad_r_fct);
    DCT_ASSERT(n_gains_level == n_thdiff_r_fct);
    DCT_ASSERT(n_gains_level == n_thvar_r_fct);
@@ -7968,7 +8424,7 @@ bool CalibDb::parseEntryDemosaicLPConfig
    DCT_ASSERT(n_gains_level == n_th_var);
    DCT_ASSERT(n_gains_level == n_th_csc);
    DCT_ASSERT(n_gains_level == n_flat_level_sel);
-   DCT_ASSERT(n_gains_level == n_pattern_level_sel);  
+   DCT_ASSERT(n_gains_level == n_pattern_level_sel);
    DCT_ASSERT(n_gains_level == n_edge_level_sel);
 
    pDemosaicLpConf->gainsArray_ArraySize = n_gains_level;
@@ -8037,13 +8493,13 @@ bool CalibDb::parseEntryDpf
   ListInit(&dpf_profile.FilterList);
 
   XML_CHECK_START(CALIB_SENSOR_DPF_TAG_ID, CALIB_SENSOR_TAG_ID);
-	
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -8109,43 +8565,44 @@ bool CalibDb::parseEntryDpf
       DCT_ASSERT( (no == tag.Size()) );
     } else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID)){
 	  if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryFilter, &dpf_profile,
-	  		(uint32_t)(CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID), (uint32_t)(CALIB_SENSOR_DPF_TAG_ID))) {		
+	  		(uint32_t)(CALIB_SENSOR_DPF_FILTERSETTING_TAG_ID), (uint32_t)(CALIB_SENSOR_DPF_TAG_ID))) {
 #if 1
-		LOGE( "%s(%d): parse error in filter setting section (unknow tag: %s)\n", 
+		LOGE( "%s(%d): parse error in filter setting section (unknow tag: %s)\n",
 			__FUNCTION__,__LINE__,tagname.c_str());
-#endif		
+#endif
 		return (false);
 	  }
 	} else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID)){
 	  if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntry3DNR, &dpf_profile,
-	  		(uint32_t)(CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID), (uint32_t)(CALIB_SENSOR_DPF_TAG_ID))) {		
+	  		(uint32_t)(CALIB_SENSOR_DSP_3DNR_SETTING_TAG_ID), (uint32_t)(CALIB_SENSOR_DPF_TAG_ID))) {
 #if 1
-		LOGE( "%s(%d): parse error in filter setting section (unknow tag: %s)\n", 
+		LOGE( "%s(%d): parse error in filter setting section (unknow tag: %s)\n",
 			__FUNCTION__,__LINE__,tagname.c_str());
-#endif		
+#endif
 		return (false);
   	  }
 
 	}else if(XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_NEW_DSP_3DNR_SETTING_TAG_ID)){
  	  if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryNew3DNR, &dpf_profile,
-	  		(uint32_t)CALIB_SENSOR_NEW_DSP_3DNR_SETTING_TAG_ID, (uint32_t)CALIB_SENSOR_DPF_TAG_ID)) { 	
+	  		(uint32_t)CALIB_SENSOR_NEW_DSP_3DNR_SETTING_TAG_ID, (uint32_t)CALIB_SENSOR_DPF_TAG_ID)) {
  #if 1
- 		LOGE( "%s(%d): parse error in filter setting section (unknow tag: %s)\n", 
+ 		LOGE( "%s(%d): parse error in filter setting section (unknow tag: %s)\n",
  			__FUNCTION__,__LINE__,tagname.c_str());
- #endif		
+ #endif
  		return (false);
  	  }
 
 	}else {
 #if 1
-		LOGE( "%s(%d): parse error in dpf section (unknow tag: %s)\n", 
+		LOGE( "%s(%d): parse error in dpf section (unknow tag: %s)\n",
 			__FUNCTION__,__LINE__,tagname.c_str());
-#endif	
-    }	
+#endif
+		return false;
+    }
     pchild = pchild->NextSibling();
   }
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddDpfProfile(m_CalibDbHandle, &dpf_profile);
 
   DCT_ASSERT(result == RET_SUCCESS);
@@ -8199,13 +8656,13 @@ bool CalibDb::parseEntryDpcc
   MEMSET(&dpcc_profile, 0, sizeof(dpcc_profile));
 
   XML_CHECK_START(CALIB_SENSOR_DPCC_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -8220,23 +8677,23 @@ bool CalibDb::parseEntryDpcc
       if (!parseEntryCell(pchild->ToElement(), tag.Size(), &CalibDb::parseEntryDpccRegisters, &dpcc_profile,
 	  		(uint32_t)(CALIB_SENSOR_DPCC_REGISTER_TAG_ID), (uint32_t)(CALIB_SENSOR_DPCC_TAG_ID))) {
 #if 1
-   	    LOGE( "%s(%d): parse error dpcc register section (unknow tag: %s)\n", 
+   	    LOGE( "%s(%d): parse error dpcc register section (unknow tag: %s)\n",
    		    __FUNCTION__,__LINE__,tagname.c_str());
-#endif	
+#endif
         return (false);
       }
     } else {
 #if 1
-		LOGE( "%s(%d): parse error dpcc section (unknow tag: %s)\n", 
+		LOGE( "%s(%d): parse error dpcc section (unknow tag: %s)\n",
 			__FUNCTION__,__LINE__,tagname.c_str());
-#endif	
+#endif
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddDpccProfile(m_CalibDbHandle, &dpcc_profile);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -8267,15 +8724,15 @@ bool CalibDb::parseEntryDpccRegisters
 
   char*     reg_name;
   uint32_t    reg_value = 0U;
-  
+
   XML_CHECK_START(CALIB_SENSOR_DPCC_REGISTER_TAG_ID, CALIB_SENSOR_DPCC_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -8299,11 +8756,11 @@ bool CalibDb::parseEntryDpccRegisters
 #endif
 
       return (false);
-    }	
+    }
     pchild = pchild->NextSibling();
   }
   XML_CHECK_END();
-  
+
   std::string s_regname(reg_name);
 
   if (s_regname == CALIB_SENSOR_DPCC_REGISTER_ISP_DPCC_MODE) {
@@ -8391,13 +8848,13 @@ bool CalibDb::parseEntryGoc
   memset(goc_data.WdrOn_GammaY, 0, sizeof(goc_data.WdrOn_GammaY));
 
   XML_CHECK_START(CALIB_SENSOR_GOC_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -8422,13 +8879,14 @@ bool CalibDb::parseEntryGoc
       DCT_ASSERT((no == tag.Size()));
     }else{
 		LOGE( "%s(%d): unknown GOC register (%s)\n", __FUNCTION__,__LINE__,tagname.c_str());
+		return false;
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbAddGocProfile(m_CalibDbHandle, &goc_data);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -8460,15 +8918,15 @@ bool CalibDb::parseEntryWdrMaxGain
     int n_maxgain      = 0;
     float* pf_maxgain_level    = NULL;
     float filter_enable = 0.0;
-	  
+
 	XML_CHECK_START(CALIB_SENSOR_WDR_MAXGAIN_FILTER_TAG_ID, CALIB_SENSOR_WDR_TAG_ID);
-  
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -8499,7 +8957,7 @@ bool CalibDb::parseEntryWdrMaxGain
                   __FUNCTION__,__LINE__, tagname.c_str());
 #endif
           return (false);
-        }		
+        }
         pchild = pchild->NextSibling();
 	}
 
@@ -8526,7 +8984,7 @@ bool CalibDb::parseEntryWdrMaxGain
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -8549,15 +9007,15 @@ bool CalibDb::parseEntryWdr
   CamCalibWdrGlobal_t wdr_data;
   memset(&wdr_data, 0, sizeof(wdr_data));
   uint32_t regValue = 0;
-  
+
   XML_CHECK_START(CALIB_SENSOR_WDR_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -8651,20 +9109,21 @@ bool CalibDb::parseEntryWdr
       }
     } else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_WDR_TBD_TAG_ID)){
      //do nothing
-    }  
+    }
 	else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_WDR_CURVE1_TAG_ID)){
       //do nothing
-    }  
+    }
 	else if (XML_CHECK_TAGID_COMPARE(CALIB_SENSOR_WDR_CURVE2_TAG_ID)){
       //do nothing
-    }  
+    }
 	else{
 #if 1
-	  LOGE( "%s(%d): parse error in rk ie sharp section (unknow tag: %s)\n", 
+	  LOGE( "%s(%d): parse error in rk ie sharp section (unknow tag: %s)\n",
 	  		__FUNCTION__,__LINE__,tagname.c_str());
 #endif
+	  return false;
     }
-	
+
     pchild = pchild->NextSibling();
   }
   XML_CHECK_END();
@@ -8695,14 +9154,14 @@ bool CalibDb::parseEntryRKsharpen
     MEMSET(&iesharpen_profile,0,sizeof(iesharpen_profile));
 
     XML_CHECK_START(CALIB_SENSOR_IESHARPEN_TAG_ID, CALIB_SENSOR_TAG_ID);
-	
+
     const XMLNode *pchild = pelement->FirstChild();
     while(pchild)
     {
         XmlTag tag = XmlTag(pchild->ToElement());
         std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -9000,12 +9459,12 @@ bool CalibDb::parseEntryRKsharpen
 		  LOGE( "%s(%d): parse error in rk ie sharp section (unknow tag: %s)\n", __FUNCTION__,__LINE__,tagname.c_str());
 #endif
           return (false);
-        }		
+        }
         pchild = pchild->NextSibling();
     }
 
 	XML_CHECK_END();
-	
+
     RESULT result = CamCalibDbAddRKsharpenProfile( m_CalibDbHandle, &iesharpen_profile);
     DCT_ASSERT( result == RET_SUCCESS );
 
@@ -9033,19 +9492,19 @@ bool CalibDb::parseEntrySystemAfps
 		LOGE("%s(%d): Invalid pointer (exit)\n", __FUNCTION__,__LINE__);
 		return false;
 	}
-	  
+
 	XML_CHECK_START(CALIB_SYSTEM_AFPS_TAG_ID, CALIB_SYSTEM_TAG_ID);
-  
+
 	const XMLNode* pchild = pelement->FirstChild();
 	while (pchild) {
 		XmlTag tag = XmlTag(pchild->ToElement());
 		std::string tagname(pchild->ToElement()->Name());
 		XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-		
+
 #ifdef DEBUG_LOG
 		LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
-		
+
 		if (XML_CHECK_TAGID_COMPARE(CALIB_SYSTEM_AFPS_DEFAULT_TAG_ID)){
 		  const char* value = tag.Value();
 		  std::string s_value(value);
@@ -9057,7 +9516,7 @@ bool CalibDb::parseEntrySystemAfps
                   __FUNCTION__,__LINE__, tagname.c_str());
 #endif
           return (false);
-        }		
+        }
         pchild = pchild->NextSibling();
 	}
 
@@ -9065,7 +9524,7 @@ bool CalibDb::parseEntrySystemAfps
 
 #ifdef DEBUG_LOG
     LOGD( "%s(%d): (exit)\n", __FUNCTION__,__LINE__);
-#endif	
+#endif
 
 	return true;
 
@@ -9091,14 +9550,14 @@ bool CalibDb::parseEntrySystem
   MEMSET(&system_data, 0, sizeof(CamCalibSystemData_t));
 
   XML_CHECK_START(CALIB_SYSTEM_TAG_ID, CALIB_FILESTART_TAG_ID);
-	
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     const char* value = tag.Value();
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -9114,12 +9573,12 @@ bool CalibDb::parseEntrySystem
 #endif
       return (false);
     }
-	
+
     pchild = pchild->NextSibling();
   }
 
   XML_CHECK_END();
-  
+
   RESULT result = CamCalibDbSetSystemData(m_CalibDbHandle, &system_data);
   DCT_ASSERT(result == RET_SUCCESS);
 
@@ -9148,13 +9607,13 @@ bool CalibDb::parseEntryCproc
   memset(cproc_data, 0, sizeof(struct CamCprocData_s));
 
   XML_CHECK_START(CALIB_SENSOR_CPROC_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -9183,11 +9642,11 @@ bool CalibDb::parseEntryCproc
       DCT_ASSERT((no == tag.Size()));
     }else{
 #if 1
-      LOGE( "%s(%d): parse error in cproc section (unknow tag: %s)\n", 
+      LOGE( "%s(%d): parse error in cproc section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-
-	}	
+	  return false;
+	}
     pchild = pchild->NextSibling();
   }
 
@@ -9211,7 +9670,7 @@ bool CalibDb::parseEntryOTP
 (
     const XMLElement*   pelement,
     void*                param
-) 
+)
 {
 #ifdef DEBUG_LOG
   LOGD( "%s(%d): (enter)\n", __FUNCTION__,__LINE__);
@@ -9221,13 +9680,13 @@ bool CalibDb::parseEntryOTP
   memset(&otpProfile, 0x00, sizeof(CamOTPGlobal_t));
 
   XML_CHECK_START(CALIB_SENSOR_OTP_TAG_ID, CALIB_SENSOR_TAG_ID);
-  
+
   const XMLNode* pchild = pelement->FirstChild();
   while (pchild) {
     XmlTag tag = XmlTag(pchild->ToElement());
     std::string tagname(pchild->ToElement()->Name());
 	XML_CHECK_WHILE_SUBTAG_MARK((char *)(tagname.c_str()), tag.Type(), tag.Size());
-	
+
 #ifdef DEBUG_LOG
 	LOGD( "%s(%d): tag: %s value:%s\n", __FUNCTION__,__LINE__,tagname.c_str(), tag.Value());
 #endif
@@ -9252,13 +9711,14 @@ bool CalibDb::parseEntryOTP
       DCT_ASSERT((no == tag.Size()));
     } else{
 #if 1
-	  LOGE( "%s(%d): parse error in cproc section (unknow tag: %s)\n", 
+	  LOGE( "%s(%d): parse error in cproc section (unknow tag: %s)\n",
           __FUNCTION__,__LINE__,tagname.c_str());
 #endif
-	}    
+	  return false;
+	}
     pchild = pchild->NextSibling();
   }
-  
+
   XML_CHECK_END();
   RESULT result = CamCalibDbAddOTPGlobal(m_CalibDbHandle, &otpProfile);
 

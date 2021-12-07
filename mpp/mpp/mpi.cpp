@@ -18,6 +18,8 @@
 
 #include <string.h>
 
+#include "rk_mpi.h"
+
 #include "mpp_log.h"
 #include "mpp_mem.h"
 
@@ -135,7 +137,7 @@ static MPP_RET mpi_decode(MppCtx ctx, MppPacket packet, MppFrame *frame)
 
     mpp_assert(0 == mpp_packet_get_length(packet));
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -159,7 +161,7 @@ static MPP_RET mpi_decode_put_packet(MppCtx ctx, MppPacket packet)
         ret = p->ctx->put_packet(packet);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -183,7 +185,7 @@ static MPP_RET mpi_decode_get_frame(MppCtx ctx, MppFrame *frame)
         ret = p->ctx->get_frame(frame);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -207,7 +209,7 @@ static MPP_RET mpi_encode(MppCtx ctx, MppFrame frame, MppPacket *packet)
         // TODO: do encode here
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -231,7 +233,7 @@ static MPP_RET mpi_encode_put_frame(MppCtx ctx, MppFrame frame)
         ret = p->ctx->put_frame(frame);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -255,7 +257,7 @@ static MPP_RET mpi_encode_get_packet(MppCtx ctx, MppPacket *packet)
         ret = p->ctx->get_packet(packet);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -266,7 +268,7 @@ static MPP_RET mpi_isp(MppCtx ctx, MppFrame dst, MppFrame src)
 
     // TODO: do isp process here
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return MPP_OK;
 }
 
@@ -277,7 +279,7 @@ static MPP_RET mpi_isp_put_frame(MppCtx ctx, MppFrame frame)
 
     // TODO: do isp put frame process here
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -312,9 +314,11 @@ static MPP_RET mpi_poll(MppCtx ctx, MppPortType type, MppPollType timeout)
         }
 
         ret = p->ctx->poll(type, timeout);
+        if (ret > 0)
+            ret = MPP_OK;
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -338,7 +342,7 @@ static MPP_RET mpi_dequeue(MppCtx ctx, MppPortType type, MppTask *task)
         ret = p->ctx->dequeue(type, task);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -362,7 +366,7 @@ static MPP_RET mpi_enqueue(MppCtx ctx, MppPortType type, MppTask task)
         ret = p->ctx->enqueue(type, task);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -380,7 +384,7 @@ static MPP_RET mpi_reset(MppCtx ctx)
         ret = p->ctx->reset();
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -398,7 +402,7 @@ static MPP_RET mpi_control(MppCtx ctx, MpiCmd cmd, MppParam param)
         ret = p->ctx->control(cmd, param);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -453,14 +457,14 @@ MPP_RET mpp_create(MppCtx *ctx, MppApi **mpi)
             break;
         }
 
-        mpp_api.version = mpp_info_get_revision();
+        mpp_api.version = 0;
         p->api      = &mpp_api;
         p->check    = p;
         *ctx = p;
         *mpi = p->api;
     } while (0);
 
-    mpp_log("mpp version: %s\n", mpp_info_get(INFO_ALL));
+    show_mpp_version();
 
     mpi_dbg_func("leave ret %d ctx %p mpi %p\n", ret, *ctx, *mpi);
     return ret;
@@ -489,7 +493,7 @@ MPP_RET mpp_init(MppCtx ctx, MppCtxType type, MppCodingType coding)
         p->coding   = coding;
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -511,7 +515,7 @@ MPP_RET mpp_destroy(MppCtx ctx)
         mpp_free(p);
     } while (0);
 
-    mpi_dbg_func("leave ret %d\n", ret);
+    mpi_dbg_func("leave ctx %p ret %d\n", ctx, ret);
     return ret;
 }
 
@@ -545,3 +549,46 @@ void mpp_show_support_format()
     }
 }
 
+typedef struct {
+    MppFrameFormat  format;
+    const char      *name;
+} MppFrameFormatInfo;
+
+static MppFrameFormatInfo color_list[] = {
+    { MPP_FMT_YUV420SP,         "YUV420SP,      NV12"   },
+    { MPP_FMT_YUV420SP_10BIT,   "YUV420SP-10bit"        },
+    { MPP_FMT_YUV422SP,         "YUV422SP,      NV24"   },
+    { MPP_FMT_YUV422SP_10BIT,   "YUV422SP-10bit"        },
+    { MPP_FMT_YUV420P,          "YUV420P,       I420"   },
+    { MPP_FMT_YUV420SP_VU,      "YUV420SP,      NV21"   },
+    { MPP_FMT_YUV422P,          "YUV422P,       422P"   },
+    { MPP_FMT_YUV422SP_VU,      "YUV422SP,      NV42"   },
+    { MPP_FMT_YUV422_YUYV,      "YUV422-YUYV,   YUY2"   },
+    { MPP_FMT_YUV422_UYVY,      "YUV422-UYVY,   UYVY"   },
+    { MPP_FMT_YUV400,           "YUV400-Y8,     Y800"   },
+
+    { MPP_FMT_RGB565,           "RGB565"                },
+    { MPP_FMT_BGR565,           "BGR565"                },
+    { MPP_FMT_RGB555,           "RGB555"                },
+    { MPP_FMT_BGR555,           "BGR555"                },
+    { MPP_FMT_RGB888,           "RGB888"                },
+    { MPP_FMT_BGR888,           "BGR888"                },
+
+    { MPP_FMT_ARGB8888,         "ARGB8888"              },
+    { MPP_FMT_ABGR8888,         "ABGR8888"              },
+    { MPP_FMT_BGRA8888,         "BGRA8888"              },
+    { MPP_FMT_RGBA8888,         "RGBA8888"              },
+};
+
+void mpp_show_color_format()
+{
+    RK_U32 i = 0;
+
+    mpp_log("mpp color support list:");
+
+    for (i = 0; i < MPP_ARRAY_ELEMS(color_list); i++) {
+        MppFrameFormatInfo *info = &color_list[i];
+        mpp_log("color: id %-5d 0x%05x %s\n",
+                info->format, info->format, info->name);
+    }
+}

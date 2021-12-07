@@ -75,6 +75,24 @@ typedef enum MppMetaKey_e {
 
     /* mpp_frame / mpp_packet meta data info key */
     KEY_TEMPORAL_ID             = FOURCC_META('t', 'l', 'i', 'd'),
+    KEY_LONG_REF_IDX            = FOURCC_META('l', 't', 'i', 'd'),
+    KEY_ENC_AVERAGE_QP          = FOURCC_META('a', 'v', 'g', 'q'),
+    KEY_ROI_DATA                = FOURCC_META('r', 'o', 'i', ' '),
+    KEY_OSD_DATA                = FOURCC_META('o', 's', 'd', ' '),
+    KEY_OSD_DATA2               = FOURCC_META('o', 's', 'd', '2'),
+    KEY_USER_DATA               = FOURCC_META('u', 's', 'r', 'd'),
+    KEY_USER_DATAS              = FOURCC_META('u', 'r', 'd', 's'),
+
+    /* input motion list for smart p rate control */
+    KEY_MV_LIST                 = FOURCC_META('m', 'v', 'l', 't'),
+
+    /* frame long-term reference frame operation */
+    KEY_ENC_MARK_LTR            = FOURCC_META('m', 'l', 't', 'r'),
+    KEY_ENC_USE_LTR             = FOURCC_META('u', 'l', 't', 'r'),
+
+    /* MLVEC specified encoder feature  */
+    KEY_ENC_FRAME_QP            = FOURCC_META('f', 'r', 'm', 'q'),
+    KEY_ENC_BASE_LAYER_PID      = FOURCC_META('b', 'p', 'i', 'd'),
 } MppMetaKey;
 
 #define mpp_meta_get(meta) mpp_meta_get_with_tag(meta, MODULE_TAG, __FUNCTION__)

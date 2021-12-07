@@ -211,11 +211,19 @@ CRKImage::CRKImage(tstring filename,bool &bCheck)
 	}
 
 	m_pFile = fopen(szName, "rb");
-	if ( !m_pFile)
+	if (!m_pFile)
 	{
 		bCheck = false;
-		printf("CRKImage : fopen <%s> fail\n", szName);
-		return;
+		printf("CRKImage : fopen <%s> fail,will try use fopen64 \n", szName);
+#if 1
+		m_pFile=  fopen64(szName, "rb");
+		if (!m_pFile)
+		{
+			bCheck = false;
+			printf("CRKImage : fopen64 <%s> fail\n", szName);
+			return;
+		}
+#endif
 	}
 //code will be error if firmware is signed.md5 is not last 32 byte.
 //	fseeko(m_pFile,-32,SEEK_END);

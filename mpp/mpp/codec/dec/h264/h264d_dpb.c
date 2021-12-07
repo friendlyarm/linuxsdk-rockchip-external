@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "mpp_mem.h"
 #include "mpp_common.h"
 #include "mpp_buf_slot.h"
 
@@ -109,8 +108,7 @@ static RK_S32 getDpbSize(H264dVideoCtx_t *p_Vid, H264_SPS_t *active_sps)
         size = 70778880;
         break;
     default:
-        H264D_ERR("dpb_size error.");
-        return size = 0;
+        size = 0;
         break;
     }
     size /= pic_size;
@@ -133,8 +131,10 @@ static RK_S32 getDpbSize(H264dVideoCtx_t *p_Vid, H264_SPS_t *active_sps)
         size = size_vui;
     }
 
-    if (size == 0) {
-        H264D_WARNNING("warnning: DPB size is 0, level(%d), pic_size(%d)", active_sps->level_idc, pic_size);
+    if (size < active_sps->max_num_ref_frames) {
+        H264D_WARNNING("warnning: DPB size is less than max_num_ref_frames, level(%d), pic_size(%d), max_num_ref_frames(%d).\n",
+                       active_sps->level_idc, pic_size, active_sps->max_num_ref_frames);
+        size = MPP_MIN(active_sps->max_num_ref_frames, 16);
     }
 
     return size;
@@ -1193,11 +1193,11 @@ static MPP_RET direct_output(H264dVideoCtx_t *p_Vid, H264_DpbBuf_t *p_Dpb, H264_
         //!< we have a frame (or complementary field pair), so output it directly
         FUN_CHECK(ret = flush_direct_output(p_Vid));
         write_picture(p, p_Vid);
+        p_Dpb->last_output_poc = p->poc;
         free_storable_picture(p_Vid->p_Dec, p);
         p_Dpb->last_picture = NULL;
         p_Vid->out_buffer.is_used = 0;
         p_Vid->out_buffer.is_directout = 0;
-        p_Dpb->last_output_poc = p->poc;
         goto __RETURN;
     }
 
@@ -1260,7 +1260,7 @@ static MPP_RET scan_dpb_output(H264_DpbBuf_t *p_Dpb, H264_StorePic_t *p)
             p_Dpb->poc_interval = 1;
         }
 
-        if (p_Dpb->p_Vid->p_Dec->immediate_out ||
+        if (p_Dpb->p_Vid->p_Dec->cfg->base.fast_out ||
             (p_err->i_slice_no < 2 && p_Dpb->last_output_poc == INT_MIN)) {
             FUN_CHECK(ret = write_stored_frame(p_Dpb->p_Vid, p_Dpb, fs));
         } else {
@@ -1279,6 +1279,29 @@ static MPP_RET scan_dpb_output(H264_DpbBuf_t *p_Dpb, H264_StorePic_t *p)
     return MPP_OK;
 __FAILED:
     return ret;
+}
+
+static void flush_one_dpb_mark(H264_DecCtx_t *p_Dec, H264_DpbMark_t *p_mark)
+{
+    if (NULL == p_mark)
+        return;
+    if (p_mark->out_flag && (p_mark->slot_idx >= 0)) {
+        MppFrame mframe = NULL;
+
+        mpp_buf_slot_get_prop(p_Dec->frame_slots, p_mark->slot_idx, SLOT_FRAME_PTR, &mframe);
+        if (mframe) {
+            H264D_DBG(H264D_DBG_SLOT_FLUSH, "[DPB_BUF_FLUSH] slot_idx=%d, top_used=%d, bot_used=%d",
+                      p_mark->slot_idx, p_mark->top_used, p_mark->bot_used);
+            mpp_frame_set_discard(mframe, 1);
+            mpp_buf_slot_set_flag(p_Dec->frame_slots, p_mark->slot_idx, SLOT_QUEUE_USE);
+            mpp_buf_slot_enqueue(p_Dec->frame_slots, p_mark->slot_idx, QUEUE_DISPLAY);
+            mpp_buf_slot_clr_flag(p_Dec->frame_slots, p_mark->slot_idx, SLOT_CODEC_USE);
+            p_Dec->last_frame_slot_idx = p_mark->slot_idx;
+        }
+        reset_dpb_mark(p_mark);
+        return;
+    }
+    H264D_DBG(H264D_DBG_WARNNING, "out_flag %d slot_idx %d\n", p_mark->out_flag, p_mark->slot_idx);
 }
 
 /*!
@@ -1312,7 +1335,7 @@ MPP_RET store_picture_in_dpb(H264_DpbBuf_t *p_Dpb, H264_StorePic_t *p)
         }
     }
     //!< if necessary, combine top and botteom to frame
-    if (get_filed_dpb_combine_flag(p_Dpb->last_picture, p)) {
+    if (get_field_dpb_combine_flag(p_Dpb->last_picture, p)) {
         if (p_Dpb->last_picture->is_directout) {
             FUN_CHECK(ret = direct_output(p_Vid, p_Dpb, p));  //!< output frame
         } else {
@@ -1373,6 +1396,7 @@ MPP_RET store_picture_in_dpb(H264_DpbBuf_t *p_Dpb, H264_StorePic_t *p)
 __RETURN:
     return ret = MPP_OK;
 __FAILED:
+    flush_one_dpb_mark(p_Vid->p_Dec, p->mem_mark);
     return ret;
 }
 
@@ -1496,17 +1520,15 @@ MPP_RET idr_memory_management(H264_DpbBuf_t *p_Dpb, H264_StorePic_t *p)
     RK_U32 i = 0;
     RK_S32 type = -1;
     MPP_RET ret = MPP_ERR_UNKNOW;
+    H264dErrCtx_t *p_err = &p_Dpb->p_Vid->p_Dec->errctx;
 
     if (p->no_output_of_prior_pics_flag) {
         //!< free all stored pictures
         for (i = 0; i < p_Dpb->used_size; i++) {
             //!< reset all reference settings
-            unmark_for_reference(p_Dpb->p_Vid->p_Dec, p_Dpb->fs[i]);
-            // NOTE: when clearing no output frame we need to remove it first
-            // with p_mark->out_flag is false to insure the CODEC_USE flag in
-            // mpp_buf_slot is clear. Then set is_output flag to true to avoid
-            // real output this frame to display queue.
-            FUN_CHECK(ret = remove_frame_from_dpb(p_Dpb, i));
+            //Set is_output flag to true to avoid real output this frame to
+            //display queue. These frames will be mark as unused and remove from
+            //dpb at flush_dpb
             p_Dpb->fs[i]->is_output = 1;
         }
     }
@@ -1519,6 +1541,7 @@ MPP_RET idr_memory_management(H264_DpbBuf_t *p_Dpb, H264_StorePic_t *p)
     update_ref_list(p_Dpb);
     update_ltref_list(p_Dpb);
     p_Dpb->last_output_poc = INT_MIN;
+    p_err->i_slice_no = 1;
 
     if (p->long_term_reference_flag) {
         p_Dpb->max_long_term_pic_idx = 0;
@@ -1643,7 +1666,7 @@ void free_storable_picture(H264_DecCtx_t *p_Dec, H264_StorePic_t *p)
         if (p->mem_malloc_type == Mem_BotOnly) {
             free_dpb_mark(p_Dec, p->mem_mark, BOTTOM_FIELD);
         }
-        MPP_FREE(p);
+        mpp_mem_pool_put(p_Dec->p_Vid->pic_st, p);
     }
 }
 
@@ -1657,7 +1680,7 @@ void free_storable_picture(H264_DecCtx_t *p_Dec, H264_StorePic_t *p)
 H264_StorePic_t *alloc_storable_picture(H264dVideoCtx_t *p_Vid, RK_S32 structure)
 {
     MPP_RET ret = MPP_ERR_UNKNOW;
-    H264_StorePic_t *s = mpp_calloc(H264_StorePic_t, 1);
+    H264_StorePic_t *s = mpp_mem_pool_get(p_Vid->pic_st);
 
     MEM_CHECK(ret, s);
     s->view_id = -1;
@@ -1677,7 +1700,7 @@ __FAILED:
 ***********************************************************************
 */
 //extern "C"
-RK_U32 get_filed_dpb_combine_flag(H264_FrameStore_t *p_last, H264_StorePic_t *p)
+RK_U32 get_field_dpb_combine_flag(H264_FrameStore_t *p_last, H264_StorePic_t *p)
 {
     RK_U32 combine_flag = 0;
 
@@ -1714,6 +1737,7 @@ MPP_RET init_dpb(H264dVideoCtx_t *p_Vid, H264_DpbBuf_t *p_Dpb, RK_S32 type)  // 
     RK_U32 i = 0;
     MPP_RET ret = MPP_ERR_UNKNOW;
     H264_SPS_t *active_sps = p_Vid->active_sps;
+    RK_U32 dpb_size;
 
     if (!active_sps) {
         ret = MPP_NOK;
@@ -1723,7 +1747,8 @@ MPP_RET init_dpb(H264dVideoCtx_t *p_Vid, H264_DpbBuf_t *p_Dpb, RK_S32 type)  // 
     if (p_Dpb->init_done) {
         free_dpb(p_Dpb);
     }
-    p_Dpb->size = MPP_MAX(1, getDpbSize(p_Vid, active_sps));
+    dpb_size = getDpbSize(p_Vid, active_sps);
+    p_Dpb->size = MPP_MAX(1, dpb_size);
     p_Dpb->num_ref_frames = active_sps->max_num_ref_frames;
     if (active_sps->max_dec_frame_buffering < active_sps->max_num_ref_frames) {
         H264D_WARNNING("DPB size at specified level is smaller than reference frames");
@@ -1852,4 +1877,3 @@ __RETURN:
 __FAILED:
     return ret;
 }
-

@@ -139,11 +139,6 @@ static inline void mpp_list_del_init(mpp_list_node *node)
     list_node_init(node);
 }
 
-static inline int list_is_last(const mpp_list_node *list, const mpp_list_node *head)
-{
-    return list->next == head;
-}
-
 static inline void _list_del_node_no_lock(mpp_list_node *node, void *data, RK_S32 size)
 {
     mpp_list_del_init(node);
@@ -166,6 +161,64 @@ RK_S32 mpp_list::del_at_tail(void *data, RK_S32 size)
     RK_S32 ret = -EINVAL;
     if (head && count) {
         _list_del_node_no_lock(head->prev, data, size);
+        count--;
+        ret = 0;
+    }
+    return ret;
+}
+
+static mpp_list_node* create_list_with_size(void *data, RK_S32 size, RK_U32 key)
+{
+    mpp_list_node *node = (mpp_list_node*)malloc(sizeof(mpp_list_node) +
+                                                 sizeof(size) + size);
+    if (node) {
+        RK_S32 *dst = (RK_S32 *)(node + 1);
+        list_node_init_with_key_and_size(node, key, size);
+        *dst++ = size;
+        memcpy(dst, data, size);
+    } else {
+        LIST_ERROR("failed to allocate list node");
+    }
+    return node;
+}
+
+RK_S32 mpp_list::fifo_wr(void *data, RK_S32 size)
+{
+    RK_S32 ret = -EINVAL;
+    if (head) {
+        mpp_list_node *node = create_list_with_size(data, size, 0);
+        if (node) {
+            mpp_list_add_tail(node, head);
+            count++;
+            ret = 0;
+        } else {
+            ret = -ENOMEM;
+        }
+    }
+    return ret;
+}
+
+static void release_list_with_size(mpp_list_node* node, void *data, RK_S32 *size)
+{
+    RK_S32 *src = (RK_S32*)(node + 1);
+    RK_S32 data_size = *src++;
+
+    *size = data_size;
+
+    if (data)
+        memcpy(data, src, data_size);
+
+    free(node);
+}
+
+RK_S32 mpp_list::fifo_rd(void *data, RK_S32 *size)
+{
+    RK_S32 ret = -EINVAL;
+    if (head && count) {
+        mpp_list_node *node = head->next;
+
+        mpp_list_del_init(node);
+        release_list_with_size(node, data, size);
         count--;
         ret = 0;
     }
@@ -241,48 +294,13 @@ RK_S32 mpp_list::flush()
             count--;
         }
     }
-    mCondition.signal();
+    signal();
     return 0;
-}
-
-void mpp_list::lock()
-{
-    mMutex.lock();
-}
-
-void mpp_list::unlock()
-{
-    mMutex.unlock();
-}
-
-RK_S32 mpp_list::trylock()
-{
-    return mMutex.trylock();
-}
-
-Mutex *mpp_list::mutex()
-{
-    return &mMutex;
 }
 
 RK_U32 mpp_list::get_key()
 {
     return keys++;
-}
-
-void mpp_list::wait()
-{
-    mCondition.wait(mMutex);
-}
-
-RK_S32 mpp_list::wait(RK_S64 timeout)
-{
-    return mCondition.timedwait(mMutex, timeout);
-}
-
-void mpp_list::signal()
-{
-    mCondition.signal();
 }
 
 mpp_list::mpp_list(node_destructor func)

@@ -10,7 +10,7 @@ macro(add_mpp_osal_test module)
     #message(STATUS "test_name : ${test_name}")
     #message(STATUS "test_tag  : ${test_tag}")
 
-    option(${test_tag} "Build osal ${module} unit test" ON)
+    option(${test_tag} "Build osal ${module} unit test" ${BUILD_TEST})
     if(${test_tag})
         add_executable(${test_name} ${test_name}.c)
         target_link_libraries(${test_name} ${MPP_SHARED})
@@ -28,8 +28,14 @@ add_mpp_osal_test(mpp_env)
 # malloc system unit test
 add_mpp_osal_test(mpp_mem)
 
+# mpp_mem_pool unit test
+add_mpp_osal_test(mpp_mem_pool)
+
 # time system unit test
 add_mpp_osal_test(mpp_time)
+
+# trace system unit test
+add_mpp_osal_test(mpp_trace)
 
 # hardware platform feature detection unit test
 add_mpp_osal_test(mpp_platform)
@@ -40,3 +46,5 @@ add_mpp_osal_test(mpp_runtime)
 # thread implement unit test
 add_mpp_osal_test(mpp_thread)
 
+# eventfd implement unit test
+add_mpp_osal_test(mpp_eventfd)

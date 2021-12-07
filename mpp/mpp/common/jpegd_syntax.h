@@ -18,12 +18,16 @@
 #ifndef __JPEGD_SYNTAX__
 #define __JPEGD_SYNTAX__
 
+#include "mpp_frame.h"
+
 #define JPEGDEC_YUV400                    (0)
 #define JPEGDEC_YUV420                    (2)
 #define JPEGDEC_YUV422                    (3)
 #define JPEGDEC_YUV444                    (4)
 #define JPEGDEC_YUV440                    (5)
 #define JPEGDEC_YUV411                    (6)
+
+#define DCT_SAMPLE_PRECISION_8            (8)
 
 #define JPEGD_STREAM_BUFF_SIZE            (512*1024)
 #define MAX_COMPONENTS                    (3)       /* for JFIF: YCbCr */
@@ -32,11 +36,6 @@
 #define MAX_AC_HUFFMAN_TABLE_LENGTH       (162)     /* for baseline */
 #define MAX_DC_HUFFMAN_TABLE_LENGTH       (12)      /* for baseline */
 #define MAX_HUFFMAN_CODE_BIT_LENGTH       (16)      /* The longest code word is 16 bits */
-#define MIN_WIDTH                         (48)      /* 48 Bytes */
-#define MIN_HEIGHT                        (48)      /* 48 Bytes */
-#define MAX_WIDTH                         (8*1024)  /* 4K Bytes */
-#define MAX_HEIGHT                        (8*1024)  /* 4K Bytes */
-#define MAX_STREAM_LENGTH                 (MAX_WIDTH * MAX_HEIGHT) /* 16M Bytes */
 #define ZERO_PADDING_LENGTH               (4)       /* 4 Bytes */
 #define JPEGD_BASELINE_TABLE_SIZE         (QUANTIZE_TABLE_LENGTH * 3 \
                                            + MAX_AC_HUFFMAN_TABLE_LENGTH * 2 \
@@ -51,6 +50,7 @@
 #define JPEGD_DBG_PARSER_INFO             (0x00000020) /* parser information */
 #define JPEGD_DBG_SYNTAX_ERR              (0x00000040) /* syntax error */
 #define JPEGD_DBG_HAL_INFO                (0x00000080) /* hal information */
+#define JPEGD_DBG_HAL_TBL                 (0x00000100) /* hal information */
 
 extern RK_U32 jpegd_debug;
 
@@ -183,6 +183,10 @@ typedef struct JpegdSyntax {
     RK_U32         quant_index[MAX_COMPONENTS];
 
     RK_U32         restart_interval;
+
+    RK_U8          sample_precision;
+    RK_U8          qtbl_entry;
+    RK_U8          htbl_entry;
 } JpegdSyntax;
 
 #endif /*__JPEGD_SYNTAX__*/

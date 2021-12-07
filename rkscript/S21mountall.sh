@@ -3,7 +3,7 @@
 # Uncomment below to see more logs
 # set -x
 
-MISC_DEV=/dev/block/by-name/misc
+MISC_DEV=$(realpath /dev/block/by-name/misc)
 
 BUSYBOX_MOUNT_OPTS="loop (a|)sync (no|)atime (no|)diratime (no|)relatime (no|)dev (no|)exec (no|)suid (r|)shared (r|)slave (r|)private (un|)bindable (r|)bind move remount ro"
 NTFS_3G_MOUNT_OPTS="ro uid=[0-9]* gid=[0-9]* umask=[0-9]* fmask=[0-9]* dmask=[0-9]*"
@@ -17,6 +17,87 @@ check_tool()
 
 	[ -n "$CONFIG" ] && echo "You may need to enable $CONFIG"
 	return 1
+}
+
+prepare_ubi()
+{
+	# Only support ubi for mtd device
+	if echo $DEV | grep -vq /dev/mtd; then
+		echo "$DEV is not a mtd device!"
+		return 1
+	fi
+
+	[ "$PART_NO" ] || { echo "No valid part number!" && return 1; }
+
+	if [ "$FSGROUP" == ubifs ]; then
+		DEV=/dev/ubi${PART_NO}_0
+	else
+		DEV=/dev/ubiblock${PART_NO}_0
+	fi
+
+	MTDDEV=/dev/mtd${PART_NO}
+
+	echo "Preparing $DEV from $MTDDEV"
+
+	# Remove ubi block device
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -r /dev/ubi${PART_NO}_0 &>/dev/null
+	fi
+
+	# Detach ubi device
+	check_tool ubidetach BR2_PACKAGE_MTD_UBIDETACH || return 1
+	ubidetach -p $MTDDEV &>/dev/null
+
+	# Attach ubi device
+	check_tool ubiattach BR2_PACKAGE_MTD_UBIATTACH || return 1
+	ubiattach /dev/ubi_ctrl -m $PART_NO -d $PART_NO || return 1
+
+	# Check for valid volume
+	if [ ! -e /dev/ubi${PART_NO}_0 ]; then
+		echo "No valid ubi volume"
+		return 1
+	fi
+
+	# Create ubi block device
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -c /dev/ubi${PART_NO}_0 || return 1
+	fi
+
+	return 0
+}
+
+format_ubifs()
+{
+	echo "Formatting $MTDDEV for $DEV"
+
+	# Remove ubi block device
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -r /dev/ubi${PART_NO}_0 &>/dev/null
+	fi
+
+	# Detach ubi device
+	check_tool ubidetach BR2_PACKAGE_MTD_UBIDETACH || return 1
+	ubidetach -p $MTDDEV &>/dev/null
+
+	# Format device
+	check_tool ubiformat BR2_PACKAGE_MTD_UBIFORMAT || return 1
+	ubiformat -yq $MTDDEV || return 1
+
+	# Attach ubi device
+	ubiattach /dev/ubi_ctrl -m $PART_NO -d $PART_NO || return 1
+
+	# Create ubi volume
+	check_tool ubimkvol BR2_PACKAGE_MTD_UBIMKVOL || return 1
+	ubimkvol /dev/ubi$PART_NO -N $PART_NAME -m || return 1
+
+	# Create ubi block device
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -c /dev/ubi${PART_NO}_0 || return 1
+	fi
 }
 
 remount_part()
@@ -50,6 +131,17 @@ format_part()
 			# Enable compression
 			check_tool mkntfs BR2_PACKAGE_NTFS_3G_NTFSPROGS && \
 			mkntfs -FCQ -L $PART_NAME $DEV
+			;;
+		ubifs)
+			format_ubifs
+			;;
+		squashfs)
+			# check_tool mksquashfs BR2_PACKAGE_SQUASHFS && \
+			# mksquashfs $DEV
+			echo "It's pointness to format a squashfs partition..."
+			;;
+		auto)
+			echo "Unable to format a auto partition..."
 			;;
 		*)
 			echo Unsupported file system $FSTYPE for $DEV
@@ -113,6 +205,7 @@ resize_vfat()
 	# Somehow fatresize only works for 256M+ fat
 	[ $SIZE -gt $((256 * 1024 * 1024)) ] && return 1
 
+	MAX_SIZE=$(( $(cat ${SYS_PATH}/size) * 512))
 	MIN_SIZE=$(($MAX_SIZE - 16 * 1024 * 1024))
 	[ $MIN_SIZE -lt $SIZE ] && return 0 # Large enough!
 	while [ $MAX_SIZE -gt $MIN_SIZE ];do
@@ -150,15 +243,42 @@ resize_part()
 	[ ! "$IS_ROOTDEV" ] && format_resize
 }
 
-done_oem_command()
+erase_oem_command()
 {
-	echo "OEM: Done with $cmd"
-	COUNT=$(echo $cmd|wc -c)
-	OFFSETS=$(strings -t d $MISC_DEV | grep -w "$cmd" | awk '{ print $1 }')
+	CMD=$1
+	FILE=$2
+
+	echo "OEM: Erasing $CMD in $FILE"
+
+	COUNT=$(echo $CMD|wc -c)
+	OFFSETS=$(strings -t d $FILE | grep -w "$CMD" | awk '{ print $1 }')
 
 	for offset in $OFFSETS; do
-		dd if=/dev/zero of=$MISC_DEV bs=1 count=$COUNT seek=$offset 2>/dev/null
+		dd if=/dev/zero of=$FILE bs=1 count=$COUNT seek=$offset conv=notrunc 2>/dev/null
 	done
+}
+
+done_oem_command()
+{
+	CMD=$1
+
+	echo "OEM: Done with $CMD"
+
+	if [ -b "$MISC_DEV" ]; then
+		erase_oem_command $CMD $MISC_DEV
+	else
+		echo "OEM: Erase $CMD from mtd device"
+
+		check_tool nanddump BR2_PACKAGE_MTD_NANDDUMP || return
+		check_tool nandwrite BR2_PACKAGE_MTD_NANDWRITE || return
+		check_tool flash_erase BR2_PACKAGE_MTD_FLASH_ERASE || return
+
+		TEMP=$(mktemp)
+		nanddump $MISC_DEV -f $TEMP
+		erase_oem_command $CMD $TEMP
+		flash_erase $MISC_DEV 0 0
+		nandwrite $MISC_DEV $TEMP
+	fi
 }
 
 handle_oem_command()
@@ -186,23 +306,19 @@ convert_mount_opts()
 
 prepare_part()
 {
-	case $FSTYPE in
-		ext[234])
-			FSGROUP=ext2
-			FSCK_CONFIG=BR2_PACKAGE_E2FSPROGS_FSCK
-			;;
-		msdos|fat|vfat)
-			FSGROUP=vfat
-			FSCK_CONFIG=BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT
-			;;
-		ntfs)
-			FSGROUP=ntfs
-			FSCK_CONFIG=BR2_PACKAGE_NTFS_3G_NTFSPROGS
-			;;
-		*)
-			echo "Unsupported file system $FSTYPE for $DEV"
-			return 1
-	esac
+	# Try to umount the mounted partitions
+	[ "$IS_ROOTDEV" ] || umount $MOUNT_POINT &>/dev/null
+
+	# Prepare for ubi (consider /dev/mtdX as ubiblock)
+	if [ $FSGROUP == ubifs ] || echo $DEV | grep -q "/dev/mtd[0-9]";then
+		if ! prepare_ubi; then
+			echo "Failed to prepare ubi for $DEV"
+			[ "$AUTO_MKFS" ] || return 1
+
+			echo "Auto formatting"
+			format_ubifs || return 1
+		fi
+	fi
 
 	case $FSGROUP in
 		ext2)
@@ -227,6 +343,18 @@ prepare_part()
 			check_tool ntfslabel BR2_PACKAGE_NTFS_3G_NTFSPROGS || return 1
 			LABEL=$(ntfslabel $DEV)
 			;;
+		ubifs)
+			MOUNT="busybox mount -t ubifs"
+			MOUNT_OPTS=$(convert_mount_opts "$BUSYBOX_MOUNT_OPTS")
+
+			LABEL=$PART_NAME
+			;;
+		squashfs|auto)
+			MOUNT="busybox mount"
+			MOUNT_OPTS=$(convert_mount_opts "$BUSYBOX_MOUNT_OPTS")
+
+			LABEL=$PART_NAME
+			;;
 		*)
 			echo Unsupported file system $FSTYPE for $DEV
 			return 1
@@ -235,6 +363,10 @@ prepare_part()
 
 	if [ $? -ne 0 ]; then
 		echo "Wrong fs type($FSTYPE) for $DEV"
+		if [ "$AUTO_MKFS" ]; then
+			echo "Auto formatting $DEV to $FSTYPE"
+			format_part && prepare_part && return 0
+		fi
 		return 1
 	fi
 
@@ -242,16 +374,14 @@ prepare_part()
 
 	MOUNT_OPTS=${MOUNT_OPTS:+" -o ${MOUNT_OPTS%,}"}
 
-	# Try to umount the mounted partitions
-	[ "$IS_ROOTDEV" ] || umount $MOUNT_POINT &>/dev/null
 	mountpoint -q $MOUNT_POINT || return 0
-
 	MOUNTED_RO_RW=$(touch $MOUNT_POINT &>/dev/null && echo rw || echo ro)
+	return 0
 }
 
 check_part()
 {
-	[ "$SKIP_FSCK" -o "$PASS" -eq 0 ] && return
+	[ "$SKIP_FSCK" -o "$PASS" -eq 0 -o -z "$FSCK_CONFIG" ] && return
 	echo "Checking $DEV($FSTYPE)"
 
 	check_tool fsck.$FSGROUP $FSCK_CONFIG || return
@@ -287,27 +417,65 @@ do_part()
 	fi
 
 	DEV=$(realpath $DEV 2>/dev/null)
+	PART_NO=$(echo $DEV|grep -oE "[0-9]*$")
 
 	# Unknown device
-	[ -b "$DEV" ] || return
+	[ -b "$DEV" -o -c "$DEV" ] || return
 
-	echo "Handling $DEV $MOUNT_POINT $FSTYPE $OPTS $PASS"
+	SYS_PATH=$(echo /sys/class/*/${DEV##*/})
+	if [ -f "$SYS_PATH/name" ]; then
+		PART_NAME=$(cat $SYS_PATH/name)
+	else
+		PART_NAME=$(grep PARTNAME ${SYS_PATH}/uevent | cut -d '=' -f 2)
+	fi
+	PART_NAME=${PART_NAME:-${DEV##*/}}
 
-	SYS_PATH=/sys/class/block/${DEV##*/}
-	MAX_SIZE=$(( $(cat ${SYS_PATH}/size) * 512))
-	PART_NAME=$(grep PARTNAME ${SYS_PATH}/uevent | cut -d '=' -f 2)
+	echo "Handling $PART_NAME: $DEV $MOUNT_POINT $FSTYPE $OPTS $PASS"
+
+	case $FSTYPE in
+		ext[234])
+			FSGROUP=ext2
+			FSCK_CONFIG=BR2_PACKAGE_E2FSPROGS_FSCK
+			;;
+		msdos|fat|vfat)
+			FSGROUP=vfat
+			FSCK_CONFIG=BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT
+			;;
+		ntfs)
+			FSGROUP=ntfs
+			FSCK_CONFIG=BR2_PACKAGE_NTFS_3G_NTFSPROGS
+			;;
+		ubifs)
+			FSGROUP=ubifs
+			# No fsck for ubifs
+			unset FSCK_CONFIG
+			;;
+		squashfs)
+			FSGROUP=squashfs
+			# No fsck for squashfs
+			unset FSCK_CONFIG
+			;;
+		auto)
+			FSGROUP=auto
+			# Running fsck on a random fs is dangerous
+			unset FSCK_CONFIG
+			;;
+		*)
+			echo "Unsupported file system $FSTYPE for $DEV"
+			return
+	esac
 
 	# Handle OEM commands for current partition
 	handle_oem_command
 
-	# Check fs types and setup check/mount tools
+	# Setup check/mount tools and do some prepare
 	prepare_part || return
-
-	# Resize partition if needed
-	resize_part
 
 	# Check and repair
 	check_part
+
+	# Resize partition if needed
+	resize_part
 
 	# Restore ro/rw
 	remount_part $MOUNTED_RO_RW
@@ -332,8 +500,8 @@ do_part()
 
 prepare_mountall()
 {
-	OEM_CMD=$(strings $MISC_DEV | grep "^cmd_" | xargs)
-	[ "$OEM_CMD" ] && echo "Note: Fount OEM commands - $OEM_CMD"
+	OEM_CMD=$(strings "$MISC_DEV" | grep "^cmd_" | xargs)
+	[ "$OEM_CMD" ] && echo "Note: Found OEM commands - $OEM_CMD"
 
 	AUTO_MKFS="/.auto_mkfs"
 	if [ -f $AUTO_MKFS ];then
@@ -354,12 +522,6 @@ prepare_mountall()
 
 mountall()
 {
-	# Recovery's rootfs is ramfs
-	if mountpoint -d /|grep -wq 0:1; then
-		echo "Only mount basic file systems for recovery"
-		return
-	fi
-
 	echo "Will now mount all partitions in /etc/fstab"
 
 	# Set environments for mountall

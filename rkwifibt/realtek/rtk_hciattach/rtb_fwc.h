@@ -29,6 +29,7 @@ struct rtb_struct;
 #define ROM_LMP_8723c           0x87c3 /* ??????? */
 #define ROM_LMP_8822b           0x8822
 #define ROM_LMP_8822c           0x8822
+#define ROM_LMP_8852a           0x8852
 #define ROM_LMP_8723cs_xx       0x8704
 #define ROM_LMP_8723cs_cg       0x8705
 #define ROM_LMP_8723cs_vf       0x8706
@@ -39,19 +40,24 @@ struct rtb_struct;
 #define CHIP_8723CS_VF 4
 #define CHIP_8723CS_XX 5
 #define CHIP_8703BS   7
+#define CHIP_8725AS   0x05
 
 /* software id */
 #define CHIP_UNKNOWN	0x00
 #define CHIP_8761AT	0x1F
 #define CHIP_8761ATF	0x2F
 #define CHIP_8761BTC	0x3F
-#define CHIP_8761B	0x4F
+#define CHIP_8761BH4	0x4F
 #define CHIP_8723BS	0x5F
 #define CHIP_BEFORE	0x6F
 #define CHIP_8822BS	0x70
 #define CHIP_8723DS	0x71
 #define CHIP_8821CS	0x72
 #define CHIP_8822CS	0x73
+#define CHIP_8761B	0x74
+#define CHIP_8852AS	0x75
+#define CHIP_8723FS	0x76
+#define CHIP_8852BS	0x77
 
 #define RTL_FW_MATCH_CHIP_TYPE  (1 << 0)
 #define RTL_FW_MATCH_HCI_VER    (1 << 1)
@@ -69,6 +75,6 @@ struct patch_info {
 };
 
 struct patch_info *get_patch_entry(struct rtb_struct *btrtl);
-uint8_t *rtb_read_config(struct rtb_struct *btrtl, int *cfg_len);
+uint8_t *rtb_read_config(const char *file, int *cfg_len, uint8_t chip_type);
 uint8_t *rtb_read_firmware(struct rtb_struct *btrtl, int *fw_len);
 uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen);

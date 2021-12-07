@@ -54,24 +54,6 @@ static MPP_RET hal_h263d_wait(void *hal, HalTaskInfo *task)
     return ctx->hal_api.wait(hal, task);
 }
 
-static MPP_RET hal_h263d_reset(void *hal)
-{
-    hal_h263_ctx *ctx = (hal_h263_ctx *)hal;
-    return ctx->hal_api.reset(hal);
-}
-
-static MPP_RET hal_h263d_flush(void *hal)
-{
-    hal_h263_ctx *ctx = (hal_h263_ctx *)hal;
-    return ctx->hal_api.flush(hal);
-}
-
-static MPP_RET hal_h263d_control(void *hal, RK_S32 cmd_type, void *param)
-{
-    hal_h263_ctx *ctx = (hal_h263_ctx *)hal;
-    return ctx->hal_api.control(hal, cmd_type, param);
-}
-
 static MPP_RET hal_h263d_deinit(void *hal)
 {
     hal_h263_ctx *ctx = (hal_h263_ctx *)hal;
@@ -82,7 +64,7 @@ static MPP_RET hal_h263d_init(void *hal, MppHalCfg *cfg)
 {
     MppHalApi *p_api = NULL;
     hal_h263_ctx *p_hal = (hal_h263_ctx *)hal;
-    VpuHardMode hard_mode = MODE_NULL;
+    VpuHwMode hw_mode = MODE_NULL;
     RK_U32 hw_flag = 0;
 
     mpp_env_get_u32("h263d_hal_debug", &h263d_hal_debug, 0);
@@ -94,12 +76,12 @@ static MPP_RET hal_h263d_init(void *hal, MppHalCfg *cfg)
     p_hal->pkt_slots = cfg->packet_slots;
 
     hw_flag = mpp_get_vcodec_type();
-    if (hw_flag & HAVE_VPU2)
-        hard_mode = VDPU2_MODE;
-    if (hw_flag & HAVE_VPU1)
-        hard_mode = VDPU1_MODE;
+    if (hw_flag & HAVE_VDPU2)
+        hw_mode = VDPU2_MODE;
+    if (hw_flag & HAVE_VDPU1)
+        hw_mode = VDPU1_MODE;
 
-    switch (hard_mode) {
+    switch (hw_mode) {
     case VDPU2_MODE : {
         mpp_log("the VDPU2_MODE is used currently!\n");
         p_api->init    = hal_vpu2_h263d_init;
@@ -107,9 +89,9 @@ static MPP_RET hal_h263d_init(void *hal, MppHalCfg *cfg)
         p_api->reg_gen = hal_vpu2_h263d_gen_regs;
         p_api->start   = hal_vpu2_h263d_start;
         p_api->wait    = hal_vpu2_h263d_wait;
-        p_api->reset   = hal_vpu2_h263d_reset;
-        p_api->flush   = hal_vpu2_h263d_flush;
-        p_api->control = hal_vpu2_h263d_control;
+        p_api->reset   = NULL;
+        p_api->flush   = NULL;
+        p_api->control = NULL;
     } break;
     case VDPU1_MODE : {
         mpp_log("the VDPU1_MODE is used currently!\n");
@@ -118,12 +100,12 @@ static MPP_RET hal_h263d_init(void *hal, MppHalCfg *cfg)
         p_api->reg_gen = hal_vpu1_h263d_gen_regs;
         p_api->start   = hal_vpu1_h263d_start;
         p_api->wait    = hal_vpu1_h263d_wait;
-        p_api->reset   = hal_vpu1_h263d_reset;
-        p_api->flush   = hal_vpu1_h263d_flush;
-        p_api->control = hal_vpu1_h263d_control;
+        p_api->reset   = NULL;
+        p_api->flush   = NULL;
+        p_api->control = NULL;
     } break;
     default : {
-        mpp_err("unknow vpu type:%d.", hard_mode);
+        mpp_err("unknow vpu type:%d.", hw_mode);
         return MPP_ERR_INIT;
     } break;
     }
@@ -142,7 +124,7 @@ const MppHalApi hal_api_h263d = {
     hal_h263d_gen_regs,
     hal_h263d_start,
     hal_h263d_wait,
-    hal_h263d_reset,
-    hal_h263d_flush,
-    hal_h263d_control,
+    NULL,
+    NULL,
+    NULL,
 };

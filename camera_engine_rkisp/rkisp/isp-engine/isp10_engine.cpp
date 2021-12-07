@@ -170,14 +170,14 @@ bool Isp10Engine::init(const char* tuningFile,
   osMutexLock(&mApiLock);
   if (mInitialized == 0) {
     if (mCamIAEngine == NULL) {
-      ALOGE("%s: getCamIA10EngineItf failed!",
+      LOGE("%s: getCamIA10EngineItf failed!",
             __func__);
       goto init_exit;
     }
 
     LOGD("%s:tuningFile %s", __func__, tuningFile);
     if (mCamIAEngine->initStatic((char*)tuningFile, ispDev, isp_ver) != RET_SUCCESS) {
-      ALOGE("%s: initstatic failed", __func__);
+      LOGE("%s: initstatic failed", __func__);
       osMutexUnlock(&mApiLock);
       deInit();
       osMutexLock(&mApiLock);
@@ -187,7 +187,7 @@ bool Isp10Engine::init(const char* tuningFile,
 	LOGD("initStatic success");
 /*
     if (!initISPStream(ispDev)) {
-      ALOGE("%s: initISPStream failed but continue", __func__);
+      LOGE("%s: initISPStream failed but continue", __func__);
       osMutexUnlock(&mApiLock);
       deInit();
       osMutexLock(&mApiLock);
@@ -253,7 +253,7 @@ bool Isp10Engine::start() {
 
 	LOGD("%s: run ISP3ATh\n", __func__);
 	if (RET_SUCCESS != mISP3AThread->run("ISP3ATh", OSLAYER_THREAD_PRIO_HIGH)) {
-	  ALOGE("%s: ISP3ATh thread start failed", __func__);
+	  LOGE("%s: ISP3ATh thread start failed", __func__);
 	  stop();
 	  ret = false;
 	} else {
@@ -390,23 +390,23 @@ bool Isp10Engine::applyIspConfig(struct CamIsp10ConfigSet* isp_cfg) {
   if (isp_cfg->active_configs & ISP_DSP_3DNR_MASK) {
   	mIspCfg.Dsp3DnrSetConfig = isp_cfg->configs.Dsp3DnrSetConfig;
   }
-  
+
   if (isp_cfg->active_configs & ISP_NEW_DSP_3DNR_MASK) {
   	mIspCfg.NewDsp3DnrSetConfig = isp_cfg->configs.NewDsp3DnrSetConfig;
   }
-  
+
   if (isp_cfg->active_configs & ISP_RK_DEMOSAICLP_MASK) {
     mIspCfg.demosaicLp_config = isp_cfg->configs.demosaicLp_config;
 	mIspCfg.enabled[HAL_ISP_DEMOSAICLP_ID] =
 	  isp_cfg->enabled[HAL_ISP_DEMOSAICLP_ID];
   }
-  
+
   if (isp_cfg->active_configs & ISP_RK_IESHARP_MASK) {
     mIspCfg.rkIESharp_config = isp_cfg->configs.rkIESharp_config;
 	mIspCfg.enabled[HAL_ISP_RKIESHARP_ID] =
 	  isp_cfg->enabled[HAL_ISP_RKIESHARP_ID];
   }
-  
+
   return true;
 }
 
@@ -458,17 +458,17 @@ bool Isp10Engine::convertIspStats(
     ia_stats->aec.is_hdr_stats = true;
 
     ia_stats->aec.lgmean = preisp_hdr_ae_stats->result.lgmean;
-    ia_stats->aec.sensor.exp_time_l =
+    ia_stats->aec.HdrAE_metadata.regTime[0]=
             preisp_hdr_ae_stats->result.reg_exp_time[0];
-    ia_stats->aec.sensor.exp_time =
+    ia_stats->aec.HdrAE_metadata.regTime[1] =
             preisp_hdr_ae_stats->result.reg_exp_time[1];
-    ia_stats->aec.sensor.exp_time_s =
+    ia_stats->aec.HdrAE_metadata.regTime[2] =
             preisp_hdr_ae_stats->result.reg_exp_time[2];
-    ia_stats->aec.sensor.gain_l =
+    ia_stats->aec.HdrAE_metadata.regGain[0]=
             preisp_hdr_ae_stats->result.reg_exp_gain[0];
-    ia_stats->aec.sensor.gain =
+    ia_stats->aec.HdrAE_metadata.regGain[1]=
             preisp_hdr_ae_stats->result.reg_exp_gain[1];
-    ia_stats->aec.sensor.gain_s =
+    ia_stats->aec.HdrAE_metadata.regGain[2] =
             preisp_hdr_ae_stats->result.reg_exp_gain[2];
     for (int i = 0; i < CIFISP_PREISP_HDRAE_MAXFRAMES; i++) {
         memcpy((char*)ia_stats->aec.oneframe[i].hdr_hist_bins,
@@ -561,7 +561,7 @@ bool Isp10Engine::configureISP(const void* config) {
       memset(&isp_cfg, 0, sizeof(struct CamIsp10ConfigSet));
       //run isp manual config??will override the 3A results
       if (!runISPManual(&ia_results, BOOL_TRUE))
-        ALOGE("%s:run ISP manual failed!", __func__);
+        LOGE("%s:run ISP manual failed!", __func__);
       convertIAResults(&isp_cfg, &ia_results);
       applyIspConfig(&isp_cfg);
     }
@@ -777,7 +777,7 @@ bool Isp10Engine::convertIAResults(
         else if (ia_results->awb.MeasMode == CAMERIC_ISP_AWB_MEASURING_MODE_RGB)
           isp_cfg->configs.awb_meas_config.awb_mode = CIFISP_AWB_MODE_RGB;
         else
-          ALOGE("%s:%d,erro awb measure mode %d", __func__, __LINE__, ia_results->awb.MeasMode);
+          LOGE("%s:%d,erro awb measure mode %d", __func__, __LINE__, ia_results->awb.MeasMode);
         isp_cfg->active_configs |= ISP_AWB_MEAS_MASK;
         isp_cfg->enabled[HAL_ISP_AWB_MEAS_ID] =
             ia_results->awb_meas_enabled;
@@ -1109,7 +1109,7 @@ bool Isp10Engine::convertIAResults(
         isp_cfg->configs.goc_config.mode =
             CIFISP_GOC_MODE_EQUIDISTANT;
       else
-        ALOGE("%s: not support %d goc mode.",
+        LOGE("%s: not support %d goc mode.",
               __func__, ia_results->goc.mode);
       for (int i = 0; i < CIFISP_GAMMA_OUT_MAX_SAMPLES; i++) {
         isp_cfg->configs.goc_config.gamma_y[i] =
@@ -1242,7 +1242,7 @@ bool Isp10Engine::convertIAResults(
           isp_cfg->configs.ie_config.eff_mat_5 =
               (uint16_t)(ia_results->ie.ModeConfig.Sharpen.coeff[7])
               | ((uint16_t)(ia_results->ie.ModeConfig.Sharpen.coeff[8]) << 0x4);
-		  
+
           /*not used for this effect*/
           isp_cfg->configs.ie_config.eff_mat_1 =
               0;
@@ -1255,7 +1255,7 @@ bool Isp10Engine::convertIAResults(
         }
         break;
         default: {
-          ALOGE("%s: set ie mode failed %d", __FUNCTION__,
+          LOGE("%s: set ie mode failed %d", __FUNCTION__,
                 ia_results->ie.mode);
           if (ia_results->ie.enabled == BOOL_TRUE)
             isp_cfg->active_configs &=  ~ISP_IE_MASK;
@@ -1370,7 +1370,7 @@ bool Isp10Engine::convertIAResults(
 	  LOGD( "WDR = 0x%x", ia_results->wdr.wdr_gain_max_value);
 	}
 
-	
+
 	if (ia_results->active & CAMIA10_DSP_3DNR_MASK) {
 	  isp_cfg->active_configs |= ISP_DSP_3DNR_MASK;
 	  isp_cfg->configs.Dsp3DnrSetConfig = ia_results->adpf.Dsp3DnrResult;
@@ -1398,7 +1398,7 @@ bool Isp10Engine::convertIAResults(
 			  isp_cfg->configs.Dsp3DnrSetConfig.src_shp_w2);
 	}
 
-	if (ia_results->active & CAMIA10_NEW_DSP_3DNR_MASK) 
+	if (ia_results->active & CAMIA10_NEW_DSP_3DNR_MASK)
 	{
 	  isp_cfg->active_configs |= ISP_NEW_DSP_3DNR_MASK;
 	  isp_cfg->configs.NewDsp3DnrSetConfig = ia_results->adpf.NewDsp3DnrResult;
@@ -1411,7 +1411,7 @@ bool Isp10Engine::convertIAResults(
 			  isp_cfg->configs.NewDsp3DnrSetConfig.enable_iir,
 			  isp_cfg->configs.NewDsp3DnrSetConfig.enable_uvnr,
 			  isp_cfg->configs.NewDsp3DnrSetConfig.enable_sharp);
-		  
+
 	  LOGD( "ConvertIA setting ynr_time_weight:%d ynr_spat_weight:%d uvnr:%d sharp:%d ",
 			  isp_cfg->configs.NewDsp3DnrSetConfig.ynr_time_weight,
 			  isp_cfg->configs.NewDsp3DnrSetConfig.ynr_spat_weight,
@@ -1420,7 +1420,7 @@ bool Isp10Engine::convertIAResults(
 			  isp_cfg->configs.NewDsp3DnrSetConfig.enable_dpc);
 	}
 
-	if (ia_results->active & CAMIA10_DEMOSAICLP_MASK) 
+	if (ia_results->active & CAMIA10_DEMOSAICLP_MASK)
 	{
 		isp_cfg->enabled[HAL_ISP_DEMOSAICLP_ID] = (bool_t)ia_results->rkDemosaicLP.lp_en;
 		isp_cfg->active_configs |= ISP_RK_DEMOSAICLP_MASK;
@@ -1446,7 +1446,7 @@ bool Isp10Engine::convertIAResults(
 		memcpy(isp_cfg->configs.demosaicLp_config.thvar_divided ,
 				ia_results->rkDemosaicLP.thvar_divided,
 				sizeof(ia_results->rkDemosaicLP.thvar_divided));
-		
+
 		isp_cfg->configs.demosaicLp_config.th_grad = ia_results->rkDemosaicLP.th_grad;
 		isp_cfg->configs.demosaicLp_config.th_diff = ia_results->rkDemosaicLP.th_diff;
 		isp_cfg->configs.demosaicLp_config.th_csc = ia_results->rkDemosaicLP.th_csc;
@@ -1464,15 +1464,15 @@ bool Isp10Engine::convertIAResults(
 		isp_cfg->configs.demosaicLp_config.thvar_r_fct = ia_results->rkDemosaicLP.thvar_r_fct;
 		isp_cfg->configs.demosaicLp_config.thgrad_b_fct = ia_results->rkDemosaicLP.thgrad_b_fct;
 		isp_cfg->configs.demosaicLp_config.thdiff_b_fct = ia_results->rkDemosaicLP.thdiff_b_fct;
-		isp_cfg->configs.demosaicLp_config.thvar_b_fct = ia_results->rkDemosaicLP.thvar_b_fct;			
+		isp_cfg->configs.demosaicLp_config.thvar_b_fct = ia_results->rkDemosaicLP.thvar_b_fct;
 	}
-	
+
 	if (ia_results->active & CAMIA10_RKIESHARP_MASK) {
 		isp_cfg->enabled[HAL_ISP_RKIESHARP_ID] = (bool_t)ia_results->rkIEsharp.iesharpen_en;
 		isp_cfg->active_configs |= ISP_RK_IESHARP_MASK;
-		isp_cfg->configs.rkIESharp_config.coring_thr = ia_results->rkIEsharp.coring_thr; 
-		isp_cfg->configs.rkIESharp_config.full_range = ia_results->rkIEsharp.full_range; 
-		isp_cfg->configs.rkIESharp_config.switch_avg = ia_results->rkIEsharp.switch_avg; 
+		isp_cfg->configs.rkIESharp_config.coring_thr = ia_results->rkIEsharp.coring_thr;
+		isp_cfg->configs.rkIESharp_config.full_range = ia_results->rkIEsharp.full_range;
+		isp_cfg->configs.rkIESharp_config.switch_avg = ia_results->rkIEsharp.switch_avg;
 		memcpy(isp_cfg->configs.rkIESharp_config.yavg_thr,
 				ia_results->rkIEsharp.yavg_thr,
 				sizeof(ia_results->rkIEsharp.yavg_thr));
@@ -1495,11 +1495,11 @@ bool Isp10Engine::convertIAResults(
 		memcpy(isp_cfg->configs.rkIESharp_config.gauss_noise_coe,
 				ia_results->rkIEsharp.gauss_noise_coe,
 				sizeof(ia_results->rkIEsharp.gauss_noise_coe));
-		
+
 		memcpy(isp_cfg->configs.rkIESharp_config.gauss_other_coe,
 				ia_results->rkIEsharp.gauss_other_coe,
 				sizeof(ia_results->rkIEsharp.gauss_other_coe));
-		
+
 		memcpy(isp_cfg->configs.rkIESharp_config.uv_gauss_flat_coe,
 				ia_results->rkIEsharp.uv_gauss_flat_coe,
 				sizeof(ia_results->rkIEsharp.uv_gauss_flat_coe));
@@ -1511,15 +1511,15 @@ bool Isp10Engine::convertIAResults(
 		memcpy(isp_cfg->configs.rkIESharp_config.uv_gauss_other_coe,
 				ia_results->rkIEsharp.uv_gauss_other_coe,
 				sizeof(ia_results->rkIEsharp.uv_gauss_other_coe));
-		
-   		memcpy(isp_cfg->configs.rkIESharp_config.grad_seq, 
+
+   		memcpy(isp_cfg->configs.rkIESharp_config.grad_seq,
 						ia_results->rkIEsharp.p_grad,
 						sizeof(ia_results->rkIEsharp.p_grad));
-		
+
 		memcpy(isp_cfg->configs.rkIESharp_config.sharp_factor,
 						ia_results->rkIEsharp.sharp_factor,
 						sizeof(ia_results->rkIEsharp.sharp_factor));
-		
+
 		memcpy(isp_cfg->configs.rkIESharp_config.line1_filter_coe,
 						ia_results->rkIEsharp.line1_filter_coe,
 						sizeof(ia_results->rkIEsharp.line1_filter_coe));
@@ -1614,7 +1614,7 @@ void Isp10Engine::transDrvMetaDataToHal
           halMeta->exp_time
       );
     else
-      ALOGW("%s:mCamIAEngine has been desroyed!", __func__);
+      LOGW("%s:mCamIAEngine has been desroyed!", __func__);
     halMeta->awb.wb_gain.gain_blue =
         UtlFixToFloat_U0208(ispMetaData->other_cfg.awb_gain_config.gain_blue);
     halMeta->awb.wb_gain.gain_green_b =
@@ -1656,12 +1656,12 @@ bool Isp10Engine::threadLoop() {
   //LOGD("%s: enter",__func__);
 
   if (!getMeasurement(v4l2_buf)) {
-    ALOGE("%s: getMeasurement failed", __func__);
+    LOGE("%s: getMeasurement failed", __func__);
     return true;//false;
   }
 
   if (v4l2_buf.index >= CAM_ISP_NUM_OF_STAT_BUFS) {
-    ALOGE("%s: v4l2_buf index: %d is invalidate!", __func__, v4l2_buf.index);
+    LOGE("%s: v4l2_buf index: %d is invalidate!", __func__, v4l2_buf.index);
     return true;//false;
   }
 
@@ -1682,12 +1682,23 @@ bool Isp10Engine::threadLoop() {
 
   //run isp manual config??will override the 3A results
   if (!runISPManual(&ia_results, BOOL_TRUE))
-    ALOGE("%s:run ISP manual failed!", __func__);
+    LOGE("%s:run ISP manual failed!", __func__);
 
   convertIAResults(&isp_cfg, &ia_results);
 
   applyIspConfig(&isp_cfg);
 
   return true;
+}
+
+void Isp10Engine::clearStatic() {
+    if (mCamIAEngine == NULL) {
+      ALOGE("%s: getCamIA10EngineItf failed!",
+            __func__);
+      return;
+    }
+
+    mCamIAEngine->clearStatic();
+
 }
 

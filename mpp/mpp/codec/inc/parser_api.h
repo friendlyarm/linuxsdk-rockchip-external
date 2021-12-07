@@ -17,9 +17,12 @@
 #ifndef __PARSER_API_H__
 #define __PARSER_API_H__
 
+#include "rk_mpi_cmd.h"
 #include "mpp_packet.h"
 #include "mpp_buf_slot.h"
+#include "mpp_dec_cfg.h"
 #include "hal_task.h"
+#include "mpp_soc.h"
 
 /*
  * slots    - all decoder need a slots interface to sync its internal dpb management
@@ -28,15 +31,11 @@
  * the reset wait for extension
  */
 typedef struct DecParserInitCfg_t {
-    // input
-    MppCodingType   coding;
-    MppBufSlots     frame_slots;
-    MppBufSlots     packet_slots;
-
-    // output
-    RK_S32          task_count;
-    RK_U32          need_split;
-    RK_U32          internal_pts;
+    MppCodingType       coding;
+    MppBufSlots         frame_slots;
+    MppBufSlots         packet_slots;
+    MppDecCfgSet        *cfg;
+    const MppDecHwCap   *hw_info;
 } ParserCfg;
 
 
@@ -70,7 +69,7 @@ typedef struct ParserApi_t {
 
     MPP_RET (*reset)(void *ctx);
     MPP_RET (*flush)(void *ctx);
-    MPP_RET (*control)(void *ctx, RK_S32 cmd, void *param);
+    MPP_RET (*control)(void *ctx, MpiCmd cmd, void *param);
     MPP_RET (*callback)(void *ctx, void *err_info);
 } ParserApi;
 

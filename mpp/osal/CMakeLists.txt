@@ -25,18 +25,30 @@ set(MPP_ALLOCATOR
     ${DRM_FILES}
 )
 
+set(MPP_DRIVER
+    driver/mpp_server.cpp
+    driver/mpp_device.c
+    driver/mpp_service.c
+    driver/vcodec_service.c
+)
+
 add_library(osal STATIC
+    mpp_soc.cpp
     mpp_platform.cpp
     mpp_runtime.cpp
     mpp_allocator.cpp
+    mpp_mem_pool.cpp
+    mpp_eventfd.cpp
     mpp_thread.cpp
     mpp_common.cpp
     mpp_queue.cpp
+    mpp_trace.cpp
     mpp_time.cpp
     mpp_list.cpp
     mpp_mem.cpp
     mpp_env.cpp
     mpp_log.cpp
+    osal_2str.c
     # Those files have a compiler marco protection, so only target
     # OS will be built
     android/os_allocator.c
@@ -46,12 +58,13 @@ add_library(osal STATIC
     linux/os_allocator.c
     linux/os_mem.c
     linux/os_env.c
-    linux/os_log.c
+    linux/os_log.cpp
     windows/os_allocator.c
     windows/os_mem.c
     windows/os_env.c
     windows/os_log.c
     ${MPP_ALLOCATOR}
+    ${MPP_DRIVER}
 )
 
 target_link_libraries(osal ${CMAKE_THREAD_LIBS_INIT})
@@ -60,6 +73,7 @@ target_include_directories(osal PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/allocator"
+    "${CMAKE_CURRENT_SOURCE_DIR}/driver/inc"
 )
 
 set_target_properties(osal PROPERTIES FOLDER "osal")

@@ -17,9 +17,9 @@
 #ifndef __MPP_ENC_H__
 #define __MPP_ENC_H__
 
-#include "mpp_thread.h"
-#include "mpp_controller.h"
-#include "mpp_hal.h"
+#include "rk_type.h"
+#include "mpp_err.h"
+#include "rk_mpi_cmd.h"
 
 /*
  * Configure of encoder is separated into four parts.
@@ -48,12 +48,12 @@
  * The module transcation flow is as follows:
  *
  *                 +                      +
- *     User        |      Mpi/Mpp         |         Controller
+ *     User        |      Mpi/Mpp         |         EncImpl
  *                 |                      |            Hal
  *                 |                      |
  * +----------+    |    +---------+       |       +------------+
  * |          |    |    |         +-----RcCfg----->            |
- * |  RcCfg   +--------->         |       |       | Controller |
+ * |  RcCfg   +--------->         |       |       | EncImpl |
  * |          |    |    |         |   +-Frame----->            |
  * +----------+    |    |         |   |   |       +---+-----^--+
  *                 |    |         |   |   |           |     |
@@ -149,51 +149,26 @@
  *   +                          +                 +                       +
  */
 
-typedef struct MppEnc_t MppEnc;
+typedef void* MppEnc;
 
-struct MppEnc_t {
+typedef struct MppEncInitCfg_t {
     MppCodingType       coding;
-    Controller          controller;
-    MppHal              hal;
-
-    // common resource
-    MppBufSlots         frame_slots;
-    MppBufSlots         packet_slots;
-    HalTaskGroup        tasks;
-
-    // internal status and protection
-    Mutex               lock;
-    RK_U32              reset_flag;
-
-    /* Encoder configure set */
-    MppEncCfgSet        cfg;
-    MppEncCfgSet        set;
-};
+    void                *mpp;
+} MppEncInitCfg;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*
- * main thread for all encoder. This thread will connect encoder / hal / mpp
- */
-void *mpp_enc_control_thread(void *data);
-void *mpp_enc_hal_thread(void *data);
+MPP_RET mpp_enc_init_v2(MppEnc *ctx, MppEncInitCfg *cfg);
+MPP_RET mpp_enc_deinit_v2(MppEnc ctx);
 
-MPP_RET mpp_enc_init(MppEnc **enc, MppCodingType coding);
-MPP_RET mpp_enc_deinit(MppEnc *enc);
-MPP_RET mpp_enc_control(MppEnc *enc, MpiCmd cmd, void *param);
-MPP_RET mpp_enc_notify(MppEnc *enc, RK_U32 flag);
-MPP_RET mpp_enc_reset(MppEnc *enc);
+MPP_RET mpp_enc_start_v2(MppEnc ctx);
+MPP_RET mpp_enc_stop_v2(MppEnc ctx);
 
-/*
- * preprocess config and rate-control config is common config then they will
- * be done in mpp_enc layer
- *
- * codec related config will be set in each hal component
- */
-void mpp_enc_update_prep_cfg(MppEncPrepCfg *dst, MppEncPrepCfg *src);
-void mpp_enc_update_rc_cfg(MppEncRcCfg *dst, MppEncRcCfg *src);
+MPP_RET mpp_enc_control_v2(MppEnc ctx, MpiCmd cmd, void *param);
+MPP_RET mpp_enc_notify_v2(MppEnc ctx, RK_U32 flag);
+MPP_RET mpp_enc_reset_v2(MppEnc ctx);
 
 #ifdef __cplusplus
 }

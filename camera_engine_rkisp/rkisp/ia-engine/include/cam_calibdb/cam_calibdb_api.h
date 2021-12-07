@@ -5,7 +5,7 @@
  * transcribed, or translated into any language or computer format, in any form
  * or by any means without written permission of:
  * Fuzhou Rockchip Electronics Co.Ltd .
- * 
+ *
  *
  *****************************************************************************/
 /**
@@ -329,6 +329,24 @@ RESULT CamCalibDbGetResolutionIdxByName
     int32_t*                     pIdx
 );
 
+RESULT CamCalibDbGetResolutionNameByIdx
+(
+    CamCalibDbHandle_t          hCamCalibDb,
+    int32_t                     idx,
+    const CamResolutionName_t*  pName
+);
+
+RESULT CamCalibDbGetAwb_FlashProfiles
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwbPara_Flash_t **flash
+);
+
+RESULT CamCalibDbAddAwb_FlashProfiles
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwbPara_Flash_t  flash
+) ;
 
 RESULT CamCalibDbAddAwb_VersionName
 (
@@ -863,7 +881,29 @@ RESULT CamCalibDbGetAwb_V10_IlluminationByIdx
     CamAwb_V10_IlluProfile_t**    pIllumination
 );
 
+RESULT CamCalibDbReplaceAwb_V10_IlluminationAll
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V10_IlluProfile_t    *pIllumination
+);
 
+RESULT CamCalibDbReplaceAwb_V11_IlluminationAll
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V11_IlluProfile_t    *pIllumination
+);
+
+RESULT CamCalibDbReplaceAwb_V10_IlluminationByName
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V10_IlluProfile_t    *pIllumination
+);
+
+RESULT CamCalibDbReplaceAwb_V11_IlluminationByName
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    CamAwb_V11_IlluProfile_t    *pIllumination
+);
 
 RESULT CamCalibDbAddLscProfile
 (
@@ -920,7 +960,7 @@ RESULT CamCalibDbReplaceCcProfileByName
 RESULT CamCalibDbGetCcProfileByName
 (
     CamCalibDbHandle_t      hCamCalibDb,
-    CamLscProfileName_t     name,
+    CamCcProfileName_t      name,
     CamCcProfile_t**          pCcProfile
 );
 
@@ -1033,7 +1073,6 @@ RESULT CamCalibDbAddDsp3DNRSetting
     CamDpfProfile_t*         pDpfProfile,
     CamDsp3DNRSettingProfile_t* pAddDsp3DNRSetting
 );
-
 
 RESULT CamCalibDbGetNoOfDsp3DNRSetting
 (
@@ -1201,6 +1240,18 @@ RESULT CamCalibDbGetOTPGlobal
 (
     CamCalibDbHandle_t  hCamCalibDb,
     CamOTPGlobal_t**   ppOTPGlobal
+);
+
+RESULT CamCalibDbDumpFile
+(
+    CamCalibDbHandle_t  hCamCalibDb,
+    const char *dump_path
+);
+
+RESULT CamCalibDbLoadFile
+(
+    CamCalibDbHandle_t*  hCamCalibDb,
+    const char* CamCalibDbIqData
 );
 
 #ifdef __cplusplus

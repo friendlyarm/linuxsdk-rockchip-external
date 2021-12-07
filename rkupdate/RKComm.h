@@ -171,6 +171,7 @@ public:
 	virtual int RKU_GetPublicKey(BYTE* lpBuffer)=0;
 	virtual void RKU_ReopenLBAHandle()=0;
 	virtual int RKU_ShowNandLBADevice()=0;
+	virtual bool RKU_IsEmmcFlash() = 0;
 	CRKComm(CRKLog *pLog);
 	virtual ~CRKComm();
 protected:
@@ -201,6 +202,7 @@ public:
 	virtual int RKU_GetPublicKey(BYTE* lpBuffer);
 	virtual void RKU_ReopenLBAHandle();
 	virtual int RKU_ShowNandLBADevice();
+	virtual bool RKU_IsEmmcFlash();
 	CRKUsbComm(CRKLog *pLog);
 	~CRKUsbComm();
 

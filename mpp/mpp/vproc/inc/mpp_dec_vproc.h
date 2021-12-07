@@ -17,10 +17,16 @@
 #ifndef __MPP_DEC_VPROC_H__
 #define __MPP_DEC_VPROC_H__
 
+#include "hal_task.h"
+
+typedef struct MppDecVprocCfg_t {
+    void            *mpp;
+    HalTaskGroup    task_group;
+} MppDecVprocCfg;
+
 typedef void* MppDecVprocCtx;
 
 #ifdef __cplusplus
-#include "mpp.h"
 
 extern "C" {
 #endif
@@ -34,7 +40,7 @@ extern "C" {
  * dec_vproc_reset  - reset process thread and discard all input
  */
 
-MPP_RET dec_vproc_init(MppDecVprocCtx *ctx, void *mpp);
+MPP_RET dec_vproc_init(MppDecVprocCtx *ctx, MppDecVprocCfg *cfg);
 MPP_RET dec_vproc_deinit(MppDecVprocCtx ctx);
 
 MPP_RET dec_vproc_start(MppDecVprocCtx ctx);

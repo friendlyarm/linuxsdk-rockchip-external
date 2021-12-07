@@ -24,7 +24,7 @@
 #include "mpp_mem.h"
 #include "mpp_env.h"
 #include "mpp_common.h"
-#include "mpp_platform.h"
+#include "mpp_soc.h"
 
 #include "vpu_api.h"
 #include "vpu_api_legacy.h"
@@ -216,7 +216,7 @@ public:
         RK_U32 i;
 
         for (i = 0; i < MPP_ARRAY_ELEMS(codec_paths); i++) {
-            rkapi_hdl = dlopen(codec_paths[i], RTLD_LAZY);
+            rkapi_hdl = dlopen(codec_paths[i], RTLD_LAZY | RTLD_GLOBAL);
             if (rkapi_hdl)
                 break;
         }
@@ -298,6 +298,9 @@ RK_S32 vpu_open_context(VpuCodecContext **ctx)
     } else if (force_mpp_mode) {
         /* force mpp mode here */
         use_mpp = 1;
+    } else if (!access("/dev/mpp_service", F_OK)) {
+        /* if mpp_service exist, force mpp mode */
+        use_mpp = 1;
     } else if (!!access("/dev/rkvdec", F_OK)) {
         /* if there is no rkvdec it means the platform must be vpu1 */
         if (s && s->videoCoding == OMX_RK_VIDEO_CodingHEVC &&
@@ -316,7 +319,7 @@ RK_S32 vpu_open_context(VpuCodecContext **ctx)
         if (s->videoCoding == OMX_RK_VIDEO_CodingAVC
             && s->codecType == CODEC_DECODER && s->width <= 1920
             && s->height <= 1088 && !s->extra_cfg.mpp_mode
-            && strncmp(mpp_get_soc_name(), "rk3399", 6)) {
+            && !strstr(mpp_get_soc_name(), "rk3399")) {
             /* H.264 smaller than 1080p use original vpuapi library for better error process */
             // NOTE: rk3399 need better performance
             use_mpp = 0;

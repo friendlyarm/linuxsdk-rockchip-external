@@ -26,19 +26,35 @@
 static MppMetaDef meta_defs[] = {
     /* categorized by type */
     /* data flow type */
-    {   KEY_INPUT_FRAME,       TYPE_FRAME,    },
-    {   KEY_OUTPUT_FRAME,      TYPE_FRAME,    },
-    {   KEY_INPUT_PACKET,      TYPE_PACKET,   },
-    {   KEY_OUTPUT_PACKET,     TYPE_PACKET,   },
+    {   KEY_INPUT_FRAME,        TYPE_FRAME,     },
+    {   KEY_OUTPUT_FRAME,       TYPE_FRAME,     },
+    {   KEY_INPUT_PACKET,       TYPE_PACKET,    },
+    {   KEY_OUTPUT_PACKET,      TYPE_PACKET,    },
     /* buffer for motion detection */
-    {   KEY_MOTION_INFO,       TYPE_BUFFER,   },
+    {   KEY_MOTION_INFO,        TYPE_BUFFER,    },
     /* buffer storing the HDR information for current frame*/
-    {   KEY_HDR_INFO,          TYPE_BUFFER,   },
+    {   KEY_HDR_INFO,           TYPE_BUFFER,    },
 
-    {   KEY_OUTPUT_INTRA,      TYPE_S32,      },
-    {   KEY_INPUT_BLOCK,       TYPE_S32,      },
-    {   KEY_OUTPUT_BLOCK,      TYPE_S32,      },
-    {   KEY_TEMPORAL_ID,       TYPE_S32,      },
+    {   KEY_OUTPUT_INTRA,       TYPE_S32,       },
+    {   KEY_INPUT_BLOCK,        TYPE_S32,       },
+    {   KEY_OUTPUT_BLOCK,       TYPE_S32,       },
+
+    /* extra information for tsvc */
+    {   KEY_TEMPORAL_ID,        TYPE_S32,       },
+    {   KEY_LONG_REF_IDX,       TYPE_S32,       },
+    {   KEY_ENC_AVERAGE_QP,     TYPE_S32,       },
+
+    {   KEY_ROI_DATA,           TYPE_PTR,       },
+    {   KEY_OSD_DATA,           TYPE_PTR,       },
+    {   KEY_OSD_DATA2,          TYPE_PTR,       },
+    {   KEY_USER_DATA,          TYPE_PTR,       },
+    {   KEY_USER_DATAS,         TYPE_PTR,       },
+    {   KEY_MV_LIST,            TYPE_PTR,       },
+
+    {   KEY_ENC_MARK_LTR,       TYPE_S32,       },
+    {   KEY_ENC_USE_LTR,        TYPE_S32,       },
+    {   KEY_ENC_FRAME_QP,       TYPE_S32,       },
+    {   KEY_ENC_BASE_LAYER_PID, TYPE_S32,       },
 };
 
 class MppMetaService
@@ -56,6 +72,7 @@ private:
     RK_U32              meta_id;
     RK_U32              meta_count;
     RK_U32              node_count;
+    RK_U32              finished;
 
 public:
     static MppMetaService *get_instance() {
@@ -77,6 +94,7 @@ public:
 
     MppMetaImpl  *get_meta(const char *tag, const char *caller);
     void          put_meta(MppMetaImpl *meta);
+    void          inc_ref(MppMetaImpl *meta);
 
     MppMetaNode  *get_node(MppMetaImpl *meta, RK_S32 index);
     void          put_node(MppMetaNode *node);
@@ -87,7 +105,8 @@ public:
 MppMetaService::MppMetaService()
     : meta_id(0),
       meta_count(0),
-      node_count(0)
+      node_count(0),
+      finished(0)
 {
     INIT_LIST_HEAD(&mlist_meta);
     INIT_LIST_HEAD(&mlist_node);
@@ -95,24 +114,26 @@ MppMetaService::MppMetaService()
 
 MppMetaService::~MppMetaService()
 {
-    mpp_assert(list_empty(&mlist_meta));
-    mpp_assert(list_empty(&mlist_node));
-
-    while (!list_empty(&mlist_meta)) {
+    if (!list_empty(&mlist_meta)) {
         MppMetaImpl *pos, *n;
+
+        mpp_log_f("cleaning leaked metadata\n");
+
         list_for_each_entry_safe(pos, n, &mlist_meta, MppMetaImpl, list_meta) {
             put_meta(pos);
         }
     }
 
-    mpp_assert(list_empty(&mlist_node));
-
-    while (!list_empty(&mlist_node)) {
+    if (!list_empty(&mlist_node)) {
         MppMetaNode *pos, *n;
+
+        mpp_log_f("cleaning leaked metadata key-value node\n");
+
         list_for_each_entry_safe(pos, n, &mlist_node, MppMetaNode, list_node) {
             put_node(pos);
         }
     }
+    finished = 1;
 }
 
 RK_S32 MppMetaService::get_index_of_key(MppMetaKey key, MppMetaType type)
@@ -138,6 +159,7 @@ MppMetaImpl *MppMetaService::get_meta(const char *tag, const char *caller)
         impl->meta_id = meta_id++;
         INIT_LIST_HEAD(&impl->list_meta);
         INIT_LIST_HEAD(&impl->list_node);
+        impl->ref_count = 1;
         impl->node_count = 0;
 
         list_add_tail(&impl->list_meta, &mlist_meta);
@@ -150,6 +172,16 @@ MppMetaImpl *MppMetaService::get_meta(const char *tag, const char *caller)
 
 void MppMetaService::put_meta(MppMetaImpl *meta)
 {
+    if (finished)
+        return ;
+
+    mpp_assert(meta->ref_count);
+    if (meta->ref_count)
+        meta->ref_count--;
+
+    if (meta->ref_count)
+        return;
+
     while (!list_empty(&meta->list_node)) {
         MppMetaNode *node = list_entry(meta->list_node.next, MppMetaNode, list_meta);
         put_node(node);
@@ -158,6 +190,12 @@ void MppMetaService::put_meta(MppMetaImpl *meta)
     list_del_init(&meta->list_meta);
     meta_count--;
     mpp_free(meta);
+}
+
+void MppMetaService::inc_ref(MppMetaImpl *meta)
+{
+    mpp_assert(meta->ref_count);
+    meta->ref_count++;
 }
 
 MppMetaNode *MppMetaService::find_node(MppMetaImpl *meta, RK_S32 type_id)
@@ -265,6 +303,20 @@ MPP_RET mpp_meta_put(MppMeta meta)
     AutoMutex auto_lock(service->get_lock());
     MppMetaImpl *impl = (MppMetaImpl *)meta;
     service->put_meta(impl);
+    return MPP_OK;
+}
+
+MPP_RET mpp_meta_inc_ref(MppMeta meta)
+{
+    if (NULL == meta) {
+        mpp_err_f("found NULL input\n");
+        return MPP_ERR_NULL_PTR;
+    }
+
+    MppMetaService *service = MppMetaService::get_instance();
+    AutoMutex auto_lock(service->get_lock());
+    MppMetaImpl *impl = (MppMetaImpl *)meta;
+    service->inc_ref(impl);
     return MPP_OK;
 }
 
@@ -411,9 +463,8 @@ MPP_RET mpp_meta_get_ptr(MppMeta meta, MppMetaKey key, void  **val)
     MppMetaImpl *impl = (MppMetaImpl *)meta;
     MppMetaVal meta_val;
     MPP_RET ret = get_val_by_key(impl, key, TYPE_PTR, &meta_val);
-    if (MPP_OK == ret)
-        *val = meta_val.val_ptr;
 
+    *val = (ret) ? NULL : meta_val.val_ptr;
     return ret;
 }
 
@@ -466,9 +517,8 @@ MPP_RET mpp_meta_get_frame(MppMeta meta, MppMetaKey key, MppFrame *frame)
     MppMetaImpl *impl = (MppMetaImpl *)meta;
     MppMetaVal meta_val;
     MPP_RET ret = get_val_by_key(impl, key, TYPE_FRAME, &meta_val);
-    if (MPP_OK == ret)
-        *frame = meta_val.frame;
 
+    *frame = (ret) ? NULL : meta_val.frame;
     return ret;
 }
 
@@ -482,9 +532,8 @@ MPP_RET mpp_meta_get_packet(MppMeta meta, MppMetaKey key, MppPacket *packet)
     MppMetaImpl *impl = (MppMetaImpl *)meta;
     MppMetaVal meta_val;
     MPP_RET ret = get_val_by_key(impl, key, TYPE_PACKET, &meta_val);
-    if (MPP_OK == ret)
-        *packet = meta_val.packet;
 
+    *packet = (ret) ? NULL : meta_val.packet;
     return ret;
 }
 
@@ -498,9 +547,8 @@ MPP_RET mpp_meta_get_buffer(MppMeta meta, MppMetaKey key, MppBuffer *buffer)
     MppMetaImpl *impl = (MppMetaImpl *)meta;
     MppMetaVal meta_val;
     MPP_RET ret = get_val_by_key(impl, key, TYPE_BUFFER, &meta_val);
-    if (MPP_OK == ret)
-        *buffer = meta_val.buffer;
 
+    *buffer = (ret) ? NULL : meta_val.buffer;
     return ret;
 }
 

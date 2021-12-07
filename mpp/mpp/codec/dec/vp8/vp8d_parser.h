@@ -21,8 +21,7 @@
 #include "mpp_bitread.h"
 #include "mpp_mem.h"
 
-#include "mpp_dec.h"
-
+#include "parser_api.h"
 #include "vp8d_syntax.h"
 #include "vp8d_data.h"
 
@@ -80,6 +79,7 @@ typedef struct VP8Frame {
     MppFrame f;
     RK_S32 slot_index;
     RK_S8 ref_count;
+    RK_U8 invisible;
 } VP8Frame;
 
 
@@ -187,7 +187,7 @@ MPP_RET  vp8d_parser_init   (void *ctx, ParserCfg *cfg);
 MPP_RET  vp8d_parser_deinit (void *ctx);
 MPP_RET  vp8d_parser_reset  (void *ctx);
 MPP_RET  vp8d_parser_flush  (void *ctx);
-MPP_RET  vp8d_parser_control(void *ctx, RK_S32 cmd_type, void *param);
+MPP_RET  vp8d_parser_control(void *ctx, MpiCmd cmd_type, void *param);
 MPP_RET  vp8d_parser_prepare(void *ctx, MppPacket pkt, HalDecTask *task);
 MPP_RET  vp8d_parser_parse  (void *ctx, HalDecTask *task);
 MPP_RET  vp8d_parser_callback(void *ctx, void *hal_info);

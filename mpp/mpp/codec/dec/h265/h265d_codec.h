@@ -25,31 +25,11 @@
  *   2015.7.15 : Create
  */
 
-#ifndef __MPP_CODEC_H__
-#define __MPP_CODEC_H__
+#ifndef __H265D_CODEC_H__
+#define __H265D_CODEC_H__
 
-#include "mpp_dec.h"
-
-enum MppColorSpace {
-    MPPCOL_SPC_RGB          = 0,
-    MPPCOL_SPC_BT709        = 1,    ///< also ITU-R BT1361 / IEC 61966-2-4 xvYCC709 / SMPTE RP177 Annex B
-    MPPCOL_SPC_UNSPECIFIED  = 2,
-    MPPCOL_SPC_FCC          = 4,
-    MPPCOL_SPC_BT470BG      = 5,    ///< also ITU-R BT601-6 625 / ITU-R BT1358 625 / ITU-R BT1700 625 PAL & SECAM / IEC 61966-2-4 xvYCC601
-    MPPCOL_SPC_SMPTE170M    = 6,    ///< also ITU-R BT601-6 525 / ITU-R BT1358 525 / ITU-R BT1700 NTSC / functionally identical to above
-    MPPCOL_SPC_SMPTE240M    = 7,
-    MPPCOL_SPC_YCOCG        = 8,    ///< Used by Dirac / VC-2 and H.264 FRext, see ITU-T SG16
-    MPPCOL_SPC_BT2020_NCL   = 9,    ///< ITU-R BT2020 non-constant luminance system
-    MPPCOL_SPC_BT2020_CL    = 10,   ///< ITU-R BT2020 constant luminance system
-    MPPCOL_SPC_NB             ,     ///< Not part of ABI
-};
-
-enum MppColorRange {
-    MPPCOL_RANGE_UNSPECIFIED = 0,
-    MPPCOL_RANGE_MPEG        = 1, ///< the normal 219*2^(n-8) "MPEG" YUV ranges
-    MPPCOL_RANGE_JPEG        = 2, ///< the normal     2^n-1   "JPEG" YUV ranges
-    MPPCOL_RANGE_NB             , ///< Not part of ABI
-};
+#include "mpp_frame.h"
+#include "mpp_dec_cfg.h"
 
 typedef struct MppRational {
     RK_S32 num; ///< numerator
@@ -148,18 +128,19 @@ typedef struct H265dContext {
      * YUV colorspace type.
      * - decoding: Set by rkcodec
      */
-    enum MppColorSpace colorspace;
+    MppFrameColorSpace colorspace;
 
     /**
      * MPEG vs JPEG YUV range.
      * - decoding: Set by rkcodec
      */
-    enum MppColorRange color_range;
+    MppFrameColorRange color_range;
 
     void *compare_info;
 
-    RK_U32 need_split;
-    RK_U32 disable_error;
+    MppDecCfgSet *cfg;
+
+    const MppDecHwCap *hw_info;
 } H265dContext_t;
 #ifdef  __cplusplus
 extern "C" {
@@ -172,4 +153,4 @@ RK_S32 h265d_syntax_fill_slice(void *ctx, RK_S32 input_index);
 }
 #endif
 
-#endif /* __MPP_CODEC_H__ */
+#endif /* __H265D_CODEC_H__ */

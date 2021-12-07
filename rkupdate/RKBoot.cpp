@@ -194,6 +194,12 @@ CHAR CRKBoot::GetIndexByName(ENUM_RKBOOTENTRY type,tchar *pName)
 	}
 	return -1;
 }
+
+bool CRKBoot::IsNewIDBFlag()
+{
+	return m_NewIDBFlag;
+}
+
 CRKBoot::~CRKBoot()
 {
 	if (m_BootData!=NULL)
@@ -235,12 +241,22 @@ CRKBoot::CRKBoot(PBYTE lpBootData,DWORD dwBootSize,bool &bCheck)
 		}
 		PSTRUCT_RKBOOT_HEAD pBootHead;
 		pBootHead = (PSTRUCT_RKBOOT_HEAD)(m_BootData);
-		if ( pBootHead->uiTag!=0x544F4F42)
+		if ( pBootHead->uiTag!=0x544F4F42  && (pBootHead->uiTag!=0x2052444C))	//add suppoty rk356x new loader
 		{
 			bCheck=false;
-			printf("CRKBoot : pBootHead->uiTag!=0x544F4F42\n");
+			printf("CRKBoot : pBootHead->uiTag!=0x544F4F42 or 0x2052444C\n");
 			return;
 		}
+
+		if (0x2052444C == pBootHead->uiTag)
+		{
+			m_NewIDBFlag = true;
+			printf("RKBoot:this is new IDB flag\n");
+		}
+		else {
+			m_NewIDBFlag = false;
+		}
+
 		if (pBootHead->ucRc4Flag)
 		{
 			m_bRc4Disable = true;

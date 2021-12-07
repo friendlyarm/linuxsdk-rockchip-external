@@ -152,12 +152,6 @@ static const MppBufSlotOps set_val_op[SLOT_PROP_BUTT] = {
     SLOT_SET_BUFFER,
 };
 
-static const MppBufSlotOps clr_val_op[SLOT_PROP_BUTT] = {
-    SLOT_CLR_EOS,
-    SLOT_CLR_FRAME,
-    SLOT_CLR_BUFFER,
-};
-
 typedef union SlotStatus_u {
     RK_U32 val;
     struct {
@@ -182,6 +176,15 @@ typedef struct MppBufSlotLog_t {
     SlotStatus          status_in;
     SlotStatus          status_out;
 } MppBufSlotLog;
+
+typedef struct MppBufSlotLogs_t {
+    pthread_mutex_t     lock;
+    RK_U16              max_count;
+    RK_U16              log_count;
+    RK_U16              log_write;
+    RK_U16              log_read;
+    MppBufSlotLog       *logs;
+} MppBufSlotLogs;
 
 struct MppBufSlotEntry_t {
     MppBufSlotsImpl     *slots;
@@ -233,7 +236,7 @@ struct MppBufSlotsImpl_t {
     struct list_head    queue[QUEUE_BUTT];
 
     // list for log
-    mpp_list            *logs;
+    MppBufSlotLogs      *logs;
 
     MppBufSlotEntry     *slots;
 };
@@ -248,10 +251,11 @@ static void generate_info_set(MppBufSlotsImpl *impl, MppFrame frame, RK_U32 forc
     RK_U32 width  = mpp_frame_get_width(frame);
     RK_U32 height = mpp_frame_get_height(frame);
     MppFrameFormat fmt = mpp_frame_get_fmt(frame);
-    RK_U32 depth = (fmt == MPP_FMT_YUV420SP_10BIT
-                    || fmt == MPP_FMT_YUV422SP_10BIT) ? 10 : 8;
+    RK_U32 depth = ((fmt & MPP_FRAME_FMT_MASK) == MPP_FMT_YUV420SP_10BIT ||
+                    (fmt & MPP_FRAME_FMT_MASK) == MPP_FMT_YUV422SP_10BIT) ? 10 : 8;
     RK_U32 codec_hor_stride = mpp_frame_get_hor_stride(frame);
     RK_U32 codec_ver_stride = mpp_frame_get_ver_stride(frame);
+
     RK_U32 hal_hor_stride = (codec_hor_stride) ?
                             (impl->hal_hor_align(codec_hor_stride)) :
                             (impl->hal_hor_align(width * depth >> 3));
@@ -259,19 +263,43 @@ static void generate_info_set(MppBufSlotsImpl *impl, MppFrame frame, RK_U32 forc
                             (impl->hal_ver_align(codec_ver_stride)) :
                             (impl->hal_ver_align(height));
 
+    RK_U32 hor_stride_pixel = width;
+
     hal_hor_stride = (force_default_align && codec_hor_stride) ? codec_hor_stride : hal_hor_stride;
     hal_ver_stride = (force_default_align && codec_ver_stride) ? codec_ver_stride : hal_ver_stride;
 
     RK_U32 size = hal_hor_stride * hal_ver_stride;
-    size *= impl->numerator;
-    size /= impl->denominator;
-    size = impl->hal_len_align ? impl->hal_len_align(hal_hor_stride * hal_ver_stride) : size;
 
+    if (MPP_FRAME_FMT_IS_FBC(fmt)) {
+        /*fbc stride default 64 align*/
+        hal_hor_stride = MPP_ALIGN(width, 64) * depth >> 3;
+        hor_stride_pixel = MPP_ALIGN(hor_stride_pixel,  64);
+
+        switch ((fmt & MPP_FRAME_FMT_MASK)) {
+        case MPP_FMT_YUV420SP_10BIT :
+        case MPP_FMT_YUV420SP : {
+            size = hal_hor_stride * hal_ver_stride * 3 / 2;
+        } break;
+        case MPP_FMT_YUV422SP_10BIT :
+        case MPP_FMT_YUV422SP : {
+            size = hal_hor_stride * hal_ver_stride * 2;
+        } break;
+        default : {
+            size = hal_hor_stride * hal_ver_stride * 3 / 2;
+            mpp_err("dec out fmt is no support");
+        } break;
+        }
+    } else {
+        size *= impl->numerator;
+        size /= impl->denominator;
+        size = impl->hal_len_align ? impl->hal_len_align(hal_hor_stride * hal_ver_stride) : size;
+    }
     mpp_frame_set_width(impl->info_set, width);
     mpp_frame_set_height(impl->info_set, height);
     mpp_frame_set_fmt(impl->info_set, fmt);
     mpp_frame_set_hor_stride(impl->info_set, hal_hor_stride);
     mpp_frame_set_ver_stride(impl->info_set, hal_ver_stride);
+    mpp_frame_set_hor_stride_pixel(impl->info_set, hor_stride_pixel);
     mpp_frame_set_buf_size(impl->info_set, size);
     mpp_frame_set_buf_size(frame, size);
     impl->buf_size = size;
@@ -286,6 +314,79 @@ static void generate_info_set(MppBufSlotsImpl *impl, MppFrame frame, RK_U32 forc
 }
 
 #define dump_slots(...) _dump_slots(__FUNCTION__, ## __VA_ARGS__)
+
+static void buf_slot_logs_reset(MppBufSlotLogs *logs)
+{
+    logs->log_count = 0;
+    logs->log_write = 0;
+    logs->log_read = 0;
+}
+
+static MppBufSlotLogs *buf_slot_logs_init(RK_U32 max_count)
+{
+    MppBufSlotLogs *logs = NULL;
+
+    if (!max_count)
+        return NULL;
+
+    logs = mpp_malloc_size(MppBufSlotLogs, sizeof(MppBufSlotLogs) +
+                           max_count * sizeof(MppBufSlotLog));
+    if (!logs) {
+        mpp_err_f("failed to create %d buf slot logs\n", max_count);
+        return NULL;
+    }
+
+    logs->max_count = max_count;
+    logs->logs = (MppBufSlotLog *)(logs + 1);
+    buf_slot_logs_reset(logs);
+
+    return logs;
+}
+
+static void buf_slot_logs_deinit(MppBufSlotLogs *logs)
+{
+    MPP_FREE(logs);
+}
+
+static void buf_slot_logs_write(MppBufSlotLogs *logs, RK_S32 index, MppBufSlotOps op,
+                                SlotStatus before, SlotStatus after)
+{
+    MppBufSlotLog *log = NULL;
+
+    log = &logs->logs[logs->log_write];
+    log->index      = index;
+    log->ops        = op;
+    log->status_in  = before;
+    log->status_out = after;
+
+    logs->log_write++;
+    if (logs->log_write >= logs->max_count)
+        logs->log_write = 0;
+
+    if (logs->log_count < logs->max_count)
+        logs->log_count++;
+    else {
+        logs->log_read++;
+        if (logs->log_read >= logs->max_count)
+            logs->log_read = 0;
+    }
+}
+
+static void buf_slot_logs_dump(MppBufSlotLogs *logs)
+{
+    while (logs->log_count) {
+        MppBufSlotLog *log = &logs->logs[logs->log_read];
+
+        mpp_log("index %2d op: %s status in %08x out %08x",
+                log->index, op_string[log->ops], log->status_in.val, log->status_out.val);
+
+        logs->log_read++;
+        if (logs->log_read >= logs->max_count)
+            logs->log_read = 0;
+        logs->log_count--;
+    }
+    mpp_assert(logs->log_read == logs->log_write);
+}
 
 static void _dump_slots(const char *caller, MppBufSlotsImpl *impl)
 {
@@ -306,34 +407,12 @@ static void _dump_slots(const char *caller, MppBufSlotsImpl *impl)
 
     mpp_log("\nslot operation history:\n\n");
 
-    mpp_list *logs = impl->logs;
-    if (logs) {
-        while (logs->list_size()) {
-            MppBufSlotLog log;
-            logs->del_at_head(&log, sizeof(log));
-            mpp_log("index %2d op: %s status in %08x out %08x",
-                    log.index, op_string[log.ops], log.status_in.val, log.status_out.val);
-        }
-    }
+    if (impl->logs)
+        buf_slot_logs_dump(impl->logs);
 
     mpp_assert(0);
 
     return;
-}
-
-static void add_slot_log(mpp_list *logs, RK_S32 index, MppBufSlotOps op, SlotStatus before, SlotStatus after)
-{
-    if (logs) {
-        MppBufSlotLog log = {
-            index,
-            op,
-            before,
-            after,
-        };
-        if (logs->list_size() >= SLOT_OPS_MAX_COUNT)
-            logs->del_at_head(NULL, sizeof(log));
-        logs->add_at_tail(&log, sizeof(log));
-    }
 }
 
 static void slot_ops_with_log(MppBufSlotsImpl *impl, MppBufSlotEntry *slot, MppBufSlotOps op, void *arg)
@@ -436,7 +515,8 @@ static void slot_ops_with_log(MppBufSlotsImpl *impl, MppBufSlotEntry *slot, MppB
     slot->status = status;
     buf_slot_dbg(BUF_SLOT_DBG_OPS_RUNTIME, "slot %3d index %2d op: %s arg %010p status in %08x out %08x",
                  impl->slots_idx, index, op_string[op], arg, before.val, status.val);
-    add_slot_log(impl->logs, index, op, before, status);
+    if (impl->logs)
+        buf_slot_logs_write(impl->logs, index, op, before, status);
     if (error)
         dump_slots(impl);
 }
@@ -512,8 +592,10 @@ static void clear_slots_impl(MppBufSlotsImpl *impl)
     if (impl->info_set)
         mpp_frame_deinit(&impl->info_set);
 
-    if (impl->logs)
-        delete impl->logs;
+    if (impl->logs) {
+        buf_slot_logs_deinit(impl->logs);
+        impl->logs = NULL;
+    }
 
     if (impl->lock)
         delete impl->lock;
@@ -546,7 +628,7 @@ MPP_RET mpp_buf_slot_init(MppBufSlots *slots)
         }
 
         if (buf_slot_debug & BUF_SLOT_DBG_OPS_HISTORY) {
-            impl->logs = new mpp_list(NULL);
+            impl->logs = buf_slot_logs_init(SLOT_OPS_MAX_COUNT);
             if (NULL == impl->logs)
                 break;
         }
@@ -653,11 +735,9 @@ MPP_RET mpp_buf_slot_ready(MppBufSlots slots)
     mpp_frame_copy(impl->info, impl->info_set);
     impl->buf_size = mpp_frame_get_buf_size(impl->info);
 
-    if (impl->logs) {
-        mpp_list *logs = impl->logs;
-        while (logs->list_size())
-            logs->del_at_head(NULL, sizeof(MppBufSlotLog));
-    }
+    if (impl->logs)
+        buf_slot_logs_reset(impl->logs);
+
     impl->info_changed  = 0;
     return MPP_OK;
 }
@@ -672,6 +752,18 @@ size_t mpp_buf_slot_get_size(MppBufSlots slots)
     MppBufSlotsImpl *impl = (MppBufSlotsImpl *)slots;
     AutoMutex auto_lock(impl->lock);
     return impl->buf_size;
+}
+
+RK_S32 mpp_buf_slot_get_count(MppBufSlots slots)
+{
+    if (NULL == slots) {
+        mpp_err_f("found NULL input\n");
+        return -1;
+    }
+
+    MppBufSlotsImpl *impl = (MppBufSlotsImpl *)slots;
+    AutoMutex auto_lock(impl->lock);
+    return impl->buf_count;
 }
 
 MPP_RET mpp_buf_slot_get_unused(MppBufSlots slots, RK_S32 *index)
@@ -838,16 +930,14 @@ MPP_RET mpp_buf_slot_set_prop(MppBufSlots slots, RK_S32 index, SlotPropType type
             impl->info_changed = 1;
 
             if (old->width || old->height) {
-                mpp_dbg(MPP_DBG_INFO, "info change found\n");
-                mpp_dbg(MPP_DBG_INFO,
-                        "old width %4d height %4d stride hor %4d ver %4d fmt %4d\n",
-                        old->width, old->height, old->hor_stride,
-                        old->ver_stride, old->fmt);
+                mpp_dbg_info("info change found\n");
+                mpp_dbg_info("old width %4d height %4d stride hor %4d ver %4d fmt %4d\n",
+                             old->width, old->height, old->hor_stride,
+                             old->ver_stride, old->fmt);
             }
-            mpp_dbg(MPP_DBG_INFO,
-                    "new width %4d height %4d stride hor %4d ver %4d fmt %4d\n",
-                    dst->width, dst->height, dst->hor_stride, dst->ver_stride,
-                    dst->fmt);
+            mpp_dbg_info("new width %4d height %4d stride hor %4d ver %4d fmt %4d\n",
+                         dst->width, dst->height, dst->hor_stride, dst->ver_stride,
+                         dst->fmt);
             // info change found here
         }
     } break;

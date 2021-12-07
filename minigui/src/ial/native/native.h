@@ -44,7 +44,7 @@
 extern "C" {
 #endif  /* __cplusplus */
 
-#define MAX_INPUTNUM	10
+#define MAX_INPUTNUM	2
 
 #ifndef _MGRM_THREADS
 
@@ -82,6 +82,9 @@ typedef struct _mousedevice {
 #endif
 #ifdef _MGCONSOLE_IMPS2
   extern MOUSEDEVICE mousedev_IMPS2;
+#endif
+#ifdef _MGCONSOLE_USB
+  extern MOUSEDEVICE mousedev_USB;
 #endif
 #ifdef _MGCONSOLE_MS
   extern MOUSEDEVICE mousedev_MS;

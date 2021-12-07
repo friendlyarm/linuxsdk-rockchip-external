@@ -18,7 +18,7 @@
 
 // Camera dependencies
 #include "rkcamera_vendor_tags.h"
-#include <base/log.h>
+#include <base/xcam_log.h>
 
 enum rkcamera3_ext_tags rkcamera3_ext3_section_bounds[RKCAMERA3_EXT_SECTION_END -
     VENDOR_SECTION] = {
@@ -38,6 +38,46 @@ const char *rkcamera3_ext_section_names[RKCAMERA3_EXT_SECTION_END -
 vendor_tag_info_t rkcamera3_privatedata[RKCAMERA3_PRIVATEDATA_END - RKCAMERA3_PRIVATEDATA_START] = {
     { "privatedata_effective_driver_frame_id", TYPE_INT64 },
     { "privatedata_frame_sof_timestamp", TYPE_INT64 },
+    { "privatedata_stillcap_sync_needed", TYPE_BYTE },
+    { "privatedata_stillcap_sync_cmd", TYPE_BYTE },
+    { "privatedata_stillcap_isp_param", TYPE_BYTE },
+    { "privatedata_isp_bls", TYPE_BYTE },
+    { "privatedata_isp_lsc_get", TYPE_BYTE},
+    { "privatedata_isp_ccm_get", TYPE_BYTE},
+    { "privatedata_isp_awb_get", TYPE_BYTE},
+    { "privatedata_isp_awb_wp", TYPE_BYTE},
+    { "privatedata_isp_awb_curv", TYPE_BYTE},
+    { "privatedata_isp_awb_refgain", TYPE_BYTE},
+    { "privatedata_isp_goc_normal", TYPE_BYTE },
+    { "privatedata_isp_goc_night", TYPE_BYTE },
+    { "privatedata_isp_cproc_preview", TYPE_BYTE },
+    { "privatedata_isp_cproc_capture", TYPE_BYTE },
+    { "privatedata_isp_cproc_video", TYPE_BYTE },
+    { "privatedata_isp_dpf_get", TYPE_BYTE },
+    { "privatedata_isp_flt_normal", TYPE_BYTE },
+    { "privatedata_isp_flt_night", TYPE_BYTE },
+    { "privatedata_isp_sensor_info", TYPE_BYTE },
+    { "privatedata_isp_module_info", TYPE_BYTE },
+    { "privatedata_isp_sensor_reg", TYPE_BYTE },
+    { "privatedata_isp_sensor_flip", TYPE_BYTE },
+    { "privatedata_isp_system_info", TYPE_BYTE },
+    { "privatedata_isp_bls_set", TYPE_BYTE },
+    { "privatedata_isp_lsc_set", TYPE_BYTE },
+    { "privatedata_isp_ccm_set", TYPE_BYTE },
+    { "privatedata_isp_awb_set", TYPE_BYTE },
+    { "privatedata_isp_awb_wp_set", TYPE_BYTE },
+    { "privatedata_isp_awb_curv_set", TYPE_BYTE },
+    { "privatedata_isp_awb_refgain_set", TYPE_BYTE },
+    { "privatedata_isp_goc_set", TYPE_BYTE },
+    { "privatedata_isp_cproc_set", TYPE_BYTE },
+    { "privatedata_isp_dpf_set", TYPE_BYTE },
+    { "privatedata_isp_flt_set", TYPE_BYTE },
+    { "privatedata_isp_restart", TYPE_BYTE },
+    { "privatedata_isp_protocol_info", TYPE_BYTE },
+    { "privatedata_tuning_flag", TYPE_BYTE },
+    //{ "privatedata_hist_bins", TYPE_INT32 },
+    { "privatedata_exp_means", TYPE_BYTE },
+    { "privatedata_exp_means_count", TYPE_INT32 }
 };
 
 vendor_tag_info_t *rkcamera3_tag_info[RKCAMERA3_EXT_SECTION_END -
@@ -49,6 +89,46 @@ uint32_t rkcamera3_all_tags[] = {
     // rkcamera3_PRIVATEDATA
     (uint32_t)RKCAMERA3_PRIVATEDATA_EFFECTIVE_DRIVER_FRAME_ID,
     (uint32_t)RKCAMERA3_PRIVATEDATA_FRAME_SOF_TIMESTAMP,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_STILLCAP_SYNC_NEEDED,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_STILLCAP_SYNC_CMD,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_STILLCAP_ISP_PARAM,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_BLS,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_LSC_GET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_CCM_GET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_GET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_WP,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_CURV,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_REFGAIN,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_GOC_NORMAL,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_GOC_NIGHT,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_CPROC_PREVIEW,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_CPROC_CAPTURE,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_CPROC_VIDEO,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_DPF_GET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_FLT_NORMAL,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_FLT_NIGHT,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_SENSOR_INFO,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_MODULE_INFO,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_SENSOR_REG,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_SENSOR_FLIP,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_SYSTEM_INFO,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_BLS_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_LSC_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_CCM_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_WP_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_CURV_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_AWB_REFGAIN_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_GOC_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_CPROC_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_DPF_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_FLT_SET,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_RESTART,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_ISP_PROTOCOL_INFO,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_TUNING_FLAG,
+    //(uint32_t)RKCAMERA3_PRIVATEDATA_HIST_BINS,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_EXP_MEANS,
+    (uint32_t)RKCAMERA3_PRIVATEDATA_EXP_MEANS_COUNT
 };
 
 const vendor_tag_ops_t* RkCamera3VendorTags::Ops = NULL;
@@ -225,7 +305,7 @@ int RkCamera3VendorTags::get_tag_type(
                 const vendor_tag_ops_t *ops,
                 uint32_t tag)
 {
-    LOGD("E");
+    //LOGD("E");
     int ret;
     uint32_t section = tag >> 16;
     uint32_t section_index = section - VENDOR_SECTION;
@@ -241,8 +321,8 @@ int RkCamera3VendorTags::get_tag_type(
     else
         ret = -1;
 
-    LOGD("tag type for tag %d is %d", tag, ret);
-    LOGD("X");
+    LOGD("tag type for tag %u is %d", tag, ret);
+    //LOGD("X");
 done:
     return ret;
 }

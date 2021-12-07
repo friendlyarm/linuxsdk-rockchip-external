@@ -51,7 +51,7 @@ char * get_link_path(const char* linkpath, char * buf, int count)
 
 	rslt = readlink(path, buf, count - 1);
 	if (rslt < 0 || (rslt >= count - 1)) {
-		printf("No link to path!!! \n");
+		printf("No link to path [%s]!!! \n", path);
 		return NULL;
 	}
 
@@ -69,6 +69,25 @@ char * get_link_path(const char* linkpath, char * buf, int count)
 
 	printf("buf = %s \n", buf);
 	return buf;
+}
+
+const char* get_mounted_device_from_path(const char* path)
+{
+	const MountedVolume *volume;
+
+	int result= scan_mounted_volumes();
+	if (result < 0) {
+		LOGE("failed to scan mounted volumes\n");
+		return NULL;
+	}
+
+	volume = find_mounted_volume_by_mount_point(path);
+	if (!volume) {
+		LOGE("failed to get volume from %s\n", path);
+		return NULL;
+	}
+
+	return volume->device;
 }
 
 void load_volume_table() {
@@ -297,6 +316,25 @@ int ensure_path_mounted(const char* path) {
 	return -1;
 }
 
+int ensure_ex_path_unmounted(const char* path) {
+	int result;
+
+	result = scan_mounted_volumes();
+	if (result < 0) {
+		LOGE("unknown volume for path [%s]\n", path);
+		return -1;
+	}
+
+	const MountedVolume* mv =
+		find_mounted_volume_by_mount_point(path);
+	if (mv == NULL) {
+		printf("path: %s is already unmounted or not existed\n");
+		return 0;
+	}
+
+	return unmount_mounted_volume(mv);
+}
+
 int ensure_path_unmounted(const char* path) {
 	Volume* v = volume_for_path(path);
 	if (v == NULL) {
@@ -346,9 +384,17 @@ int format_volume(const char* volume) {
 		return -1;
 	}
 
-	if (strcmp(v->fs_type, "yaffs2") == 0 || strcmp(v->fs_type, "mtd") == 0) {
+	if (strcmp(v->fs_type, "yaffs2") == 0 || strcmp(v->fs_type, "mtd") == 0 || strcmp(v->fs_type, "ubifs") == 0 ) {
 		mtd_scan_partitions();
-		const MtdPartition* partition = mtd_find_partition_by_name(v->device);
+		char filepath[20];
+		if(strstr(v->device, "userdata") != NULL){
+			strcpy(filepath, "userdata");
+			LOGW("change v->device from %s to %s.\n", v->device, filepath);
+		}else{
+			strcpy(filepath, v->device);
+		}
+
+		const MtdPartition* partition = mtd_find_partition_by_name(filepath);
 		if (partition == NULL) {
 			LOGE("format_volume: no MTD partition \"%s\"\n", v->device);
 			return -1;

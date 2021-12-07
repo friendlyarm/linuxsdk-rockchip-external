@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __HAL_JPEGD_VDPU1_REG_TABLE_H__
-#define __HAL_JPEGD_VDPU1_REG_TABLE_H__
+#ifndef __HAL_JPEGD_VDPU1_REG_H__
+#define __HAL_JPEGD_VDPU1_REG_H__
 
-#include "mpp_device_patch.h"
+#include "vcodec_service.h"
 
 #define JPEGD_REG_NUM                       (101)
 
@@ -28,7 +28,6 @@
 #define DEC_VDPU1_SCMD_DISABLE              (0)
 #define DEC_VDPU1_LATENCY_COMPENSATION      (0)
 #define DEC_VDPU1_DATA_DISCARD_ENABLE       (0)
-
 
 typedef struct {
     struct {
@@ -608,7 +607,7 @@ typedef struct JpegdIocRegInfo_t {
 
     /* vepu_reg_num - vdpu_reg_num */
     RK_U32                 regs_diff[164 - JPEGD_REG_NUM];
-    RegExtraInfo           extra_info;
+    RK_U8                  extra_info[EXTRA_INFO_SIZE];
 } JpegdIocRegInfo;
 
 #endif

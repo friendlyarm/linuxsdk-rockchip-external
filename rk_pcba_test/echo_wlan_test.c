@@ -35,8 +35,8 @@
 
 #define WLAN_START_UP_COMMAND "ifconfig wlan0 up"
 #define WLAN_MANAGE_START "wpa_supplicant -i wlan0 -c /etc/wpa_supplicant.conf &"
-#define WLAN_SCAN_COMMAND "wpa_cli scan 'wlan0'"
-#define WLAN_SCAN_RESULT  "wpa_cli scan_r | busybox awk 'NR>=3{print $5,$3}'"
+#define WLAN_SCAN_COMMAND "wpa_cli -i wlan0 scan 'wlan0'"
+#define WLAN_SCAN_RESULT  "wpa_cli -i wlan0 scan_r | busybox awk 'NR>=3{print $5,$3}'"
 #define SCAN_RESULT_FILE "/tmp/wlan_scan_result.txt"
 
 #define AP_SUPPORT_CMD "iw list | busybox grep AP > %s"

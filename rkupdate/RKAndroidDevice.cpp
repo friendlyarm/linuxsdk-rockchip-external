@@ -1,5 +1,9 @@
 #include "RKAndroidDevice.h"
 #define tole(x)		(x)
+#define look_for_userdata(name)	\
+	memcmp(name, PARTNAME_USERDATA, sizeof(PARTNAME_USERDATA) - 1)
+
+
 /*factor is 0xedb88320*/
 bool CRKAndroidDevice::bGptFlag = 0;
 extern int sdBootUpdate;
@@ -175,7 +179,25 @@ bool CRKAndroidDevice::CalcIDBCount()
 		}
 		return false;
 	}
-	uiIdSectorNum = 4 + m_usFlashDataSec + m_usFlashBootSec;
+	if (m_pImage->m_bootObject->IsNewIDBFlag())
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("INFO:CalcIDBCount IsNewIDBFlag is true"));
+		}
+		bRet = GetLoaderHeadSize();
+		if (!bRet)
+		{
+			if (m_pLog)
+			{
+				m_pLog->Record(_T("ERROR:CalcIDBCount-->GetLoaderHeadSize failed"));
+			}
+			return false;
+		}
+		uiIdSectorNum = m_usFlashHeadSec + m_usFlashDataSec + m_usFlashBootSec;
+	} else {
+		uiIdSectorNum = 4 + m_usFlashDataSec + m_usFlashBootSec;
+	}
 
 	m_flashInfo.uiSecNumPerIDB = uiIdSectorNum;
 	m_flashInfo.usPhyBlokcPerIDB = CALC_UNIT(uiIdSectorNum,m_flashInfo.usValidSecPerBlock);
@@ -247,6 +269,29 @@ bool CRKAndroidDevice::GetLoaderDataSize()
 	return bRet;
 }
 
+bool CRKAndroidDevice::GetLoaderHeadSize()
+{
+	if (!m_pImage)
+	{
+		return false;
+	}
+	char index;
+	bool bRet;
+	tchar loaderName[]=_T("FlashHead");
+	index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER,loaderName);
+	if (index==-1)
+	{
+		return false;
+	}
+	DWORD dwDelay;
+	bRet = m_pImage->m_bootObject->GetEntryProperty(ENTRYLOADER,index,m_dwLoaderHeadSize,dwDelay);
+	if (bRet)
+	{
+		m_usFlashHeadSec = PAGEALIGN(BYTE2SECTOR(m_dwLoaderHeadSize))*4;
+	}
+	return bRet;
+}
+
 CRKAndroidDevice::CRKAndroidDevice(STRUCT_RKDEVICE_DESC &device):CRKDevice(device)
 {
 	m_oldSec0 = NULL;
@@ -255,9 +300,11 @@ CRKAndroidDevice::CRKAndroidDevice(STRUCT_RKDEVICE_DESC &device):CRKDevice(devic
 	m_oldSec3 = NULL;
 	m_dwLoaderSize = 0;
 	m_dwLoaderDataSize = 0;
+	m_dwLoaderHeadSize = 0;
 	m_oldIDBCounts = 0;
 	m_usFlashBootSec = 0;
 	m_usFlashDataSec = 0;
+	m_usFlashHeadSec = 0;
 	m_dwBackupOffset = 0xFFFFFFFF;
 	m_paramBuffer = NULL;
 	m_pCallback = NULL;
@@ -623,6 +670,130 @@ int CRKAndroidDevice::MakeIDBlockData(PBYTE lpIDBlock)
 	return 0;
 }
 
+int CRKAndroidDevice::MakeNewIDBlockData(PBYTE lpIDBlock)
+{
+	int i;
+
+	if (m_pLog)
+	{
+		m_pLog->Record(_T("INFO:MakeNewIDBlockData in"));
+	}
+
+	if (!m_pImage)
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Image is invalid"));
+		}
+		return -1;
+	}
+	char index;
+	tchar loaderCodeName[]=_T("FlashBoot");
+	index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER,loaderCodeName);
+	if (index==-1)
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderCode Entry failed"));
+		}
+		return -2;
+	}
+	PBYTE loaderCodeBuffer;
+	loaderCodeBuffer = new BYTE[m_dwLoaderSize];
+	memset(loaderCodeBuffer,0,m_dwLoaderSize);
+	if ( !m_pImage->m_bootObject->GetEntryData(ENTRYLOADER,index,loaderCodeBuffer) )
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderCode Data failed"));
+		}
+		delete []loaderCodeBuffer;
+		return -3;
+	}
+
+	tchar loaderDataName[]=_T("FlashData");
+	index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER,loaderDataName);
+	if (index==-1)
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderData Entry failed"));
+		}
+		delete []loaderCodeBuffer;
+		return -4;
+	}
+	PBYTE loaderDataBuffer;
+	loaderDataBuffer = new BYTE[m_dwLoaderDataSize];
+	memset(loaderDataBuffer,0,m_dwLoaderDataSize);
+	if ( !m_pImage->m_bootObject->GetEntryData(ENTRYLOADER,index,loaderDataBuffer) )
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderData Data failed"));
+		}
+		delete []loaderDataBuffer;
+		delete []loaderCodeBuffer;
+		return -5;
+	}
+
+	tchar loaderHeadName[]=_T("FlashHead");
+	index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER,loaderHeadName);
+	if (index==-1)
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderHead Entry failed"));
+		}
+		delete []loaderDataBuffer;
+		delete []loaderCodeBuffer;
+		return -6;
+	}
+	PBYTE loaderHeadBuffer;
+	loaderHeadBuffer = new BYTE[m_dwLoaderHeadSize];
+	memset(loaderHeadBuffer,0,m_dwLoaderHeadSize);
+	if ( !m_pImage->m_bootObject->GetEntryData(ENTRYLOADER,index,loaderHeadBuffer) )
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderHead Data failed"));
+		}
+		delete []loaderDataBuffer;
+		delete []loaderCodeBuffer;
+		delete []loaderHeadBuffer;
+		return -7;
+	}
+
+	if (m_pImage->m_bootObject->Rc4DisableFlag)
+	{//close rc4 encryption
+		for (i=0;i<m_dwLoaderHeadSize/SECTOR_SIZE;i++)
+		{
+			P_RC4(loaderHeadBuffer+SECTOR_SIZE*i,SECTOR_SIZE);
+		}
+		for (i=0;i<m_dwLoaderDataSize/SECTOR_SIZE;i++)
+		{
+			P_RC4(loaderDataBuffer+SECTOR_SIZE*i,SECTOR_SIZE);
+		}
+		for (i=0;i<m_dwLoaderSize/SECTOR_SIZE;i++)
+		{
+			P_RC4(loaderCodeBuffer+SECTOR_SIZE*i,SECTOR_SIZE);
+		}
+	}
+	memcpy(lpIDBlock, loaderHeadBuffer, m_dwLoaderHeadSize);
+	memcpy(lpIDBlock+SECTOR_SIZE*m_usFlashHeadSec, loaderDataBuffer, m_dwLoaderDataSize);
+	memcpy(lpIDBlock+SECTOR_SIZE*(m_usFlashHeadSec+m_usFlashDataSec), loaderCodeBuffer, m_dwLoaderSize);
+
+
+	delete []loaderDataBuffer;
+	delete []loaderCodeBuffer;
+	delete []loaderHeadBuffer;
+
+	if (m_pLog)
+	{
+		m_pLog->Record(_T("INFO:MakeNewIDBlockData out"));
+	}
+	return 0;
+}
+
 bool CRKAndroidDevice::MakeSpareData(PBYTE lpIDBlock,DWORD dwSectorNum,PBYTE lpSpareBuffer)
 {
 	int i = 0;
@@ -847,7 +1018,19 @@ int CRKAndroidDevice::DownloadIDBlock()
 	int iRet=0;
 	memset(pIDBData,0,dwSectorNum*SECTOR_SIZE);
 
-	iRet = MakeIDBlockData(pIDBData);
+	// iRet = MakeIDBlockData(pIDBData);
+	if (m_pImage->m_bootObject->IsNewIDBFlag())
+	{
+		if (m_pLog)
+		{
+			m_pLog->Record(_T("INFO:DownloadIDBlock-->IsNewIDBFlag is true"),iRet);
+		}
+		iRet = MakeNewIDBlockData(pIDBData);
+	}
+	else {
+		iRet = MakeIDBlockData(pIDBData);
+	}
+
 	if ( iRet!=0 )
 	{
 		if (m_pLog)
@@ -924,7 +1107,7 @@ int CRKAndroidDevice::DownloadImage()
 				{
 					bFoundSystem = true;
 				}
-				if (strcmp(rkImageHead.item[i].name,PARTNAME_USERDATA)==0)
+				if (look_for_userdata(rkImageHead.item[i].name)==0)
 				{
 					bFoundUserData = true;
 				}
@@ -1008,7 +1191,7 @@ int CRKAndroidDevice::DownloadImage()
 		{
 			if (m_pCallback)
 			{
-				sprintf(szPrompt,"%s writing...",rkImageHead.item[i].name);
+				sprintf(szPrompt,"%s writing...\n",rkImageHead.item[i].name);
 				m_pCallback(szPrompt);
 			}
 			if (GptFlag)
@@ -1045,17 +1228,18 @@ int CRKAndroidDevice::DownloadImage()
 		else
 		{
 			if (strcmp(rkImageHead.item[i].name, PARTNAME_RECOVERY) == 0 ||
-				strcmp(rkImageHead.item[i].name, PARTNAME_MISC) == 0)
+				strcmp(rkImageHead.item[i].name, PARTNAME_MISC) == 0 ||
+				look_for_userdata(rkImageHead.item[i].name) == 0)
 			{
 				if (!sdBootUpdate) {
 					//not sdboot update image, we will ignore download partiton.
-					//chad.ma add for ignore 'recovery' or 'misc' partition update at here.
-					m_pLog->Record(_T("\n######Ignore %s download ######\n"), rkImageHead.item[i].name);
+					//chad.ma add for ignore 'recovery' or 'misc' or 'userdata' partition update at here.
+					m_pLog->Record(_T(" INFO:##  Ignore [ %s ] download  ##\n"), rkImageHead.item[i].name);
 					continue;
 				}
 			}
 
-			m_pLog->Record(_T("###### Download %s ... #######"),rkImageHead.item[i].name);
+			m_pLog->Record(_T(" INFO:###### Download %s ... #######"),rkImageHead.item[i].name);
 
 			if (rkImageHead.item[i].file[55]=='H')
 			{
@@ -1070,7 +1254,7 @@ int CRKAndroidDevice::DownloadImage()
 			{
 				if (m_pCallback)
 				{
-					sprintf(szPrompt,"%s writing...",rkImageHead.item[i].name);
+					sprintf(szPrompt,"%s writing...\n",rkImageHead.item[i].name);
 					m_pCallback(szPrompt);
 				}
 				bRet = RKA_File_Download(rkImageHead.item[i],uiCurrentByte,uiTotalSize);
@@ -1103,7 +1287,7 @@ int CRKAndroidDevice::DownloadImage()
 		{
 			if (m_pCallback)
 			{
-				sprintf(szPrompt,"%s checking...",rkImageHead.item[i].name);
+				sprintf(szPrompt,"%s checking...\n",rkImageHead.item[i].name);
 				m_pCallback(szPrompt);
 			}
 			if (GptFlag)
@@ -1130,17 +1314,17 @@ int CRKAndroidDevice::DownloadImage()
 					return -6;
 				}
 			}
-
 		}
 		else
 		{
 			if (strcmp(rkImageHead.item[i].name, PARTNAME_RECOVERY) == 0 ||
-				strcmp(rkImageHead.item[i].name, PARTNAME_MISC) == 0)
+				strcmp(rkImageHead.item[i].name, PARTNAME_MISC) == 0 ||
+				look_for_userdata(rkImageHead.item[i].name) == 0)
 			{
 				if (!sdBootUpdate) {
 					//not sdboot update image , we will ignore check partiton.
-					//chad.ma add for ignore 'recovery' or 'misc' partition check at here.
-					m_pLog->Record(_T("\n###### Ignore %s Check ######\n"), rkImageHead.item[i].name);
+					//chad.ma add for ignore 'recovery' or 'misc' or 'userdata' partition check at here.
+					m_pLog->Record(_T(" INFO:#  Ignore [ %s ] Check  #\n"), rkImageHead.item[i].name);
 					continue;
 				}
 			}
@@ -1157,7 +1341,7 @@ int CRKAndroidDevice::DownloadImage()
 			{
 				if (m_pCallback)
 				{
-					sprintf(szPrompt,"%s checking...",rkImageHead.item[i].name);
+					sprintf(szPrompt,"%s checking...\n",rkImageHead.item[i].name);
 					m_pCallback(szPrompt);
 				}
 				bRet = RKA_File_Check(rkImageHead.item[i],uiCurrentByte,uiTotalSize);
@@ -1295,7 +1479,7 @@ int CRKAndroidDevice::UpgradePartition()
 				{
 					dwFlagSector = rkImageHead.item[i].flash_offset + rkImageHead.item[i].part_size -4;
 				}
-				if (strcmp(rkImageHead.item[i].name,PARTNAME_USERDATA)==0)
+				if (look_for_userdata(rkImageHead.item[i].name)==0)
 				{
 					bFoundUserData = true;
 				}
@@ -1753,7 +1937,7 @@ bool CRKAndroidDevice::RKA_File_Download(STRUCT_RKIMAGE_ITEM &entry,long long &c
 		uifileBufferSize = entry.size;
 	if (m_pLog)
 	{
-		m_pLog->Record(_T("INFO:Start to download %s,offset=0x%x,size=%llu"),entry.name,entry.flash_offset,uifileBufferSize);
+		m_pLog->Record(_T("INFO:Start updating [ %s ],offset=0x%x,size=%llu"),entry.name,entry.flash_offset,uifileBufferSize);
 	}
 
 	BYTE byRWMethod=RWMETHOD_IMAGE;
@@ -1895,6 +2079,11 @@ bool CRKAndroidDevice::RKA_File_Download(STRUCT_RKIMAGE_ITEM &entry,long long &c
 	}
 	delete []pBuffer;
 	pBuffer = NULL;
+
+	if (m_pLog)
+	{
+		m_pLog->Record(_T("INFO:[ %s ] upgrade Done!"),entry.name);
+	}
 	return true;
 }
 

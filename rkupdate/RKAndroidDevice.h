@@ -188,10 +188,12 @@ protected:
 private:
 	DWORD  m_dwLoaderSize;
 	DWORD  m_dwLoaderDataSize;
+	DWORD  m_dwLoaderHeadSize;
 	DWORD  m_dwBackupOffset;
 	char   m_oldIDBCounts;
 	USHORT m_usFlashDataSec;
 	USHORT m_usFlashBootSec;
+	USHORT m_usFlashHeadSec;
 	BYTE   *m_paramBuffer;
 	BYTE *m_gptBuffer;
 	UINT   m_uiParamFileSize;
@@ -205,6 +207,7 @@ private:
 
 	bool GetLoaderSize();
 	bool GetLoaderDataSize();
+	bool GetLoaderHeadSize();
 	bool GetOldSectorData();
 	bool CalcIDBCount();
 	bool IsExistSector3Crc(PRKANDROID_IDB_SEC2 pSec);
@@ -219,6 +222,7 @@ private:
 	virtual bool MakeSector2(PBYTE pSector);
 	virtual bool MakeSector3(PBYTE pSector);
 	virtual int MakeIDBlockData(PBYTE lpIDBlock);
+	virtual int MakeNewIDBlockData(PBYTE lpIDBlock);
 	virtual bool  MakeSpareData(PBYTE lpIDBlock,DWORD dwSectorNum,PBYTE lpSpareBuffer);
 	virtual int WriteIDBlock(PBYTE lpIDBlock,DWORD dwSectorNum,bool bErase);
 	bool RKA_Param_Download(STRUCT_RKIMAGE_ITEM &entry,long long &currentByte,long long totalByte);
