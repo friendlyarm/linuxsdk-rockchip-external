@@ -93,6 +93,14 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd_id,
 		return handle_otp_read();
 	case RKTEST_TA_CMD_OEM_OTP_WRITE:
 		return handle_otp_write();
+	case RKTEST_TA_CMD_OEM_OTP_SIZE:
+		return handle_otp_size();
+	case RKTEST_TA_CMD_STORAGE_SPEED:
+		return handle_storage_speed(param_types, params);
+	case RKTEST_TA_CMD_TRNG_READ:
+		return handle_trng_read();
+	case RKTEST_TA_CMD_SOCKET:
+		return handle_socket();
 	default:
 		EMSG("InvokeCommandEntry: BAD PARAMETERS!");
 		return TEE_ERROR_BAD_PARAMETERS;

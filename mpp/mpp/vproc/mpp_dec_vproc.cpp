@@ -74,7 +74,7 @@ typedef struct MppDecVprocCtxImpl_t {
 
 static void dec_vproc_put_frame(Mpp *mpp, MppFrame frame, MppBuffer buf, RK_S64 pts, RK_U32 err)
 {
-    mpp_list *list = mpp->mFrames;
+    mpp_list *list = mpp->mFrmOut;
     MppFrame out = NULL;
     MppFrameImpl *impl = NULL;
 
@@ -95,6 +95,9 @@ static void dec_vproc_put_frame(Mpp *mpp, MppFrame frame, MppBuffer buf, RK_S64 
     mpp->mFramePutCount++;
     list->signal();
     list->unlock();
+
+    if (mpp->mDec)
+        mpp_dec_callback(mpp->mDec, MPP_DEC_EVENT_ON_FRM_READY, out);
 }
 
 static void dec_vproc_clr_prev0(MppDecVprocCtxImpl *ctx)
@@ -381,8 +384,8 @@ static void dec_vproc_set_dei_v2(MppDecVprocCtxImpl *ctx, MppFrame frm)
         params.param.com.dfmt = IEP2_FMT_YUV420;
         params.param.com.sswap = IEP2_YUV_SWAP_SP_UV;
         params.param.com.dswap = IEP2_YUV_SWAP_SP_UV;
-        params.param.com.width = img.act_w;
-        params.param.com.height = img.act_h;
+        params.param.com.width = mpp_frame_get_hor_stride(frm);
+        params.param.com.height = mpp_frame_get_ver_stride(frm);
 
         ops->control(ctx->iep_ctx, IEP_CMD_SET_DEI_CFG, &params);
 
@@ -431,8 +434,8 @@ static void dec_vproc_set_dei_v2(MppDecVprocCtxImpl *ctx, MppFrame frm)
         params.param.com.dfmt = IEP2_FMT_YUV420;
         params.param.com.sswap = IEP2_YUV_SWAP_SP_UV;
         params.param.com.dswap = IEP2_YUV_SWAP_SP_UV;
-        params.param.com.width = img.act_w;
-        params.param.com.height = img.act_h;
+        params.param.com.width = mpp_frame_get_hor_stride(frm);
+        params.param.com.height = mpp_frame_get_ver_stride(frm);
         ops->control(ctx->iep_ctx, IEP_CMD_SET_DEI_CFG, &params);
 
         mode = mode | MPP_FRAME_FLAG_IEP_DEI_I2O1;
@@ -589,7 +592,7 @@ MPP_RET dec_vproc_init(MppDecVprocCtx *ctx, MppDecVprocCfg *cfg)
     p->slots = ((MppDecImpl *)p->mpp->mDec)->frame_slots;
     p->thd = new MppThread(dec_vproc_thread, p, "mpp_dec_vproc");
     sem_init(&p->reset_sem, 0, 0);
-    ret = hal_task_group_init(&p->task_group, 4);
+    ret = hal_task_group_init(&p->task_group, 4, sizeof(HalDecVprocTask));
     if (ret) {
         mpp_err_f("create task group failed\n");
         delete p->thd;

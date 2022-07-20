@@ -25,6 +25,7 @@ static const struct {
 } keyword[] = {
 	{"transfer_data",		TRANSFER_DATA},
 	{"storage",			STORAGE},
+	{"storage_speed",		STORAGE_SPEED},
 	{"property",			PROPERTY},
 	{"crypto_sha",			CRYPTO_SHA},
 	{"crypto_aes",			CRYPTO_AES},
@@ -33,7 +34,12 @@ static const struct {
 #if (OTP_TEST == ENABLE)
 	{"otp_read",			OTP_READ},
 	{"otp_write",			OTP_WRITE},
+	{"otp_size",			OTP_SIZE},
+	{"otp_ns_read",			OTP_NS_READ},
+	{"otp_ns_write",		OTP_NS_WRITE},
 #endif
+	{"trng",			TRNG_READ},
+	{"socket",			SOCKET},
 	{NULL,				TEST_NULL},
 };
 

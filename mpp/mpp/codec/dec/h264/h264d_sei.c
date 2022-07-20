@@ -166,7 +166,7 @@ static MPP_RET interpret_buffering_period_info(
 
     READ_UE(p_bitctx, &seq_parameter_set_id);
 
-    if (seq_parameter_set_id > 31 || !p_videoctx->spsSet[seq_parameter_set_id]) {
+    if (seq_parameter_set_id >= MAXSPS || !p_videoctx->spsSet[seq_parameter_set_id]) {
         H264D_ERR("seq_parameter_set_id %d may be invalid\n", seq_parameter_set_id);
         goto __BITREAD_ERR;
     }
@@ -175,7 +175,7 @@ static MPP_RET interpret_buffering_period_info(
     vui_seq_parameters = &(p_videoctx->spsSet[sei_msg->seq_parameter_set_id]->vui_seq_parameters);
 
     if (vui_seq_parameters->nal_hrd_parameters_present_flag) {
-        for (i = 0; i < vui_seq_parameters->vcl_hrd_parameters.cpb_cnt_minus1; i++) {
+        for (i = 0; i <= vui_seq_parameters->vcl_hrd_parameters.cpb_cnt_minus1; i++) {
             SKIP_BITS(p_bitctx,
                       vui_seq_parameters->nal_hrd_parameters.initial_cpb_removal_delay_length_minus1); //initial_cpb_removal_delay
             SKIP_BITS(p_bitctx,
@@ -184,7 +184,7 @@ static MPP_RET interpret_buffering_period_info(
     }
 
     if (vui_seq_parameters->vcl_hrd_parameters_present_flag) {
-        for (i = 0; i < vui_seq_parameters->vcl_hrd_parameters.cpb_cnt_minus1; i++) {
+        for (i = 0; i <= vui_seq_parameters->vcl_hrd_parameters.cpb_cnt_minus1; i++) {
             SKIP_BITS(p_bitctx,
                       vui_seq_parameters->vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1); //initial_cpb_removal_delay
             SKIP_BITS(p_bitctx,

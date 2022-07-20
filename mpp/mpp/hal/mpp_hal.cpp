@@ -33,7 +33,7 @@
 #include "hal_m2vd_api.h"
 #include "hal_mpg4d_api.h"
 #include "hal_jpegd_api.h"
-#include "hal_h265e_api.h"
+#include "hal_av1d_api.h"
 
 // for test and demo
 #include "hal_dummy_dec_api.h"
@@ -70,8 +70,8 @@ static const MppHalApi *hw_apis[] = {
 #if HAVE_JPEGD
     &hal_api_jpegd,
 #endif
-#if HAVE_H265E
-    &hal_api_h265e,
+#if HAVE_AV1D
+    &hal_api_av1d,
 #endif
     &hal_api_dummy_dec,
     &hal_api_dummy_enc,
@@ -112,7 +112,8 @@ MPP_RET mpp_hal_init(MppHal *ctx, MppHalCfg *cfg)
                 break;
             }
 
-            ret = hal_task_group_init(&p->tasks, cfg->cfg->status.hal_task_count);
+            ret = hal_task_group_init(&p->tasks, cfg->cfg->status.hal_task_count,
+                                      sizeof(HalDecTask));
             if (ret) {
                 mpp_err_f("hal_task_group_init failed ret %d\n", ret);
                 break;

@@ -22,9 +22,13 @@
 #include <errno.h>
 #include <libgen.h>
 
+extern "C" {
+    #include "../mtdutils/mtdutils.h"
+}
+
 #define	CMD4RECOVERY_FILENAME "/mnt/sdcard/cmd4recovery"
 static char * _url = NULL;
-static char * _save_path = NULL;
+static char const * _save_path = NULL;
 static char _url_dir[128];
 double processvalue = 0;
 
@@ -196,7 +200,19 @@ bool RK_ota_set_partition(int partition) {
                 if (strcmp(update_cmd[i].name, "parameter") == 0) {
                     sprintf(update_cmd[i].dest_path, "/dev/block/by-name/gpt");
                 } else {
-                    sprintf(update_cmd[i].dest_path, "/dev/block/by-name/%s", update_cmd[i].name);
+                    if (!isMtdDevice()) {
+                       sprintf(update_cmd[i].dest_path, "/dev/block/by-name/%s", update_cmd[i].name);
+                    } else {
+                       if ( update_cmd[i].need_update && (mtd_scan_partitions() > 0) ) {
+                          const MtdPartition *mtdp = mtd_find_partition_by_name(update_cmd[i].name);
+                          if (mtdp) {
+                             sprintf(update_cmd[i].dest_path, "/dev/mtd%d", mtdp->device_index);
+                             LOGI("need update %s ,.dest_path: %s.\n", update_cmd[i].name,update_cmd[i].dest_path);
+                          }
+                       } else {
+                          sprintf(update_cmd[i].dest_path, "/dev/block/by-name/%s", update_cmd[i].name);
+                       }
+                    }
                 }
             }
         }
@@ -219,7 +235,7 @@ static int ota_recovery_cmds (long long flash_offset, const char *dest_path)
 
     LOGI("[%s:%d] parameter flash offset %#llx dest path %s\n", __func__, __LINE__, flash_offset, dest_path);
     memset(data_buf, 0, sizeof(data_buf)/sizeof(data_buf[0]));
-    int fd = open(CMD4RECOVERY_FILENAME, O_CREAT|O_RDWR|O_SYNC|O_APPEND);
+    int fd = open(CMD4RECOVERY_FILENAME, O_CREAT|O_RDWR|O_SYNC|O_APPEND, 0644);
     if (fd < 0) {
         LOGE("[%s-%d] error opening %s.\n", __func__, __LINE__,  CMD4RECOVERY_FILENAME);
         return -1;
@@ -263,7 +279,7 @@ static int ota_recovery_cmds (long long flash_offset, const char *dest_path)
     return 0;
 }
 
-void RK_ota_start(RK_upgrade_callback cb) {
+void RK_ota_start(RK_upgrade_callback cb, RK_print_callback print_cb) {
     LOGI("start RK_ota_start.\n");
     processvalue = 95;
     cb(NULL, RK_UPGRADE_START);
@@ -278,7 +294,7 @@ void RK_ota_start(RK_upgrade_callback cb) {
     // 1. 获取文件
     int res = download_file(_url, _save_path);
     if (res == 0) {
-        _url = _save_path;
+        _url = (char *)_save_path;
     } else if (res == -1) {
         LOGE("download_file error.\n");
         cb(NULL, RK_UPGRADE_ERR);
@@ -301,10 +317,13 @@ void RK_ota_start(RK_upgrade_callback cb) {
 
     // 3. 下载文件到分区并校验
     int num = sizeof(update_cmd)/sizeof(UPDATE_CMD);
+    char prompt[128] = {0};
     for (int i = 0; i < num; i++ ) {
         if (update_cmd[i].need_update) {
             if (update_cmd[i].cmd != NULL) {
                 LOGI("now write %s to %s.\n", update_cmd[i].name, update_cmd[i].dest_path);
+                sprintf(prompt,"[%s] upgrade start...\n", update_cmd[i].name);
+                print_cb(prompt);
                 if (!is_sdboot &&
                         ( (strcmp(update_cmd[i].name, "misc") == 0) ||
                           (strcmp(update_cmd[i].name, "parameter") == 0) )) {
@@ -315,8 +334,13 @@ void RK_ota_start(RK_upgrade_callback cb) {
                 printf("update_cmd.flash_offset = %lld.\n", update_cmd[i].flash_offset);
                 if (update_cmd[i].cmd(_url, (void*)(&update_cmd[i])) != 0) {
                     LOGE("update %s error.\n", update_cmd[i].dest_path);
+                    sprintf(prompt,"[%s] upgrade fail\n", update_cmd[i].name);
+                    print_cb(prompt);
                     cb(NULL, RK_UPGRADE_ERR);
                     return ;
+                } else {
+                    sprintf(prompt, "[%s] upgraede success!\n", update_cmd[i].name);
+                    print_cb(prompt);
                 }
                 if (is_sdboot) {
                     if (ota_recovery_cmds(update_cmd[i].flash_offset, update_cmd[i].dest_path)) {
@@ -403,6 +427,7 @@ void RK_ota_start(RK_upgrade_callback cb) {
     LOGI("RK_ota_start is ok!");
     processvalue = 100;
     cb(NULL, RK_UPGRADE_FINISHED);
+    print_cb((char *)"updateEngine upgrade OK!\n");
 }
 
 int RK_ota_get_progress() {

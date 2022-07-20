@@ -24,6 +24,7 @@
 #define OFFSET_CODEC_PARAMS_REGS    (64 * sizeof(RK_U32))
 #define OFFSET_COMMON_ADDR_REGS     (128 * sizeof(RK_U32))
 #define OFFSET_CODEC_ADDR_REGS      (160 * sizeof(RK_U32))
+#define OFFSET_POC_HIGHBIT_REGS     (200 * sizeof(RK_U32))
 #define OFFSET_INTERRUPT_REGS       (224 * sizeof(RK_U32))
 #define OFFSET_STATISTIC_REGS       (256 * sizeof(RK_U32))
 
@@ -108,7 +109,8 @@ typedef struct Vdpu34xRegCommon_t {
 
     struct SWREG13_EN_MODE_SET {
         RK_U32      timeout_mode                : 1;
-        RK_U32      reserve0                    : 2;
+        RK_U32      req_timeout_rst_sel         : 1;
+        RK_U32      reserve0                    : 1;
         RK_U32      dec_commonirq_mode          : 1;
         RK_U32      reserve1                    : 2;
         RK_U32      stmerror_waitdecfifo_empty  : 1;
@@ -116,7 +118,8 @@ typedef struct Vdpu34xRegCommon_t {
         RK_U32      h26x_streamd_error_mode     : 1;
         RK_U32      reserve3                    : 2;
         RK_U32      allow_not_wr_unref_bframe   : 1;
-        RK_U32      reserve4                    : 2;
+        RK_U32      fbc_output_wr_disable       : 1;
+        RK_U32      reserve4                    : 1;
         RK_U32      colmv_error_mode            : 1;
 
         RK_U32      reserve5            : 2;
@@ -125,7 +128,13 @@ typedef struct Vdpu34xRegCommon_t {
         RK_U32      ycacherd_prior      : 1;
         RK_U32      reserve7            : 2;
         RK_U32      cur_pic_is_idr      : 1;
-        RK_U32      reserve8            : 7;
+        RK_U32      reserve8            : 1;
+        RK_U32      right_auto_rst_disable  : 1;
+        RK_U32      frame_end_err_rst_flag  : 1;
+        RK_U32      rd_prior_mode       : 1;
+        RK_U32      rd_ctrl_prior_mode  : 1;
+        RK_U32      reserve9            : 1;
+        RK_U32      filter_outbuf_mode  : 1;
     } reg013;
 
     struct SWREG14_FBC_PARAM_SET {
@@ -214,11 +223,33 @@ typedef struct Vdpu34xRegCommon_t {
     } reg025;
 
     struct SWREG26_BLOCK_GATING_EN {
-        RK_U32      swreg_block_gating_e    : 16;
-        RK_U32      block_gating_en_l2      : 4;
+        RK_U32      swreg_block_gating_e    : 20;
         RK_U32      reserve                 : 11;
         RK_U32      reg_cfg_gating_en       : 1;
     } reg026;
+    RK_U32 reg027;
+    struct SWREG28_MULTIPLY_CORE_CTRL {
+        RK_U32      swreg_vp9_wr_prob_idx   : 3;
+        RK_U32      reserve0                : 1;
+        RK_U32      swreg_vp9_rd_prob_idx   : 3;
+        RK_U32      reserve1                : 1;
+
+        RK_U32      swreg_ref_req_advance_flag  : 1;
+        RK_U32      sw_colmv_req_advance_flag   : 1;
+        RK_U32      sw_poc_only_highbit_flag    : 1;
+        RK_U32      sw_poc_arb_flag             : 1;
+
+        RK_U32      reserve2                : 4;
+        RK_U32      sw_film_idx             : 10;
+        RK_U32      reserve3                : 2;
+        RK_U32      sw_pu_req_mismatch_dis  : 1;
+        RK_U32      sw_colmv_req_mismatch_dis   : 1;
+        RK_U32      reserve4                : 2;
+    } reg028;
+    /* NOTE: reg027 ~ reg032 are added in vdpu38x at rk3588 */
+    RK_U32  reg029_031[3];
+    /* NOTE: timeout must be config in vdpu38x */
+    RK_U32  reg032_timeout_threshold;
 } Vdpu34xRegCommon;
 
 /* base: OFFSET_COMMON_ADDR_REGS */

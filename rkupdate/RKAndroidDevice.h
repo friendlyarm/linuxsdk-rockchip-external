@@ -109,6 +109,7 @@ const BYTE Wipe_All[]={0x72,0x65,0x63,0x6F,0x76,0x65,
 
 #define MAX_PACKAGE_FILES			16
 #define RKIMAGE_TAG				0x46414B52
+#define PARTNAME_PACKAGE_FILE   "package-file"
 #define PARTNAME_BOOTLOADER		"bootloader"
 #define PARTNAME_PARAMETER		"parameter"
 #define PARTNAME_KERNEL			"kernel"
@@ -119,6 +120,8 @@ const BYTE Wipe_All[]={0x72,0x65,0x63,0x6F,0x76,0x65,
 #define PARTNAME_BACKUP			"backup"
 #define PARTNAME_USERDATA		"userdata"
 #define PARTNAME_USER			"user"
+
+#define INCLUDE_LOADER			"bootloader"
 
 #define MAX_MANUFACTURER		60
 #define MAX_MACHINE_INFO		30
@@ -182,6 +185,8 @@ public:
 	virtual ~CRKAndroidDevice();
 	int UpgradePartition();
 	bool GetPublicKey(unsigned char *pKey,unsigned int &nKeySize);
+	bool IsExistBootloaderInFw();
+	bool IsExistPartitonInFw(const char* partName, UINT &offset, UINT &size);
 	UpgradeCallbackFunc m_pCallback;
 	UpgradeProgressCallbackFunc m_pProcessCallback;
 protected:

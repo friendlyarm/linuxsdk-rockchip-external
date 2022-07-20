@@ -18,6 +18,7 @@
 #define __MPP_LIST_H__
 
 #include "rk_type.h"
+#include "mpp_err.h"
 
 #include "mpp_thread.h"
 
@@ -63,6 +64,10 @@ public:
     RK_S32 show_by_key(void *data, RK_U32 key);
 
     RK_S32 flush();
+
+    // for list wait
+    MPP_RET wait_lt(RK_S64 timeout, RK_S32 val);
+    MPP_RET wait_gt(RK_S64 timeout, RK_S32 val);
 
 private:
     node_destructor         destroy;
@@ -195,6 +200,10 @@ static __inline int list_empty(struct list_head *head)
 {
     return head->next == head;
 }
+
+typedef RK_S32 (*list_cmp_func_t)(void *, const struct list_head *, const struct list_head *);
+
+void list_sort(void *priv, struct list_head *head, list_cmp_func_t cmp);
 
 #ifdef __cplusplus
 }

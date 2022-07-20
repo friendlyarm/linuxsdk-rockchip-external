@@ -65,6 +65,9 @@ static MppCodingTypeInfo support_list[] = {
 #if HAVE_JPEGD
     {   MPP_CTX_DEC,    MPP_VIDEO_CodingMJPEG,      "dec",  "jpeg",         },
 #endif
+#if HAVE_AV1D
+    {   MPP_CTX_DEC,    MPP_VIDEO_CodingAV1,        "dec",  "av1",          },
+#endif
 #if HAVE_H264E
     {   MPP_CTX_ENC,    MPP_VIDEO_CodingAVC,        "enc",  "h.264/AVC",    },
 #endif
@@ -449,7 +452,7 @@ MPP_RET mpp_create(MppCtx *ctx, MppApi **mpi)
         }
 
         memset(p, 0, sizeof(*p));
-        p->ctx = new Mpp();
+        p->ctx = new Mpp(p);
         if (NULL == p->ctx) {
             mpp_free(p);
             mpp_err_f("failed to new Mpp\n");
@@ -566,6 +569,8 @@ static MppFrameFormatInfo color_list[] = {
     { MPP_FMT_YUV422_YUYV,      "YUV422-YUYV,   YUY2"   },
     { MPP_FMT_YUV422_UYVY,      "YUV422-UYVY,   UYVY"   },
     { MPP_FMT_YUV400,           "YUV400-Y8,     Y800"   },
+    { MPP_FMT_YUV444SP,         "YUV444SP"              },
+    { MPP_FMT_YUV444P,          "YUV444P"               },
 
     { MPP_FMT_RGB565,           "RGB565"                },
     { MPP_FMT_BGR565,           "BGR565"                },

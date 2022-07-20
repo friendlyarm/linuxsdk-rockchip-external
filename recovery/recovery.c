@@ -59,6 +59,10 @@ static const char *INTENT_FILE = "/userdata/recovery/intent";
 static const char *LOG_FILE = "/userdata/recovery/log";
 static const char *LAST_LOG_FILE = "/userdata/recovery/last_log";
 static const char *SDCARD_ROOT = "/sdcard";
+static const char *SDCARD_ROOT2 = "/mnt/external_sd";
+static const char *USERDATA_ROOT = "/userdata";
+static const char *UDISK_ROOT = "/udisk";
+static const char *UDISK_ROOT2 = "/mnt/usb_storage";
 static const char *TEMPORARY_LOG_FILE = "/tmp/recovery.log";
 static const char *SIDELOAD_TEMP_DIR = "/tmp/sideload";
 static const char *coldboot_done = "/dev/.coldboot_done";
@@ -147,6 +151,7 @@ static const int MAX_ARG_LENGTH = 4096;
 static const int MAX_ARGS = 100;
 extern size_t strlcpy(char *dst, const char *src, size_t dsize);
 extern size_t strlcat(char *dst, const char *src, size_t dsize);
+extern int do_rk_updateEngine(const char *binary, const char *path);
 
 
 int read_encrypted_fs_info(encrypted_fs_info *encrypted_fs_data) {
@@ -657,6 +662,60 @@ wipe_data(int confirm) {
     ui_print("Data wipe complete.\n");
 }
 
+static int ui_update(const char * fw_package) {
+    const char* binary = "/usr/bin/rkupdate";
+    int i, ret = 0;
+    int status = INSTALL_SUCCESS;
+
+    for(i = 0; i < 5; i++) {
+    ret = ensure_path_mounted(fw_package);
+    if(ret == 0)
+        break;
+        sleep(1);
+        LOGD("mounted %s failed.\n", fw_package);
+    }
+
+    if(ret == 0 && access(fw_package, F_OK) == 0) {
+        LOGD(">>>rkflash will update from %s\n", fw_package);
+#ifdef USE_RKUPDATE
+        status = do_rk_update(binary, fw_package);
+#endif
+
+#ifdef USE_UPDATEENGINE
+        const char* updateEnginebin = "/usr/bin/updateEngine";
+        status = do_rk_updateEngine(updateEnginebin, fw_package);
+#endif
+        if(status == INSTALL_SUCCESS){
+            strcpy(systemFlag, fw_package);
+
+            if(strncmp(fw_package,"/userdata", 9) != 0) {
+                if (resize_volume("/userdata"))
+                    LOGE("\n ---resize_volume userdata error ---\n");
+            } else {
+                //update success, delete userdata/update.img and write result to file.
+                if(access(fw_package, F_OK) == 0)
+                    remove(fw_package);
+            }
+        }
+    } else {
+        status = INSTALL_ERROR;
+    }
+
+    if (status != INSTALL_SUCCESS) {
+        ui_print("Installation aborted.\n");
+        while (1)
+        {
+            /* code */
+        }
+
+        return -1;
+    }
+    ui_print("update.img Installation done.\n");
+    ui_show_text(0);
+
+    return 0;
+}
+
 static void
 prompt_and_wait() {
     char** headers = prepend_title((const char**)MENU_HEADERS);
@@ -689,19 +748,53 @@ prompt_and_wait() {
                 break;
 #endif
             case ITEM_APPLY_SDCARD:
-                ;
-                int status = sdcard_directory(SDCARD_ROOT);
-                if (status >= 0) {
-                    if (status != INSTALL_SUCCESS) {
-                        ui_set_background(BACKGROUND_ICON_ERROR);
-                        ui_print("Installation aborted.\n");
-                    } else if (!ui_text_visible()) {
-                        return;  // reboot if logs aren't visible
-                    } else {
-                        ui_print("\nInstall from sdcard complete.\n");
+                {
+                    int status = sdcard_directory(SDCARD_ROOT);
+                    if (status >= 0) {
+                        if (status != INSTALL_SUCCESS) {
+                            ui_set_background(BACKGROUND_ICON_ERROR);
+                            ui_print("Installation aborted.\n");
+                        } else if (!ui_text_visible()) {
+                            return;  // reboot if logs aren't visible
+                        } else {
+                            ui_print("\nInstall from sdcard complete.\n");
+                        }
                     }
                 }
                 break;
+
+            case ITEM_APPLY_USERDATA:
+            {
+                //update firmware from local userdata;
+                const char* fw_package = "/userdata/update.img";
+                // LOGD("%s:%d:-------->>>>> USERDATA update\n",__func__, __LINE__);
+                int status = ui_update(fw_package);
+                if (status < 0) {
+                    ui_set_background(BACKGROUND_ICON_ERROR);
+                } else if (!ui_text_visible()) {
+                    return;  // reboot if logs aren't visible
+                } else {
+                    ui_print("\nInstall from sdcard complete.\n");
+                }
+            }
+                break;
+
+            case ITEM_APPLY_UDISK:
+            {
+                //update firmware from udisk;
+                const char* fw_package = "/udisk/update.img";
+                // LOGD("%s:%d:-------->>>> UDISK update\n",__func__, __LINE__);
+                int status = ui_update(fw_package);
+                if (status < 0) {
+                    ui_set_background(BACKGROUND_ICON_ERROR);
+                } else if (!ui_text_visible()) {
+                    ui_print("\nInstall from sdcard complete.\n");
+                    return;  // reboot if logs aren't visible
+                } else {
+                    ui_print("\nInstall from sdcard complete.\n");
+                }
+            }
+               break;
         }
     }
 }
@@ -728,12 +821,17 @@ main(int argc, char **argv) {
         freopen(TEMPORARY_LOG_FILE, "a", stdout); setbuf(stdout, NULL);
         freopen(TEMPORARY_LOG_FILE, "a", stderr); setbuf(stderr, NULL);
     } else {
-        printf("\n\n");
+        printf("\n");
         printf("*********************************************************\n");
         printf("            ROCKCHIP recovery system                     \n");
         printf("*********************************************************\n");
+        printf("**** version : v1.0.1 ****\n");
     }
     printf("Starting recovery on %s\n", ctime(&start));
+
+#ifndef RecoveryNoUi
+    printf("Recovery System have UI defined.\n");
+#endif
 
     ui_init();
     ui_set_background(BACKGROUND_ICON_INSTALLING);
@@ -793,21 +891,6 @@ main(int argc, char **argv) {
     }
     printf("\n");
 
-#if 0   //add for test fopen /userdata/* function.
-    FILE *hfile;
-    char* filename = "/userdata/test.txt";
-    char buffer[1024];
-    hfile = fopen(filename, "rb");
-    if (!hfile)
-    {
-        printf("fopen <%s> fail\n", filename);
-        return;
-    }
-
-    fread(buffer,1,sizeof(buffer),hfile);
-    printf("%s \n", buffer);
-#endif
-
     if (update_package) {
         // For backwards compatibility on the cache partition only, if
         // we're given an old 'root' path "CACHE:foo", change it to
@@ -822,9 +905,6 @@ main(int argc, char **argv) {
             update_package = modified_path;
         }
     }
-    printf("\n");
-
-    //property_list(print_property, NULL);
     printf("\n");
 
     int status = INSTALL_SUCCESS;
@@ -886,14 +966,14 @@ main(int argc, char **argv) {
 
         const char* binary = "/usr/bin/rkupdate";
         int i, ret = 0;
-        for(i = 0; i < 5; i++){
+        for (i = 0; i < 5; i++) {
             ret = ensure_path_mounted(update_package);
             if(ret == 0)
                 break;
             sleep(1);
             printf("mounted %s failed.\n", update_package);
         }
-        if(ret == 0) {
+        if (ret == 0) {
             printf(">>>rkflash will update from %s\n", update_package);
             #ifdef USE_RKUPDATE
             status = do_rk_update(binary, update_package);
@@ -902,10 +982,10 @@ main(int argc, char **argv) {
             const char* updateEnginebin = "/usr/bin/updateEngine";
             status = do_rk_updateEngine(updateEnginebin, update_package);
             #endif
-            if(status == INSTALL_SUCCESS){
+            if (status == INSTALL_SUCCESS) {
                 strcpy(systemFlag, update_package);
 
-                if(strncmp(update_package,"/userdata", 9) != 0) {
+                if (strncmp(update_package,"/userdata", 9) != 0) {
                     if (resize_volume("/userdata"))
                         LOGE("\n ---resize_volume userdata error ---\n");
                 } else {
@@ -929,14 +1009,14 @@ main(int argc, char **argv) {
 
         if (status != INSTALL_SUCCESS) ui_print("Installation aborted.\n");
         ui_print("update.img Installation done.\n");
-        ui_show_text(0);
+        //ui_show_text(0);
     }else if (sdupdate_package != NULL) {
         // update image from sdcard
-        #ifdef USE_RKUPDATE
+#ifdef USE_RKUPDATE
         const char* binary = "/usr/bin/rkupdate";
         printf(">>>sdboot update will update from %s\n", sdupdate_package);
         status = do_rk_update(binary, sdupdate_package);
-        #endif
+#endif
 
         #ifdef USE_UPDATEENGINE
 #define	FACTORY_FIRMWARE_IMAGE "/mnt/sdcard/out_image.img"
@@ -953,7 +1033,7 @@ main(int argc, char **argv) {
             }
         }
 
-        if(isMtdDevice() == 0){
+        if (isMtdDevice()) {
             printf("start flash write to /dev/mtd0.\n");
             size_t total_size;
             size_t erase_size;
@@ -968,21 +1048,21 @@ main(int argc, char **argv) {
                     system("flashcp -v " FACTORY_FIRMWARE_IMAGE " /dev/mtd0");
                 } else
                 printf("Error: Can't find rk-nand or spi-nand0.\n");
-            }else{
+            } else {
                 system("flash_erase /dev/mtd0 0x0 0");
                 system("sh "CMD4RECOVERY_FILENAME);
             }
-        }else{
+        } else {
             printf("Start to dd data to emmc partition.\n");
             system("sh "CMD4RECOVERY_FILENAME);
         }
 
-        #endif
+#endif
 
-        if(status == INSTALL_SUCCESS){
+        if (status == INSTALL_SUCCESS) {
             printf("update.img Installation success.\n");
             ui_print("update.img Installation success.\n");
-            ui_show_text(0);
+            //ui_show_text(0);
         }
 
     } else if (wipe_data) {
@@ -992,15 +1072,21 @@ main(int argc, char **argv) {
     } else if (wipe_all) {
         if (device_wipe_data()) status = INSTALL_ERROR;
         if (erase_volume("/userdata")) status = INSTALL_ERROR;
-        if (status != INSTALL_SUCCESS) ui_print("Data wipe failed.\n");
-        ui_print("Data wipe done.\n");
+        if (status != INSTALL_SUCCESS) {
+            ui_print("Data wipe failed.\n");
+            printf("userdata wipe failed.\n");
+        } else {
+            ui_print("Data wipe done.\n");
+            printf("userdata wipe done.\n");
+        }
+
         if (access("/dev/block/by-name/oem", F_OK) == 0) {
             if (resize_volume("/oem")) status = INSTALL_ERROR;
             if (status != INSTALL_SUCCESS) ui_print("resize failed.\n");
         }
 
         ui_print("resize oem done.\n");
-        ui_show_text(0);
+        //ui_show_text(0);
     }
     else if (pcba_test)
     {
@@ -1014,8 +1100,10 @@ main(int argc, char **argv) {
     }
 
     if (status != INSTALL_SUCCESS) ui_set_background(BACKGROUND_ICON_ERROR);
-    if (status != INSTALL_SUCCESS || ui_text_visible()) {
-        prompt_and_wait();
+    if (status != INSTALL_SUCCESS) {
+        printf("\n Install fail! \n");
+        if (!bSDBootUpdate && ui_text_visible())
+            prompt_and_wait();
     }
 
     if (sdupdate_package != NULL && bSDBootUpdate) {
@@ -1041,6 +1129,7 @@ main(int argc, char **argv) {
     finish_recovery(send_intent);
     ui_print("Rebooting...\n");
     printf("Reboot...\n");
+    ui_show_text(0);
     fflush(stdout);
     sync();
     reboot(RB_AUTOBOOT);

@@ -45,7 +45,7 @@ endif()
 #  install 64bit data
 # ----------------------------------------------------------------------------
 if (USE_64BIT)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/para64
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/para
     DESTINATION "share/rkap_3a"
 	FILES_MATCHING PATTERN "*.bin"
 )

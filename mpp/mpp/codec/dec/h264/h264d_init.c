@@ -432,11 +432,12 @@ static MPP_RET dpb_mark_malloc(H264dVideoCtx_t *p_Vid, H264_StorePic_t *dec_pic)
             }
 
             if (MPP_FRAME_FMT_IS_FBC(out_fmt)) {
-                /* field mode can not use FBC */
-                if (p_Vid->frame_mbs_only_flag) {
+                /*
+                 * field mode can not use FBC, but VOP only support fbc fmt for 10bit source.
+                 * Generally, there is no 10bit field source.
+                 */
+                if (p_Vid->frame_mbs_only_flag || p_Vid->bit_depth_luma == 10) {
                     mpp_slots_set_prop(p_Dec->frame_slots, SLOTS_HOR_ALIGN, hor_align_64);
-                    impl->offset_x = 0;
-                    impl->offset_y = 4;
                     fmt |= (out_fmt & MPP_FRAME_FBC_MASK);
                 }
                 p_Dec->cfg->base.out_fmt = fmt;
@@ -448,6 +449,13 @@ static MPP_RET dpb_mark_malloc(H264dVideoCtx_t *p_Vid, H264_StorePic_t *dec_pic)
             /* Before cropping */
             impl->hor_stride = hor_stride;
             impl->ver_stride = ver_stride;
+
+            if (MPP_FRAME_FMT_IS_FBC(out_fmt)) {
+                impl->offset_x = 0;
+                impl->offset_y = 4;
+                impl->ver_stride += 16;
+            }
+
             /* After cropped */
             impl->width = p_Vid->width_after_crop;
             impl->height = p_Vid->height_after_crop;
@@ -660,7 +668,7 @@ static MPP_RET alloc_decpic(H264_SLICE_t *currSlice)
 
     return ret = MPP_OK;
 __FAILED:
-    MPP_FREE(dec_pic);
+    mpp_mem_pool_put(p_Vid->pic_st, dec_pic);
     p_Vid->dec_pic = NULL;
 
     return ret;

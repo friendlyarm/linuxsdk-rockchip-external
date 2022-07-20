@@ -4,7 +4,7 @@
 #include "RKBoot.h"
 #define  IMAGE_RESERVED_SIZE 61
 #pragma pack(1)
-typedef struct  
+typedef struct
 {
 	UINT uiTag;
 	USHORT usSize;
@@ -40,6 +40,8 @@ public:
  	property<CRKImage,UINT,READ_ONLY> BootSize;
 	UINT GetFWOffset();
  	property<CRKImage,UINT,READ_ONLY> FWOffset;
+	FILE* GetFWFileHandle();
+	property<CRKImage,FILE*,READ_ONLY> FWFileHandle;
 	long long GetFWSize();
  	property<CRKImage,long long,READ_ONLY> FWSize;
 	CRKBoot *m_bootObject;

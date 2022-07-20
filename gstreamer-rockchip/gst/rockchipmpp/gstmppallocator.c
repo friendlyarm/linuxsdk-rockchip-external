@@ -164,7 +164,8 @@ gst_mpp_allocator_import_mppbuf (GstAllocator * allocator, MppBuffer mbuf)
     mem = gst_mpp_allocator_import_dmafd (allocator, fd, size);
     quark = gst_mpp_ext_buffer_quark ();
   } else {
-    mem = gst_dmabuf_allocator_alloc (allocator, dup (fd), size);
+    mem = gst_fd_allocator_alloc (allocator, dup (fd), size,
+        GST_FD_MEMORY_FLAG_KEEP_MAPPED);
     quark = gst_mpp_buffer_quark ();
   }
 
@@ -236,6 +237,18 @@ gst_mpp_allocator_alloc (GstAllocator * allocator, gsize size,
   return mem;
 }
 
+static gpointer
+gst_mpp_mem_map_full (GstMemory * mem, GstMapInfo * info, gsize size)
+{
+  if (mem->parent)
+    return gst_mpp_mem_map_full (mem->parent, info, size);
+
+  if (GST_MEMORY_IS_NOT_MAPPABLE (mem))
+    return NULL;
+
+  return mem->allocator->mem_map (mem, size, info->flags);
+}
+
 GstAllocator *
 gst_mpp_allocator_new (void)
 {
@@ -292,6 +305,7 @@ gst_mpp_allocator_init (GstMppAllocator * allocator)
   GstAllocator *alloc = GST_ALLOCATOR_CAST (allocator);
 
   alloc->mem_type = GST_ALLOCATOR_MPP;
+  alloc->mem_map_full = GST_DEBUG_FUNCPTR (gst_mpp_mem_map_full);
 
   GST_OBJECT_FLAG_SET (allocator, GST_ALLOCATOR_FLAG_CUSTOM_ALLOC);
 }

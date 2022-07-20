@@ -19,6 +19,7 @@
 
 extern bool is_sdboot;
 RK_Upgrade_Status_t m_status = RK_UPGRADE_ERR;
+FILE* cmd_pipe = NULL;
 
 void handle_upgrade_callback(void *user_data, RK_Upgrade_Status_t status){
     if (status == RK_UPGRADE_FINISHED) {
@@ -27,6 +28,13 @@ void handle_upgrade_callback(void *user_data, RK_Upgrade_Status_t status){
     }
     m_status = status;
     LOGI("rk m_status = %d.\n", m_status);
+}
+
+void handle_print_callback(char *szPrompt)
+{
+    if(cmd_pipe != NULL){
+        fprintf(cmd_pipe, "ui_print %s\n", szPrompt);
+    }
 }
 
 static int MiscUpdate(char *url,  char *update_partition, char *save_path) {
@@ -74,7 +82,7 @@ static int MiscUpdate(char *url,  char *update_partition, char *save_path) {
                 LOGE("ota file is error.\n");
                 return -1;
             }
-            RK_ota_start(handle_upgrade_callback);
+            RK_ota_start(handle_upgrade_callback, handle_print_callback);
             if (m_status != RK_UPGRADE_FINISHED) {
                 return -1;
             }
@@ -86,7 +94,7 @@ static int MiscUpdate(char *url,  char *update_partition, char *save_path) {
             strcpy(msg.command, "boot-recovery");
             sprintf(msg.recovery, "%s%s", recovery_str, savepath);
             msg.recovery[strlen(msg.recovery) + 1] = '\n';
-            memcpy(msg.needupdate, &partition, 6);
+            memcpy(msg.needupdate, &partition, 4);
             set_bootloader_message(&msg);
             return 0;
         }
@@ -102,7 +110,7 @@ static int MiscUpdate(char *url,  char *update_partition, char *save_path) {
         LOGE("ota file is error.\n");
         return -1;
     }
-    RK_ota_start(handle_upgrade_callback);
+    RK_ota_start(handle_upgrade_callback, handle_print_callback);
     if (m_status != RK_UPGRADE_FINISHED) {
         return -1;
     }
@@ -116,6 +124,10 @@ void display() {
     LOGI("--misc=update          Recovery mode: Setting the partition to be upgraded.\n");
     LOGI("--misc=display         Display misc info.\n");
     LOGI("--misc=wipe_userdata   Format data partition.\n");
+    LOGI("--misc_custom= < op >  Operation on misc for custom cmdline");
+    LOGI("        op:     read   Read custom cmdline to /tmp/custom_cmdline");
+    LOGI("                write  Write /tmp/custom_cmdline to custom area");
+    LOGI("                clean  clean custom area");
     LOGI("--update               Upgrade mode.\n");
     LOGI("--partition=0x3FFC00   Set the partition to be upgraded.(NOTICE: OTA not support upgrade loader and parameter)\n");
     LOGI("                       0x3FFC00: 0011 1111 1111 1100 0000 0000.\n");
@@ -150,6 +162,7 @@ static const struct option engine_options[] = {
   { "image_url", required_argument, NULL, 'i' + 'u'},
   { "check", required_argument, NULL, 'c' },
   { "misc", required_argument, NULL, 'm' },
+  { "misc_custom", required_argument, NULL, 'd' },
   { "partition", required_argument, NULL, 'p' },
   { "reboot", no_argument, NULL, 'r' },
   { "help", no_argument, NULL, 'h' },
@@ -159,13 +172,14 @@ static const struct option engine_options[] = {
 };
 
 int main(int argc, char *argv[]) {
-    LOGI("*** update_engine: Version V1.1.4 ***.\n");
+    LOGI("*** update_engine: Version V1.1.5 ***.\n");
     int arg;
     char *image_url = NULL;
     char *version_url = NULL;
     char *misc_func = NULL;
     char *save_path = NULL;
     char *partition = NULL;
+    char *custom_define = NULL;
     bool is_update = false;
     bool is_reboot = false;
     int pipefd = -1;
@@ -182,10 +196,16 @@ int main(int argc, char *argv[]) {
         case 'i' + 'u': image_url = optarg; continue;
         case 'p' + 'f': pipefd = atoi(optarg); continue;
         case 'h': display(); break;
+        case 'd': custom_define = optarg; continue;
         case '?':
             LOGE("Invalid command argument\n");
             continue;
         }
+    }
+
+    if (pipefd != -1) {
+        cmd_pipe = fdopen(pipefd, "wb");
+        setlinebuf(cmd_pipe);
     }
 
     if (is_update) {
@@ -208,7 +228,7 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            RK_ota_start(handle_upgrade_callback);
+            RK_ota_start(handle_upgrade_callback, handle_print_callback);
         } else {
             LOGI("%s-%d: is ota update\n", __func__, __LINE__);
             if (MiscUpdate(image_url, partition, save_path) == 0) {
@@ -238,6 +258,21 @@ int main(int argc, char *argv[]) {
             LOGE("unknow misc cmdline : %s.\n", misc_func);
             return 0;
         }
+    } else if (custom_define != NULL) {
+        if (strcmp(custom_define, "read") == 0) {
+            if (readCustomMiscCmdline())
+                return -1;
+        } else if (strcmp(custom_define, "write") == 0) {
+            if (writeCustomMiscCmdline())
+                return -1;
+        } else if (strcmp(custom_define, "clean") == 0) {
+            if (cleanCustomMiscCmdline())
+                return -1;
+        } else {
+                LOGI("Not supported\n");
+                return m_status;
+        }
+        m_status = RK_UPGRADE_FINISHED;
     }
 
     if (is_reboot && (m_status == RK_UPGRADE_FINISHED)) {

@@ -326,6 +326,10 @@ MPP_RET m2vd_parser_reset(void *ctx)
         mpp_buf_slot_clr_flag(p->frame_slots, p->frame_ref1->slot_index,
                               SLOT_CODEC_USE);
 
+    if (p->input_packet) {
+        mpp_packet_clr_eos(p->input_packet);
+    }
+
     p->frame_cur->slot_index = 0xff;
     p->frame_ref0->slot_index = 0xff;
     p->frame_ref1->slot_index = 0xff;
@@ -333,7 +337,6 @@ MPP_RET m2vd_parser_reset(void *ctx)
     p->resetFlag = 1;
     p->eos = 0;
     p->left_length = 0;
-    p->need_split = 0;
     p->vop_header_found = 0;
     m2vd_dbg_func("FUN_O");
     return ret;
@@ -468,7 +471,7 @@ MPP_RET m2vd_parser_prepare(void *ctx, MppPacket pkt, HalDecTask *task)
     length = mpp_packet_get_length(pkt);
     eos = mpp_packet_get_eos(pkt);
 
-    if (eos && !length) {
+    if (eos && !length && !p->left_length) {
         task->valid = 0;
         task->flags.eos = 1;
         m2vd_parser_flush(ctx);
@@ -514,6 +517,9 @@ MPP_RET m2vd_parser_prepare(void *ctx, MppPacket pkt, HalDecTask *task)
         mpp_packet_set_data(p->input_packet, p->bitstream_sw_buf);
         mpp_packet_set_size(p->input_packet, p->max_stream_size);
 
+        if (mpp_packet_get_eos(pkt))
+            mpp_packet_set_eos(p->input_packet);
+
         p->pts = mpp_packet_get_pts(pkt);
         task->valid = 1;
         mpp_packet_set_length(pkt, 0);
@@ -531,7 +537,7 @@ MPP_RET m2vd_parser_prepare(void *ctx, MppPacket pkt, HalDecTask *task)
         mpp_packet_set_extra_data(p->input_packet);
     }
 
-    p->eos = mpp_packet_get_eos(pkt);
+    p->eos = mpp_packet_get_eos(p->input_packet);
     mpp_packet_set_pts(p->input_packet, p->pts);
     task->input_packet = p->input_packet;
     task->flags.eos = p->eos;
@@ -1107,8 +1113,8 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
             if ((pts > ctx->PreGetFrameTime) && (ctx->GroupFrameCnt > 0)) {
                 tmp_frame_period = (tmp_frame_period * 256) / ctx->GroupFrameCnt;
                 if ((tmp_frame_period > 4200) && (tmp_frame_period < 11200) &&
-                    (abs(ctx->frame_period - tmp_frame_period) > 128)) {
-                    if (abs(ctx->preframe_period - tmp_frame_period) > 128)
+                    (llabs(ctx->frame_period - tmp_frame_period) > 128)) {
+                    if (llabs(ctx->preframe_period - tmp_frame_period) > 128)
                         ctx->preframe_period = tmp_frame_period;
                     else
                         ctx->frame_period = tmp_frame_period;
@@ -1446,6 +1452,16 @@ MPP_RET m2vd_parser_parse(void *ctx, HalDecTask *in_task)
         MppFrame frame = NULL;
         mpp_buf_slot_get_prop(p->frame_slots, p->cur_slot_index, SLOT_FRAME_PTR, &frame);
         mpp_frame_set_poc(frame, p->pic_head.temporal_reference);
+
+        if (p->dxva_ctx->seq_disp_ext.color_description) {
+            mpp_frame_set_color_primaries(frame, p->dxva_ctx->seq_disp_ext.color_primaries);
+            mpp_frame_set_color_trc(frame, p->dxva_ctx->seq_disp_ext.transfer_characteristics);
+            mpp_frame_set_colorspace(frame, p->dxva_ctx->seq_disp_ext.matrix_coefficients);
+        } else {
+            mpp_frame_set_color_primaries(frame, MPP_FRAME_PRI_UNSPECIFIED);
+            mpp_frame_set_color_trc(frame, MPP_FRAME_TRC_UNSPECIFIED);
+            mpp_frame_set_colorspace(frame, MPP_FRAME_SPC_UNSPECIFIED);
+        }
 
         in_task->valid = 1;
         m2v_update_ref_frame(p);

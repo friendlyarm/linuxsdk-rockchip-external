@@ -41,7 +41,6 @@ void CRKDevice::SetUid(PBYTE value)
 		}
 		m_uid = value;
 	}
-
 }
 void CRKDevice::SetMiscModifyFlag(ENUM_MISC_MODIFY_FLAG value)
 {
@@ -94,7 +93,6 @@ CRKDevice::CRKDevice(STRUCT_RKDEVICE_DESC &device)
 	m_usb = device.emUsbType;
 	m_device = device.emDeviceType;
 	m_bcdUsb = device.usbcdUsb;
-
 
 	memset(m_idBlockOffset,0,sizeof(DWORD)*5);
 	memset(m_flashInfo.blockState,0,IDBLOCK_TOP);
@@ -182,8 +180,8 @@ CRKDevice::~CRKDevice()
 		delete []m_pFlashInfoData;
 		m_pFlashInfoData = NULL;
 	}
-
 }
+
 bool CRKDevice::SetObject(CRKImage *pImage,CRKComm *pComm,CRKLog *pLog)
 {
 /*pImage可以为空,用于完成不用固件参与的操作*/

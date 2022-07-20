@@ -83,6 +83,42 @@ typedef enum MppMetaKey_e {
     KEY_USER_DATA               = FOURCC_META('u', 's', 'r', 'd'),
     KEY_USER_DATAS              = FOURCC_META('u', 'r', 'd', 's'),
 
+    /*
+     * For vepu580 roi buffer config mode
+     * The encoder roi structure is so complex that we should provide a buffer
+     * tunnel for externl user to config encoder hardware by direct sending
+     * roi data buffer.
+     * This way can reduce the config parsing and roi buffer data generating
+     * overhead in mpp.
+     */
+    KEY_ROI_DATA2               = FOURCC_META('r', 'o', 'i', '2'),
+
+    /*
+     * qpmap for rv1109/1126 encoder qpmap config
+     * Input data is a MppBuffer which contains an array of 16bit Vepu541RoiCfg.
+     * And each 16bit represents a 16x16 block qp info.
+     *
+     * H.264 - 16x16 block qp is arranged in raster order:
+     * each value is a 16bit data
+     * 00 01 02 03 04 05 06 07 -> 00 01 02 03 04 05 06 07
+     * 10 11 12 13 14 15 16 17    10 11 12 13 14 15 16 17
+     * 20 21 22 23 24 25 26 27    20 21 22 23 24 25 26 27
+     * 30 31 32 33 34 35 36 37    30 31 32 33 34 35 36 37
+     *
+     * H.265 - 16x16 block qp is reorder to 64x64/32x32 ctu order then 64x64 / 32x32 ctu raster order
+     * 64x64 ctu
+     * 00 01 02 03 04 05 06 07 -> 00 01 02 03 10 11 12 13 20 21 22 23 30 31 32 33 04 05 06 07 14 15 16 17 24 25 26 27 34 35 36 37
+     * 10 11 12 13 14 15 16 17
+     * 20 21 22 23 24 25 26 27
+     * 30 31 32 33 34 35 36 37
+     * 32x32 ctu
+     * 00 01 02 03 04 05 06 07 -> 00 01 10 11 02 03 12 13 04 05 14 15 06 07 16 17
+     * 10 11 12 13 14 15 16 17    20 21 30 31 22 23 32 33 24 25 34 35 26 27 36 37
+     * 20 21 22 23 24 25 26 27
+     * 30 31 32 33 34 35 36 37
+     */
+    KEY_QPMAP0                  = FOURCC_META('e', 'q', 'm', '0'),
+
     /* input motion list for smart p rate control */
     KEY_MV_LIST                 = FOURCC_META('m', 'v', 'l', 't'),
 
@@ -121,6 +157,13 @@ MPP_RET mpp_meta_set_buffer(MppMeta meta, MppMetaKey key, MppBuffer buffer);
 MPP_RET mpp_meta_get_frame (MppMeta meta, MppMetaKey key, MppFrame  *frame);
 MPP_RET mpp_meta_get_packet(MppMeta meta, MppMetaKey key, MppPacket *packet);
 MPP_RET mpp_meta_get_buffer(MppMeta meta, MppMetaKey key, MppBuffer *buffer);
+
+MPP_RET mpp_meta_get_s32_d(MppMeta meta, MppMetaKey key, RK_S32 *val, RK_S32 def);
+MPP_RET mpp_meta_get_s64_d(MppMeta meta, MppMetaKey key, RK_S64 *val, RK_S64 def);
+MPP_RET mpp_meta_get_ptr_d(MppMeta meta, MppMetaKey key, void  **val, void *def);
+MPP_RET mpp_meta_get_frame_d(MppMeta meta, MppMetaKey key, MppFrame *frame, MppFrame def);
+MPP_RET mpp_meta_get_packet_d(MppMeta meta, MppMetaKey key, MppPacket *packet, MppPacket def);
+MPP_RET mpp_meta_get_buffer_d(MppMeta meta, MppMetaKey key, MppBuffer *buffer, MppBuffer def);
 
 #ifdef __cplusplus
 }

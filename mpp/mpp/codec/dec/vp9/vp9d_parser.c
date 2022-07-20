@@ -28,6 +28,7 @@
 #include "vp9data.h"
 #include "vp9d_codec.h"
 #include "vp9d_parser.h"
+#include "mpp_frame_impl.h"
 
 /**
  * Clip a signed integer into the -(2^p),(2^p-1) range.
@@ -254,6 +255,8 @@ MPP_RET vp9d_split_deinit(Vp9CodecContext *vp9_ctx)
 static RK_S32 vp9_ref_frame(Vp9CodecContext *ctx, VP9Frame *dst, VP9Frame *src)
 {
     VP9Context *s = ctx->priv_data;
+    MppFrameImpl *impl_frm = (MppFrameImpl *)dst->f;
+
     if (src->ref == NULL || src->slot_index >= 0x7f) {
         mpp_err("vp9_ref_frame is vaild");
         return -1;
@@ -264,7 +267,7 @@ static RK_S32 vp9_ref_frame(Vp9CodecContext *ctx, VP9Frame *dst, VP9Frame *src)
     dst->ref->ref_count++;
     vp9d_dbg(VP9D_DBG_REF, "get prop slot frame %p  count %d", dst->f, dst->ref->ref_count);
     mpp_buf_slot_get_prop(s->slots, src->slot_index, SLOT_FRAME, &dst->f);
-
+    impl_frm->buffer = NULL; //parser no need process hal buf
     vp9d_dbg(VP9D_DBG_REF, "get prop slot frame after %p", dst->f);
     return 0;
 }
@@ -393,6 +396,9 @@ static RK_S32 vp9_alloc_frame(Vp9CodecContext *ctx, VP9Frame *frame)
     mpp_frame_set_errinfo(frame->f, 0);
     mpp_frame_set_discard(frame->f, 0);
     mpp_frame_set_pts(frame->f, s->pts);
+    // set current poc
+    s->cur_poc++;
+    mpp_frame_set_poc(frame->f, s->cur_poc);
 
     if (MPP_FRAME_FMT_IS_FBC(s->cfg->base.out_fmt)) {
         mpp_slots_set_prop(s->slots, SLOTS_HOR_ALIGN, hor_align_64);
@@ -635,8 +641,9 @@ static RK_S32 decode_parser_header(Vp9CodecContext *ctx,
         return MPP_ERR_STREAM;
     }
     vp9d_dbg(VP9D_DBG_HEADER, "profile %d", ctx->profile);
-    if (mpp_get_bit1(&s->gb)) {
-        vp9d_dbg(VP9D_DBG_HEADER, "show_existing_frame 1");
+    s->show_existing_frame = mpp_get_bit1(&s->gb);
+    vp9d_dbg(VP9D_DBG_HEADER, "show_existing_frame %d", s->show_existing_frame);
+    if (s->show_existing_frame) {
         *refo = mpp_get_bits(&s->gb, 3);
         vp9d_dbg(VP9D_DBG_HEADER, "frame_to_show %d", *refo);
         return 0;
@@ -1732,6 +1739,7 @@ MPP_RET vp9d_paser_reset(Vp9CodecContext *ctx)
     VP9ParseContext *pc = (VP9ParseContext *)ps->priv_data;
 
     s->got_keyframes = 0;
+    s->cur_poc = 0;
     for (i = 0; i < 3; i++) {
         if (s->frames[i].ref) {
             vp9_unref_frame(s, &s->frames[i]);

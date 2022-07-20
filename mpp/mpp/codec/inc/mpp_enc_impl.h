@@ -85,6 +85,7 @@ typedef struct MppEncImpl_t {
     RK_S64              task_pts;
     MppBuffer           frm_buf;
     MppBuffer           pkt_buf;
+    MppBuffer           md_info;
 
     // internal status and protection
     Mutex               lock;
@@ -125,6 +126,10 @@ typedef struct MppEncImpl_t {
     MppEncRefs          refs;
     MppEncRefFrmUsrCfg  frm_cfg;
 
+    /* two-pass deflicker parameters */
+    RK_U32              support_hw_deflicker;
+    EncRcTaskInfo       rc_info_prev;
+
     /* Encoder configure set */
     MppEncCfgSet        cfg;
 } MppEncImpl;
@@ -134,6 +139,7 @@ extern "C" {
 #endif
 
 void *mpp_enc_thread(void *data);
+void *mpp_enc_async_thread(void *data);
 
 #ifdef __cplusplus
 }

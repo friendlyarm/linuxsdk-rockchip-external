@@ -25,10 +25,6 @@
 #include "iep2_api.h"
 #include "iep2_ff.h"
 
-#define RKABS(a)                (((a) >= 0) ? (a) : -(a))
-#define RKMIN(a, b)             (((a) < (b)) ? (a) : (b))
-#define RKMAX(a, b)             (((a) > (b)) ? (a) : (b))
-
 void iep2_check_ffo(struct iep2_api_ctx *ctx)
 {
     RK_U32 tdiff = ctx->output.ff_gradt_tcnt + 1;
@@ -87,10 +83,10 @@ void iep2_check_ffo(struct iep2_api_ctx *ctx)
     if (RKABS(ctx->ff_inf.frm_score - ctx->ff_inf.fie_score) > 5) {
         if (ctx->ff_inf.frm_score > ctx->ff_inf.fie_score) {
             ctx->ff_inf.is_frm = 1;
-            mpp_log("deinterlace frame mode\n");
+            iep_dbg_trace("deinterlace frame mode\n");
         } else {
             ctx->ff_inf.is_frm = 0;
-            mpp_log("deinterlace field mode\n");
+            iep_dbg_trace("deinterlace field mode\n");
         }
     }
 }

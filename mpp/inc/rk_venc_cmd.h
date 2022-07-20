@@ -374,6 +374,7 @@ typedef enum MppEncHwCfgChange_e {
     MPP_ENC_HW_CFG_CHANGE_AQ_THRD_P     = (1 << 3),
     MPP_ENC_HW_CFG_CHANGE_AQ_STEP_I     = (1 << 4),
     MPP_ENC_HW_CFG_CHANGE_AQ_STEP_P     = (1 << 5),
+    MPP_ENC_HW_CFG_CHANGE_MB_RC         = (1 << 6),
     MPP_ENC_HW_CFG_CHANGE_ALL           = (0xFFFFFFFF),
 } MppEncHwCfgChange;
 
@@ -393,6 +394,12 @@ typedef struct MppEncHwCfg_t {
     RK_U32                  aq_thrd_p[16];
     RK_S32                  aq_step_i[16];
     RK_S32                  aq_step_p[16];
+
+    /* vepu1/2 */
+    RK_S32                  mb_rc_disable;
+
+    /* vepu580 */
+    RK_S32                  extra_buf;
 } MppEncHwCfg;
 
 /*
@@ -881,8 +888,8 @@ typedef struct MppEncH265DblkCfg_t {
 } MppEncH265DblkCfg_t;
 
 typedef struct MppEncH265SaoCfg_t {
-    RK_U32  slice_sao_luma_flag;
-    RK_U32  slice_sao_chroma_flag;
+    RK_U32  slice_sao_luma_disable;
+    RK_U32  slice_sao_chroma_disable;
 } MppEncH265SaoCfg;
 
 typedef struct MppEncH265TransCfg_t {
@@ -1104,6 +1111,25 @@ typedef struct MppEncROICfg_t {
     MppEncROIRegion     *regions;      /**< ROI parameters */
 } MppEncROICfg;
 
+/**
+ * @brief Mpp ROI parameter for vepu54x / vepu58x
+ * @note  These encoders have more complex roi configure structure.
+ *        User need to generate roi structure data for different soc.
+ *        And send buffers to encoder through metadata.
+ */
+typedef struct MppEncROICfg2_t {
+    MppBuffer          base_cfg_buf;
+    MppBuffer          qp_cfg_buf;
+    MppBuffer          amv_cfg_buf;
+    MppBuffer          mv_cfg_buf;
+
+    RK_U32             roi_qp_en    : 1;
+    RK_U32             roi_amv_en   : 1;
+    RK_U32             roi_mv_en    : 1;
+    RK_U32             reserve_bits : 29;
+    RK_U32             reserve[3];
+} MppEncROICfg2;
+
 /*
  * Mpp OSD parameter
  *
@@ -1217,5 +1243,22 @@ typedef struct MppEncUserDataSet_t {
     RK_U32              count;
     MppEncUserDataFull  *datas;
 } MppEncUserDataSet;
+
+typedef enum MppEncSceneMode_e {
+    MPP_ENC_SCENE_MODE_DEFAULT,
+    MPP_ENC_SCENE_MODE_IPC,
+    MPP_ENC_SCENE_MODE_BUTT,
+} MppEncSceneMode;
+
+typedef enum MppEncFineTuneCfgChange_e {
+    /* change on scene mode */
+    MPP_ENC_TUNE_CFG_CHANGE_SCENE_MODE      = (1 << 0),
+} MppEncFineTuneCfgChange;
+
+typedef struct MppEncFineTuneCfg_t {
+    RK_U32              change;
+
+    MppEncSceneMode     scene_mode;
+} MppEncFineTuneCfg;
 
 #endif /*__RK_VENC_CMD_H__*/

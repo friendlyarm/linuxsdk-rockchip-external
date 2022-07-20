@@ -6,6 +6,7 @@
 #define _RKTEST_H_
 
 #include <tee_client_api.h>
+#include <tee_api_defines_extensions.h>
 
 #define DISABLE		0
 #define ENABLE		1
@@ -13,6 +14,7 @@
 typedef enum {
 	TRANSFER_DATA = 0,
 	STORAGE,
+	STORAGE_SPEED,
 	PROPERTY,
 	CRYPTO_SHA,
 	CRYPTO_AES,
@@ -20,6 +22,11 @@ typedef enum {
 	SECSTOR_TA,
 	OTP_READ,
 	OTP_WRITE,
+	OTP_SIZE,
+	OTP_NS_READ,
+	OTP_NS_WRITE,
+	TRNG_READ,
+	SOCKET,
 	TEST_NULL,
 } enum_func;
 

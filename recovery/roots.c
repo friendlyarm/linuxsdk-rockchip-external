@@ -28,6 +28,7 @@
 #include "roots.h"
 #include "common.h"
 #include "rktools.h"
+#include "mtdutils/rk29.h"
 //#include "make_ext4fs.h"
 
 static int num_volumes = 0;
@@ -51,7 +52,7 @@ char * get_link_path(const char* linkpath, char * buf, int count)
 
 	rslt = readlink(path, buf, count - 1);
 	if (rslt < 0 || (rslt >= count - 1)) {
-		printf("No link to path [%s]!!! \n", path);
+		// printf("No link to path [%s]!!! \n", path);
 		return NULL;
 	}
 
@@ -66,8 +67,7 @@ char * get_link_path(const char* linkpath, char * buf, int count)
 		buf[0] = '/';
 	}
 
-
-	printf("buf = %s \n", buf);
+	// printf("buf = %s \n", buf);
 	return buf;
 }
 
@@ -111,76 +111,42 @@ void load_volume_table() {
 	}
 
 	char buffer[1024];
+	char file_system[1024];
+	char mount_point[1024];
+	char fs_type[1024];
+	char option[1024];
+	char dump[1024];
+	char pass[1024];
+	char device[1024];
 	int i;
 	while (fgets(buffer, sizeof(buffer)-1, fstab)) {
-		for (i = 0; buffer[i] && isspace(buffer[i]); ++i);
-		if (buffer[i] == '\0' || buffer[i] == '#') continue;
-		char* original = strdup(buffer);
-		char *file_system = original;
-
-		char* mount_point = strstr(original+i, "\t");
-		if(!mount_point) {
-			free(original);
-			break;
-		}
-		*mount_point = 0;
-		for(mount_point++; *mount_point == '\t' || *mount_point == ' ' || *mount_point == '\n'; mount_point++);
-		char* fs_type = strstr(mount_point, "\t");
-		if(!fs_type) {
-			free(original);
-			break;
-		}
-		*fs_type = 0;
-
-		for(fs_type++; *fs_type == '\t' || *fs_type == ' ' || *fs_type == '\n'; fs_type++);
-		char* option = strstr(fs_type, "\t");
-		if(!option) {
-			free(original);
-			break;
-		}
-		*option = 0;
-
-		for(option++; *option == '\t' || *option == ' ' || *option == '\n'; option++);
-		char* dump = strstr(option, "\t");
-		if(!dump) {
-			free(original);
-			break;
-		}
-		*dump = 0;
-
-		for(dump++; *dump == '\t' || *dump == ' ' || *dump == '\n'; dump++);
-		char* pass = strstr(dump, "\t");
-		if(!pass) {
-			free(original);
-			break;
-		}
-		*pass = 0;
-
-		for(pass++; *pass == '\t' || *pass == ' ' || *pass == '\n'; pass++);
-		char* nextline = strstr(pass, "\n");
-		if(!nextline) {
-			free(original);
-			break;
-		}
-		*nextline = 0;
+		i = sscanf(buffer, "%s %s %s %s %s %s", file_system,
+			   mount_point, fs_type, option, dump, pass);
+		if (file_system[0] == '#') continue;
 		//printf("load_volume_table file_system:%s, mount_point:%s, fs_type:%s, option:%s, dump:%s, pass:%s\n", file_system, mount_point, fs_type, option, dump, pass);
-		if (file_system && mount_point && fs_type && option && dump && pass) {
+		/* HACK: Convert PARTLABEL to "by-name" symlink */
+		if (file_system == strstr(file_system, "PARTLABEL="))
+			snprintf(device, sizeof(device), "/dev/block/by-name/%s",
+				 file_system + strlen("PARTLABEL="));
+		else
+			strcpy(device, file_system);
+
+		if (i == 6) {
 			while (num_volumes >= alloc) {
 				alloc *= 2;
 				device_volumes = realloc(device_volumes, alloc*sizeof(Volume));
 			}
 			device_volumes[num_volumes].mount_point = strdup(mount_point);
 			device_volumes[num_volumes].fs_type = strdup(fs_type);
-			device_volumes[num_volumes].option = option ? strdup(option) : NULL;
-			device_volumes[num_volumes].dump = dump ? strdup(dump) : NULL;
-			device_volumes[num_volumes].pass = pass ? strdup(pass) : NULL;
-			device_volumes[num_volumes].device = strdup(file_system);;
+			device_volumes[num_volumes].option = strdup(option);
+			device_volumes[num_volumes].dump = strdup(dump);
+			device_volumes[num_volumes].pass = strdup(pass);
+			device_volumes[num_volumes].device = strdup(device);;
 			device_volumes[num_volumes].device2 = NULL;
 			++num_volumes;
 		} else {
-			LOGE("skipping malformed recovery.fstab line: %s\n", original);
+			LOGE("skipping malformed recovery.fstab line: %s\n", buffer);
 		}
-		free(original);
 	}
 
 	fclose(fstab);
@@ -200,8 +166,8 @@ Volume* volume_for_path(const char* path) {
 	memset(mount_point, 0, sizeof(mount_point));
 	char* tmp = get_link_path(path, mount_point, 1024);
 
-	if ( tmp != NULL)
-		printf(" ### get mount_ponit = %s ### \n", mount_point);
+	// if ( tmp != NULL)
+	// 	printf(" ### get mount_ponit = %s ### \n", mount_point);
 
 	for (i = 0; i < num_volumes; ++i) {
 		Volume* v = device_volumes+i;
@@ -328,7 +294,7 @@ int ensure_ex_path_unmounted(const char* path) {
 	const MountedVolume* mv =
 		find_mounted_volume_by_mount_point(path);
 	if (mv == NULL) {
-		printf("path: %s is already unmounted or not existed\n");
+		LOGE("path: %s is already unmounted or not existed\n");
 		return 0;
 	}
 
@@ -426,7 +392,7 @@ int format_volume(const char* volume) {
 	}
 
 	if (strcmp(v->fs_type, "ext2") == 0) {
-		int result = rk_make_ext2fs(v->device, 0, v->mount_point);//make_ext2fs(v->device, NULL, NULL, 0, 0, 0);
+		int result = rk_make_ext2fs(v->device);//make_ext2fs(v->device, NULL, NULL, 0, 0, 0);
 		if (result != 0) {
 			LOGE("format_volume: make_extf2fs failed on %s\n", v->device);
 			return -1;
@@ -434,7 +400,7 @@ int format_volume(const char* volume) {
 		return 0;
 	}
 	if (strcmp(v->fs_type, "vfat") == 0) {
-		int result = make_vfat(v->device, 0, v->mount_point);
+		int result = make_vfat(v->device, v->mount_point);
 		if (result != 0) {
 			LOGE("format_volume: make_vfat failed on %s\n", v->device);
 			return -1;
@@ -443,7 +409,7 @@ int format_volume(const char* volume) {
 	}
 
 	if (strcmp(v->fs_type, "ntfs") == 0) {
-		int result = make_ntfs(v->device, 0, v->mount_point);
+		int result = make_ntfs(v->device, v->mount_point);
 		if (result != 0) {
 			LOGE("format_volume: make_ntfs failed on %s\n", v->device);
 			return -1;

@@ -860,8 +860,7 @@ int CRKAndroidDevice::WriteIDBlock(PBYTE lpIDBlock,DWORD dwSectorNum,bool bErase
 	return 0;
 }
 
-int CRKAndroidDevice::
-	PrepareIDB()
+int CRKAndroidDevice::PrepareIDB()
 {
 	int i;
 	generate_gf();
@@ -1027,7 +1026,8 @@ int CRKAndroidDevice::DownloadIDBlock()
 		}
 		iRet = MakeNewIDBlockData(pIDBData);
 	}
-	else {
+	else
+	{
 		iRet = MakeIDBlockData(pIDBData);
 	}
 
@@ -1055,8 +1055,183 @@ int CRKAndroidDevice::DownloadIDBlock()
 		//BufferWriteBack();
 		return -3;
 	}
-
 }
+
+bool CRKAndroidDevice::IsExistPartitonInFw(const char* partName, UINT &offset, UINT &size)
+{
+	bool bRet;
+	long long dwFwOffset;
+	bool  bFound = false;
+	STRUCT_RKIMAGE_HDR rkImageHead;
+	int iHeadSize;
+
+	dwFwOffset = m_pImage->FWOffset;
+	iHeadSize = sizeof(STRUCT_RKIMAGE_HDR);
+
+	bRet = m_pImage->GetData(dwFwOffset,iHeadSize,(PBYTE)&rkImageHead);
+	if (!bRet) return false;
+	if (rkImageHead.item_count<=0) return false;
+
+	/* get partiton size and offset in fw data to buffer */
+	long long partitonSize;
+	long long partitonOffset;
+
+	for (int i = 0; i < rkImageHead.item_count; i++)
+	{
+		if (strncmp(rkImageHead.item[i].name, partName, strlen(partName)) != 0)
+			continue;
+
+		if (rkImageHead.item[i].file[55] == 'H') {
+			partitonSize = *((DWORD *)(&rkImageHead.item[i].file[56]));
+			partitonSize <<= 32;
+			partitonSize += rkImageHead.item[i].size;
+		} else {
+			partitonSize = rkImageHead.item[i].size;
+		}
+
+		partitonOffset = rkImageHead.item[i].offset;
+		offset		   = (UINT)partitonOffset;
+		size		   = (UINT)partitonSize;
+		bFound = true;
+
+		break;
+	}
+
+	return bFound;
+}
+
+bool CRKAndroidDevice::IsExistBootloaderInFw()
+{
+	bool bRet;
+	long long dwFwOffset;
+	bool  bExistLoader = false;
+	FILE *pfPackageFile;
+	STRUCT_RKIMAGE_HDR rkImageHead;
+	PBYTE pBuffer = NULL;
+	int iHeadSize;
+
+	dwFwOffset = m_pImage->FWOffset;
+	iHeadSize = sizeof(STRUCT_RKIMAGE_HDR);
+	bRet = m_pImage->GetData(dwFwOffset,iHeadSize,(PBYTE)&rkImageHead);
+
+	if (!bRet) return false;
+	if (rkImageHead.item_count<=0) return false;
+
+	const char* package_name = "/tmp/package-file";
+	pfPackageFile = fopen(package_name, "wb+");
+	if (!pfPackageFile) {
+		printf("open %s fail !\n", package_name);
+		return false;
+	}
+
+	/* get package-file data to buffer */
+	long long fileBufferSize;
+	long long entryStartOffset;
+	unsigned int uiBufferSize = LBA_TRANSFER_SIZE;
+
+	for (int i = 0; i < rkImageHead.item_count; i++)
+	{
+		if (strcmp(rkImageHead.item[i].name, "package-file") != 0)
+			continue;
+
+		if (rkImageHead.item[i].file[55] == 'H') {
+			fileBufferSize = *((DWORD *)(&rkImageHead.item[i].file[56]));
+			fileBufferSize <<= 32;
+			fileBufferSize += rkImageHead.item[i].size;
+		} else {
+			fileBufferSize = rkImageHead.item[i].size;
+		}
+
+		if (fileBufferSize > 0) {
+			DWORD dwFwOffset;
+			dwFwOffset = m_pImage->FWOffset;
+			if (rkImageHead.item[i].file[50] =='H') {
+				entryStartOffset = *((DWORD *)(&rkImageHead.item[i].file[51]));
+				entryStartOffset <<= 32;
+				entryStartOffset += rkImageHead.item[i].offset;
+				entryStartOffset += m_pImage->FWOffset;
+			} else {
+				entryStartOffset = m_pImage->FWOffset;
+				entryStartOffset += rkImageHead.item[i].offset;
+			}
+
+			pBuffer = new BYTE[uiBufferSize];
+			if (!pBuffer) {
+				printf("Err: No enough memory!\n");
+				goto END;
+			}
+
+			unsigned int uiWroteByte = 0;
+			long long uiEntryOffset = 0;
+			while (fileBufferSize > 0) {
+				memset(pBuffer, 0, uiBufferSize);
+				if (fileBufferSize < uiBufferSize) {
+					uiWroteByte = fileBufferSize;
+				} else {
+					uiWroteByte = uiBufferSize;
+				}
+
+				bRet = m_pImage->GetData(dwFwOffset + rkImageHead.item[i].offset + uiEntryOffset,
+										uiWroteByte, pBuffer);
+				if (!bRet) {
+					goto END;
+				}
+
+				/* write package-file to file */
+				size_t size_wr = 0;
+				if (!strcmp(rkImageHead.item[i].name, PARTNAME_PARAMETER)) {
+					size_wr = fwrite(pBuffer + 8, 1, uiWroteByte - 12, pfPackageFile);
+				} else {
+					size_wr = fwrite(pBuffer, 1, uiWroteByte, pfPackageFile);
+				}
+
+				if (size_wr != uiWroteByte) {
+					printf(" ### save %s fail!!! ###\n", rkImageHead.item[i].name);
+					goto END;
+				}
+
+				fileBufferSize -= uiWroteByte;
+				uiEntryOffset  += uiWroteByte;
+			}
+		}
+
+		/* judge whether exist bootloader string in package-file */
+		ssize_t read;
+		size_t  len = 0;
+		char *line = NULL;
+		fseek(pfPackageFile, 0, SEEK_SET);
+		while ((read = getline(&line, &len, pfPackageFile)) != -1)
+		{
+			printf("%s", line);
+			int i = 0;
+
+			if (strstr(line, INCLUDE_LOADER) == NULL)
+				continue;
+			for (i = 0; i< read; i++) {
+				if (line[i] == '#') {
+					bExistLoader = false;
+					break;
+				}
+				if (line[i] == 'b') {
+					bExistLoader = true;
+					break;
+				}
+			}
+		}
+		if (line)
+			free(line);
+	}
+
+END:
+	if (pfPackageFile)
+		fclose(pfPackageFile);
+	if (pBuffer) {
+		delete []pBuffer;
+		pBuffer = NULL;
+	}
+	return bExistLoader;
+}
+
 int CRKAndroidDevice::DownloadImage()
 {
 	long long dwFwOffset;
@@ -1088,17 +1263,17 @@ int CRKAndroidDevice::DownloadImage()
 
 	m_dwBackupOffset = 0xFFFFFFFF;
 	int i;
-	bool bFound=false,bFoundSystem=false,bFoundUserData=false;
+	bool bFoundParam=false,bFoundSystem=false,bFoundUserData=false;
 	int iParamPos=-1;
 	long long uiTotalSize=0;
 	long long ulItemSize;
-	for ( i=0;i<rkImageHead.item_count;i++ )
+	for ( i = 0; i < rkImageHead.item_count; i++ )
 	{
 		if ( rkImageHead.item[i].flash_offset!=0xFFFFFFFF )
 		{
-			if ( strcmp(rkImageHead.item[i].name,PARTNAME_PARAMETER)==0)
+			if (strcmp(rkImageHead.item[i].name,PARTNAME_PARAMETER)==0)
 			{
-				bFound = true;
+				bFoundParam = true;
 				iParamPos = i;
 			}
 			else
@@ -1136,11 +1311,10 @@ int CRKAndroidDevice::DownloadImage()
 					ulItemSize = rkImageHead.item[i].size;
 				uiTotalSize += ulItemSize;
 			}
-
 		}
 	}
 
-	if ( !bFound )
+	if (!bFoundParam)
 	{
 		if (m_pLog)
 		{
@@ -1216,11 +1390,11 @@ int CRKAndroidDevice::DownloadImage()
 					{
 						m_pLog->Record(_T(" ERROR:DownloadImage-->RKA_Param_Download failed"));
 					}
-//				if(m_pCallback)
-//				{
-//					sprintf(szPrompt,"%s writing... failed",rkImageHead.item[i].name);
-//					m_pCallback(szPrompt);
-//				}
+					// if(m_pCallback)
+					// {
+					// 	sprintf(szPrompt,"%s writing... failed",rkImageHead.item[i].name);
+					// 	m_pCallback(szPrompt);
+					// }
 					return -4;
 				}
 			}
@@ -1354,7 +1528,6 @@ int CRKAndroidDevice::DownloadImage()
 					return -7;
 				}
 			}
-
 		}
 	}
 	if (m_pProcessCallback)
@@ -1444,7 +1617,7 @@ int CRKAndroidDevice::UpgradePartition()
 	m_dwBackupOffset = 0xFFFFFFFF;
 	int i;
 	vector<int>::iterator iter;
-	bool bFound=false,bFoundSystem=false,bFoundUserData=false;
+	bool bFoundParam=false,bFoundSystem=false,bFoundUserData=false;
 	int iParamPos=-1;
 	long long uiTotalSize=0;
 	long long ulItemSize;
@@ -1466,7 +1639,7 @@ int CRKAndroidDevice::UpgradePartition()
 			}
 			if ( strcmp(rkImageHead.item[i].name,PARTNAME_PARAMETER)==0)
 			{
-				bFound = true;
+				bFoundParam = true;
 				iParamPos = i;
 			}
 			else
@@ -1477,7 +1650,7 @@ int CRKAndroidDevice::UpgradePartition()
 				}
 				if (strcmp(rkImageHead.item[i].name,PARTNAME_MISC)==0)
 				{
-					dwFlagSector = rkImageHead.item[i].flash_offset + rkImageHead.item[i].part_size -4;
+					dwFlagSector = rkImageHead.item[i].flash_offset + rkImageHead.item[i].part_size - 4;
 				}
 				if (look_for_userdata(rkImageHead.item[i].name)==0)
 				{
@@ -1497,11 +1670,10 @@ int CRKAndroidDevice::UpgradePartition()
 					ulItemSize = rkImageHead.item[i].size;
 				uiTotalSize += ulItemSize;
 			}
-
 		}
 	}
 
-	if ( !bFound )
+	if ( !bFoundParam )
 	{
 		if (m_pLog)
 		{
@@ -1585,7 +1757,6 @@ int CRKAndroidDevice::UpgradePartition()
 		}
 		else
 		{
-
 			if (rkImageHead.item[vecUpgradePartition[i]].file[55]=='H')
 			{
 				ulItemSize = *((DWORD *)(&rkImageHead.item[vecUpgradePartition[i]].file[56]));

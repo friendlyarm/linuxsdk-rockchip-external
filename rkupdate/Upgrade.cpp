@@ -3,8 +3,78 @@
 //#include "RKComm.h"
 #include "RKAndroidDevice.h"
 #include <uuid/uuid.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#define OTP_NODE_PATH  "/sys/bus/nvmem/devices/rockchip-otp0/nvmem"
+
 UpgradeCallbackFunc g_callback=NULL;
 UpgradeProgressCallbackFunc g_progress_callback=NULL;
+
+/* RK3308 loader update*/
+int IsRK3308_Plateform()
+{
+	int fd = -1;
+	int len;
+	char buff[32];
+	fd = open(OTP_NODE_PATH, O_RDONLY);
+	if (fd < 0 )
+	{
+		printf("Open OTP node fail!\n");
+		return false;
+	}
+
+	len = read(fd, buff, sizeof(buff));
+	if (len != sizeof(buff))
+	{
+		printf("read OTP node data fail\n");
+	}
+
+	close(fd);
+
+	if (buff[0] == 'R' && buff[1] == 'K' && buff[2] == 0x33 && buff[3] == 0x08)
+		return 1;
+	else
+	{
+		int i = 0;
+		for (size_t i = 0; i < 32; i++)
+		{
+			if (i % 16 == 0 && i != 0)
+				printf("\n");
+			printf("%x ", buff[i]);
+		}
+	}
+
+	return 0;
+}
+
+int Compatible_rk3308bs_loader()
+{
+	int fd = -1;
+	int len;
+	char buff[32];
+	fd = open(OTP_NODE_PATH, O_RDONLY);
+	if (fd < 0 )
+	{
+		printf("Open OTP node fail!\n");
+		return false;
+	}
+
+	printf("%s: \n", __func__);
+
+	len = read(fd, buff, sizeof(buff));
+	if (len != sizeof(buff))
+	{
+		printf("read OTP node data fail\n");
+	}
+
+	close(fd);
+	printf("OTP node data Info: %x \n", buff[28]);
+
+	return (buff[28] & 0x38) && (buff[28] & 0xc0);
+}
 
 bool CreateUid(PBYTE pUid)
 {
@@ -32,7 +102,6 @@ bool CreateUid(PBYTE pUid)
 	usCrc = CRC_CCITT(pManufactory,28);
 	memcpy(pCrc,(BYTE *)&usCrc,2);
 	return true;
-
 }
 
 bool ParsePartitionInfo(string &strPartInfo,string &strName,UINT &uiOffset,UINT &uiLen)
@@ -159,8 +228,8 @@ bool parse_parameter(char *pParameter,PARAM_ITEM_VECTOR &vecItem)
 		break;
 	}
 	return bFind;
-
 }
+
 bool get_parameter_loader( CRKComm *pComm,char *pParameter, int &nParamSize)
 {
 	if ((nParamSize!=-1)&&(!pParameter))
@@ -213,6 +282,7 @@ bool get_parameter_loader( CRKComm *pComm,char *pParameter, int &nParamSize)
 	pBuffer = NULL;
 	return true;
 }
+
 bool read_bytes_from_partition(DWORD dwPartitionOffset,long long ullstart,DWORD dwCount,PBYTE pOut,CRKComm *pComm)
 {
 	int iRet;
@@ -372,7 +442,6 @@ bool check_fw_crc(CRKComm *pComm,DWORD dwOffset,PSTRUCT_RKIMAGE_HDR pHeader,CRKL
 	if (uiCrc!=*((UINT *)(oldCrc)))
 		return false;
 	return true;
-
 }
 
 bool download_backup_image(PARAM_ITEM_VECTOR &vecParam,char *pszItemName,DWORD dwBackupOffset,STRUCT_RKIMAGE_HDR &hdr,CRKComm *pComm,CRKLog *pLog=NULL)
@@ -520,8 +589,6 @@ bool download_backup_image(PARAM_ITEM_VECTOR &vecParam,char *pszItemName,DWORD d
 	return true;
 }
 
-
-
 bool IsDeviceLock(CRKComm *pComm,bool &bLock)
 {
 	int iRet;
@@ -536,6 +603,7 @@ bool IsDeviceLock(CRKComm *pComm,bool &bLock)
 		bLock = false;
 	return true;
 }
+
 bool GetPubicKeyFromExternal(char *szDev,CRKLog *pLog,unsigned char *pKey,unsigned int &nKeySize)
 {
 	int hDev=-1;
@@ -667,6 +735,7 @@ EXIT_GetPubicKeyFromDevice:
 	}
 	return bSuccess;
 }
+
 bool UnlockDevice(CRKImage *pImage,CRKLog *pLog,unsigned char *pKey,unsigned int nKeySize)
 {
 	PBYTE pMd5,pSignMd5;
@@ -721,6 +790,8 @@ bool do_rk_firmware_upgrade(char *szFw,void *pCallback,void *pProgressCallback,c
 	BYTE uid[RKDEVICE_UID_LEN];
 	tstring strFw = szFw;
 	tstring strUid;
+	bool bUpdateLoader = true;
+
 	g_callback = (UpgradeCallbackFunc)pCallback;
 	g_progress_callback = (UpgradeProgressCallbackFunc)pProgressCallback;
 	if (g_progress_callback)
@@ -742,61 +813,6 @@ bool do_rk_firmware_upgrade(char *szFw,void *pCallback,void *pProgressCallback,c
 		pLog->Record("ERROR:do_rk_firmware_upgrade-->new CRKComm failed!");
 		goto EXIT_UPGRADE;
 	}
-
-#if 0   //closed by chad.ma 20180731
-	if (IsDeviceLock(pComm,bLock))
-	{
-		if (bLock)
-		{
-			bRet = true;
-			pImage = new CRKImage(strFw,bRet);
-			if (!bRet)
-			{
-				pLog->Record("ERROR:do_rk_firmware_upgrade-->new CRKImage with check failed,%s!",szFw);
-				goto EXIT_UPGRADE;
-			}
-
-			//bRet = GetPubicKeyFromExternal(szBootDev,pLog,key,nKeySize);
-			//if (!bRet)
-			//{
-			//	if (szBootDev)
-			//		pLog->Record("ERROR:do_rk_firmware_upgrade-->Get PubicKey failed,dev=%s!",szBootDev);
-			//	else
-			//		pLog->Record("ERROR:do_rk_firmware_upgrade-->Get PubicKey failed,dev=NULL!");
-			//	goto EXIT_UPGRADE;
-			//}
-			//if(access("/res/publicKey.bin",F_OK) == 0){
-			//	int fd = open("/tmp/publicKey.bin", O_RDONLY, 0);
-			//	nKeySize = read(fd, key, 514);
-			//}else{
-			//	printf("access /res/publicKey.bin failed!\n");
-			//	goto EXIT_UPGRADE;
-			//}
-			//if (!UnlockDevice(pImage,pLog,key,nKeySize))
-			//{
-			//	pLog->Record("ERROR:do_rk_firmware_upgrade-->UnlockDevice failed!");
-			//	goto EXIT_UPGRADE;
-			//}
-//			if (pCallback)
-//				((UpgradeCallbackFunc)pCallback)("pause");
-
-		}
-		else
-		{
-			pImage = new CRKImage(strFw,bRet);
-			if (!bRet)
-			{
-				pLog->Record("ERROR:do_rk_firmware_upgrade-->new CRKImage failed,%s!",szFw);
-				goto EXIT_UPGRADE;
-			}
-		}
-	}
-	else
-	{
-		pLog->Record("ERROR:do_rk_firmware_upgrade-->IsDeviceLock failed!");
-		goto EXIT_UPGRADE;
-	}
-#endif
 
 	pDevice = new CRKAndroidDevice(device);
 	if (!pDevice)
@@ -826,31 +842,70 @@ bool do_rk_firmware_upgrade(char *szFw,void *pCallback,void *pProgressCallback,c
 		goto EXIT_UPGRADE;
 	}
 
-    printf("############### update boatloader start############\n");
+	bUpdateLoader = pDevice->IsExistBootloaderInFw();
 
-    pLog->Record("IDBlock Preparing...");
-    printf("\t\t ############### IDBlock Preparing...\n");
-    iRet = pDevice->PrepareIDB();
-    if (iRet!=ERR_SUCCESS)
-    {
-    	pLog->Record("ERROR:do_rk_firmware_upgrade-->PrepareIDB failed!");
-    	goto EXIT_UPGRADE;
-    }
-    pLog->Record("IDBlock Writing...");
-    printf("\t\t ############### IDBlock Writing...\n");
-    iRet = pDevice->DownloadIDBlock();
-    if (iRet!=ERR_SUCCESS)
-    {
-    	pLog->Record("ERROR:do_rk_firmware_upgrade-->DownloadIDBlock failed!");
-    	goto EXIT_UPGRADE;
-    }
-    printf("############### update boatloader Suceess############\n");
-
-	if (strFw.find(_T(".bin"))!=tstring::npos)
+	if (IsRK3308_Plateform() && Compatible_rk3308bs_loader())
 	{
-		pLog->Record("INFO:do_rk_firmware_upgrade-->Download loader only success!");
-		bSuccess = true;
-		return bSuccess;
+		bool bFound_3308bs_loader = false;
+		const char* rk3308bs_loader = "rk3308bs_loader";
+		DWORD rk3308bs_loaderOffset = 0;
+		DWORD rk3308bs_loaderSize   = 0;
+
+		bUpdateLoader = false;
+		if (pDevice->IsExistPartitonInFw(rk3308bs_loader, rk3308bs_loaderOffset,rk3308bs_loaderSize))
+		{
+			printf("Found RK3308bs loader in fw and offset :%d size :%d.\n",rk3308bs_loaderOffset,rk3308bs_loaderSize);
+
+			if (pImage->m_bootObject)
+			{
+				delete pImage->m_bootObject;
+
+				bool bRet;
+				PBYTE lpBoot;
+				lpBoot = new BYTE[rk3308bs_loaderSize];
+
+				long offset = rk3308bs_loaderOffset + pImage->GetFWOffset();
+				fseeko64(pImage->GetFWFileHandle(),offset,SEEK_SET);
+				fread(lpBoot,1,rk3308bs_loaderSize,pImage->GetFWFileHandle());
+				pImage->m_bootObject = new CRKBoot(lpBoot,rk3308bs_loaderSize, bRet);
+				if (!bRet)
+				{
+					printf("CRKImage :Error! new CRKBoot fail!\n");
+					return false;
+				}
+				bUpdateLoader = true;
+			}
+		}
+	}
+
+	if (bUpdateLoader)
+	{
+		printf("############### update boatloader start ############\n");
+
+		pLog->Record("IDBlock Preparing...");
+		printf("\t\t ############### IDBlock Preparing...\n");
+		iRet = pDevice->PrepareIDB();
+		if (iRet!=ERR_SUCCESS)
+		{
+			pLog->Record("ERROR:do_rk_firmware_upgrade-->PrepareIDB failed!");
+			goto EXIT_UPGRADE;
+		}
+		pLog->Record("IDBlock Writing...");
+		printf("\t\t ############### IDBlock Writing...\n");
+		iRet = pDevice->DownloadIDBlock();
+		if (iRet!=ERR_SUCCESS)
+		{
+			pLog->Record("ERROR:do_rk_firmware_upgrade-->DownloadIDBlock failed!");
+			goto EXIT_UPGRADE;
+		}
+		printf("############### update boatloader Suceess############\n");
+
+		if (strFw.find(_T(".bin"))!=tstring::npos)
+		{
+			pLog->Record("INFO:do_rk_firmware_upgrade-->Download loader only success!");
+			bSuccess = true;
+			return bSuccess;
+		}
 	}
 
 	iRet = pDevice->DownloadImage();
@@ -896,6 +951,7 @@ EXIT_UPGRADE:
 
 	return bSuccess;
 }
+
 bool do_rk_partition_upgrade(char *szFw,void *pCallback,void *pProgressCallback,char nBoot,char *szBootDev)
 {
 	bool bSuccess=false,bRet=false,bLock;
@@ -958,7 +1014,6 @@ bool do_rk_partition_upgrade(char *szFw,void *pCallback,void *pProgressCallback,
 			}
 //			if (pCallback)
 //				((UpgradeCallbackFunc)pCallback)("pause");
-
 		}
 		else
 		{
@@ -969,7 +1024,6 @@ bool do_rk_partition_upgrade(char *szFw,void *pCallback,void *pProgressCallback,
 				goto EXIT_DOWNLOAD;
 			}
 		}
-
 	}
 	else
 	{
@@ -1036,7 +1090,6 @@ EXIT_DOWNLOAD:
 
 	return bSuccess;
 }
-
 
 bool do_rk_backup_recovery(void *pCallback,void *pProgressCallback)
 {
@@ -1125,6 +1178,7 @@ bool do_rk_backup_recovery(void *pCallback,void *pProgressCallback)
 	}
 
 	bSuccess = true;
+
 EXIT_RECOVERY:
 	if (bSuccess)
 	{
@@ -1153,5 +1207,4 @@ EXIT_RECOVERY:
 	}
 
 	return bSuccess;
-
 }

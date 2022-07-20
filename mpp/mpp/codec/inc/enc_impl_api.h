@@ -19,7 +19,7 @@
 
 #include "rk_mpi_cmd.h"
 
-#include "hal_task.h"
+#include "hal_enc_task.h"
 #include "mpp_enc_cfg.h"
 #include "mpp_enc_refs.h"
 
@@ -32,9 +32,6 @@ typedef struct EncImplCfg_t {
     MppClientType   type;
     MppEncCfgSet    *cfg;
     MppEncRefs      refs;
-
-    // output
-    RK_S32          task_count;
 } EncImplCfg;
 
 /*

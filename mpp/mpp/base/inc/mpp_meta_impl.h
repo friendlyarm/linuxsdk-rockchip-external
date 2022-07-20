@@ -27,6 +27,18 @@ typedef struct MppMetaDef_t {
     MppMetaType         type;
 } MppMetaDef;
 
+typedef struct MppMetaVal_t {
+    RK_U32              state;
+    union {
+        RK_S32          val_s32;
+        RK_S64          val_s64;
+        void            *val_ptr;
+        MppFrame        frame;
+        MppPacket       packet;
+        MppBuffer       buffer;
+    };
+} MppMetaVal;
+
 typedef struct MppMetaImpl_t {
     char                tag[MPP_TAG_SIZE];
     const char          *caller;
@@ -34,36 +46,17 @@ typedef struct MppMetaImpl_t {
     RK_S32              ref_count;
 
     struct list_head    list_meta;
-    struct list_head    list_node;
     RK_S32              node_count;
+    MppMetaVal          vals[];
 } MppMetaImpl;
-
-typedef union MppMetaVal_u {
-    RK_S32              val_s32;
-    RK_S64              val_s64;
-    void                *val_ptr;
-    MppFrame            frame;
-    MppPacket           packet;
-    MppBuffer           buffer;
-} MppMetaVal;
-
-typedef struct MppMetaNode_t {
-    struct list_head    list_meta;
-    struct list_head    list_node;
-    MppMetaImpl         *meta;
-    RK_S32              node_id;
-
-    RK_S32              type_id;
-    MppMetaVal          val;
-} MppMetaNode;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 RK_S32 mpp_meta_size(MppMeta meta);
+MPP_RET mpp_meta_dump(MppMeta meta);
 MPP_RET mpp_meta_inc_ref(MppMeta meta);
-MppMetaNode *mpp_meta_next_node(MppMeta meta);
 
 #ifdef __cplusplus
 }

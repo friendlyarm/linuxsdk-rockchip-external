@@ -1,6 +1,9 @@
 #include "RKImage.h"
 #include "MD5Checksum.h"
 
+extern int IsRK3308_Plateform();
+extern int Compatible_rk3308bs_loader();
+
 DWORD CRKImage::GetVersion()
 {
 	return m_version;
@@ -45,6 +48,12 @@ long long CRKImage::GetFWSize()
 {
 	return m_fwSize;
 }
+
+FILE* CRKImage::GetFWFileHandle()
+{
+	return m_pFile;
+}
+
 bool CRKImage::Md5Check(long long nCheckSize)
 {
 	printf("In Md5Check\n");
@@ -76,8 +85,8 @@ bool CRKImage::Md5Check(long long nCheckSize)
 	}
 	else
 		return false;
-
 }
+
 bool CRKImage::SaveBootFile(tstring filename)
 {
 	FILE *file=NULL;
@@ -111,12 +120,12 @@ bool CRKImage::SaveFWFile(tstring filename)
 	}
 	BYTE buffer[1024];
 	DWORD dwBufferSize=1024;
-	long long dwFWSize=m_fwSize;
+	long long dwFWSize = m_fwSize;
 	DWORD dwReadSize;
 	fseeko(m_pFile,m_fwOffset,SEEK_SET);
 	do
 	{
-		dwReadSize = (dwFWSize>=1024)?dwBufferSize:dwFWSize;
+		dwReadSize = (dwFWSize>=1024)? dwBufferSize:dwFWSize;
 		fread(buffer,1,dwReadSize,m_pFile);
 		fwrite(buffer,1,dwReadSize,file);
 		dwFWSize -= dwReadSize;
@@ -124,6 +133,7 @@ bool CRKImage::SaveFWFile(tstring filename)
 	fclose(file);
 	return true;
 }
+
 bool CRKImage::GetData(long long dwOffset,DWORD dwSize,PBYTE lpBuffer)
 {
 	if ( dwOffset<0 || dwSize==0 )
@@ -215,7 +225,7 @@ CRKImage::CRKImage(tstring filename,bool &bCheck)
 	{
 		bCheck = false;
 		printf("CRKImage : fopen <%s> fail,will try use fopen64 \n", szName);
-#if 1
+
 		m_pFile=  fopen64(szName, "rb");
 		if (!m_pFile)
 		{
@@ -223,17 +233,17 @@ CRKImage::CRKImage(tstring filename,bool &bCheck)
 			printf("CRKImage : fopen64 <%s> fail\n", szName);
 			return;
 		}
-#endif
 	}
-//code will be error if firmware is signed.md5 is not last 32 byte.
-//	fseeko(m_pFile,-32,SEEK_END);
-//	fread(m_md5,1,32,m_pFile);
-//	fseeko(m_pFile,0,SEEK_SET);
-// 	if (!Md5Check())
-// 	{
-// 		bCheck = false;
-// 		return;
-// 	}
+
+	//code will be error if firmware is signed.md5 is not last 32 byte.
+	//	fseeko(m_pFile,-32,SEEK_END);
+	//	fread(m_md5,1,32,m_pFile);
+	//	fseeko(m_pFile,0,SEEK_SET);
+	// 	if (!Md5Check())
+	// 	{
+	// 		bCheck = false;
+	// 		return;
+	// 	}
 
 	int nMd5DataSize;
 	long long ulFwSize;
@@ -304,7 +314,6 @@ CRKImage::CRKImage(tstring filename,bool &bCheck)
 		m_bootOffset = 0;
 		m_bootSize = m_fileSize;
 	}
-
 
 	PBYTE lpBoot;
 	lpBoot = new BYTE[m_bootSize];

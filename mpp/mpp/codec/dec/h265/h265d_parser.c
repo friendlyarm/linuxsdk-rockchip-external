@@ -1751,9 +1751,18 @@ MPP_RET h265d_prepare(void *ctx, MppPacket pkt, HalDecTask *task)
 
     task->valid = 0;
     s->eos = mpp_packet_get_eos(pkt);
+
     if (sc != NULL) {
         sc->eos = s->eos;
+    } else if (h265dctx->cfg->base.split_parse) {
+        h265d_split_init((void**)&sc);
+        if (sc == NULL) {
+            mpp_err("split contxt malloc fail");
+            return MPP_ERR_NOMEM;
+        }
+        h265dctx->split_cxt = sc;
     }
+
     buf = (RK_U8 *)mpp_packet_get_pos(pkt);
     pts = mpp_packet_get_pts(pkt);
     dts = mpp_packet_get_dts(pkt);
@@ -1863,7 +1872,9 @@ MPP_RET h265d_parse(void *ctx, HalDecTask *task)
     h265d_dbg(H265D_DBG_GLOBAL, "decode poc = %d", s->poc);
     if (s->ref) {
         h265d_parser2_syntax(h265dctx);
-        s->ps_need_upate     = 0;
+        if (!task->flags.parse_err)
+            s->ps_need_upate = 0;
+
         s->task->syntax.data = s->hal_pic_private;
         s->task->syntax.number = 1;
         s->task->valid = 1;

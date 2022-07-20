@@ -17,7 +17,7 @@
 #ifndef __MPP_ENC_HAL_H__
 #define __MPP_ENC_HAL_H__
 
-#include "hal_task.h"
+#include "hal_enc_task.h"
 #include "mpp_enc_cfg.h"
 #include "mpp_device.h"
 
@@ -25,10 +25,12 @@ typedef struct MppEncHalCfg_t {
     // input for encoder
     MppCodingType   coding;
     MppEncCfgSet    *cfg;
+    RK_S32          task_cnt;
 
     // output from enc_impl
     MppClientType   type;
     MppDev          dev;
+    RK_S32          cap_recn_out;
 } MppEncHalCfg;
 
 typedef struct MppEncHalApi_t {

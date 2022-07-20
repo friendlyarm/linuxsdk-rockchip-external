@@ -20,7 +20,7 @@
 
 #include "mpp_time.h"
 
-#include "hal_task_defs.h"
+#include "hal_task.h"
 #include "mpp_rc_defs.h"
 #include "mpp_enc_refs.h"
 
@@ -33,7 +33,17 @@
 
 typedef struct HalEncTaskFlag_t {
     RK_U32          err;
+    RK_S32          drop_by_fps;
+    RK_S32          reg_idx;
+    /* hal buf index */
+    RK_S32          curr_idx;
+    RK_S32          refr_idx;
 } HalEncTaskFlag;
+
+typedef struct MppSyntax_t {
+    RK_U32              number;
+    void                *data;
+} MppSyntax;
 
 typedef struct HalEncTask_t {
     RK_U32          valid;
@@ -78,8 +88,8 @@ typedef struct HalEncTask_t {
     // task stopwatch for timing
     MppStopwatch    stopwatch;
 
-    // current mv info output buffer (not used)
-    MppBuffer       mv_info;
+    // current md info output buffer
+    MppBuffer       md_info;
 
     // low delay mode part output information
     RK_U32          part_first;

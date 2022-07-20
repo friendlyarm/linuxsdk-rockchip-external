@@ -28,11 +28,17 @@ add_mpp_base_test(mpp_buffer)
 # mpp_packet unit test
 add_mpp_base_test(mpp_packet)
 
+# mpp_meta unit test
+add_mpp_base_test(mpp_meta)
+
 # mpp_bitwriter unit test
 add_mpp_base_test(mpp_bit)
 
 # mpp_trie unit test
 add_mpp_base_test(mpp_trie)
+
+# mpp_cluster unit test
+add_mpp_base_test(mpp_cluster)
 
 # mpp_enc_cfg unit test
 add_mpp_base_test(mpp_enc_cfg)

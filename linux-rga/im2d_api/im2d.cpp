@@ -954,6 +954,8 @@ IM_API IM_STATUS rga_check_format(const char *name, rga_buffer_t info, im_rect r
 
     if (format == RK_FORMAT_RGBA_8888 || format == RK_FORMAT_BGRA_8888 ||
         format == RK_FORMAT_RGBX_8888 || format == RK_FORMAT_BGRX_8888 ||
+        format == RK_FORMAT_ARGB_8888 || format == RK_FORMAT_ABGR_8888 ||
+        format == RK_FORMAT_XRGB_8888 || format == RK_FORMAT_XBGR_8888 ||
         format == RK_FORMAT_RGB_888   || format == RK_FORMAT_BGR_888   ||
         format == RK_FORMAT_RGB_565   || format == RK_FORMAT_BGR_565) {
         if (~format_usage & IM_RGA_SUPPORT_FORMAT_RGB) {
@@ -963,7 +965,9 @@ IM_API IM_STATUS rga_check_format(const char *name, rga_buffer_t info, im_rect r
             return IM_STATUS_NOT_SUPPORTED;
         }
     } else if (format == RK_FORMAT_RGBA_4444 || format == RK_FORMAT_BGRA_4444 ||
-               format == RK_FORMAT_RGBA_5551 || format == RK_FORMAT_BGRA_5551) {
+               format == RK_FORMAT_RGBA_5551 || format == RK_FORMAT_BGRA_5551 ||
+               format == RK_FORMAT_ARGB_4444 || format == RK_FORMAT_ABGR_4444 ||
+               format == RK_FORMAT_ARGB_5551 || format == RK_FORMAT_ABGR_5551) {
         if (~format_usage & IM_RGA_SUPPORT_FORMAT_RGB_OTHER) {
             imSetErrorMsg("%s unsupported RGBA 4444/5551 format, format = 0x%x(%s)\n%s",
                           name, info.format, translate_format_str(info.format),
@@ -993,7 +997,8 @@ IM_API IM_STATUS rga_check_format(const char *name, rga_buffer_t info, im_rect r
             (info.width % 2)  || (info.height % 2) ||
             (rect.x % 2) || (rect.y % 2) ||
             (rect.width % 2) || (rect.height % 2)) {
-            imSetErrorMsg("%s, Error yuv not align to 2, rect[x,y,w,h] = [%d, %d, %d, %d], "
+            imSetErrorMsg("%s, Error yuv not align to 2 or width stride not align to 4, "
+                          "rect[x,y,w,h] = [%d, %d, %d, %d], "
                           "wstride = %d, hstride = %d, format = 0x%x(%s)\n%s",
                           name, rect.x, rect.y, info.width, info.height, info.wstride, info.hstride,
                           info.format, translate_format_str(info.format),

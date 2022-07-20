@@ -22,6 +22,10 @@ if( HAVE_JPEGD )
     add_subdirectory(jpegd)
 endif()
 
+if( HAVE_AV1D )
+    add_subdirectory(av1d)
+endif()
+
 if( HAVE_JPEGE )
     add_subdirectory(jpege)
 endif()
@@ -32,8 +36,4 @@ endif()
 
 if( HAVE_VP8E)
     add_subdirectory(vp8e)
-endif()
-
-if(HAVE_H265E)
-    add_subdirectory(h265e)
 endif()

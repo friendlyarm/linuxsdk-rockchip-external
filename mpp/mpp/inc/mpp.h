@@ -96,7 +96,7 @@
 class Mpp
 {
 public:
-    Mpp();
+    Mpp(MppCtx ctx = NULL);
     ~Mpp();
     MPP_RET init(MppCtxType type, MppCodingType coding);
 
@@ -122,9 +122,10 @@ public:
     MPP_RET notify(RK_U32 flag);
     MPP_RET notify(MppBufferGroup group);
 
-    mpp_list        *mPackets;
-    mpp_list        *mFrames;
-    mpp_list        *mTimeStamps;
+    mpp_list        *mPktIn;
+    mpp_list        *mPktOut;
+    mpp_list        *mFrmIn;
+    mpp_list        *mFrmOut;
     /* counters for debug */
     RK_U32          mPacketPutCount;
     RK_U32          mPacketGetCount;
@@ -173,10 +174,11 @@ public:
     MppTask         mInputTask;
     MppTask         mEosTask;
 
+    MppCtx          mCtx;
     MppDec          mDec;
     MppEnc          mEnc;
 
-    RK_U32          mEncVersion;
+    RK_U32          mEncAyncIo;
 
 private:
     void clear();
@@ -207,6 +209,10 @@ private:
     MPP_RET control_dec(MpiCmd cmd, MppParam param);
     MPP_RET control_enc(MpiCmd cmd, MppParam param);
     MPP_RET control_isp(MpiCmd cmd, MppParam param);
+
+    /* for special encoder async io mode */
+    MPP_RET put_frame_async(MppFrame frame);
+    MPP_RET get_packet_async(MppPacket *packet);
 
     Mpp(const Mpp &);
     Mpp &operator=(const Mpp &);

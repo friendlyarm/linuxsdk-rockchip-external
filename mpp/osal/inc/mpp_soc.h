@@ -42,6 +42,7 @@ typedef enum RockchipSocType_e {
     ROCKCHIP_SOC_RK1808,
     ROCKCHIP_SOC_RK3566,
     ROCKCHIP_SOC_RK3568,
+    ROCKCHIP_SOC_RK3588,
     ROCKCHIP_SOC_BUTT,
 } RockchipSocType;
 
@@ -80,7 +81,7 @@ typedef struct {
     const RK_U32            vcodec_type;
 
     /* Max 4 decoder cap */
-    const MppDecHwCap       *dec_caps[4];
+    const MppDecHwCap       *dec_caps[6];
     /* Max 4 encoder cap */
     const MppEncHwCap       *enc_caps[4];
 } MppSocInfo;
