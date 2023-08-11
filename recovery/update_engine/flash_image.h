@@ -1,27 +1,34 @@
-/*************************************************************************
-    > File Name: flash_image.h
-    > Author: jkand.huang
-    > Mail: jkand.huang@rock-chips.com
-    > Created Time: Tue 21 May 2019 09:29:39 AM CST
- ************************************************************************/
+/*
+ * Copyright (C) 2023 Rockchip Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #ifndef _FLASH_IMAGE_H
 #define _FLASH_IMAGE_H
 #include "defineHeader.h"
 
 #pragma pack(1)
-typedef struct
-{
+typedef struct {
     char name[20];
     unsigned int offset;
     unsigned int size;
-}STRUCT_PARAM_ITEM,*PSTRUCT_PARAM_ITEM;
+} STRUCT_PARAM_ITEM, *PSTRUCT_PARAM_ITEM;
 
-typedef struct
-{
+typedef struct {
     char name[20];
     char value[256];
-}STRUCT_CONFIG_ITEM,*PSTRUCT_CONFIG_ITEM;
+} STRUCT_CONFIG_ITEM, *PSTRUCT_CONFIG_ITEM;
 #pragma pack()
 
 int flash_bootloader(char *dest_path, void *pupdate_cmd);

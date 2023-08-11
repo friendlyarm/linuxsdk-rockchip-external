@@ -82,8 +82,10 @@ enum
   PROP_WINDOW_WIDTH,
   PROP_WINDOW_HEIGHT,
   PROP_DRIVER_NAME,
+  PROP_BUS_ID,
   PROP_CONNECTOR_ID,
-  PROP_PLANE_ID
+  PROP_PLANE_ID,
+  PROP_FORCE_ASPECT_RATIO,
 };
 
 /* ============================================================= */
@@ -444,7 +446,17 @@ drm_ensure_allowed_caps (GstRkXImageSink * self, drmModePlane * plane,
   for (i = 0; i < plane->count_formats; i++) {
     gboolean linear = FALSE, afbc = FALSE;
 
-    fmt = gst_video_format_from_drm (plane->formats[i]);
+    check_afbc (self, plane, plane->formats[i], &linear, &afbc);
+
+    if (plane->formats[i] == DRM_FORMAT_YUV420_8BIT)
+      fmt = GST_VIDEO_FORMAT_NV12;
+    else if (plane->formats[i] == DRM_FORMAT_YUV420_10BIT)
+      fmt = GST_VIDEO_FORMAT_NV12_10LE40;
+    else if (afbc && plane->formats[i] == DRM_FORMAT_YUYV)
+      fmt = GST_VIDEO_FORMAT_NV16;
+      else
+        fmt = gst_video_format_from_drm (plane->formats[i]);
+
     if (fmt == GST_VIDEO_FORMAT_UNKNOWN) {
       GST_INFO_OBJECT (self, "ignoring format %" GST_FOURCC_FORMAT,
           GST_FOURCC_ARGS (plane->formats[i]));
@@ -459,16 +471,16 @@ drm_ensure_allowed_caps (GstRkXImageSink * self, drmModePlane * plane,
     if (!caps)
       continue;
 
-    check_afbc (self, plane, plane->formats[i], &linear, &afbc);
-
     if (afbc) {
       GstCaps *afbc_caps = gst_caps_copy (caps);
       gst_caps_set_simple (afbc_caps, "arm-afbc", G_TYPE_INT, 1, NULL);
 
-      if (linear)
+      if (linear) {
         gst_caps_append (caps, afbc_caps);
-      else
+      } else {
         gst_caps_replace (&caps, afbc_caps);
+        gst_caps_unref (afbc_caps);
+      }
     }
 
     out_caps = gst_caps_merge (out_caps, caps);
@@ -991,6 +1003,12 @@ xwindow_calculate_display_ratio (GstRkXImageSink * self, int *x, int *y,
   video_par_n = self->par_n;
   video_par_d = self->par_d;
 
+  if (self->keep_aspect) {
+    *window_width = video_width;
+    *window_height = video_height;
+    goto out;
+  }
+
   gst_video_calculate_device_ratio (self->hdisplay, self->vdisplay,
       self->mm_width, self->mm_height, &dpy_par_n, &dpy_par_d);
 
@@ -1019,6 +1037,7 @@ xwindow_calculate_display_ratio (GstRkXImageSink * self, int *x, int *y,
     *window_width = self->xwindow->width;
   }
 
+out:
   GST_DEBUG_OBJECT (self, "scaling to %dx%d", *window_width, *window_height);
 
   return TRUE;
@@ -2349,13 +2368,21 @@ gst_x_image_sink_set_property (GObject * object, guint prop_id,
       gst_x_image_sink_manage_event_thread (ximagesink);
       break;
     case PROP_DRIVER_NAME:
+      g_free (ximagesink->devname);
       ximagesink->devname = g_value_dup_string (value);
+      break;
+    case PROP_BUS_ID:
+      g_free (ximagesink->bus_id);
+      ximagesink->bus_id = g_value_dup_string (value);
       break;
     case PROP_CONNECTOR_ID:
       ximagesink->conn_id = g_value_get_int (value);
       break;
     case PROP_PLANE_ID:
       ximagesink->plane_id = g_value_get_int (value);
+      break;
+    case PROP_FORCE_ASPECT_RATIO:
+      ximagesink->keep_aspect = g_value_get_boolean (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2399,13 +2426,19 @@ gst_x_image_sink_get_property (GObject * object, guint prop_id,
         g_value_set_uint64 (value, 0);
       break;
     case PROP_DRIVER_NAME:
-      g_value_take_string (value, ximagesink->devname);
+      g_value_set_string (value, ximagesink->devname);
+      break;
+    case PROP_BUS_ID:
+      g_value_set_string (value, ximagesink->bus_id);
       break;
     case PROP_CONNECTOR_ID:
       g_value_set_int (value, ximagesink->conn_id);
       break;
     case PROP_PLANE_ID:
       g_value_set_int (value, ximagesink->plane_id);
+      break;
+    case PROP_FORCE_ASPECT_RATIO:
+      g_value_set_boolean (value, ximagesink->keep_aspect);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2463,6 +2496,9 @@ gst_x_image_sink_finalize (GObject * object)
 
   gst_poll_free (ximagesink->poll);
 
+  g_clear_pointer (&ximagesink->devname, g_free);
+  g_clear_pointer (&ximagesink->bus_id, g_free);
+
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
@@ -2479,6 +2515,8 @@ gst_x_image_sink_init (GstRkXImageSink * ximagesink)
 
   ximagesink->fps_n = 0;
   ximagesink->fps_d = 1;
+
+  ximagesink->keep_aspect = TRUE;
 
   g_mutex_init (&ximagesink->x_lock);
   g_mutex_init (&ximagesink->flow_lock);
@@ -2500,6 +2538,8 @@ gst_x_image_sink_init (GstRkXImageSink * ximagesink)
   ximagesink->save_rect.h = 0;
 
   ximagesink->paused = FALSE;
+
+  ximagesink->devname = g_strdup ("rockchip");
 }
 
 static gboolean
@@ -2521,7 +2561,11 @@ gst_x_image_sink_start (GstBaseSink * bsink)
   pres = NULL;
   plane = NULL;
 
-  self->fd = open ("/dev/dri/card0", O_RDWR);
+  if (self->devname || self->bus_id)
+    self->fd = drmOpen (self->devname, self->bus_id);
+
+  if (self->fd < 0)
+    self->fd = open ("/dev/dri/card0", O_RDWR | O_CLOEXEC);
 
   if (self->fd < 0)
     goto open_failed;
@@ -2756,6 +2800,17 @@ gst_x_image_sink_class_init (GstRkXImageSinkClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
 
   /**
+   * kmssink:bus-id:
+   *
+   * If you have a system with multiple displays for the same driver-name,
+   * you can choose which display to use by setting the DRM bus ID. Otherwise,
+   * the driver decides which one.
+   */
+  g_object_class_install_property (gobject_class, PROP_BUS_ID,
+      g_param_spec_string ("bus-id", "Bus ID", "DRM bus ID", NULL,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
+
+  /**
    * kmssink:connector-id:
    *
    * A GPU has several output connectors, for example: LVDS, VGA,
@@ -2777,6 +2832,11 @@ gst_x_image_sink_class_init (GstRkXImageSinkClass * klass)
   g_object_class_install_property (gobject_class, PROP_PLANE_ID,
       g_param_spec_int ("plane-id", "Plane ID", "DRM plane id", -1, G_MAXINT32,
           -1, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
+
+  g_object_class_install_property (gobject_class, PROP_FORCE_ASPECT_RATIO,
+      g_param_spec_boolean ("force-aspect-ratio", "Force aspect ratio",
+      "When enabled, scaling will respect original aspect ratio", TRUE,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "Video sink", "Sink/Video",

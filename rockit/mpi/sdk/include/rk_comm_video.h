@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMMON_VIDEO_H_
 #define INCLUDE_RT_MPI_RK_COMMON_VIDEO_H_
@@ -58,10 +44,10 @@ typedef enum rkROTATION_E {
 } ROTATION_E;
 
 typedef enum rkMIRROR_E {
-    MIRROR_NONE,
-    MIRROR_HORIZONTAL,
-    MIRROR_VERTICAL,
-    MIRROR_BOTH,
+    MIRROR_NONE       = 0,
+    MIRROR_HORIZONTAL = 1,  /* RW; MIRROR */
+    MIRROR_VERTICAL   = 2,  /* RW; FLIP */
+    MIRROR_BOTH       = 3,  /* RW; MIRROR and FLIP */
     MIRROR_BUTT
 } MIRROR_E;
 
@@ -136,6 +122,7 @@ typedef struct rkASPECT_RATIO_S {
 #define RK_VIDEO_FMT_MASK                   0x000f0000
 #define RK_VIDEO_FMT_YUV                    0x00000000
 #define RK_VIDEO_FMT_RGB                    0x00010000
+#define RK_VIDEO_FMT_BAYER                  0X00020000
 
 typedef enum rkPIXEL_FORMAT_E {
     RK_FMT_YUV420SP         = RK_VIDEO_FMT_YUV,        /* YYYY... UV...            */
@@ -152,7 +139,9 @@ typedef enum rkPIXEL_FORMAT_E {
     RK_FMT_YUV400SP,                                   /* YYYY...                  */
     RK_FMT_YUV440SP,                                   /* YYYY... UVUV...          */
     RK_FMT_YUV411SP,                                   /* YYYY... UV...            */
+    RK_FMT_YUV444,                                     /* YUVYUVYUV...             */
     RK_FMT_YUV444SP,                                   /* YYYY... UVUVUVUV...      */
+    RK_FMT_YUV444P,                                    /* YYYY... UUUU... VVVV     */
     RK_FMT_YUV422_YVYU,                                /* YVYUYVYU...              */
     RK_FMT_YUV422_VYUY,                                /* VYUYVYUY...              */
     RK_FMT_YUV_BUTT,
@@ -180,10 +169,36 @@ typedef enum rkPIXEL_FORMAT_E {
     RK_FMT_RGBA5551,                                   /* 16-bit RGB               */
     RK_FMT_BGRA5551,                                   /* 16-bit RGB               */
     RK_FMT_BGRA4444,                                   /* 16-bit RGB               */
+    RK_FMT_RGBA4444,                                   /* 16-bit RGB               */
+    RK_FMT_XBGR8888,                                   /* 32-bit RGB               */
     RK_FMT_RGB_BUTT,
 
-    RK_FMT_BUTT            = RK_FMT_RGB_BUTT,
+    RK_FMT_2BPP,
+
+    RK_FMT_RGB_BAYER_SBGGR_8BPP = RK_VIDEO_FMT_BAYER,  /* 8-bit raw                */
+    RK_FMT_RGB_BAYER_SGBRG_8BPP,                       /* 8-bit raw                */
+    RK_FMT_RGB_BAYER_SGRBG_8BPP,                       /* 8-bit raw                */
+    RK_FMT_RGB_BAYER_SRGGB_8BPP,                       /* 8-bit raw                */
+    RK_FMT_RGB_BAYER_SBGGR_10BPP,                      /* 10-bit raw               */
+    RK_FMT_RGB_BAYER_SGBRG_10BPP,                      /* 10-bit raw               */
+    RK_FMT_RGB_BAYER_SGRBG_10BPP,                      /* 10-bit raw               */
+    RK_FMT_RGB_BAYER_SRGGB_10BPP,                      /* 10-bit raw               */
+    RK_FMT_RGB_BAYER_SBGGR_12BPP,                      /* 12-bit raw               */
+    RK_FMT_RGB_BAYER_SGBRG_12BPP,                      /* 12-bit raw               */
+    RK_FMT_RGB_BAYER_SGRBG_12BPP,                      /* 12-bit raw               */
+    RK_FMT_RGB_BAYER_SRGGB_12BPP,                      /* 12-bit raw               */
+    RK_FMT_RGB_BAYER_14BPP,                            /* 14-bit raw               */
+    RK_FMT_RGB_BAYER_SBGGR_16BPP,                      /* 16-bit raw               */
+    RK_FMT_RGB_BAYER_BUTT,
+    RK_FMT_BUTT            = RK_FMT_RGB_BAYER_BUTT,
 } PIXEL_FORMAT_E;
+
+typedef enum rkVIDEO_PROC_DEV_TYPE_E {
+    VIDEO_PROC_DEV_GPU = 0x0,       /* GPU device */
+    VIDEO_PROC_DEV_RGA = 0x1,       /* RGA device */
+
+    VIDEO_PROC_DEV_BUTT
+} VIDEO_PROC_DEV_TYPE_E;
 
 typedef enum rkVIDEO_FIELD_E {
     VIDEO_FIELD_TOP         = 0x1,    /* even field */

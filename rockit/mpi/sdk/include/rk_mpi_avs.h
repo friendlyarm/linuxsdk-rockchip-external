@@ -1,19 +1,6 @@
-/*
- * Copyright 2020 RockcRKp Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use tRKs file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
+
 
 #ifndef INCLUDE_RT_MPI_RK_MPI_AVS_H_
 #define INCLUDE_RT_MPI_RK_MPI_AVS_H_
@@ -57,6 +44,8 @@ RK_S32 RK_MPI_AVS_ReleaseChnFrame(AVS_GRP AVSGrp, AVS_CHN AVSChn,
                                   const VIDEO_FRAME_INFO_S *pstVideoFrame);
 RK_S32 RK_MPI_AVS_SetModParam(const AVS_MOD_PARAM_S *pstModParam);
 RK_S32 RK_MPI_AVS_GetModParam(AVS_MOD_PARAM_S *pstModParam);
+
+RK_S32 RK_MPI_AVS_GetFinalLut(AVS_GRP AVSGrp, AVS_FINAL_LUT_S *pstFinalLut);
 
 #ifdef __cplusplus
 #if __cplusplus

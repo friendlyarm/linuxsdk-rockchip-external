@@ -27,7 +27,10 @@
 #include "rk_mpi_ao.h"
 #include "rk_mpi_mb.h"
 #include "rk_mpi_sys.h"
-#include "argparse.h"
+
+#include "test_comm_argparse.h"
+
+#define USE_AO_MIXER 0
 
 typedef struct _rkMpiAOCtx {
     const char *srcFilePath;
@@ -185,9 +188,33 @@ RK_S32 deinit_mpi_ao(AUDIO_DEV aoDevId, AO_CHN aoChn) {
         return RK_FAILURE;
     }
 
-    result =  RK_MPI_AO_Disable(aoDevId);
+    return RK_SUCCESS;
+}
+
+RK_S32 test_close_device_ao(TEST_AO_CTX_S *ctx) {
+    AUDIO_DEV aoDevId = ctx->s32DevId;
+    RK_S32 result =  RK_MPI_AO_Disable(aoDevId);
     if (result != 0) {
-        RK_LOGE("ao disable  fail, reason = %d", result);
+        RK_LOGE("ao disable fail, reason = %d", result);
+        return RK_FAILURE;
+    }
+    return RK_SUCCESS;
+}
+
+RK_S32 test_set_ao_channel_mode(AUDIO_DEV aoDevId, AO_CHN aoChn) {
+    RK_S32 result = 0;
+    AO_CHN_PARAM_S pstParams;
+    memset(&pstParams, 0, sizeof(AO_CHN_PARAM_S));
+    // for test : aoChn0 output left channel,  aoChn1 output right channel,
+    if (aoChn == 0) {
+        pstParams.enMode = AUDIO_CHN_MODE_LEFT;
+    } else if (aoChn == 1) {
+        pstParams.enMode = AUDIO_CHN_MODE_RIGHT;
+    }
+
+    result = RK_MPI_AO_SetChnParams(aoDevId, aoChn, &pstParams);
+    if (result != RK_SUCCESS) {
+        RK_LOGE("ao set channel params, aoChn = %d", aoChn);
         return RK_FAILURE;
     }
 
@@ -204,8 +231,18 @@ void* sendDataThread(void * ptr) {
     RK_S32 s32MilliSec = -1;
     RK_S32 size = 0;
     RK_S32 result = 0;
+    FILE *file = RK_NULL;
+    RK_LOGI("params->s32ChnIndex : %d", params->s32ChnIndex);
+    if (USE_AO_MIXER) {
+        if (params->s32ChnIndex == 0) {
+            file = fopen("8000_1_ao0.pcm", "rb");
+        } else if (params->s32ChnIndex == 1) {
+            file = fopen("8000_1_ao1.pcm", "rb");
+        }
+    } else {
+        file = fopen(params->srcFilePath, "rb");
+    }
 
-    FILE *file = fopen(params->srcFilePath, "rb");
     if (file == RK_NULL) {
         RK_LOGE("open save file %s failed because %s.", params->srcFilePath, strerror(errno));
         goto __EXIT;
@@ -371,6 +408,11 @@ RK_S32 unit_test_mpi_ao(TEST_AO_CTX_S *ctx) {
     for (i = 0; i < ctx->s32ChnNum; i++) {
         memcpy(&(params[i]), ctx, sizeof(TEST_AO_CTX_S));
         params[i].s32ChnIndex = i;
+
+        if (USE_AO_MIXER) {
+            test_set_ao_channel_mode(params[i].s32DevId, params[i].s32ChnIndex);
+        }
+
         test_init_mpi_ao(&params[i]);
         pthread_create(&tidSend[i], RK_NULL, sendDataThread, reinterpret_cast<void *>(&params[i]));
         pthread_create(&tidReceive[i], RK_NULL, commandThread, reinterpret_cast<void *>(&params[i]));
@@ -381,6 +423,8 @@ RK_S32 unit_test_mpi_ao(TEST_AO_CTX_S *ctx) {
         pthread_join(tidReceive[i], RK_NULL);
         deinit_mpi_ao(params[i].s32DevId, params[i].s32ChnIndex);
     }
+
+    test_close_device_ao(ctx);
 
     return RK_SUCCESS;
 __FAILED:

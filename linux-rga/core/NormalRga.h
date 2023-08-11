@@ -43,13 +43,9 @@
 
 #include "drmrga.h"
 #include "rga.h"
+#include "rga_ioctl.h"
 
 #include "NormalRgaContext.h"
-
-#ifdef ANDROID_7_DRM
-#define RGA_BUF_GEM_TYPE_MASK      0xC0
-#define RGA_BUF_GEM_TYPE_DMA       0x80
-#endif
 
 int         RgaInit(void **ctx);
 int         RgaDeInit(void **ctx);
@@ -89,15 +85,12 @@ int         isRectValid(rga_rect_t rect);
 
 int         NormalRgaSetRect(rga_rect_t *rect, int x, int y,
                              int w, int h, int s, int f);
-void        NormalRgaSetLogOnceFlag(int log);
-void        NormalRgaSetAlwaysLogFlag(bool log);
+
 void        NormalRgaLogOutRgaReq(struct rga_req rgaReg);
 
-#ifdef ANDROID
 void        is_debug_log(void);
 int         is_out_log(void);
-int         hwc_get_int_property(const char* pcProperty, const char* default_value);
-#endif
+int         get_int_property(void);
 
 int         NormalRgaSetFdsOffsets(struct rga_req *req,
                                    uint16_t src_fd,     uint16_t dst_fd,
@@ -312,3 +305,5 @@ int         NormalRgaMmuFlag(struct rga_req *msg,
                              int  src_mmu_en,   int  dst_mmu_en);
 
 #endif
+
+void NormalRgaCompatModeConvertRga2(rga2_req *req, rga_req *orig_req);

@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_MPI_COMM_AIO_H_
 #define INCLUDE_RT_MPI_MPI_COMM_AIO_H_
@@ -29,6 +15,19 @@ extern "C" {
 
 #define MAX_AUDIO_FILE_PATH_LEN 256
 #define MAX_AUDIO_FILE_NAME_LEN 256
+
+/*
+ * G726 bitrate and bitdepth map:
+ *  bitrate :  16000  24000 32000 40000
+ * bit depth:    2     3     4      5
+ */
+typedef enum rkAUDIO_G726_BPS_E {
+    G726_BPS_16K   = 16000,     // 2bit
+    G726_BPS_24K   = 24000,     // 3bit
+    G726_BPS_32K   = 32000,     // 4bit
+    G726_BPS_40K   = 40000,     // 5bit
+    G726_BPS_BUTT,
+} AUDIO_G726_BPS;
 
 typedef enum rkAUDIO_SAMPLE_RATE_E {
     AUDIO_SAMPLE_RATE_DISABLE = 0,
@@ -56,16 +55,40 @@ typedef struct rkAUDIO_STREAM_S {
 
 typedef enum rkAUDIO_BIT_WIDTH_E {
     AUDIO_BIT_WIDTH_8   = 0,   /* 8bit width */
-    AUDIO_BIT_WIDTH_16  = 1,   /* 16bit width*/
-    AUDIO_BIT_WIDTH_24  = 2,   /* 24bit width*/
+    AUDIO_BIT_WIDTH_16  = 1,   /* 16bit width */
+    AUDIO_BIT_WIDTH_24  = 2,   /* 24bit width */
+    AUDIO_BIT_WIDTH_32  = 3,   /* 32bit width */
+    AUDIO_BIT_WIDTH_FLT = 4,   /* float, 32bit width */
     AUDIO_BIT_WIDTH_BUTT,
 } AUDIO_BIT_WIDTH_E;
 
 typedef enum rkAIO_SOUND_MODE_E {
     AUDIO_SOUND_MODE_MONO   = 0,/*mono*/
     AUDIO_SOUND_MODE_STEREO = 1,/*stereo*/
+    AUDIO_SOUND_MODE_4_CHN  = 4,
+    AUDIO_SOUND_MODE_6_CHN  = 6,
+    AUDIO_SOUND_MODE_8_CHN  = 8,
     AUDIO_SOUND_MODE_BUTT
 } AUDIO_SOUND_MODE_E;
+
+typedef enum rkAUDIO_CHN_MODE_E {
+    AUDIO_CHN_MODE_LEFT   = 10,
+    AUDIO_CHN_MODE_RIGHT  = 11,
+    AUDIO_CHN_MODE_BUTT
+} AUDIO_CHN_MODE_E;
+
+typedef enum rkAUDIO_LOOPBACK_MODE_E {
+    AUDIO_LOOPBACK_NONE = 0,        /* audio no use loopback */
+    AUDIO_LOOPBACK_SW_MICL_REFR,    /* audio use software loopback (Mic Left + Ref Right) */
+    AUDIO_LOOPBACK_SW_REFL_MICR,    /* audio use software loopback (Ref Left + Mic Right) */
+    AUDIO_LOOPBACK_BUTT
+} AUDIO_LOOPBACK_MODE_E;
+
+typedef enum rkAUDIO_CHN_ATTR_MODE_E {
+    AUDIO_CHN_ATTR_PPM  = 1,
+    AUDIO_CHN_ATTR_RATE = 2,
+    AUDIO_CHN_ATTR_BUTT
+} AUDIO_CHN_ATTR_MODE_E;
 
 typedef struct rkAUDIO_FRAME_S {
     MB_BLK              pMbBlk;
@@ -87,6 +110,16 @@ typedef struct rkAUDIO_FRAME_INFO_S {
     AUDIO_FRAME_S *pstFrame;/*frame ptr*/
     RK_U32         u32Id;   /*frame id*/
 } AUDIO_FRAME_INFO_S;
+
+typedef struct rkAUDIO_ADENC_PARAM_S {
+    RK_U8          *pu8InBuf;
+    RK_U32          u32InLen;
+    RK_U64          u64InTimeStamp;
+
+    RK_U8          *pu8OutBuf;
+    RK_U32          u32OutLen;
+    RK_U64          u64OutTimeStamp;
+} AUDIO_ADENC_PARAM_S;
 
 typedef enum rkAIO_MODE_E {
     AIO_MODE_I2S_MASTER  = 0,   /* AIO I2S master mode */
@@ -134,8 +167,31 @@ typedef struct rkAIO_ATTR_S {
 } AIO_ATTR_S;
 
 typedef struct rkAI_CHN_PARAM_S {
-    RK_U32 u32UsrFrmDepth;
+    RK_S32 s32UsrFrmDepth;
+    RK_S32 s32UsrFrmCount;
+	AUDIO_LOOPBACK_MODE_E enLoopbackMode;
 } AI_CHN_PARAM_S;
+
+typedef struct rkAO_CHN_PARAM_S {
+    AUDIO_CHN_MODE_E  enMode;
+    AUDIO_LOOPBACK_MODE_E enLoopbackMode;
+} AO_CHN_PARAM_S;
+
+typedef struct rkAI_CHN_ATTR_S {
+    AUDIO_CHN_ATTR_MODE_E  enChnAttr;
+    union {
+        RK_S32  s32Ppm;
+        RK_U32  u32SampleRate;
+    };
+} AI_CHN_ATTR_S;
+
+typedef struct rkAO_CHN_ATTR_S {
+    AUDIO_CHN_ATTR_MODE_E  enChnAttr;
+    union {
+        RK_S32  s32Ppm;
+        RK_U32  u32SampleRate;
+    };
+} AO_CHN_ATTR_S;
 
 typedef struct rkAO_CHN_STATE_S {
     RK_U32              u32ChnTotalNum;    /* total number of channel buffer */
@@ -152,6 +208,9 @@ typedef enum rkAUDIO_TRACK_MODE_E {
     AUDIO_TRACK_LEFT_MUTE   = 5,
     AUDIO_TRACK_RIGHT_MUTE  = 6,
     AUDIO_TRACK_BOTH_MUTE   = 7,
+    AUDIO_TRACK_FRONT_LEFT  = 8,
+    AUDIO_TRACK_FRONT_RIGHT = 9,
+    AUDIO_TRACK_OUT_STEREO  = 10,
 
     AUDIO_TRACK_BUTT
 } AUDIO_TRACK_MODE_E;
@@ -175,6 +234,23 @@ typedef struct rkAUDIO_FADE_S {
     AUDIO_FADE_RATE_E enFadeOutRate;
 } AUDIO_FADE_S;
 
+typedef enum rkAUDIO_VOLUME_CURVE_E {
+    AUDIO_CURVE_UNSET     = 0,
+    AUDIO_CURVE_LINEAR    = 1,
+    AUDIO_CURVE_LOGARITHM = 2,
+    AUDIO_CURVE_CUSTOMIZE = 3,
+
+    AUDIO_CURVE_BUTT
+} AUDIO_VOLUME_CURVE_E;
+
+typedef struct rkAUDIO_VOLUME_CURVE_S {
+    AUDIO_VOLUME_CURVE_E enCurveType;
+    RK_S32               s32Resolution;
+    RK_FLOAT             fMinDB;
+    RK_FLOAT             fMaxDB;
+    RK_U32              *pCurveTable;
+} AUDIO_VOLUME_CURVE_S;
+
 /*Defines the configure parameters of AI saving file.*/
 typedef struct rkAUDIO_SAVE_FILE_INFO_S {
     RK_BOOL     bCfg;
@@ -188,6 +264,128 @@ typedef struct rkAUDIO_FILE_STATUS_S {
     RK_BOOL     bSaving;
 } AUDIO_FILE_STATUS_S;
 
+typedef enum rkAIO_VQE_CONFIG_METHOD  {
+    AIO_VQE_CONFIG_NONE,
+    AIO_VQE_CONFIG_USER,       // user set all configs by parameters
+    AIO_VQE_CONFIG_LOAD_FILE,  // read and parse config file
+} AIO_VQE_CONFIG_METHOD;
+
+typedef enum rkAI_VQE_TYPE_S {
+    AI_VQE_NONE = 0,
+    AI_VQE_RECORD,
+    AI_VQE_TALK,
+} AI_VQE_TYPE_S;
+
+typedef struct rkAI_VQE_CONFIG_S {
+    AIO_VQE_CONFIG_METHOD enCfgMode;  /* see AIO_VQE_CONFIG_METHOD */
+    RK_S32                s32WorkSampleRate;    /* Sample Rate: 8KHz/16KHz/48KHz. default: 16KHz*/
+    RK_S32                s32FrameSample;       /* VQE frame length, default: 256 frames(16ms,16KHz) */
+    union {
+        /* config file if enCfgMode = AIO_VQE_CONFIG_LOAD_FILE */
+        RK_CHAR           aCfgFile[MAX_AUDIO_FILE_PATH_LEN];
+    };
+} AI_VQE_CONFIG_S;
+
+typedef struct rkAI_AED_CONFIG_S {
+    RK_FLOAT              fSnrDB;
+    RK_FLOAT              fLsdDB;
+    RK_S32                s32Policy;
+} AI_AED_CONFIG_S;
+
+typedef struct rkAI_AED_RESULT_S {
+    RK_BOOL               bAcousticEventDetected;
+    RK_BOOL               bLoudSoundDetected;
+    RK_FLOAT              lsdResult;
+} AI_AED_RESULT_S;
+
+typedef RK_VOID (*AI_BCD_CB)(void);
+
+typedef struct rkAI_BCD_CONFIG_S {
+    RK_S32                mFrameLen;       // Statistics frame length, the longer it is, the harder it is to wake up
+    RK_S32                mBlankFrameMax;  // Reset the frame length, and re-statistics when the frame length exceeds it
+    RK_FLOAT              mCryEnergy;
+    RK_FLOAT              mJudgeEnergy;
+    RK_FLOAT              mCryThres1;
+    RK_FLOAT              mCryThres2;
+} AI_BCD_CONFIG_S;
+
+typedef struct rkAI_BCD_RESULT_S {
+    RK_BOOL               bBabyCry;
+} AI_BCD_RESULT_S;
+
+typedef struct rkAI_BUZ_CONFIG_S {
+    RK_S32                mFrameLen;       // Statistics frame length, the longer it is, the harder it is to wake up
+    RK_S32                mBlankFrameMax;  // Reset the frame length, and re-statistics when the frame length exceeds it
+    RK_FLOAT              mEnergyMean;
+    RK_FLOAT              mEnergyMax;
+    RK_FLOAT              mBuzThres1;
+    RK_FLOAT              mBuzThres2;
+} AI_BUZ_CONFIG_S;
+
+typedef struct rkAI_BUZ_RESULT_S {
+    RK_BOOL               bBuzz;
+} AI_BUZ_RESULT_S;
+
+typedef struct rkAI_GBS_CONFIG_S {
+    RK_S32                mFrameLen;       // Statistics frame length, the longer it is, the harder it is to wake up
+} AI_GBS_CONFIG_S;
+
+typedef struct rkAI_GBS_RESULT_S {
+    RK_BOOL               bGbs;
+} AI_GBS_RESULT_S;
+
+/**Defines the configure parameters of ANR.*/
+typedef struct rkAUDIO_ANR_CONFIG_S {
+    RK_FLOAT    fNoiseFactor;
+    RK_S32      s32SwU;
+    RK_FLOAT    fPsiMin;
+    RK_FLOAT    fPsiMax;
+    RK_FLOAT    fGmin;
+} AUDIO_ANR_CONFIG_S;
+
+typedef struct rkAUDIO_AGC_CONFIG_S {
+    RK_FLOAT    fAttackTime;
+    RK_FLOAT    fReleaseTime;
+    RK_FLOAT    fAttenuateTime;
+    RK_FLOAT    fMaxGain;
+    RK_FLOAT    fMaxPeak;
+    RK_FLOAT    fRth0;
+    RK_FLOAT    fRth1;
+    RK_FLOAT    fRth2;
+    RK_FLOAT    fRk0;
+    RK_FLOAT    fRk1;
+    RK_FLOAT    fRk2;
+    RK_FLOAT    fLineGainDb;
+    RK_S32      s32SwSmL0;
+    RK_S32      s32SwSmL1;
+    RK_S32      s32SwSmL2;
+} AUDIO_AGC_CONFIG_S;
+
+typedef enum rkAO_VQE_MASK {
+    AO_VQE_MASK_NONE = 1 << 0,
+    AO_VQE_MASK_3A   = 1 << 1,
+    AO_VQE_MASK_AGC  = 1 << 2,
+    AO_VQE_MASK_ANR  = 1 << 3,
+} AO_VQE_MASK;
+
+typedef struct rkAO_VQE_USER_CONFIG_S {
+    RK_U32                u32OpenMask;          /* see AO_VQE_MASK */
+
+    AUDIO_AGC_CONFIG_S    stAgcCfg;
+    AUDIO_ANR_CONFIG_S    stAnrCfg;
+} AO_VQE_USER_CONFIG_S;
+
+typedef struct rkAO_VQE_CONFIG_S {
+    AIO_VQE_CONFIG_METHOD enCfgMode;  /* see AIO_VQE_CONFIG_METHOD */
+    RK_S32                s32WorkSampleRate;    /* Sample Rate: 8KHz/16KHz/48KHz. default: 16KHz*/
+    RK_S32                s32FrameSample;       /* VQE frame length, default: 256 frames(16ms,16KHz) */
+    union {
+        /* config file if enCfgMode = AIO_VQE_CONFIG_LOAD_FILE */
+        RK_CHAR               aCfgFile[MAX_AUDIO_FILE_PATH_LEN];
+        /* set user' parameters if enCfgMode = AIO_VQE_CONFIG_USER */
+        AO_VQE_USER_CONFIG_S  stUsrCfg;
+    };
+} AO_VQE_CONFIG_S;
 
 typedef enum rkEN_AIO_ERR_CODE_E {
     AIO_ERR_VQE_ERR        = 65 , /*vqe error*/

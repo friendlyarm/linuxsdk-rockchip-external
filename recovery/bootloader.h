@@ -17,6 +17,8 @@
 #ifndef _RECOVERY_BOOTLOADER_H
 #define _RECOVERY_BOOTLOADER_H
 
+#include "common.h"
+
 static const int BOOTLOADER_MESSAGE_OFFSET_IN_MISC = 16 * 1024;
 #define MISC_OFFSET 2048    //A,B 结构体在偏移2K 的位置
 #define MISC_OFFSET_CMDLINE 6144    //擦除命令，在偏移4K 的位置，配合挂载脚本使用
@@ -41,9 +43,6 @@ static const int BOOTLOADER_MESSAGE_OFFSET_IN_MISC = 16 * 1024;
 /* Maximum values for slot data */
 #define AVB_AB_MAX_PRIORITY 15
 #define AVB_AB_MAX_TRIES_REMAINING 7
-
-#define MISC_PARTITION_NAME_BLOCK "/dev/block/by-name/misc"
-#define MISC_PARTITION_NAME_MTD "misc"
 
 #define CMD_WIPE_USERDATA "cmd_wipe_userdata"
 
@@ -99,7 +98,7 @@ typedef struct AvbABSlotData {
 
     /* Reserved for future use. */
     unsigned char reserved[1];
-}AvbABSlotData;
+} AvbABSlotData;
 
 /* Struct used for recording A/B metadata.
  *
@@ -125,12 +124,10 @@ typedef struct AvbABData {
 
     /* CRC32 of all 28 bytes preceding this field. */
     unsigned int crc32;
-}AvbABData;
+} AvbABData;
 
 int setSlotActivity();
 int setSlotSucceed();
-int readMisc(struct AvbABData *info);
-void display(struct AvbABData info);
 void miscDisplay() ;
 int wipe_userdata(int auto_reboot);
 int writeCustomMiscCmdline(void);

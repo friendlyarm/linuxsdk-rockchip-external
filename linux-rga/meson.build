@@ -8,50 +8,35 @@ project(
 
 pkgconfig = import('pkgconfig')
 
-libdrm_dep = dependency('', required : false)
-libdrm_option = get_option('libdrm')
-if libdrm_option != 'false'
-    libdrm_dep = dependency('libdrm', version : '>= 2.4.0')
-    if libdrm_option == 'true' and not libdrm_dep.found()
-        error('libdrm requested, but not found.')
-    endif
-endif
-
-if libdrm_dep.found()
-    message('Building with libdrm.')
-    add_project_arguments('-DLIBDRM=1', language : 'cpp')
-else
-    message('Building without libdrm.')
-endif
-
 libthreads_dep = dependency('threads')
 
-gen_version = vcs_tag(
-	command : ['./genversion.sh', 'meson'],
-	replace_string : ['$GIT_BUILD_VERSION'],
-	input : 'version.h.template', output : 'version.h',
- )
 add_project_arguments('-DLINUX=1', language : 'cpp')
 
 librga_srcs = [
-	gen_version,
+    'core/utils/android_utils/src/android_utils.cpp',
+    'core/utils/drm_utils/src/drm_utils.cpp',
+    'core/utils/utils.cpp',
     'core/GrallocOps.cpp',
     'core/NormalRgaApi.cpp',
 	'core/NormalRga.cpp',
 	'core/RgaUtils.cpp',
 	'core/RockchipRga.cpp',
 	'core/RgaApi.cpp',
-	'im2d_api/im2d.cpp',
+	'core/rga_sync.cpp',
+    'im2d_api/src/im2d_log.cpp',
+    'im2d_api/src/im2d_impl.cpp',
+	'im2d_api/src/im2d.cpp',
 ]
 
-incdir = include_directories('include')
+incdir = include_directories('include', 'im2d_api', 'core/hardware', 'core/utils', 'core/3rdparty/libdrm/include/drm')
 
 librga = shared_library(
     'rga',
     librga_srcs,
-    dependencies : [libdrm_dep, libthreads_dep],
+    dependencies : [libthreads_dep],
 	include_directories : incdir,
     version : meson.project_version(),
+    cpp_args : ['-w'],
     install : true,
 )
 
@@ -66,6 +51,14 @@ install_headers(
 	'include/RgaApi.h',
 	'im2d_api/im2d.h',
 	'im2d_api/im2d.hpp',
+    'im2d_api/im2d_type.h',
+    'im2d_api/im2d_version.h',
+    'im2d_api/im2d_buffer.h',
+    'im2d_api/im2d_common.h',
+    'im2d_api/im2d_single.h',
+    'im2d_api/im2d_task.h',
+    'im2d_api/im2d_mpi.h',
+    'im2d_api/im2d_expand.h',
     subdir : 'rga',
 )
 

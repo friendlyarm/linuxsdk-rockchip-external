@@ -88,7 +88,7 @@ drm_dep = dependency('libdrm', required : get_option('rkximage'))
 mpp_dep = dependency('rockchip_mpp', required : get_option('rockchipmpp'))
 rga_dep = dependency('librga', required : get_option('rga'))
 
-if rga_dep.found()
+if rga_dep.found() and not get_option('rga').disabled()
   cdata.set10('HAVE_RGA', 1)
 endif
 
@@ -105,6 +105,10 @@ endif
 
 if cc.has_header_symbol('gst/video/video-format.h', 'GST_VIDEO_FORMAT_NV12_10LE40', dependencies : gstvideo_dep)
   cdata.set10('HAVE_NV12_10LE40', 1)
+endif
+
+if cc.has_header_symbol('gst/video/video-format.h', 'GST_VIDEO_FORMAT_NV16_10LE40', dependencies : gstvideo_dep)
+  cdata.set10('HAVE_NV16_10LE40', 1)
 endif
 
 gst_rockchip_args = ['-DHAVE_CONFIG_H']

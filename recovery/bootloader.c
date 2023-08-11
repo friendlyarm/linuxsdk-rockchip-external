@@ -27,35 +27,25 @@
 #include <unistd.h>
 
 
-static int get_bootloader_message_mtd(struct bootloader_message *out, const Volume* v);
-static int set_bootloader_message_mtd(const struct bootloader_message *in, const Volume* v);
-static int get_bootloader_message_block(struct bootloader_message *out, const Volume* v);
-static int set_bootloader_message_block(const struct bootloader_message *in, const Volume* v);
+static int get_bootloader_message_mtd(struct bootloader_message *out);
+static int set_bootloader_message_mtd(const struct bootloader_message *in);
+static int get_bootloader_message_block(struct bootloader_message *out);
+static int set_bootloader_message_block(const struct bootloader_message *in);
 
-int get_bootloader_message(struct bootloader_message *out) {
-    Volume* v = volume_for_path("/misc");
+int get_bootloader_message(struct bootloader_message *out)
+{
+    if (isMtdDevice())
+        return get_bootloader_message_mtd(out);
 
-    if(!v) return -1;
-    //if (strcmp(v->fs_type, "mtd") == 0) {
-    if (isMtdDevice()) {
-        return get_bootloader_message_mtd(out, v);
-    } else if (strcmp(v->fs_type, "emmc") == 0) {
-        return get_bootloader_message_block(out, v);
-    }
-    LOGE("unknown misc partition fs_type \"%s\"\n", v->fs_type);
-    return -1;
+    return get_bootloader_message_block(out);
 }
 
-int set_bootloader_message(const struct bootloader_message *in) {
-    Volume* v = volume_for_path("/misc");
-    //if (strcmp(v->fs_type, "mtd") == 0) {
-    if (isMtdDevice()) {
-        return set_bootloader_message_mtd(in, v);
-    } else if (strcmp(v->fs_type, "emmc") == 0) {
-        return set_bootloader_message_block(in, v);
-    }
-    LOGE("unknown misc partition fs_type \"%s\"\n", v->fs_type);
-    return -1;
+int set_bootloader_message(const struct bootloader_message *in)
+{
+    if (isMtdDevice())
+        return set_bootloader_message_mtd(in);
+
+    return set_bootloader_message_block(in);
 }
 
 // ------------------------------
@@ -68,8 +58,8 @@ int set_bootloader_message(const struct bootloader_message *in) {
 #define CMD_OFFSET (16 << 10)
 
 #define MISC_NAME "misc"
-static int get_bootloader_message_mtd(struct bootloader_message *out,
-                                      const Volume* v) {
+static int get_bootloader_message_mtd(struct bootloader_message *out)
+{
     size_t write_size;
     mtd_scan_partitions();
     const MtdPartition *part = mtd_find_partition_by_name(MISC_NAME);
@@ -93,15 +83,15 @@ static int get_bootloader_message_mtd(struct bootloader_message *out,
     if (r != size) return -1;
 
     memcpy(out, &data[CMD_OFFSET], sizeof(*out));
-	printf("out->command = %s.\n", out->command);
-	printf("out->status = %s.\n", out->status);
-	printf("out->recovery = %s.\n", out->recovery);
-	printf("out->systemFlag = %s.\n", out->systemFlag);
+    LOGI("out->command = %s.\n", out->command);
+    LOGI("out->status = %s.\n", out->status);
+    LOGI("out->recovery = %s.\n", out->recovery);
+    LOGI("out->systemFlag = %s.\n", out->systemFlag);
 
     return 0;
 }
-static int set_bootloader_message_mtd(const struct bootloader_message *in,
-                                      const Volume* v) {
+static int set_bootloader_message_mtd(const struct bootloader_message *in)
+{
     size_t write_size;
     mtd_scan_partitions();
     const MtdPartition *part = mtd_find_partition_by_name(MISC_NAME);
@@ -149,7 +139,8 @@ static int set_bootloader_message_mtd(const struct bootloader_message *in,
 // ------------------------------------
 // for misc partitions on block devices
 // ------------------------------------
-static void wait_for_device(const char* fn) {
+static void wait_for_device(const char* fn)
+{
     int tries = 0;
     int ret;
     struct stat buf;
@@ -157,21 +148,21 @@ static void wait_for_device(const char* fn) {
         ++tries;
         ret = stat(fn, &buf);
         if (ret) {
-            printf("stat %s try %d: %s\n", fn, tries, strerror(errno));
+            LOGI("stat %s try %d: %s\n", fn, tries, strerror(errno));
             sleep(1);
         }
     } while (ret && tries < 10);
     if (ret) {
-        printf("failed to stat %s\n", fn);
+        LOGI("failed to stat %s\n", fn);
     }
 }
 
-static int get_bootloader_message_block(struct bootloader_message *out,
-                                        const Volume* v) {
-    wait_for_device(v->device);
-    FILE* f = fopen(v->device, "rb");
+static int get_bootloader_message_block(struct bootloader_message *out)
+{
+    wait_for_device(MISC_PARTITION_NAME_BLOCK);
+    FILE* f = fopen(MISC_PARTITION_NAME_BLOCK, "rb");
     if (f == NULL) {
-        LOGE("Can't open %s\n(%s)\n", v->device, strerror(errno));
+        LOGE("Can't open %s\n(%s)\n", MISC_PARTITION_NAME_BLOCK, strerror(errno));
         return -1;
     }
     struct bootloader_message temp;
@@ -179,32 +170,32 @@ static int get_bootloader_message_block(struct bootloader_message *out,
 
     int count = fread(&temp, sizeof(temp), 1, f);
     if (count != 1) {
-        LOGE("Failed reading %s\n(%s)\n", v->device, strerror(errno));
+        LOGE("Failed reading %s\n(%s)\n", MISC_PARTITION_NAME_BLOCK, strerror(errno));
         return -1;
     }
     if (fclose(f) != 0) {
-        LOGE("Failed closing %s\n(%s)\n", v->device, strerror(errno));
+        LOGE("Failed closing %s\n(%s)\n", MISC_PARTITION_NAME_BLOCK, strerror(errno));
         return -1;
     }
     memcpy(out, &temp, sizeof(temp));
     return 0;
 }
 
-static int set_bootloader_message_block(const struct bootloader_message *in,
-                                        const Volume* v) {
-    FILE* f = fopen(v->device, "wb");
+static int set_bootloader_message_block(const struct bootloader_message *in)
+{
+    FILE* f = fopen(MISC_PARTITION_NAME_BLOCK, "wb");
     if (f == NULL) {
-        LOGE("Can't open %s\n(%s)\n", v->device, strerror(errno));
+        LOGE("Can't open %s\n(%s)\n", MISC_PARTITION_NAME_BLOCK, strerror(errno));
         return -1;
     }
     fseek(f, BOOTLOADER_MESSAGE_OFFSET_IN_MISC, SEEK_SET);
     int count = fwrite(in, sizeof(*in), 1, f);
     if (count != 1) {
-        LOGE("Failed writing %s\n(%s)\n", v->device, strerror(errno));
+        LOGE("Failed writing %s\n(%s)\n", MISC_PARTITION_NAME_BLOCK, strerror(errno));
         return -1;
     }
     if (fclose(f) != 0) {
-        LOGE("Failed closing %s\n(%s)\n", v->device, strerror(errno));
+        LOGE("Failed closing %s\n(%s)\n", MISC_PARTITION_NAME_BLOCK, strerror(errno));
         return -1;
     }
     return 0;

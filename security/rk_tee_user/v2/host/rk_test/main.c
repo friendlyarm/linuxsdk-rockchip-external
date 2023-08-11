@@ -40,6 +40,8 @@ static const struct {
 #endif
 	{"trng",			TRNG_READ},
 	{"socket",			SOCKET},
+	{"crypto_hw",			CRYPTO_HW},
+	{"derive_key",			DERIVE_KEY},
 	{NULL,				TEST_NULL},
 };
 

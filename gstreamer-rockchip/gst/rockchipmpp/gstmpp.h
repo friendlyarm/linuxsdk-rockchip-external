@@ -23,6 +23,7 @@
 #define  __GST_MPP_H__
 
 #include <gst/video/video.h>
+#include <gst/allocators/gstdmabuf.h>
 
 #ifdef HAVE_RGA
 #include <rga/rga.h>
@@ -70,6 +71,8 @@ G_BEGIN_DECLS;
     "BGR16, RGB, BGR, RGBA, BGRA, RGBx, BGRx"
 #endif
 
+gboolean gst_mpp_use_rga ();
+
 const gchar *gst_mpp_video_format_to_string (GstVideoFormat format);
 
 GstVideoFormat gst_mpp_mpp_format_to_gst_format (MppFrameFormat mpp_format);
@@ -84,8 +87,15 @@ gboolean gst_mpp_rga_convert_from_mpp_frame (MppFrame * mframe,
     GstMemory * out_mem, GstVideoInfo * dst_vinfo, gint rotation);
 #endif
 
+/* Apply new format and size without reinit the video info */
+void
+gst_mpp_video_info_update_format (GstVideoInfo * info, GstVideoFormat format,
+    guint width, guint height);
+
 gboolean gst_mpp_video_info_align (GstVideoInfo * info,
     gint hstride, gint vstride);
+
+guint gst_mpp_get_pixel_stride (GstVideoInfo * info);
 
 G_END_DECLS;
 

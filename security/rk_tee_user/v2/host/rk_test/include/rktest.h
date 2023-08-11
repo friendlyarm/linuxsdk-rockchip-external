@@ -28,6 +28,8 @@ typedef enum {
 	TRNG_READ,
 	SOCKET,
 	TEST_NULL,
+	CRYPTO_HW,
+	DERIVE_KEY,
 } enum_func;
 
 TEEC_Result rk_test(uint32_t invoke_command);

@@ -17,7 +17,6 @@
  */
 #include "NormalRga.h"
 #include "NormalRgaContext.h"
-#include "version.h"
 
 #ifdef ANDROID
 #include "GrallocOps.h"
@@ -30,29 +29,17 @@
 pthread_mutex_t mMutex = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
+#include "im2d_api/src/im2d_impl.h"
+
 #define RGA_SRCOVER_EN 1
 
 volatile int32_t refCount = 0;
 struct rgaContext *rgaCtx = NULL;
+extern struct im2d_job_manager g_im2d_job_manager;
 
-void NormalRgaSetLogOnceFlag(int log) {
-    struct rgaContext *ctx = NULL;
-
-    ctx->mLogOnce = log;
-    return;
-}
-
-void NormalRgaSetAlwaysLogFlag(int log) {
-    struct rgaContext *ctx = NULL;
-
-    ctx->mLogAlways = log;
-    return;
-}
-
-#ifdef ANDROID
 void is_debug_log(void) {
     struct rgaContext *ctx = rgaCtx;
-    ctx->Is_debug = hwc_get_int_property("vendor.rga.log","0");
+    ctx->Is_debug = get_int_property();
 }
 
 int is_out_log( void ) {
@@ -60,26 +47,21 @@ int is_out_log( void ) {
     return ctx->Is_debug;
 }
 
-//return property value of pcProperty
-int hwc_get_int_property(const char* pcProperty, const char* default_value) {
-    char value[PROPERTY_VALUE_MAX];
-    int new_value = 0;
-
-    if (pcProperty == NULL || default_value == NULL) {
-        ALOGE("hwc_get_int_property: invalid param");
-        return -1;
-    }
-
-    property_get(pcProperty, value, default_value);
-    new_value = atoi(value);
-
-    return new_value;
-}
+int get_int_property(void) {
+#ifdef ANDROID
+    char level[PROP_VALUE_MAX];
+    __system_property_get("vendor.rga.log" ,level);
+#else
+    char *level = getenv("ROCKCHIP_RGA_LOG");
+    if (level == nullptr)
+        level = (char *)"0";
 #endif
+
+    return atoi(level);
+}
 
 int NormalRgaOpen(void **context) {
     struct rgaContext *ctx = NULL;
-    char buf[30];
     int fd = -1;
     int ret = 0;
 
@@ -104,14 +86,45 @@ int NormalRgaOpen(void **context) {
         }
         ctx->rgaFd = fd;
 
-        /* Get RGA hardware version. */
-        ret = ioctl(fd, RGA2_GET_VERSION, buf);
-        if (ret < 0) {
-            ret = ioctl(fd, RGA_GET_VERSION, buf);
-        }
+        ret = ioctl(fd, RGA_IOC_GET_DRVIER_VERSION, &ctx->mDriverVersion);
+        if (ret >= 0) {
+            ret = ioctl(fd, RGA_IOC_GET_HW_VERSION, &ctx->mHwVersions);
+            if (ret < 0) {
+                ALOGE("librga fail to get hw versions!\n");
+                goto getVersionError;
+            }
 
-        ctx->mVersion = atof(buf);
-        memcpy(ctx->mVersion_str, buf, sizeof(ctx->mVersion_str));
+            /*
+             * For legacy: Because normalRGA requires a version greater
+             *             than 2.0 to use rga2 normally.
+             */
+            ctx->mVersion = (float)3.2;
+
+            ctx->driver = RGA_DRIVER_IOC_MULTI_RGA;
+        } else {
+            /* Choose legacy mode. */
+            ctx->mHwVersions.size = 1;
+            /* Try to get the version of RGA2 */
+            ret = ioctl(fd, RGA2_GET_VERSION, ctx->mHwVersions.version[0].str);
+            if (ret < 0) {
+                /* Try to get the version of RGA1 */
+                ret = ioctl(fd, RGA_GET_VERSION, ctx->mHwVersions.version[0].str);
+                if (ret < 0) {
+                    ALOGE("librga fail to get RGA2/RGA1 version! %s\n", strerror(ret));
+                    goto getVersionError;
+                }
+            }
+
+            sscanf((char *)ctx->mHwVersions.version[0].str, "%x.%x.%x",
+                &ctx->mHwVersions.version[0].major,
+                &ctx->mHwVersions.version[0].minor,
+                &ctx->mHwVersions.version[0].revision);
+
+            ctx->mVersion = atof((char *)ctx->mHwVersions.version[0].str);
+
+            ctx->driver = RGA_DRIVER_IOC_RGA2;
+            ALOGE("librga fail to get driver version! Compatibility mode will be enabled.\n");
+        }
 
         NormalRgaInitTables();
 
@@ -131,6 +144,7 @@ int NormalRgaOpen(void **context) {
     *context = (void *)ctx;
     return ret;
 
+getVersionError:
 rgaOpenErr:
     free(ctx);
 mallocErr:
@@ -195,10 +209,14 @@ int NormalRgaClose(void **context) {
 int RgaInit(void **ctx) {
     int ret = 0;
     ret = NormalRgaOpen(ctx);
-#ifdef ANDROID
-    property_set("vendor.rga_api.version", RGA_API_VERSION);
-    property_set("vendor.rga_built.version", RGA_API_GIT_BUILD_VERSION);
-#endif
+    if (ret < 0)
+        return ret;
+
+    /* check driver version. */
+    ret = rga_check_driver(rgaCtx->mDriverVersion);
+    if (ret == IM_STATUS_ERROR_VERSION)
+        return -1;
+
     return ret;
 }
 
@@ -216,15 +234,11 @@ int NormalRgaPaletteTable(buffer_handle_t dst,
     struct rgaContext *ctx = rgaCtx;
     int srcVirW,srcVirH,srcActW,srcActH,srcXPos,srcYPos;
     int dstVirW,dstVirH,dstActW,dstActH,dstXPos,dstYPos;
-    int scaleMode,rotateMode,orientation,ditherEn;
     int srcType,dstType,srcMmuFlag,dstMmuFlag;
-    int planeAlpha;
     int dstFd = -1;
-    int srcFd = -1;
     int ret = 0;
     drm_rga_t tmpRects,relRects;
     struct rga_req rgaReg;
-    bool perpixelAlpha;
     void *srcBuf = NULL;
     void *dstBuf = NULL;
     RECT clip;
@@ -297,8 +311,6 @@ int NormalRgaPaletteTable(buffer_handle_t dst,
     } else
         dstFd = -1;
 
-    orientation = 0;
-    rotateMode = 0;
     srcVirW = relRects.src.wstride;
     srcVirH = relRects.src.height;
     srcXPos = relRects.src.xoffset;
@@ -398,12 +410,10 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     blend = 0;
     yuvToRgbMode = 0;
 
-#ifdef ANDROID
     /* print debug log by setting property vendor.rga.log as 1 */
     is_debug_log();
     if(is_out_log())
         ALOGD("<<<<-------- print rgaLog -------->>>>");
-#endif
 
     if (!src && !dst && !src1) {
         ALOGE("src = %p, dst = %p, src1 = %p", src, dst, src1);
@@ -434,17 +444,42 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
 
     srcFd = dstFd = src1Fd = -1;
 
-#ifdef ANDROID
     if (is_out_log()) {
-        ALOGD("src->hnd = %p , dst->hnd = %p , src1->hnd = %p\n", src->hnd, dst->hnd, src1 ? src1->hnd : 0);
-        ALOGD("src: Fd = %.2d , phyAddr = %p , virAddr = %p\n",src->fd,src->phyAddr,src->virAddr);
+        ALOGD("src->hnd = 0x%lx , dst->hnd = 0x%lx , src1->hnd = 0x%lx\n",
+            (unsigned long)src->hnd, (unsigned long)dst->hnd, (unsigned long)(src1 ? src1->hnd : 0));
+        ALOGD("src: handle = %d, Fd = %.2d ,phyAddr = %p ,virAddr = %p\n", src->handle, src->fd, src->phyAddr, src->virAddr);
         if (src1)
-            ALOGD("src1: Fd = %.2d , phyAddr = %p , virAddr = %p\n", src1->fd, src1->phyAddr, src1->virAddr);
-        ALOGD("dst: Fd = %.2d , phyAddr = %p , virAddr = %p\n",dst->fd,dst->phyAddr,dst->virAddr);
+            ALOGD("src1: handle = %d, Fd = %.2d , phyAddr = %p , virAddr = %p\n", src1->handle, src1->fd, src1->phyAddr, src1->virAddr);
+        ALOGD("dst: handle = %d, Fd = %.2d ,phyAddr = %p ,virAddr = %p\n", dst->handle, dst->fd, dst->phyAddr, dst->virAddr);
     }
-#endif
+
+    if (src1) {
+        if (src->handle > 0 && dst->handle > 0 && src1->handle > 0) {
+            /* This will mark the use of handle */
+            rgaReg.handle_flag |= 1;
+        } else if ((src->handle > 0 || dst->handle > 0 || src1->handle > 0) &&
+                   (src->handle <= 0 || dst->handle <= 0 || src1->handle <= 0)) {
+            ALOGE("librga only supports the use of handles only or no handles, [src,src1,dst] = [%d, %d, %d]\n",
+                  src->handle, src1->handle, dst->handle);
+            return -EINVAL;
+        }
+    } else {
+        if (src->handle > 0 && dst->handle > 0) {
+            /* This will mark the use of handle */
+            rgaReg.handle_flag |= 1;
+        } else if ((src->handle > 0 || dst->handle > 0) &&
+                   (src->handle <= 0 || dst->handle <= 0)) {
+            ALOGE("librga only supports the use of handles only or no handles, [src,dst] = [%d, %d]\n",
+                  src->handle, dst->handle);
+            return -EINVAL;
+        }
+    }
+
     /*********** get src addr *************/
-    if (src && src->phyAddr) {
+    if (src && src->handle) {
+        /* In order to minimize changes, the handle here will reuse the variable of Fd. */
+        srcFd = src->handle;
+    } else if (src && src->phyAddr) {
         srcBuf = src->phyAddr;
     } else if (src && src->fd > 0) {
         srcFd = src->fd;
@@ -503,12 +538,15 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
 
     /*********** get src1 addr *************/
     if (src1) {
-        if (src1 && src1->phyAddr) {
+        if (src1->handle) {
+            /* In order to minimize changes, the handle here will reuse the variable of Fd. */
+            src1Fd = src1->handle;
+        } else if (src1->phyAddr) {
             src1Buf = src1->phyAddr;
-        } else if (src1 && src1->fd > 0) {
+        } else if (src1->fd > 0) {
             src1Fd = src1->fd;
             src1->mmuFlag = 1;
-        } else if (src1 && src1->virAddr) {
+        } else if (src1->virAddr) {
             src1Buf = src1->virAddr;
             src1->mmuFlag = 1;
         }
@@ -518,7 +556,7 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
          * the 'src1Type' at the end whether to enable mmu.
          */
 #ifdef ANDROID
-        else if (src1 && src1->hnd) {
+        else if (src1->hnd) {
 #ifndef RK3188
             /* RK3188 is special, cannot configure rga through fd. */
         RkRgaGetHandleFd(src1->hnd, &src1Fd);
@@ -562,7 +600,10 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     }
 
     /*********** get dst addr *************/
-    if (dst && dst->phyAddr) {
+    if (dst && dst->handle) {
+        /* In order to minimize changes, the handle here will reuse the variable of Fd. */
+        dstFd = dst->handle;
+    } else if (dst && dst->phyAddr) {
         dstBuf = dst->phyAddr;
     } else if (dst && dst->fd > 0) {
         dstFd = dst->fd;
@@ -620,14 +661,13 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     if (dstFd == 0)
         dstFd = -1;
 
-#ifdef ANDROID
     if(is_out_log()) {
-        ALOGD("src: Fd = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", srcFd, srcBuf, src->mmuFlag, srcType);
+        ALOGD("handle_flag: 0x%x\n", rgaReg.handle_flag);
+        ALOGD("src: Fd/handle = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", srcFd, srcBuf, src->mmuFlag, srcType);
         if (src1)
-            ALOGD("src1: Fd = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", src1Fd, src1Buf, src1->mmuFlag, src1Type);
-        ALOGD("dst: Fd = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", dstFd, dstBuf, dst->mmuFlag, dstType);
+            ALOGD("src1: Fd/handle = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", src1Fd, src1Buf, src1->mmuFlag, src1Type);
+        ALOGD("dst: Fd/handle = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", dstFd, dstBuf, dst->mmuFlag, dstType);
     }
-#endif
 
     relSrcRect.format = RkRgaCompatibleFormat(relSrcRect.format);
     relDstRect.format = RkRgaCompatibleFormat(relDstRect.format);
@@ -652,10 +692,8 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     /* determined by format, need pixel alpha or not. */
     perpixelAlpha = NormalRgaFormatHasAlpha(RkRgaGetRgaFormat(relSrcRect.format));
 
-#ifdef ANDROID
     if(is_out_log())
         ALOGE("blend = %x , perpixelAlpha = %d",blend,perpixelAlpha);
-#endif
 
     /* blend bit[0:15] is to set which way to blend,such as whether need glabal alpha,and so on. */
     switch ((blend & 0xFFFF)) {
@@ -689,11 +727,22 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
             break;
 
         case 0x0501:/* dst over , no need premultiplied. */
-            NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 4, 0);
+            if (perpixelAlpha && planeAlpha < 255)
+                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 4, 0);
+            else if (perpixelAlpha)
+                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 1, planeAlpha , 1, 4, 0);
+            else
+                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 3, planeAlpha , 1, 4, 0);
             break;
 
         case 0x0504:/* dst over, need premultiplied. */
-            NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 4, 0);
+            if (perpixelAlpha && planeAlpha < 255)
+                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 4, 0);
+            else if (perpixelAlpha)
+                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 1, planeAlpha , 1, 4, 0);
+            else
+                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 3, planeAlpha , 1, 4, 0);
+
             rgaReg.alpha_rop_flag |= (1 << 9);  //real color mode
             break;
 
@@ -753,8 +802,9 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
             hScale = (float)relSrcRect.width / relSrc1Rect.height;
             vScale = (float)relSrcRect.height / relSrc1Rect.width;
         }
-        if (hScale < 1/16 || hScale > 16 || vScale < 1/16 || vScale > 16) {
-            ALOGE("Error scale[%f,%f] line %d", hScale, vScale, __LINE__);
+        // check scale limit form low to high version, gradually strict, avoid invalid jugdement
+        if (ctx->mVersion <= 1.003 && (hScale < 1/2 || vScale < 1/2)) {
+            ALOGE("e scale[%f,%f] ver[%f]", hScale, vScale, ctx->mVersion);
             return -EINVAL;
         }
         if (ctx->mVersion <= 2.0 && (hScale < 1/8 ||
@@ -762,10 +812,11 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
             ALOGE("Error scale[%f,%f] line %d", hScale, vScale, __LINE__);
             return -EINVAL;
         }
-        if (ctx->mVersion <= 1.003 && (hScale < 1/2 || vScale < 1/2)) {
-            ALOGE("e scale[%f,%f] ver[%f]", hScale, vScale, ctx->mVersion);
+        if (hScale < 1/16 || hScale > 16 || vScale < 1/16 || vScale > 16) {
+            ALOGE("Error scale[%f,%f] line %d", hScale, vScale, __LINE__);
             return -EINVAL;
         }
+
     } else if (src && dst) {
         hScale = (float)relSrcRect.width / relDstRect.width;
         vScale = (float)relSrcRect.height / relDstRect.height;
@@ -793,19 +844,16 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     stretch = (hScale != 1.0f) || (vScale != 1.0f);
     /* scale up use bicubic */
     if (hScale < 1 || vScale < 1) {
-        scaleMode = 2;
 #ifdef ANDROID
         if((src->format == HAL_PIXEL_FORMAT_RGBA_8888  ||src->format == HAL_PIXEL_FORMAT_BGRA_8888))
 #elif LINUX
         if((relSrcRect.format == RK_FORMAT_RGBA_8888  || relSrcRect.format == RK_FORMAT_BGRA_8888))
 #endif
-            scaleMode = 0;     //  force change scale_mode to 0 ,for rga not support
+        scaleMode = 0;     //  force change scale_mode to 0 ,for rga not support
     }
 
-#ifdef ANDROID
     if(is_out_log())
         ALOGD("scaleMode = %d , stretch = %d;",scaleMode,stretch);
-#endif
 
     /*
      * according to the rotation to set corresponding parameter.It's diffrient from the opengl.
@@ -903,7 +951,7 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
 
             dstVirW = relDstRect.wstride;
             dstVirH = relDstRect.hstride;
-            dstXPos = relDstRect.xoffset + relDstRect.width - 1;
+            dstXPos = relDstRect.xoffset;
             dstYPos = relDstRect.yoffset;
             dstActW = relDstRect.height;
             dstActH = relDstRect.width;
@@ -927,8 +975,8 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
 
             dstVirW = relDstRect.wstride;
             dstVirH = relDstRect.hstride;
-            dstXPos = relDstRect.xoffset + relDstRect.width - 1;
-            dstYPos = relDstRect.yoffset + relDstRect.height - 1;
+            dstXPos = relDstRect.xoffset;
+            dstYPos = relDstRect.yoffset;
             dstActW = relDstRect.width;
             dstActH = relDstRect.height;
             break;
@@ -952,7 +1000,7 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
             dstVirW = relDstRect.wstride;
             dstVirH = relDstRect.hstride;
             dstXPos = relDstRect.xoffset;
-            dstYPos = relDstRect.yoffset + relDstRect.height - 1;
+            dstYPos = relDstRect.yoffset;
             dstActW = relDstRect.height;
             dstActH = relDstRect.width;
             break;
@@ -1009,10 +1057,21 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     else
         ditherEn = 0;
 
-#ifdef ANDROID
+#if 0
+    /* YUV HDS or VDS enable */
+    if (NormalRgaIsYuvFormat(relDstRect.format)) {
+        rgaReg.uvhds_mode = 1;
+        if ((relDstRect.format == RK_FORMAT_YCbCr_420_SP ||
+             relDstRect.format == RK_FORMAT_YCrCb_420_SP) &&
+            rotation == 0 && hScale == 1.0f && vScale == 1.0f) {
+            /* YUV420SP only support vds when without rotation and scale. */
+            rgaReg.uvvds_mode = 1;
+        }
+    }
+#endif
+
     if(is_out_log())
         ALOGE("rgaVersion = %lf  , ditherEn =%d ",ctx->mVersion,ditherEn);
-#endif
 
     /* only to configure the parameter by driver version, because rga driver has too many version. */
     if (ctx->mVersion <= (float)1.003) {
@@ -1093,18 +1152,18 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
         if (src1) {
             if (src1Fd != -1) {
                 src1MmuFlag = src1Type ? 1 : 0;
-                if (src1 && src1Fd == src1->fd)
+                if (src1Fd == src1->fd)
                     src1MmuFlag = src1->mmuFlag ? 1 : 0;
                 NormalRgaSetPatVirtualInfo(&rgaReg, 0, 0, 0, src1VirW, src1VirH, &clip,
                                            RkRgaGetRgaFormat(relSrc1Rect.format),0);
                 /*src dst fd*/
                 NormalRgaSetFdsOffsets(&rgaReg, 0, src1Fd, 0, 0);
             } else {
-                if (src1 && src1->hnd)
+                if (src1->hnd)
                     src1MmuFlag = src1Type ? 1 : 0;
-                if (src1 && src1Buf == src1->virAddr)
+                if (src1Buf == src1->virAddr)
                     src1MmuFlag = 1;
-                if (src1 && src1Buf == src1->phyAddr)
+                if (src1Buf == src1->phyAddr)
                     src1MmuFlag = 0;
 #if defined(__arm64__) || defined(__aarch64__)
                 NormalRgaSetPatVirtualInfo(&rgaReg, (unsigned long)src1Buf,
@@ -1164,15 +1223,15 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
             srcMmuFlag = src->mmuFlag ? 1 : 0;
 
         if (src1) {
-            if (src1 && src1->hnd)
+            if (src1->hnd)
                 src1MmuFlag = src1Type ? 1 : 0;
-            if (src1 && src1Buf == src1->virAddr)
+            if (src1Buf == src1->virAddr)
                 src1MmuFlag = 1;
-            if (src1 && src1Buf == src1->phyAddr)
+            if (src1Buf == src1->phyAddr)
                 src1MmuFlag = 0;
             if (src1Fd != -1)
                 src1MmuFlag = src1Type ? 1 : 0;
-            if (src1 && src1Fd == src1->fd)
+            if (src1Fd == src1->fd)
                 src1MmuFlag = src1->mmuFlag ? 1 : 0;
         }
 
@@ -1328,35 +1387,89 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
         }
     }
 
-#ifdef ANDROID
+    /* mosaic */
+    memcpy(&rgaReg.mosaic_info, &src->mosaic_info, sizeof(struct rga_mosaic_info));
+
+    /* OSD */
+    memcpy(&rgaReg.osd_info, &src->osd_info, sizeof(struct rga_osd_info));
+
+    /* pre_intr */
+    memcpy(&rgaReg.pre_intr_info, &src->pre_intr, sizeof(src->pre_intr));
+
     if(is_out_log()) {
         ALOGD("srcMmuFlag = %d , dstMmuFlag = %d , rotateMode = %d \n", srcMmuFlag, dstMmuFlag,rotateMode);
         ALOGD("<<<<-------- rgaReg -------->>>>\n");
         NormalRgaLogOutRgaReq(rgaReg);
     }
-#elif LINUX
-#if __DEBUG
-    NormalRgaLogOutRgaReq(rgaReg);
-#endif
-#endif
 
-#ifdef ANDROID
-#ifndef RK3368
-#ifdef  ANDROID_7_DRM
-    /* if Android 7.0 and above using drm should configure this parameter. */
-    rgaReg.render_mode |= RGA_BUF_GEM_TYPE_DMA;
-#endif
-#endif
-#endif
     if(src->sync_mode == RGA_BLIT_ASYNC || dst->sync_mode == RGA_BLIT_ASYNC) {
         sync_mode = RGA_BLIT_ASYNC;
     }
-    /* using sync to pass config to rga driver. */
-    if(ioctl(ctx->rgaFd, sync_mode, &rgaReg)) {
-        printf(" %s(%d) RGA_BLIT fail: %s",__FUNCTION__, __LINE__,strerror(errno));
-        ALOGE(" %s(%d) RGA_BLIT fail: %s",__FUNCTION__, __LINE__,strerror(errno));
-        return -errno;
+
+    /* rga3 rd_mode */
+    /* If rd_mode is not configured, raster mode is executed by default. */
+    rgaReg.src.rd_mode = src->rd_mode ? src->rd_mode : raster_mode;
+    rgaReg.dst.rd_mode = dst->rd_mode ? dst->rd_mode : raster_mode;
+    if (src1)
+        rgaReg.pat.rd_mode = src1->rd_mode ? src1->rd_mode : raster_mode;
+
+    rgaReg.in_fence_fd = dst->in_fence_fd;
+    rgaReg.core = dst->core;
+    rgaReg.priority = dst->priority;
+
+    if (dst->job_handle > 0) {
+        im_rga_job_t *job = NULL;
+
+        g_im2d_job_manager.mutex.lock();
+
+        job = g_im2d_job_manager.job_map[dst->job_handle];
+        if (job->task_count >= RGA_TASK_NUM_MAX) {
+            printf("job[%d] add task failed! too many tasks, count = %d\n", dst->job_handle, job->task_count);
+
+            g_im2d_job_manager.mutex.unlock();
+            return -errno;
+        }
+
+        job->req[job->task_count] = rgaReg;
+        job->task_count++;
+
+        g_im2d_job_manager.mutex.unlock();
+
+        return 0;
+    } else {
+        void *ioc_req = NULL;
+
+        switch (ctx->driver) {
+            case RGA_DRIVER_IOC_RGA2:
+                rga2_req compat_req;
+
+                memset(&compat_req, 0x0, sizeof(compat_req));
+                NormalRgaCompatModeConvertRga2(&compat_req, &rgaReg);
+
+                ioc_req = &compat_req;
+                break;
+
+            case RGA_DRIVER_IOC_MULTI_RGA:
+                ioc_req = &rgaReg;
+                break;
+
+            default:
+                printf("unknow driver[0x%x]\n", ctx->driver);
+                return -errno;
+        }
+
+        do {
+            ret = ioctl(ctx->rgaFd, sync_mode, ioc_req);
+        } while (ret == -1 && (errno == EINTR || errno == 512));   /* ERESTARTSYS is 512. */
+        if(ret) {
+            printf(" %s(%d) RGA_BLIT fail: %s\n",__FUNCTION__, __LINE__,strerror(errno));
+            ALOGE(" %s(%d) RGA_BLIT fail: %s",__FUNCTION__, __LINE__,strerror(errno));
+            return -errno;
+        }
     }
+
+    dst->out_fence_fd = rgaReg.out_fence_fd;
+
     return 0;
 }
 
@@ -1382,7 +1495,6 @@ int RgaCollorFill(rga_info *dst) {
     //check buffer_handle_t with rects
     struct rgaContext *ctx = rgaCtx;
     int dstVirW,dstVirH,dstActW,dstActH,dstXPos,dstYPos;
-    int scaleMode,ditherEn;
     int dstType,dstMmuFlag;
     int dstFd = -1;
     int ret = 0;
@@ -1409,17 +1521,13 @@ int RgaCollorFill(rga_info *dst) {
         return -EINVAL;
     }
 
-    if (dst) {
-        color = dst->color;
-        memcpy(&relDstRect, &dst->rect, sizeof(rga_rect_t));
-    }
-
-    dstFd = -1;
+    color = dst->color;
+    memcpy(&relDstRect, &dst->rect, sizeof(rga_rect_t));
 
     if (relDstRect.hstride == 0)
         relDstRect.hstride = relDstRect.height;
 #ifdef ANDROID
-    if (dst && dst->hnd) {
+    if (dst->hnd) {
         ret = RkRgaGetHandleFd(dst->hnd, &dstFd);
         if (ret) {
             ALOGE("dst handle get fd fail ret = %d,hnd=%p", ret, &dst->hnd);
@@ -1436,24 +1544,29 @@ int RgaCollorFill(rga_info *dst) {
     }
 #endif
 
-    if (dst && dstFd < 0)
+    if (dst->handle > 0) {
+        dstFd = dst->handle;
+        /* This will mark the use of handle */
+        rgaReg.handle_flag |= 1;
+    } else {
         dstFd = dst->fd;
+    }
 
-    if (dst && dst->phyAddr)
+    if (dst->phyAddr)
         dstBuf = dst->phyAddr;
-    else if (dst && dst->virAddr)
+    else if (dst->virAddr)
         dstBuf = dst->virAddr;
 #ifdef ANDROID
-    else if (dst && dst->hnd)
+    else if (dst->hnd)
         ret = RkRgaGetHandleMapAddress(dst->hnd, &dstBuf);
 #endif
 
-    if (dst && dstFd == -1 && !dstBuf) {
+    if (dstFd == -1 && !dstBuf) {
         ALOGE("%d:dst has not fd and address for render", __LINE__);
         return ret;
     }
 
-    if (dst && dstFd == 0 && !dstBuf) {
+    if (dstFd == 0 && !dstBuf) {
         ALOGE("dstFd is zero, now driver not support");
         return -EINVAL;
     }
@@ -1578,21 +1691,71 @@ int RgaCollorFill(rga_info *dst) {
 #endif
 #endif
 
-#ifndef RK3368
-#ifdef  ANDROID_7_DRM
-    rgaReg.render_mode |= RGA_BUF_GEM_TYPE_DMA;
-#endif
-#endif
-
     if(dst->sync_mode == RGA_BLIT_ASYNC) {
         sync_mode = dst->sync_mode;
     }
 
-    if(ioctl(ctx->rgaFd, sync_mode, &rgaReg)) {
-        printf(" %s(%d) RGA_COLORFILL fail: %s",__FUNCTION__, __LINE__,strerror(errno));
-        ALOGE(" %s(%d) RGA_COLORFILL fail: %s",__FUNCTION__, __LINE__,strerror(errno));
-        return -errno;
+    /* rga3 rd_mode */
+    /* If rd_mode is not configured, raster mode is executed by default. */
+    rgaReg.dst.rd_mode = dst->rd_mode ? dst->rd_mode : raster_mode;
+
+    rgaReg.in_fence_fd = dst->in_fence_fd;
+    rgaReg.core = dst->core;
+    rgaReg.priority = dst->priority;
+
+    if (dst->job_handle > 0)
+    {
+        im_rga_job_t *job = NULL;
+
+        g_im2d_job_manager.mutex.lock();
+
+        job = g_im2d_job_manager.job_map[dst->job_handle];
+        if (job->task_count >= RGA_TASK_NUM_MAX) {
+            printf("job[%d] add task failed! too many tasks, count = %d\n", dst->job_handle, job->task_count);
+
+            g_im2d_job_manager.mutex.unlock();
+            return -errno;
+        }
+
+        job->req[job->task_count] = rgaReg;
+        job->task_count++;
+
+        g_im2d_job_manager.mutex.unlock();
+
+        return 0;
+    } else {
+        void *ioc_req = NULL;
+
+        switch (ctx->driver) {
+            case RGA_DRIVER_IOC_RGA2:
+                rga2_req compat_req;
+
+                memset(&compat_req, 0x0, sizeof(compat_req));
+                NormalRgaCompatModeConvertRga2(&compat_req, &rgaReg);
+
+                ioc_req = &compat_req;
+                break;
+
+            case RGA_DRIVER_IOC_MULTI_RGA:
+                ioc_req = &rgaReg;
+                break;
+
+            default:
+                printf("unknow driver[0x%x]\n", ctx->driver);
+                return -errno;
+        }
+
+        do {
+            ret = ioctl(ctx->rgaFd, sync_mode, ioc_req);
+        } while (ret == -1 && (errno == EINTR || errno == 512));   /* ERESTARTSYS is 512. */
+        if(ret) {
+            printf(" %s(%d) RGA_COLORFILL fail: %s\n",__FUNCTION__, __LINE__,strerror(errno));
+            ALOGE(" %s(%d) RGA_COLORFILL fail: %s",__FUNCTION__, __LINE__,strerror(errno));
+            return -errno;
+        }
     }
+
+    dst->out_fence_fd = rgaReg.out_fence_fd;
 
     return 0;
 }
@@ -1628,12 +1791,10 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
 
     srcType = dstType = lutType = srcMmuFlag = dstMmuFlag = lutMmuFlag = 0;
 
-#ifdef ANDROID
     /* print debug log by setting property vendor.rga.log as 1 */
     is_debug_log();
     if(is_out_log())
     ALOGD("<<<<-------- print rgaLog -------->>>>");
-#endif
 
     if (!src && !dst) {
         ALOGE("src = %p, dst = %p, lut = %p", src, dst, lut);
@@ -1650,17 +1811,37 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
 
     srcFd = dstFd = lutFd = -1;
 
-#ifdef ANDROID
     if(is_out_log()) {
-        ALOGD("src->hnd = %p , dst->hnd = %p, lut->hnd = %p \n",src->hnd,dst->hnd, lut->hnd);
+        ALOGD("src->hnd = 0x%lx , dst->hnd = 0x%lx, lut->hnd = 0x%lx \n",
+            (unsigned long)src->hnd, (unsigned long)dst->hnd, (unsigned long)lut->hnd);
         ALOGD("src: Fd = %.2d , phyAddr = %p , virAddr = %p\n",src->fd,src->phyAddr,src->virAddr);
         ALOGD("dst: Fd = %.2d , phyAddr = %p , virAddr = %p\n",dst->fd,dst->phyAddr,dst->virAddr);
         ALOGD("lut: Fd = %.2d , phyAddr = %p , virAddr = %p\n",lut->fd,lut->phyAddr,lut->virAddr);
     }
-#endif
+
+    if (lut) {
+        if (src->handle <= 0 || dst->handle <= 0 || lut->handle <= 0) {
+            ALOGE("librga only supports the use of handles only or no handles, [src,lut,dst] = [%d, %d, %d]\n",
+                    src->handle, lut->handle, dst->handle);
+            return -EINVAL;
+        }
+
+        /* This will mark the use of handle */
+        rgaReg.handle_flag |= 1;
+    } else if (src->handle > 0 && dst->handle > 0) {
+        /* This will mark the use of handle */
+        rgaReg.handle_flag |= 1;
+    } else {
+        ALOGE("librga only supports the use of handles only or no handles, [src,dst] = [%d, %d]\n",
+                  src->handle, dst->handle);
+        return -EINVAL;
+    }
 
     /*********** get src addr *************/
-    if (src && src->phyAddr) {
+    if (src && src->handle) {
+        /* In order to minimize changes, the handle here will reuse the variable of Fd. */
+        srcFd = src->handle;
+    } else if (src && src->phyAddr) {
         srcBuf = src->phyAddr;
     } else if (src && src->fd > 0) {
         srcFd = src->fd;
@@ -1714,7 +1895,10 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
         srcFd = -1;
 
     /*********** get dst addr *************/
-    if (dst && dst->phyAddr) {
+    if (dst && dst->handle) {
+        /* In order to minimize changes, the handle here will reuse the variable of Fd. */
+        dstFd = dst->handle;
+    } else if (dst && dst->phyAddr) {
         dstBuf = dst->phyAddr;
     } else if (dst && dst->fd > 0) {
         dstFd = dst->fd;
@@ -1768,7 +1952,10 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
         dstFd = -1;
 
     /*********** get lut addr *************/
-    if (lut && lut->phyAddr) {
+    if (lut && lut->handle) {
+        /* In order to minimize changes, the handle here will reuse the variable of Fd. */
+        lutFd = lut->handle;
+    } else if (lut && lut->phyAddr) {
         lutBuf = lut->phyAddr;
     } else if (lut && lut->fd > 0) {
         lutFd = lut->fd;
@@ -1795,8 +1982,10 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
         else {
             lutType = 1;
         }
+
+        ALOGD("lut->mmuFlag = %d", lut->mmuFlag);
     }
-    ALOGD("lut->mmuFlag = %d", lut->mmuFlag);
+
     if (!isRectValid(relLutRect)) {
         ret = NormalRgaGetRect(lut->hnd, &tmpLutRect);
         if (ret) {
@@ -1811,13 +2000,11 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
     if (lutFd == 0)
         lutFd = -1;
 
-#ifdef ANDROID
     if(is_out_log()) {
         ALOGD("src: Fd = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", srcFd, srcBuf, src->mmuFlag, srcType);
         ALOGD("dst: Fd = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", dstFd, dstBuf, dst->mmuFlag, dstType);
         ALOGD("lut: Fd = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", lutFd, lutBuf, lut->mmuFlag, lutType);
     }
-#endif
 
     relSrcRect.format = RkRgaCompatibleFormat(relSrcRect.format);
     relDstRect.format = RkRgaCompatibleFormat(relDstRect.format);
@@ -2111,17 +2298,11 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
 
     }
 
-#ifdef ANDROID
     if(is_out_log()) {
         ALOGD("srcMmuFlag = %d , dstMmuFlag = %d , lutMmuFlag = %d\n", srcMmuFlag, dstMmuFlag, lutMmuFlag);
         ALOGD("<<<<-------- rgaReg -------->>>>\n");
         NormalRgaLogOutRgaReq(rgaReg);
     }
-#elif LINUX
-#if __DEBUG
-    NormalRgaLogOutRgaReq(rgaReg);
-#endif
-#endif
 
     switch (RkRgaGetRgaFormat(relSrcRect.format)) {
         case RK_FORMAT_BPP1 :
@@ -2138,6 +2319,17 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
             break;
     }
 
+    /* rga3 rd_mode */
+    /* If rd_mode is not configured, raster mode is executed by default. */
+    rgaReg.src.rd_mode = src->rd_mode ? src->rd_mode : raster_mode;
+    rgaReg.dst.rd_mode = dst->rd_mode ? dst->rd_mode : raster_mode;
+    if (lut)
+        rgaReg.pat.rd_mode = lut->rd_mode ? lut->rd_mode : raster_mode;
+
+    rgaReg.in_fence_fd = dst->in_fence_fd;
+    rgaReg.core = dst->core;
+    rgaReg.priority = dst->priority;
+
     if (!(lutFd == -1 && lutBuf == NULL)) {
         rgaReg.fading.g = 0xff;
         rgaReg.render_mode = update_palette_table_mode;
@@ -2151,10 +2343,36 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
     rgaReg.render_mode = color_palette_mode;
     rgaReg.endian_mode = 1;
 
-    if(ioctl(ctx->rgaFd, RGA_BLIT_SYNC, &rgaReg) != 0) {
-      printf("color palette ioctl err\n");
-        return -1;
+    void *ioc_req = NULL;
+    rga2_req compat_req;
+
+    switch (ctx->driver) {
+        case RGA_DRIVER_IOC_RGA2:
+            memset(&compat_req, 0x0, sizeof(compat_req));
+            NormalRgaCompatModeConvertRga2(&compat_req, &rgaReg);
+
+            ioc_req = &compat_req;
+            break;
+
+        case RGA_DRIVER_IOC_MULTI_RGA:
+            ioc_req = &rgaReg;
+            break;
+
+        default:
+            printf("unknow driver[0x%x]\n", ctx->driver);
+            return -errno;
     }
+
+    do {
+        ret = ioctl(ctx->rgaFd, RGA_BLIT_SYNC, &ioc_req);
+    } while (ret == -1 && (errno == EINTR || errno == 512));   /* ERESTARTSYS is 512. */
+    if(ret) {
+        printf(" %s(%d) RGA_COLOR_PALETTE fail: %s\n",__FUNCTION__, __LINE__,strerror(errno));
+        ALOGE(" %s(%d) RGA_COLOR_PALETTE fail: %s",__FUNCTION__, __LINE__,strerror(errno));
+        return -errno;
+    }
+
+    dst->out_fence_fd = rgaReg.out_fence_fd;
 
     return 0;
 }

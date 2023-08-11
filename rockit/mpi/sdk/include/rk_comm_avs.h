@@ -1,24 +1,9 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2023 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMMON_AVS_H_
 #define INCLUDE_RT_MPI_RK_COMMON_AVS_H_
 
-#include "rk_type.h"
 #include "rk_common.h"
 #include "rk_errno.h"
 #include "rk_comm_video.h"
@@ -29,41 +14,39 @@ extern "C" {
 #endif
 #endif /* End of #ifdef __cplusplus */
 
-#define AVS_MAX_GRP_NUM          32
-#define AVS_PIPE_NUM             6
-#define AVS_MAX_CHN_NUM          2
 #define AVS_SPLIT_NUM            2
 #define AVS_SPLIT_PIPE_NUM       6
 #define AVS_CUBE_MAP_SURFACE_NUM 6
 
-#define AVS_MAX_IN_WIDTH         8192
-#define AVS_MAX_IN_HEIGHT        8192
-#define AVS_MIN_IN_WIDTH         1280
-#define AVS_MIN_IN_HEIGHT        720
-
-#define AVS_MAX_OUT_WIDTH        10000
-#define AVS_MAX_OUT_HEIGHT       10000
-#define AVS_MIN_OUT_WIDTH        256
-#define AVS_MIN_OUT_HEIGHT       256
-#define MAX_AVS_FILE_PATH_LEN    256
-
-typedef enum rkAVS_LUT_ACCURAY_E {
-    AVS_LUT_ACCURACY_HIGH = 0,    /* LUT high accuracy. */
-    AVS_LUT_ACCURACY_LOW  = 1,    /* LUT low accuracy. */
+typedef enum rkAVS_LUT_ACCURACY_E {
+    AVS_LUT_ACCURACY_HIGH    = 0,    /* LUT high accuracy. */
+    AVS_LUT_ACCURACY_LOW     = 1,    /* LUT low accuracy. */
 
     AVS_LUT_ACCURACY_BUTT
-} AVS_LUT_ACCURAY_E;
+} AVS_LUT_ACCURACY_E;
 
-typedef struct rkAVS_LUT_S {
-    AVS_LUT_ACCURAY_E enAccuracy;
-    RK_CHAR aFilePath[MAX_AVS_FILE_PATH_LEN];
-} AVS_LUT_S;
+typedef enum rkAVS_LUT_STEP_E {
+    AVS_LUT_STEP_HIGH    = 0,    /* LUT step size 16  pixel */
+    AVS_LUT_STEP_MEDIUM  = 1,    /* LUT step size 32 pixel */
+    AVS_LUT_STEP_LOW     = 2,    /* LUT step size 64 pixel */
+
+    AVS_LUT_STEP_BUTT
+} AVS_LUT_STEP_E;
+
+typedef enum rkAVS_FUSE_WIDTH_E {
+    AVS_FUSE_WIDTH_HIGH      = 0,    /* Fusion zone size 128 pixel */
+    AVS_FUSE_WIDTH_MEDIUM    = 1,    /* Fusion zone size 256 pixel */
+    AVS_FUSE_WIDTH_LOW       = 2,    /* Fusion zone size 512 pixel */
+
+    AVS_FUSE_WIDTH_BUTT
+} AVS_FUSE_WIDTH_E;
 
 typedef enum rkAVS_PROJECTION_MODE_E {
-    AVS_PROJECTION_EQUIRECTANGULAR  = 0,  /* Equirectangular mode. */
-    AVS_PROJECTION_RECTILINEAR      = 1,  /* Rectilinear mode. */
-    AVS_PROJECTION_CYLINDRICAL      = 2,  /* Cylindrical mode. */
-    AVS_PROJECTION_CUBE_MAP         = 3,  /* Cube map mode. */
+    AVS_PROJECTION_EQUIRECTANGULAR       = 0,  /* Equirectangular mode. */
+    AVS_PROJECTION_RECTILINEAR           = 1,  /* Rectilinear mode. */
+    AVS_PROJECTION_CYLINDRICAL           = 2,  /* Cylindrical mode. */
+    AVS_PROJECTION_CUBE_MAP              = 3,  /* Cube map mode. */
+    AVS_PROJECTION_EQUIRECTANGULAR_TRANS = 4,  /* Transvers Equirectangular  mode. */
 
     AVS_PROJECTION_BUTT
 } AVS_PROJECTION_MODE_E;
@@ -75,19 +58,33 @@ typedef enum rkAVS_GAIN_MODE_E {
     AVS_GAIN_MODE_BUTT
 } AVS_GAIN_MODE_E;
 
-
 typedef enum rkAVS_MODE_E {
     AVS_MODE_BLEND        = 0, /* according to LUT stitching, blend at the splicing point */
     AVS_MODE_NOBLEND_VER  = 1, /* place input images vertically together, no blend at the stitching point. */
     AVS_MODE_NOBLEND_HOR  = 2, /* place input images horizontally together, no blend at the stitching point */
 
     /* Only 4 image stitching is supported,
-    * two rows are placed, two rows are placed together,
-    * no blend at the stitching point. */
+    *   two rows are placed, two rows are placed together,
+    *   no blend at the stitching point.
+    *  The input image arrangement position of each pipe
+    *   is as follows.
+    * +-----------+-----------+
+    * |   pipe0   |   pipe1   |
+    * +-----------+-----------+
+    * |   pipe2   |   pipe3   |
+    * +-----------+-----------+
+    * */
     AVS_MODE_NOBLEND_QR   = 3,
 
     AVS_MODE_BUTT
 } AVS_MODE_E;
+
+typedef enum rkAVS_PARAM_SOURCE_E {
+    AVS_PARAM_SOURCE_LUT   = 0,     /* Look up table*/
+    AVS_PARAM_SOURCE_CALIB = 1,     /* Calibration file */
+
+    AVS_PARAM_SOURCE_MODE_BUT
+} AVS_PARAM_SOURCE_E;
 
 typedef struct rkAVS_GAIN_ATTR_S {
     AVS_GAIN_MODE_E enMode;
@@ -105,6 +102,11 @@ typedef struct rkAVS_FOV_S {
     RK_U32 u32FOVY;
 } AVS_FOV_S;
 
+typedef struct rkAVS_LUT_STEP_S {
+    AVS_LUT_STEP_E    enStepX;
+    AVS_LUT_STEP_E    enStepY;
+} AVS_STEP_ATTR_S;
+
 typedef struct rkAVS_SPLIT_ATTR_S {
     RK_U32   u32PipeNum;
     AVS_PIPE AVSPipe[AVS_SPLIT_PIPE_NUM];
@@ -117,6 +119,34 @@ typedef struct rkAVS_CUBE_MAP_ATTR_S {
     POINT_S   stStartPoint[AVS_CUBE_MAP_SURFACE_NUM];  /* RW; Start point of each surface. */
 } AVS_CUBE_MAP_ATTR_S;
 
+typedef struct rkAVS_LUT_S {
+    AVS_LUT_ACCURACY_E enAccuracy;
+    AVS_FUSE_WIDTH_E   enFuseWidth;
+    AVS_STEP_ATTR_S    stLutStep;
+    RK_VOID           *pVirAddr[AVS_PIPE_NUM];
+} AVS_LUT_S;
+
+typedef struct rkAVS_CALIB_S {
+    const RK_CHAR *pCalibFilePath;
+    const RK_CHAR *pMeshAlphaPath;
+} AVS_CALIB_S;
+
+typedef struct rkAVS_FINAL_LUT_S {
+    MB_BLK pMeshBlk[AVS_PIPE_NUM];
+    MB_BLK pAlphaBlk[AVS_PIPE_NUM];
+    MB_BLK pLdchBlk[AVS_PIPE_NUM];
+    MB_BLK pParamBlk[AVS_PIPE_NUM];
+} AVS_FINAL_LUT_S;
+
+typedef struct rkAVS_INPUT_ATTR_S {
+    AVS_PARAM_SOURCE_E  enParamSource;         /* RW; Input param source. */
+    union {
+        AVS_LUT_S       stLUT;                 /* Look up table. */
+        AVS_CALIB_S     stCalib;               /* Calibration file. */
+    };
+    SIZE_S              stSize;                /* Source resolution */
+} AVS_INPUT_ATTR_S;
+
 typedef struct rkAVS_OUTPUT_ATTR_S {
     AVS_PROJECTION_MODE_E    enPrjMode;                  /* RW; Projection mode. */
     POINT_S                  stCenter;                   /* Center point. */
@@ -125,13 +155,15 @@ typedef struct rkAVS_OUTPUT_ATTR_S {
     AVS_ROTATION_S           stRotation;                 /* Output rotation. */
     AVS_SPLIT_ATTR_S         stSplitAttr[AVS_SPLIT_NUM]; /* Split attribute for 7 or 8 inputs stitching. */
     AVS_CUBE_MAP_ATTR_S      stCubeMapAttr;              /* Cube map attribute. */
+    SIZE_S                   stSize;                     /* Mesh resolution */
+    RK_FLOAT                 fDistance;                  /* Optimum stitch distance. */
 } AVS_OUTPUT_ATTR_S;
 
 typedef struct rkAVS_GRP_ATTR_S {
     AVS_MODE_E           enMode;                        /* Group work mode */
     RK_U32               u32PipeNum;                    /* RW; Pipe number. */
     RK_BOOL              bSyncPipe;                     /* RW; Whether sync pipe image. */
-    AVS_LUT_S            stLUT;                         /* Look up table. */
+    AVS_INPUT_ATTR_S     stInAttr;                      /* Input attribute */
     AVS_GAIN_ATTR_S      stGainAttr;                    /* Gain attribute. */
     RK_U64               u64BBoxPhyAddr[AVS_PIPE_NUM];  /* Physical address of bounding box data. */
     AVS_OUTPUT_ATTR_S    stOutAttr;                     /* Output attribute. */
@@ -145,10 +177,12 @@ typedef struct rkAVS_CHN_ATTR_S {
     DYNAMIC_RANGE_E     enDynamicRange;     /* RW; Dynamic range. */
     RK_U32              u32Depth;           /* RW; Chn user list depth. */
     FRAME_RATE_CTRL_S   stFrameRate;        /* Frame rate control info. */
+    RK_U32              u32FrameBufCnt;     /* RW; frame buffer cnt only used by MB_SOURCE_PRIVATE */
 } AVS_CHN_ATTR_S;
 
 typedef struct rkAVS_MOD_PARAM_S {
     RK_U32 u32WorkingSetSize;               /* RW; AVS work */
+    MB_SOURCE_E enMBSource;                 /* RW; AVS MB pool source type */
 } AVS_MOD_PARAM_S;
 
 #define RK_AVS_OK                   RK_SUCCESS

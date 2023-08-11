@@ -19,11 +19,20 @@
 #ifndef _rockchip_normal_rga_context_h_
 #define _rockchip_normal_rga_context_h_
 
-#ifdef LINUX
-#define __DEBUG 0
+#include "rga_ioctl.h"
 
+#ifndef ANDROID
+#define ALOGD(...) { printf(__VA_ARGS__); printf("\n"); }
 #define ALOGE(...) { printf(__VA_ARGS__); printf("\n"); }
 #endif
+
+typedef enum {
+    RGA_DRIVER_IOC_UNKONW = 0,
+    RGA_DRIVER_IOC_RGA2,
+    RGA_DRIVER_IOC_MULTI_RGA,
+
+    RGA_DRIVER_IOC_DEFAULT = RGA_DRIVER_IOC_MULTI_RGA,
+} RGA_DRIVER_IOC_TYPE;
 
 struct rgaContext {
     int rgaFd;
@@ -31,7 +40,8 @@ struct rgaContext {
     int mLogOnce;
     float mVersion;
     int Is_debug;
-    char mVersion_str[16];
-    char reserved[128];
+    struct rga_hw_versions_t mHwVersions;
+    struct rga_version_t mDriverVersion;
+    RGA_DRIVER_IOC_TYPE driver = RGA_DRIVER_IOC_DEFAULT;
 };
 #endif

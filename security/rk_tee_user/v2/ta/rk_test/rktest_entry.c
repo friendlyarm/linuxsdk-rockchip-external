@@ -101,6 +101,10 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd_id,
 		return handle_trng_read();
 	case RKTEST_TA_CMD_SOCKET:
 		return handle_socket();
+	case RKTEST_TA_CMD_CRYPTO_HW:
+		return handle_crypto_hw(param_types, params);
+	case RKTEST_TA_CMD_DERIVE_KEY:
+		return handle_derive_key();
 	default:
 		EMSG("InvokeCommandEntry: BAD PARAMETERS!");
 		return TEE_ERROR_BAD_PARAMETERS;

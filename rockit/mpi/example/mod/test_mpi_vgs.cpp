@@ -28,8 +28,9 @@
 #include "rk_mpi_mb.h"
 #include "rk_mpi_sys.h"
 #include "rk_mpi_cal.h"
-#include "mpi_test_utils.h"
-#include "argparse.h"
+
+#include "test_comm_vgs.h"
+#include "test_comm_argparse.h"
 
 typedef enum rkVGS_TASK_TYPE_E {
     VGS_TASK_TYPE_NONE = 0,
@@ -78,11 +79,13 @@ typedef struct _rkMpiVgsCtx {
     RECT_S  stCropRect;
     RK_S32  s32JobIdx;
     RK_U32  u32SrcSize;
+    RK_S32  s32ProcessTime;
+    RK_S32  bPerformace;
 } TEST_VGS_CTX_S;
 
 typedef struct _rkMpiTestTaskCtx {
     VGS_ADD_COVER_S enCoverInfo[VGS_MAX_TASK_NUM];
-    VGS_ADD_OSD_S   enOsdInfo[VGS_MAX_TASK_NUM * VGS_MAX_ARRAY_SIZE];
+    VGS_ADD_OSD_S   enOsdInfo[VGS_MAX_TASK_NUM * 8];
     VGS_MOSAIC_S    enMosaicInfo[VGS_MAX_TASK_NUM];
     VGS_DRAW_LINE_S enDrawLine[VGS_MAX_TASK_NUM];
     VGS_CROP_INFO_S stCropInfo;
@@ -102,10 +105,6 @@ RK_S32 test_open_and_read_file(const char *path, void *pu8SrcData, RK_U32 u32Src
          fclose(pFile);
     }
     RK_LOGD("unit_test_open_source u32ReadSize:%d", u32ReadSize);
-    if (u32ReadSize != u32SrcSize) {
-        RK_LOGE("read error read %d, request %d", u32ReadSize, u32SrcSize);
-        return RK_ERR_VGS_NULL_PTR;
-    }
     return RK_SUCCESS;
 }
 
@@ -116,6 +115,7 @@ RK_S32 unit_test_vgs_generate_source(const char *srcFilePath, MB_BLK *pstSrcBlk,
     if (s32Ret == RK_SUCCESS) {
        pSrcData = RK_MPI_MB_Handle2VirAddr(*pstSrcBlk);
        s32Ret = test_open_and_read_file(srcFilePath, pSrcData, u32SrcSize);
+       RK_MPI_SYS_MmzFlushCache(*pstSrcBlk, RK_FALSE);
     }
     return s32Ret;
 }
@@ -471,19 +471,17 @@ RK_S32 unit_test_vgs_generate_drawline_task_array(
 
 RK_VOID unit_test_set_vgs_mosaic_array_info(
         VGS_MOSAIC_S *pstVgsMosaic, const TEST_VGS_CTX_S *ctx, RK_U32 u32ArraySize) {
-    VGS_MOSAIC_BLK_SIZE_E u32BlkSize[VGS_MAX_TASK_NUM]  = {RK_MOSAIC_BLK_SIZE_8, RK_MOSAIC_BLK_SIZE_16,
-        RK_MOSAIC_BLK_SIZE_32,  RK_MOSAIC_BLK_SIZE_64};
-    RK_U32               u32Ratio[VGS_MAX_TASK_NUM]     = {4, 2, 6, 4, 10, 2, 4, 6};
-    RK_S32               s32SrcWidth                    = ctx->s32SrcWidth;
-    RK_S32               s32SrcHeight                   = ctx->s32SrcHeight;
+    VGS_MOSAIC_BLK_SIZE_E u32BlkSize[VGS_MAX_TASK_NUM] = {RK_MOSAIC_BLK_SIZE_8,
+        RK_MOSAIC_BLK_SIZE_16, RK_MOSAIC_BLK_SIZE_32,  RK_MOSAIC_BLK_SIZE_64};
+    RK_S32 xoffset = 240;
+    RK_S32 yoffset = 160;
+
     for (RK_S32 i = 0; i < u32ArraySize; i++) {
-        if (u32Ratio[i]) {
-            pstVgsMosaic[i].enBlkSize = u32BlkSize[i];
-            pstVgsMosaic[i].stDstRect.s32X      = s32SrcWidth / u32Ratio[i];
-            pstVgsMosaic[i].stDstRect.s32Y      = s32SrcHeight /  u32Ratio[i];
-            pstVgsMosaic[i].stDstRect.u32Width  = s32SrcWidth /  u32Ratio[i];
-            pstVgsMosaic[i].stDstRect.u32Height = s32SrcHeight /  u32Ratio[i];
-        }
+        pstVgsMosaic[i].enBlkSize = u32BlkSize[i];
+        pstVgsMosaic[i].stDstRect.s32X = i*xoffset;
+        pstVgsMosaic[i].stDstRect.s32Y = i*yoffset;
+        pstVgsMosaic[i].stDstRect.u32Width = xoffset;
+        pstVgsMosaic[i].stDstRect.u32Height = yoffset;
     }
 }
 
@@ -539,28 +537,31 @@ RK_S32 unit_test_vgs_output_one_task(
         return s32Ret;
     }
     RK_U32 u32OutputSize = stMbPicCalResult.u32MBSize;
+    if (dstFilePath) {
+        snprintf(yuv_out_path,
+                sizeof(yuv_out_path),
+                "%svgs_out_%dx%d_j_%d_t_%d.yuv",
+                dstFilePath,
+                videoFrameOut.u32VirWidth,
+                videoFrameOut.u32VirHeight, jobId, taskId);
 
-    snprintf(yuv_out_path,
-            sizeof(yuv_out_path),
-            "%svgs_out_%dx%d_j_%d_t_%d.yuv",
-            dstFilePath,
-            videoFrameOut.u32VirWidth,
-            videoFrameOut.u32VirHeight, jobId, taskId);
-
-    FILE *file = fopen(yuv_out_path, "wb+");
-    if (file == RK_NULL) {
-        RK_LOGE("open path %s failed because %s.", yuv_out_path, strerror(errno));
-        return RK_ERR_SYS_NULL_PTR;
-    }
-    if (file) {
-        if (pstFrame) {
-            RK_LOGD("get frame data = %p, size = %d, bBlk:%p ", pstFrame, u32OutputSize, bBlk);
-            fwrite(pstFrame, 1, u32OutputSize, file);
-            fflush(file);
+        FILE *file = fopen(yuv_out_path, "wb+");
+        if (file == RK_NULL) {
+            RK_LOGE("open path %s failed because %s.", yuv_out_path, strerror(errno));
+            return RK_ERR_SYS_NULL_PTR;
         }
-        fclose(file);
-        file = NULL;
+        if (file) {
+            if (pstFrame) {
+                RK_LOGD("get frame data = %p, size = %d, bBlk:%p ", pstFrame, u32OutputSize, bBlk);
+                RK_MPI_SYS_MmzFlushCache(bBlk, RK_TRUE);
+                fwrite(pstFrame, 1, u32OutputSize, file);
+                fflush(file);
+            }
+            fclose(file);
+            file = NULL;
+        }
     }
+
     RK_MPI_MB_ReleaseMB(bBlk);
     return RK_SUCCESS;
 }
@@ -891,6 +892,22 @@ __FAILED:
     return RK_NULL;
 }
 
+RK_S32 unit_test_vgs_set_default_ctx(TEST_VGS_CTX_S *ctx, TEST_VGS_PROC_CTX_S *procCtx) {
+    procCtx->stImgIn.stVFrame.enPixelFormat = (PIXEL_FORMAT_E)ctx->s32SrcPixFormat;
+    procCtx->stImgIn.stVFrame.u32Width = ctx->s32SrcWidth;
+    procCtx->stImgIn.stVFrame.u32Height = ctx->s32SrcHeight;
+    procCtx->stImgIn.stVFrame.enCompressMode = (COMPRESS_MODE_E)ctx->s32SrcCompressMode;
+    procCtx->stImgOut.stVFrame.enPixelFormat = (PIXEL_FORMAT_E)ctx->s32DstPixFormat;
+    procCtx->stImgOut.stVFrame.u32Width = ctx->s32DstWidth;
+    procCtx->stImgOut.stVFrame.u32Height = ctx->s32DstHeight;
+    procCtx->stImgOut.stVFrame.enCompressMode = (COMPRESS_MODE_E)ctx->s32DstCompressMode;
+    procCtx->s32ProcessTimes = ctx->s32ProcessTime;
+    procCtx->s32JobNum = ctx->s32JobNum;
+    procCtx->s32TaskNum = ctx->s32TaskNum;
+    procCtx->opType = VGS_OP_QUICK_RESIZE;
+    return RK_SUCCESS;
+}
+
 RK_S32 unit_test_vgs_all_job(TEST_VGS_CTX_S *ctx) {
     RK_S32 s32Ret                  = RK_SUCCESS;
     RK_S32  s32JobId               = ctx->s32JobIdx;
@@ -985,16 +1002,18 @@ int main(int argc, const char **argv) {
     memset(&ctx, 0, sizeof(TEST_VGS_CTX_S));
     RK_S32 s32Ret = RK_SUCCESS;
     //  set default params.
-    ctx.dstFilePath     = RK_NULL;
-    ctx.s32LoopCount    = 1;
-    ctx.s32JobNum       = 1;
-    ctx.s32TaskNum      = 1;
-    ctx.s32TaskType      = VGS_TASK_TYPE_COVER;
-    ctx.u32TaskArraySize  = 1;
+    ctx.dstFilePath         = RK_NULL;
+    ctx.s32LoopCount        = 1;
+    ctx.s32JobNum           = 1;
+    ctx.s32TaskNum          = 1;
+    ctx.s32TaskType         = VGS_TASK_TYPE_COVER;
+    ctx.u32TaskArraySize    = 1;
     ctx.s32SrcCompressMode  = 0;
     ctx.s32SrcPixFormat     = RK_FMT_YUV420SP;
     ctx.s32DstCompressMode  = 0;
     ctx.s32DstPixFormat     = RK_FMT_YUV420SP;
+    ctx.bPerformace         = RK_FALSE;
+    ctx.s32ProcessTime      = 500;
 
     struct argparse_option options[] = {
         OPT_HELP(),
@@ -1055,6 +1074,10 @@ int main(int argc, const char **argv) {
                     "crop ratio rect width. default(0).", NULL, 0, 0),
         OPT_INTEGER('\0', "crop_h", &(ctx.stCropRect.u32Height),
                     "crop ratio rect height. default(0).", NULL, 0, 0),
+        OPT_INTEGER('\0', "performace", &(ctx.bPerformace),
+                    "performace. default(0).", NULL, 0, 0),
+        OPT_INTEGER('\0', "proc_time", &(ctx.s32ProcessTime),
+                    "s32ProcessTime. default(500).", NULL, 0, 0),
         OPT_END(),
     };
 
@@ -1066,8 +1089,7 @@ int main(int argc, const char **argv) {
     argc = argparse_parse(&argparse, argc, argv);
     mpi_vgs_test_show_options(&ctx);
 
-    if (ctx.srcFilePath == RK_NULL
-        || ctx.s32SrcWidth <= 0
+    if (ctx.s32SrcWidth <= 0
         || ctx.s32SrcHeight <= 0
         || ctx.s32DstWidth <= 0
         || ctx.s32DstHeight <= 0) {
@@ -1078,7 +1100,14 @@ int main(int argc, const char **argv) {
     if (s32Ret != RK_SUCCESS) {
         goto __FAILED;
     }
-    unit_test_mpi_vgs(&ctx);
+    if (ctx.bPerformace) {
+        TEST_VGS_PROC_CTX_S vgsTestCtx;
+        unit_test_vgs_set_default_ctx(&ctx, &vgsTestCtx);
+        s32Ret = TEST_VGS_MultiTest(&vgsTestCtx);
+    } else {
+        s32Ret = unit_test_mpi_vgs(&ctx);
+    }
+
     s32Ret = RK_MPI_SYS_Exit();
     if (s32Ret != RK_SUCCESS) {
         goto __FAILED;

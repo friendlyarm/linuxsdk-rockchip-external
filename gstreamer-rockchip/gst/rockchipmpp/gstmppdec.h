@@ -59,7 +59,11 @@ struct _GstMppDec
 
   gboolean arm_afbc;
 
+  gboolean dma_feature;
+
   gboolean ignore_error;
+
+  gboolean fast_mode;
 
   /* stop handling new frame when flushing */
   gboolean flushing;
@@ -78,6 +82,8 @@ struct _GstMppDec
   /* for using MPP generated PTS */
   gboolean use_mpp_pts;
   GstClockTime mpp_delta_pts;
+
+  guint32 decoded_frames;
 
   MppCodingType mpp_type;
   MppCtx mpp_ctx;
@@ -102,7 +108,7 @@ GType gst_mpp_dec_get_type (void);
 
 #define GST_FLOW_TIMEOUT GST_FLOW_CUSTOM_ERROR_1
 
-#define MPP_DEC_OUT_FORMATS "NV12, NV16, NV12_10LE40"
+#define MPP_DEC_OUT_FORMATS "NV12, NV16, NV12_10LE40, NV16_10LE40"
 
 #ifdef HAVE_RGA
 #define MPP_DEC_FORMATS MPP_DEC_OUT_FORMATS "," GST_RGA_FORMATS
@@ -111,6 +117,15 @@ GType gst_mpp_dec_get_type (void);
 #endif
 
 #define MPP_DEC_FEATURE_ARM_AFBC "arm-afbc"
+
+#define MPP_DEC_CAPS_MAKE(fmts) \
+    GST_VIDEO_CAPS_MAKE (fmts) ";" \
+    GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_MEMORY_DMABUF, fmts)
+
+#define MPP_DEC_CAPS_MAKE_AFBC(fmts) \
+    GST_VIDEO_CAPS_MAKE (fmts) ", " MPP_DEC_FEATURE_ARM_AFBC " = (int) 1;" \
+    GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_MEMORY_DMABUF, fmts) \
+    ", " MPP_DEC_FEATURE_ARM_AFBC " = (int) 1"
 
 void gst_mpp_dec_fixup_video_info (GstVideoDecoder * decoder,
     GstVideoFormat format, gint width, gint height);

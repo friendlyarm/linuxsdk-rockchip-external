@@ -80,6 +80,9 @@ G_DEFINE_ABSTRACT_TYPE (GstMppEnc, gst_mpp_enc, GST_TYPE_VIDEO_ENCODER);
 #define DEFAULT_PROP_HEIGHT 0   /* Original */
 #define DEFAULT_PROP_ZERO_COPY_PKT TRUE
 
+/* Input isn't ARM AFBC by default */
+static GstVideoFormat DEFAULT_PROP_ARM_AFBC = FALSE;
+
 #define DEFAULT_FPS 30
 
 enum
@@ -97,6 +100,7 @@ enum
   PROP_WIDTH,
   PROP_HEIGHT,
   PROP_ZERO_COPY_PKT,
+  PROP_ARM_AFBC,
   PROP_LAST,
 };
 
@@ -105,6 +109,8 @@ static const MppFrameFormat gst_mpp_enc_formats[] = {
   MPP_FMT_YUV420P,
   MPP_FMT_YUV422_YUYV,
   MPP_FMT_YUV422_UYVY,
+  MPP_FMT_YUV444SP,
+  MPP_FMT_YUV444P,
   MPP_FMT_RGB565LE,
   MPP_FMT_BGR565LE,
   MPP_FMT_ARGB8888,
@@ -150,6 +156,9 @@ gst_mpp_enc_video_info_matched (GstVideoInfo * info, GstVideoInfo * other)
   guint i;
 
   if (GST_VIDEO_INFO_FORMAT (info) != GST_VIDEO_INFO_FORMAT (other))
+    return FALSE;
+
+  if (GST_VIDEO_INFO_SIZE (info) != GST_VIDEO_INFO_SIZE (other))
     return FALSE;
 
   if (GST_VIDEO_INFO_WIDTH (info) != GST_VIDEO_INFO_WIDTH (other))
@@ -279,6 +288,13 @@ gst_mpp_enc_set_property (GObject * object,
       self->zero_copy_pkt = g_value_get_boolean (value);
       return;
     }
+    case PROP_ARM_AFBC:{
+      if (self->input_state)
+        GST_WARNING_OBJECT (encoder, "unable to change ARM AFBC");
+      else
+        self->arm_afbc = g_value_get_boolean (value);
+      return;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       return;
@@ -330,6 +346,9 @@ gst_mpp_enc_get_property (GObject * object,
       break;
     case PROP_ZERO_COPY_PKT:
       g_value_set_boolean (value, self->zero_copy_pkt);
+      break;
+    case PROP_ARM_AFBC:
+      g_value_set_boolean (value, self->arm_afbc);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -480,9 +499,13 @@ gst_mpp_enc_start (GstVideoEncoder * encoder)
 
   GST_DEBUG_OBJECT (self, "starting");
 
+  gst_video_info_init (&self->info);
+
   self->allocator = gst_mpp_allocator_new ();
   if (!self->allocator)
     return FALSE;
+
+  gst_mpp_allocator_set_cacheable (self->allocator, FALSE);
 
   if (mpp_create (&self->mpp_ctx, &self->mpi))
     goto err_unref_alloc;
@@ -577,7 +600,8 @@ gst_mpp_enc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
   GstMppEnc *self = GST_MPP_ENC (encoder);
   GstVideoInfo *info = &self->info;
   MppFrameFormat format;
-  gint width, height;
+  gint width, height, hstride, vstride;
+  gboolean convert = FALSE;
 
   GST_DEBUG_OBJECT (self, "setting format: %" GST_PTR_FORMAT, state->caps);
 
@@ -608,24 +632,59 @@ gst_mpp_enc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
   width = self->width ? : width;
   height = self->height ? : height;
 
-  if (self->rotation || width != GST_VIDEO_INFO_WIDTH (info) ||
-      height != GST_VIDEO_INFO_HEIGHT (info) ||
-      !gst_mpp_enc_format_supported (format) ||
-      !gst_mpp_enc_video_info_matched (info, &state->info)) {
-    format = MPP_FMT_YUV420SP;
-    gst_video_info_set_format (info, gst_mpp_mpp_format_to_gst_format (format),
-        width, height);
+  /* Check for conversion */
+  if (self->rotation || !gst_mpp_enc_format_supported (format) ||
+      width != GST_VIDEO_INFO_WIDTH (info) ||
+      height != GST_VIDEO_INFO_HEIGHT (info)) {
+    if (!gst_mpp_use_rga ()) {
+      GST_ERROR_OBJECT (self, "unable to convert without RGA");
+      return FALSE;
+    }
+
+    convert = TRUE;
+  }
+
+  /* Check for alignment */
+  if (!gst_mpp_enc_video_info_matched (info, &state->info))
+    convert = TRUE;
+
+  if (convert) {
+    /* Prefer NV12 when using RGA conversion */
+    if (gst_mpp_use_rga ())
+      format = MPP_FMT_YUV420SP;
+
+    gst_mpp_video_info_update_format (info,
+        gst_mpp_mpp_format_to_gst_format (format), width, height);
 
     if (!gst_mpp_enc_video_info_align (info))
       return FALSE;
 
-    GST_INFO_OBJECT (self, "converting to aligned NV12");
+    GST_INFO_OBJECT (self, "converting to aligned %s",
+        gst_mpp_video_format_to_string (GST_VIDEO_INFO_FORMAT (info)));
   }
 
+  hstride = GST_MPP_VIDEO_INFO_HSTRIDE (info);
+  vstride = GST_MPP_VIDEO_INFO_VSTRIDE (info);
+
+  GST_INFO_OBJECT (self, "applying %s%s %dx%d (%dx%d)",
+      gst_mpp_video_format_to_string (GST_VIDEO_INFO_FORMAT (info)),
+      self->arm_afbc ? "(AFBC)" : "", width, height, hstride, vstride);
+
+  if (self->arm_afbc) {
+    if (self->mpp_type != MPP_VIDEO_CodingAVC &&
+        self->mpp_type != MPP_VIDEO_CodingHEVC) {
+      GST_WARNING_OBJECT (self, "Only H.264 and H.265 support ARM AFBC");
+      self->arm_afbc = FALSE;
+    } else {
+      format |= MPP_FRAME_FBC_AFBC_V2;
+    }
+  }
+
+  mpp_frame_set_fmt (self->mpp_frame, format);
   mpp_frame_set_width (self->mpp_frame, width);
   mpp_frame_set_height (self->mpp_frame, height);
-  mpp_frame_set_hor_stride (self->mpp_frame, GST_MPP_VIDEO_INFO_HSTRIDE (info));
-  mpp_frame_set_ver_stride (self->mpp_frame, GST_MPP_VIDEO_INFO_VSTRIDE (info));
+  mpp_frame_set_hor_stride (self->mpp_frame, hstride);
+  mpp_frame_set_ver_stride (self->mpp_frame, vstride);
 
   if (!GST_VIDEO_INFO_FPS_N (info) || GST_VIDEO_INFO_FPS_N (info) > 240) {
     GST_WARNING_OBJECT (self, "framerate (%d/%d) is insane!",
@@ -679,7 +738,7 @@ gst_mpp_enc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
   size = GST_VIDEO_INFO_SIZE (&info);
 
   gst_video_alignment_reset (&align);
-  align.padding_right = GST_MPP_VIDEO_INFO_HSTRIDE (&info) -
+  align.padding_right = gst_mpp_get_pixel_stride (&info) -
       GST_VIDEO_INFO_WIDTH (&info);
   align.padding_bottom = GST_MPP_VIDEO_INFO_VSTRIDE (&info) -
       GST_VIDEO_INFO_HEIGHT (&info);
@@ -786,13 +845,16 @@ convert:
   gst_buffer_append_memory (outbuf, out_mem);
 
 #ifdef HAVE_RGA
-  if (gst_mpp_rga_convert (inbuf, &src_info, out_mem, dst_info, self->rotation)) {
+  if (gst_mpp_use_rga () &&
+      gst_mpp_rga_convert (inbuf, &src_info, out_mem, dst_info,
+          self->rotation)) {
     GST_DEBUG_OBJECT (self, "using RGA converted buffer");
     return outbuf;
   }
 #endif
 
-  if (self->rotation)
+  if (self->rotation ||
+      GST_VIDEO_INFO_FORMAT (&src_info) != GST_VIDEO_INFO_FORMAT (dst_info))
     goto err;
 
   if (gst_video_frame_map (&src_frame, &src_info, inbuf, GST_MAP_READ)) {
@@ -1046,6 +1108,7 @@ gst_mpp_enc_init (GstMppEnc * self)
   self->bps_min = DEFAULT_PROP_BPS_MIN;
   self->bps_max = DEFAULT_PROP_BPS_MAX;
   self->zero_copy_pkt = DEFAULT_PROP_ZERO_COPY_PKT;
+  self->arm_afbc = DEFAULT_PROP_ARM_AFBC;
   self->prop_dirty = TRUE;
 }
 
@@ -1164,6 +1227,9 @@ gst_mpp_enc_class_init (GstMppEncClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
 #ifdef HAVE_RGA
+  if (!gst_mpp_use_rga ())
+    goto no_rga;
+
   g_object_class_install_property (gobject_class, PROP_ROTATION,
       g_param_spec_enum ("rotation", "Rotation",
           "Rotation",
@@ -1181,6 +1247,8 @@ gst_mpp_enc_class_init (GstMppEncClass * klass)
           "Height (0 = original)",
           0, G_MAXINT, DEFAULT_PROP_HEIGHT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+no_rga:
 #endif
 
   g_object_class_install_property (gobject_class, PROP_GOP,
@@ -1216,6 +1284,14 @@ gst_mpp_enc_class_init (GstMppEncClass * klass)
   g_object_class_install_property (gobject_class, PROP_ZERO_COPY_PKT,
       g_param_spec_boolean ("zero-copy-pkt", "Zero-copy encoded packet",
           "Zero-copy encoded packet", DEFAULT_PROP_ZERO_COPY_PKT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  if (g_getenv ("GST_MPPENC_DEFAULT_ARM_AFBC"))
+    DEFAULT_PROP_ARM_AFBC = TRUE;
+
+  g_object_class_install_property (gobject_class, PROP_ARM_AFBC,
+      g_param_spec_boolean ("arm-afbc", "ARM AFBC",
+          "Input is ARM AFBC compressed format", DEFAULT_PROP_ARM_AFBC,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   element_class->change_state = GST_DEBUG_FUNCPTR (gst_mpp_enc_change_state);

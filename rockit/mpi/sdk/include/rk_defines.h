@@ -18,6 +18,8 @@
 #ifndef INCLUDE_RT_MPI_RK_DEFINES_H_
 #define INCLUDE_RT_MPI_RK_DEFINES_H_
 
+/* Automatic generated [rv1109] config */
+
 #ifdef __cplusplus
 #if __cplusplus
 extern "C" {
@@ -25,14 +27,15 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* For VENC */
-#define VENC_MAX_CHN_NUM               64
+#define VENC_MAX_CHN_NUM               16
 #define VENC_MAX_ROI_NUM               8
 
 /* For VDEC */
-#define VDEC_MAX_CHN_NUM               128
+#define VDEC_MAX_CHN_NUM               64
 
 /* For Region */
 #define RGN_MAX_HANDLE_NUM             128
+#define RGN_EXTRA_DEVICE_TYPE          1
 
 /* For VI */
 /* number of channle and device on video input unit of chip
@@ -40,7 +43,7 @@ extern "C" {
  * multiplied by VI_MAX_CHN_NUM, because all VI devices
  * can't work at mode of 4 channles at the same time.
  */
-#define VI_MAX_DEV_NUM                 8
+#define VI_MAX_DEV_NUM                 3
 #define VI_MAX_PHY_PIPE_NUM            VI_MAX_DEV_NUM
 #define VI_MAX_VIR_PIPE_NUM            0
 #define VI_MAX_PIPE_NUM                (VI_MAX_PHY_PIPE_NUM + VI_MAX_VIR_PIPE_NUM)
@@ -49,13 +52,14 @@ extern "C" {
 #define VI_MAX_CHN_NUM                 (VI_MAX_PHY_CHN_NUM + VI_MAX_EXT_CHN_NUM)
 
 /* For VO */
-#define VO_MAX_DEV_NUM                 4 /* max dev num */
+#define VO_SPLICE_DEVICE_TYPE          1
+#define VO_MAX_DEV_NUM                 3 /* max dev num */
 #define VO_MAX_LAYER_NUM               8 /* max layer num */
 #define VO_MAX_CHN_NUM                 128 /* max chn num */
 #define VO_MAX_WBC_NUM                 1
 #define VO_MAX_BUF_NUM                 15
 #define VO_MAX_PRIORITY                7 /* max layer priority */
-#define VO_MAX_PHY_DEV_NUM             4 /* max physical dev num */
+#define VO_MAX_PHY_DEV_NUM             3 /* max physical dev num */
 
 /* For AUDIO */
 #define AI_DEV_MAX_NUM                 2
@@ -72,6 +76,7 @@ extern "C" {
 #define VPSS_MIN_IMAGE_HEIGHT          64
 #define VPSS_MAX_IMAGE_WIDTH           8192
 #define VPSS_MAX_IMAGE_HEIGHT          8192
+#define VPSS_VIDEO_PROC_DEVICE_TYPE    1
 
 /* For VGS */
 #define VGS_MAX_JOB_NUM                128
@@ -80,6 +85,23 @@ extern "C" {
 /* For TDE */
 #define TDE_MAX_JOB_NUM                128
 #define TDE_MAX_TASK_NUM               200
+
+/* For GDC */
+#define GDC_MAX_JOB_NUM                128
+#define GDC_MAX_TASK_NUM               200
+
+/* For AVS */
+#define AVS_MAX_GRP_NUM                4
+#define AVS_PIPE_NUM                   2
+#define AVS_MAX_CHN_NUM                2
+#define AVS_MAX_IN_WIDTH               4096
+#define AVS_MAX_IN_HEIGHT              4096
+#define AVS_MIN_IN_WIDTH               1280
+#define AVS_MIN_IN_HEIGHT              720
+#define AVS_MAX_OUT_WIDTH              4096
+#define AVS_MAX_OUT_HEIGHT             4096
+#define AVS_MIN_OUT_WIDTH              256
+#define AVS_MIN_OUT_HEIGHT             256
 
 #ifdef __cplusplus
 #if __cplusplus

@@ -19,6 +19,10 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include "update_engine/log.h"
+
+#define MISC_PARTITION_NAME_BLOCK "/dev/block/by-name/misc"
+#define MISC_PARTITION_NAME_MTD "misc"
 
 // Initialize the graphics system.
 void ui_init();
@@ -48,10 +52,10 @@ void ui_end_menu();
 
 // Set the icon (normally the only thing visible besides the progress bar).
 enum {
-  BACKGROUND_ICON_NONE,
-  BACKGROUND_ICON_INSTALLING,
-  BACKGROUND_ICON_ERROR,
-  NUM_BACKGROUND_ICONS
+    BACKGROUND_ICON_NONE,
+    BACKGROUND_ICON_INSTALLING,
+    BACKGROUND_ICON_ERROR,
+    NUM_BACKGROUND_ICONS
 };
 void ui_set_background(int icon);
 
@@ -75,17 +79,10 @@ void ui_reset_progress();
 
 #define MOD_TAG "RECOVERY"
 
-#define LOGE(...) fprintf(stdout, "[E/]"MOD_TAG" " __VA_ARGS__)
-#define LOGW(...) fprintf(stdout, "[W/]"MOD_TAG" " __VA_ARGS__)
-#define LOGI(...) fprintf(stdout, "[I/]"MOD_TAG" " __VA_ARGS__)
-#define LOGD(...) fprintf(stdout, "[D/]"MOD_TAG" " __VA_ARGS__)
 
 #define FUNC_ENTER() LOGD("%s:%d : Enter >>>>\n", __func__,__LINE__)
 #define FUNC_LEAVE() LOGD("%s:%d : Leave <<<<\n", __func__,__LINE__)
-#if 0
-#define LOGV(...) do {} while (0)
-#define LOGD(...) do {} while (0)
-#endif
+
 
 #define STRINGIFY(x) #x
 #define EXPAND(x) STRINGIFY(x)
@@ -96,11 +93,11 @@ typedef struct {
     const char* fs_type;      // "yaffs2" or "ext4" or "vfat"
 
     const char* device;       // MTD partition name if fs_type == "yaffs"
-                              // block device if fs_type == "ext4" or "vfat"
+    // block device if fs_type == "ext4" or "vfat"
 
     const char* device2;      // alternative device to try if fs_type
-                              // == "ext4" or "vfat" and mounting
-                              // 'device' fails
+    // == "ext4" or "vfat" and mounting
+    // 'device' fails
 
     const char* option;       // mount parameter
 

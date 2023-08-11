@@ -24,6 +24,7 @@
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <sys/ioctl.h>
 #include <math.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -55,14 +56,38 @@
 
 #ifdef LINUX
 #include "NormalRga.h"
-#if LIBDRM
-#include <drm.h>
+#include "drm.h"
 #include "drm_mode.h"
-#include "xf86drm.h"
-#endif
 #endif
 
-#include "version.h"
+#include "im2d_api/im2d.h"
+
+#ifdef LINUX
+static int local_drmIoctl(int fd, unsigned long request, void *arg) {
+    int ret;
+
+    do {
+        ret = ioctl(fd, request, arg);
+    } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
+    return ret;
+}
+
+static int local_drmPrimeHandleToFD(int fd, uint32_t handle, uint32_t flags, int *prime_fd) {
+    struct drm_prime_handle args;
+    int ret;
+
+    memset(&args, 0, sizeof(args));
+    args.fd = -1;
+    args.handle = handle;
+    args.flags = flags;
+    ret = local_drmIoctl(fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &args);
+    if (ret)
+        return ret;
+
+    *prime_fd = args.fd;
+    return 0;
+}
+#endif
 
 #ifdef ANDROID
 namespace android {
@@ -78,6 +103,10 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
         mLogAlways(0),
         mContext(NULL) {
         RkRgaInit();
+
+#ifdef ANDROID
+        property_set("vendor.rga_api.version", RGA_API_VERSION);
+#endif
         ALOGE("%s", RGA_API_FULL_VERSION);
     }
 
@@ -114,7 +143,6 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
 #ifdef LINUX
     int RockchipRga::RkRgaAllocBuffer(int drm_fd, bo_t *bo_info, int width,
                                       int height, int bpp, int flags) {
-#if LIBDRM
         struct drm_mode_create_dumb arg;
         int ret;
 
@@ -124,7 +152,7 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
         arg.height = height;
         arg.flags = flags;
 
-        ret = drmIoctl(drm_fd, DRM_IOCTL_MODE_CREATE_DUMB, &arg);
+        ret = local_drmIoctl(drm_fd, DRM_IOCTL_MODE_CREATE_DUMB, &arg);
         if (ret) {
             fprintf(stderr, "failed to create dumb buffer: %s\n", strerror(errno));
             return ret;
@@ -135,13 +163,9 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
         bo_info->pitch = arg.pitch;
 
         return 0;
-#else
-        return -1;
-#endif
     }
 
     int RockchipRga::RkRgaFreeBuffer(int drm_fd, bo_t *bo_info) {
-#if LIBDRM
         struct drm_mode_destroy_dumb arg;
         int ret;
 
@@ -149,7 +173,7 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
             return -EINVAL;
         memset(&arg, 0, sizeof(arg));
         arg.handle = bo_info->handle;
-        ret = drmIoctl(drm_fd, DRM_IOCTL_MODE_DESTROY_DUMB, &arg);
+        ret = local_drmIoctl(drm_fd, DRM_IOCTL_MODE_DESTROY_DUMB, &arg);
         if (ret) {
             fprintf(stderr, "failed to destroy dumb buffer: %s\n", strerror(errno));
             return -errno;
@@ -157,9 +181,7 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
         bo_info->handle = 0;
 
         return 0;
-#else
-        return -1;
-#endif
+
     }
 
     int RockchipRga::RkRgaGetAllocBufferExt(bo_t *bo_info, int width, int height, int bpp, int flags) {
@@ -195,14 +217,13 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
     }
 
     int RockchipRga::RkRgaGetMmap(bo_t *bo_info) {
-#if LIBDRM
         struct drm_mode_map_dumb arg;
         void *map;
         int ret;
 
         memset(&arg, 0, sizeof(arg));
         arg.handle = bo_info->handle;
-        ret = drmIoctl(bo_info->fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
+        ret = local_drmIoctl(bo_info->fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
         if (ret)
             return ret;
         map = mmap64(0, bo_info->size, PROT_READ | PROT_WRITE, MAP_SHARED, bo_info->fd, arg.offset);
@@ -210,9 +231,6 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
             return -EINVAL;
         bo_info->ptr = map;
         return 0;
-#else
-        return -1;
-#endif
     }
 
     int RockchipRga::RkRgaUnmap(bo_t *bo_info) {
@@ -232,13 +250,9 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
     }
 
     int RockchipRga::RkRgaGetBufferFd(bo_t *bo_info, int *fd) {
-#if LIBDRM
         int ret = 0;
-        ret = drmPrimeHandleToFD(bo_info->fd, bo_info->handle, DRM_CLOEXEC | DRM_RDWR, fd);
+        ret = local_drmPrimeHandleToFD(bo_info->fd, bo_info->handle, DRM_CLOEXEC | DRM_RDWR, fd);
         return ret;
-#else
-        return -1;
-#endif
     }
 #endif
 
@@ -263,7 +277,7 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
             RkRgaLogOutUserPara(src);
             RkRgaLogOutUserPara(dst);
             RkRgaLogOutUserPara(src1);
-            ALOGE("This output the user patamaters when rga call blit fail");
+            ALOGE("This output the user parameters when rga call blit fail");
         }
         return ret;
     }
@@ -289,7 +303,7 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
         if (ret) {
             RkRgaLogOutUserPara(src);
             RkRgaLogOutUserPara(dst);
-            ALOGE("This output the user patamaters when rga call CollorPalette fail");
+            ALOGE("This output the user parameters when rga call CollorPalette fail");
         }
         return ret;
     }
@@ -298,8 +312,9 @@ RGA_SINGLETON_STATIC_INSTANCE(RockchipRga)
         if (!rgaInfo)
             return -EINVAL;
 
-        ALOGE("fd-vir-phy-hnd-format[%d, %p, %p, %p, %d]", rgaInfo->fd,
-              rgaInfo->virAddr, rgaInfo->phyAddr, (void*)rgaInfo->hnd, rgaInfo->format);
+        ALOGE("handl-fd-vir-phy-hnd-format[%d, %d, %p, %p, %lx, %d]",
+              rgaInfo->handle, rgaInfo->fd, rgaInfo->virAddr, rgaInfo->phyAddr,
+              (unsigned long)rgaInfo->hnd, rgaInfo->format);
         ALOGE("rect[%d, %d, %d, %d, %d, %d, %d, %d]",
               rgaInfo->rect.xoffset, rgaInfo->rect.yoffset,
               rgaInfo->rect.width,   rgaInfo->rect.height, rgaInfo->rect.wstride,

@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2023 Rockchip Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef _GPT_H
 #define _GPT_H
 
@@ -83,12 +99,12 @@ typedef unsigned long long u64;
 
 typedef union {
     struct {
-    unsigned int time_low;
-    unsigned short time_mid;
-    unsigned short time_hi_and_version;
-    unsigned char clock_seq_hi_and_reserved;
-    unsigned char clock_seq_low;
-    unsigned char node[6];
+        unsigned int time_low;
+        unsigned short time_mid;
+        unsigned short time_hi_and_version;
+        unsigned char clock_seq_hi_and_reserved;
+        unsigned char clock_seq_low;
+        unsigned char node[6];
     } uuid;
     u8 raw[16];
 } efi_guid_t;
@@ -133,11 +149,11 @@ typedef struct _gpt_header {
 
 typedef union _gpt_entry_attributes {
     struct {
-        u64 required_to_function:1;
-        u64 no_block_io_protocol:1;
-        u64 legacy_bios_bootable:1;
-        u64 reserved:45;
-        u64 type_guid_specific:16;
+        u64 required_to_function: 1;
+        u64 no_block_io_protocol: 1;
+        u64 legacy_bios_bootable: 1;
+        u64 reserved: 45;
+        u64 type_guid_specific: 16;
     } fields;
     unsigned long long raw;
 } gpt_entry_attributes;

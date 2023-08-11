@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMMON_H_
 #define INCLUDE_RT_MPI_RK_COMMON_H_
@@ -38,6 +24,8 @@ extern "C" {
     } while (0)
 
 #define VERSION_NAME_MAXLEN 64
+
+#define RK_MAX(a, b)           ((a) > (b) ? (a) : (b))
 typedef struct rkMPP_VERSION_S {
     RK_CHAR aVersion[VERSION_NAME_MAXLEN];
 } MPP_VERSION_S;
@@ -46,6 +34,7 @@ typedef RK_S32 AI_CHN;
 typedef RK_S32 AO_CHN;
 typedef RK_S32 AENC_CHN;
 typedef RK_S32 ADEC_CHN;
+typedef RK_S32 AF_CHN;
 typedef RK_S32 AUDIO_DEV;
 typedef RK_S32 VI_DEV;
 typedef RK_S32 VI_PIPE;
@@ -79,6 +68,7 @@ typedef RK_S32 AVS_CHN;
 typedef RK_S32 MCF_GRP;
 typedef RK_S32 MCF_PIPE;
 typedef RK_S32 MCF_CHN;
+typedef RK_S32 IVS_CHN;
 
 #define RK_INVALID_CHN (-1)
 #define RK_INVALID_WAY (-1)
@@ -116,6 +106,11 @@ typedef enum rkMOD_ID_E {
     RK_ID_ISP     = 15,
     RK_ID_WBC     = 16,
     RK_ID_AVS     = 17,
+    RK_ID_GDC     = 18,
+	RK_ID_RGA     = 19,
+    RK_ID_AF      = 20,
+    RK_ID_IVS     = 21,
+	RK_ID_PVS     = 22,
 
     RK_ID_BUTT,
 } MOD_ID_E;
@@ -145,12 +140,17 @@ typedef struct rkMPP_CHN_S {
 #define RK_MOD_ISP       "isp"
 #define RK_MOD_WBC       "wbc"
 #define RK_MOD_AVS       "avs"
+#define RK_MOD_GDC       "gdc"
+#define RK_MOD_RGA       "rga"
+#define RK_MOD_AF        "af"
+#define RK_MOD_IVS       "ivs"
+#define RK_MOD_PVS       "pvs"
 
 typedef enum rkCODEC_ID_E {
      RK_VIDEO_ID_Unused,             /**< Value when coding is N/A */
      RK_VIDEO_ID_AutoDetect,         /**< Autodetection of coding type */
      RK_VIDEO_ID_MPEG1VIDEO,
-     RK_VIDEO_ID_MPEG2VIDEO,              /**< AKA: H.262 */
+     RK_VIDEO_ID_MPEG2VIDEO,         /**< AKA: H.262 */
      RK_VIDEO_ID_H263,               /**< H.263 */
      RK_VIDEO_ID_MPEG4,              /**< MPEG-4 */
      RK_VIDEO_ID_WMV,                /**< Windows Media Video (WMV1,WMV2,WMV3)*/
@@ -169,6 +169,7 @@ typedef enum rkCODEC_ID_E {
      RK_VIDEO_ID_VP6,
      RK_VIDEO_ID_AVSPLUS,            /**< AVS+ profile=0x48 */
      RK_VIDEO_ID_AVS,                /**< AVS  profile=0x20 */
+     RK_VIDEO_ID_AV1,
      /* *< Reserved region for introducing Khronos Standard Extensions */
      RK_VIDEO_ID_KhronosExtensions = 0x2F000000,
      /* *< Reserved region for introducing Vendor Extensions */
@@ -184,6 +185,7 @@ typedef enum rkCODEC_ID_E {
      RK_AUDIO_ID_PCM_S32LE,   /**< Any variant of PCM_S32LE coding */
      RK_AUDIO_ID_ADPCM_G722,         /**< Any variant of ADPCM_G722 encoded data */
      RK_AUDIO_ID_ADPCM_G726,         /**< Any variant of ADPCM_G726 encoded data */
+     RK_AUDIO_ID_ADPCM_G726LE,       /**< G.726 ADPCM little-endian encoded data*/
      RK_AUDIO_ID_ADPCM_IMA_QT,       /**< Any variant of ADPCM_IMA encoded data */
      RK_AUDIO_ID_AMR_NB,      /**< Any variant of AMR_NB encoded data */
      RK_AUDIO_ID_AMR_WB,      /**< Any variant of AMR_WB encoded data */
@@ -230,7 +232,7 @@ typedef enum rkCODEC_ID_E {
      RK_AUDIO_CodingMax = 0x7FFFFFFF,
 
      /* subtitle codecs */
-     RK_SUB_ID_Unused = 0x17000,          ///< A dummy ID pointing at the start of subtitle codecs.
+     RK_SUB_ID_Unused = 0x80000000,    ///< A dummy ID pointing at the start of subtitle codecs.
      RK_SUB_ID_DVD,
      RK_SUB_ID_DVB,
      RK_SUB_ID_TEXT,  ///< raw UTF-8 text
@@ -241,7 +243,7 @@ typedef enum rkCODEC_ID_E {
      RK_SUB_ID_DVB_TELETEXT,
      RK_SUB_ID_SRT,
 
-     RK_SUB_ID_MICRODVD   = 0x17800,
+     RK_SUB_ID_MICRODVD = 0x80000800,
      RK_SUB_ID_EIA_608,
      RK_SUB_ID_JACOSUB,
      RK_SUB_ID_SAMI,

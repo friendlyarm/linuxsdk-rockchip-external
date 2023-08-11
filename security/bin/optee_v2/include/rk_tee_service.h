@@ -47,3 +47,17 @@ int rk_decrypt_data(unsigned char *cipher, unsigned int cipher_len,
  */
 int rk_encrypt_data(unsigned char *plain, unsigned int plain_len,
 				unsigned char *cipher, unsigned int *cipher_len);
+/*
+ * usage: read secure boot enable flag.
+ * params: flag, output data
+ *         flag = 0 means disable, flag = 1 means enabled
+ * return: 0 success, others fail
+ */
+int rk_read_secure_boot_enable_flag(uint8_t *flag);
+/*
+ * usage: read vboot key hash.
+ * params: buf, output data
+ *         length, output data length, it should be 32 or 64 bytes
+ * return: 0 success, others fail
+ */
+int rk_read_vbootkey_hash(uint8_t *buf, uint32_t length);

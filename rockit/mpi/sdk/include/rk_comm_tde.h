@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef SRC_RT_MPI_INCLUDE_RK_COMM_TDE_H_
 #define SRC_RT_MPI_INCLUDE_RK_COMM_TDE_H_
@@ -67,14 +53,13 @@ typedef enum rkTDE_ALUCMD_E {
 /* Structure of the bitmap information set by customers */
 typedef struct rkTDE_SURFACE_S {
     MB_BLK pMbBlk;/* <Header address of a bitmap or the Y component */
-
     PIXEL_FORMAT_E enColorFmt; /* <Color format */
-
     RK_U32 u32Height; /* <Bitmap height */
-
     RK_U32 u32Width; /* <Bitmap width */
-
     COMPRESS_MODE_E enComprocessMode; /* compress type */
+    RK_BOOL bAlphaExt1555;  /* <Whether to enable the alpha extension of an ARGB1555 bitmap. */
+    RK_U8 u8Alpha0;  /* <Values of alpha0 and alpha1, used as the ARGB1555 format */
+    RK_U8 u8Alpha1;  /* <Values of alpha0 and alpha1, used as the ARGB1555 format */
 } TDE_SURFACE_S;
 
 /* Definition of the TDE rectangle */

@@ -1,19 +1,5 @@
-/*
- * Copyright 2021 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMM_RGN_H__
 #define INCLUDE_RT_MPI_RK_COMM_RGN_H__
@@ -32,6 +18,7 @@ typedef RK_U32 RGN_HANDLE;
 
 #define RGN_CLUT_NUM                   256
 #define RGN_MAX_BUF_NUM                2
+#define RGN_COLOR_LUT_NUM              2
 
 #define RGN_MIN_WIDTH                  16
 #define RGN_MIN_HEIGHT                 16
@@ -43,8 +30,8 @@ typedef RK_U32 RGN_HANDLE;
 #define RGN_COVER_MAX_WIDTH            8192
 #define RGN_COVER_MAX_HEIGHT           8192
 
-#define RGN_OVERLAY_MIN_X              0
-#define RGN_OVERLAY_MIN_Y              0
+#define RGN_OVERLAY_MIN_X              -8192
+#define RGN_OVERLAY_MIN_Y              -8192
 #define RGN_OVERLAY_MAX_X              8192
 #define RGN_OVERLAY_MAX_Y              8192
 #define RGN_OVERLAY_MAX_WIDTH          8192
@@ -59,11 +46,20 @@ typedef RK_U32 RGN_HANDLE;
 #define RGN_MOSAIC_MAX_WIDTH           8192
 #define RGN_MOSAIC_MAX_HEIGHT          8192
 
+#define RGN_LINE_MIN_X                 0
+#define RGN_LINE_MIN_Y                 0
+#define RGN_LINE_MAX_X                 8192
+#define RGN_LINE_MAX_Y                 8192
+#define RGN_LINE_MIN_THICK             1
+#define RGN_LINE_MAX_THICK             32
+
 /* type of video regions */
 typedef enum rkRGN_TYPE_E {
     OVERLAY_RGN = 0,     /* video overlay region */
+    OVERLAY_EX_RGN,
     COVER_RGN,
     MOSAIC_RGN,
+    LINE_RGN,
     RGN_BUTT
 } RGN_TYPE_E;
 
@@ -79,6 +75,19 @@ typedef struct rkOVERLAY_QP_INFO {
     RK_S32 s32Qp;
 } OVERLAY_QP_INFO_S;
 
+typedef enum rkINVERT_COLOR_MODE_E {
+    LESSTHAN_LUM_THRESH = 0,
+    MORETHAN_LUM_THRESH,
+    INVERT_COLOR_BUTT
+} INVERT_COLOR_MODE_E;
+
+typedef struct rkOVERLAY_INVERT_COLOR_S {
+    SIZE_S stInvColArea;
+    RK_U32 u32LumThresh;
+    INVERT_COLOR_MODE_E enChgMod;
+    RK_BOOL bInvColEn;
+} OVERLAY_INVERT_COLOR_S;
+
 typedef struct rkOVERLAY_ATTR_S {
     /* bitmap pixel format,now only support BGRA5551 or ARGB8888 */
     PIXEL_FORMAT_E enPixelFmt;
@@ -89,6 +98,8 @@ typedef struct rkOVERLAY_ATTR_S {
     RK_U32 u32ClutNum;
     /* color loop up table, only support BGRA8888 format now. */
     RK_U32 u32Clut[RGN_CLUT_NUM];
+    /* ex overlay fiter device type, now only support venc module*/
+    VIDEO_PROC_DEV_TYPE_E enVProcDev;
 } OVERLAY_ATTR_S;
 
 typedef struct rkOVERLAY_CHN_ATTR_S {
@@ -111,15 +122,35 @@ typedef struct rkOVERLAY_CHN_ATTR_S {
 
     /* overlay regions qp info (only support to venc) */
     OVERLAY_QP_INFO_S stQpInfo;
+    /* 2BPP color table*/
+    RK_U32 u32ColorLUT[RGN_COLOR_LUT_NUM];
+
+    OVERLAY_INVERT_COLOR_S stInvertColor;
 } OVERLAY_CHN_ATTR_S;
+
+typedef struct rkRGN_QUADRANGLE_S {
+    RK_BOOL bSolid;
+    RK_U32 u32Thick;
+    POINT_S stPoint[4];
+} RGN_QUADRANGLE_S;
 
 typedef enum rkRGN_COORDINATE_E {
     RGN_ABS_COOR = 0,   /*Absolute coordinate*/
     RGN_RATIO_COOR      /*Ratio coordinate*/
 } RGN_COORDINATE_E;
 
+typedef enum rkRGN_AREA_TYPE_E {
+    AREA_RECT = 0,
+    AREA_QUAD_RANGLE,
+    AREA_BUTT
+} RGN_COVER_TYPE_E;
+
 typedef struct rkCOVER_CHN_ATTR_S {
-    RECT_S stRect;                          /* config of rect */
+    RGN_COVER_TYPE_E enCoverType;
+    union {
+        RECT_S stRect;                      /* config of rect */
+        RGN_QUADRANGLE_S stQuadRangle;
+    };
     RK_U32 u32Color;                        /* RGB888 format */
     RK_U32 u32Layer;                        /* COVER region layer */
     RGN_COORDINATE_E enCoordinate;          /* ratio coordiante or abs coordinate */
@@ -139,6 +170,13 @@ typedef struct rkMOSAIC_CHN_ATTR_S {
     RK_U32 u32Layer;               /*MOSAIC region layer range:[0,3] */
 } MOSAIC_CHN_ATTR_S;
 
+typedef struct rkLINE_CHN_ATTR_S {
+    RK_U32 u32Thick;
+    RK_U32 u32Color;
+    POINT_S stStartPoint;
+    POINT_S stEndPoint;
+} LINE_CHN_ATTR_S;
+
 typedef union rkRGN_ATTR_U {
     OVERLAY_ATTR_S      stOverlay;      /* attribute of overlay region */
 } RGN_ATTR_U;
@@ -146,7 +184,8 @@ typedef union rkRGN_ATTR_U {
 typedef union rkRGN_CHN_ATTR_U {
     OVERLAY_CHN_ATTR_S      stOverlayChn;      /* attribute of overlay region */
     COVER_CHN_ATTR_S        stCoverChn;        /* attribute of cover region */
-    MOSAIC_CHN_ATTR_S       stMosaicChn;       /* attribute of mosic region */
+    MOSAIC_CHN_ATTR_S       stMosaicChn;       /* attribute of mosaic region */
+    LINE_CHN_ATTR_S         stLineChn;         /* attribute of draw line region */
 } RGN_CHN_ATTR_U;
 
 /* attribute of a region */

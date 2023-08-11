@@ -23,8 +23,6 @@ extern "C" {
 
 bool is_boot_from_SD(void);
 void ensure_sd_mounted(bool *bSDMounted);
-int get_cfg_Item(char *pFileName /*in*/, char *pKey /*in*/,
-                  char * pValue/*in out*/, int * pValueLen /*out*/);
 bool is_sdcard_update(void);
 
 #ifdef  __cplusplus

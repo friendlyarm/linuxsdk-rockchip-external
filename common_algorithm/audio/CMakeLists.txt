@@ -13,10 +13,6 @@ if (ANR_ENABLE)
 	add_subdirectory(rkap_anr)
 endif()
 
-if (RKAPPLUS_ENABLE)
-	add_subdirectory(rkskv)
-endif()
-
-if (RKAPPLUS_AED_ENABLE)
-	add_subdirectory(rkaed)
+if(RKAPPLUS_AED_ENABLE OR RKAPPLUS_ENABLE)
+	add_subdirectory(rkaudio_algorithms)
 endif()

@@ -60,7 +60,9 @@ G_DEFINE_ABSTRACT_TYPE (GstMppDec, gst_mpp_dec, GST_TYPE_VIDEO_DECODER);
 #define DEFAULT_PROP_WIDTH 0    /* Original */
 #define DEFAULT_PROP_HEIGHT 0   /* Original */
 
-static gboolean DEFAULT_PROP_IGNORE_ERROR = FALSE;
+static gboolean DEFAULT_PROP_IGNORE_ERROR = TRUE;
+static gboolean DEFAULT_PROP_FAST_MODE = TRUE;
+static gboolean DEFAULT_PROP_DMA_FEATURE = FALSE;
 
 enum
 {
@@ -70,6 +72,8 @@ enum
   PROP_HEIGHT,
   PROP_CROP_RECTANGLE,
   PROP_IGNORE_ERROR,
+  PROP_FAST_MODE,
+  PROP_DMA_FEATURE,
   PROP_LAST,
 };
 
@@ -136,6 +140,17 @@ gst_mpp_dec_set_property (GObject * object,
         self->ignore_error = g_value_get_boolean (value);
       break;
     }
+    case PROP_FAST_MODE:{
+      if (self->input_state)
+        GST_WARNING_OBJECT (decoder, "unable to change fast mode");
+      else
+        self->fast_mode = g_value_get_boolean (value);
+      break;
+    }
+    case PROP_DMA_FEATURE:{
+      self->dma_feature = g_value_get_boolean (value);
+      break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -161,6 +176,12 @@ gst_mpp_dec_get_property (GObject * object,
       break;
     case PROP_IGNORE_ERROR:
       g_value_set_boolean (value, self->ignore_error);
+      break;
+    case PROP_FAST_MODE:
+      g_value_set_boolean (value, self->fast_mode);
+      break;
+    case PROP_DMA_FEATURE:
+      g_value_set_boolean (value, self->dma_feature);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -213,6 +234,7 @@ gst_mpp_dec_reset (GstVideoDecoder * decoder, gboolean drain, gboolean final)
 
   self->mpi->reset (self->mpp_ctx);
   self->task_ret = GST_FLOW_OK;
+  self->decoded_frames = 0;
 
   GST_MPP_DEC_UNLOCK (decoder);
 }
@@ -224,14 +246,10 @@ gst_mpp_dec_start (GstVideoDecoder * decoder)
 
   GST_DEBUG_OBJECT (self, "starting");
 
-  self->allocator = gst_mpp_allocator_new ();
-  if (!self->allocator)
-    return FALSE;
+  gst_video_info_init (&self->info);
 
-  if (mpp_create (&self->mpp_ctx, &self->mpi)) {
-    gst_object_unref (self->allocator);
+  if (mpp_create (&self->mpp_ctx, &self->mpi))
     return FALSE;
-  }
 
   self->interlace_mode = GST_VIDEO_INTERLACE_MODE_PROGRESSIVE;
   self->mpp_type = MPP_VIDEO_CodingUnused;
@@ -241,6 +259,7 @@ gst_mpp_dec_start (GstVideoDecoder * decoder)
   self->input_state = NULL;
 
   self->task_ret = GST_FLOW_OK;
+  self->decoded_frames = 0;
   self->flushing = FALSE;
 
   /* Prefer using MPP PTS */
@@ -252,6 +271,18 @@ gst_mpp_dec_start (GstVideoDecoder * decoder)
   GST_DEBUG_OBJECT (self, "started");
 
   return TRUE;
+}
+
+static void
+gst_mpp_dec_clear_allocator (GstVideoDecoder * decoder)
+{
+  GstMppDec *self = GST_MPP_DEC (decoder);
+  if (self->allocator) {
+    gst_mpp_allocator_set_cacheable (self->allocator, FALSE);
+    gst_object_unref (self->allocator);
+    self->allocator = NULL;
+    self->mpi->control (self->mpp_ctx, MPP_DEC_SET_EXT_BUF_GROUP, NULL);
+  }
 }
 
 static gboolean
@@ -269,12 +300,12 @@ gst_mpp_dec_stop (GstVideoDecoder * decoder)
 
   mpp_destroy (self->mpp_ctx);
 
-  gst_object_unref (self->allocator);
-
   if (self->input_state) {
     gst_video_codec_state_unref (self->input_state);
     self->input_state = NULL;
   }
+
+  gst_mpp_dec_clear_allocator (decoder);
 
   GST_DEBUG_OBJECT (self, "stopped");
 
@@ -302,6 +333,10 @@ gst_mpp_dec_finish (GstVideoDecoder * decoder)
 {
   GST_DEBUG_OBJECT (decoder, "finishing");
   gst_mpp_dec_reset (decoder, TRUE, FALSE);
+
+  /* No need to caching buffers after finished */
+  gst_mpp_dec_clear_allocator (decoder);
+
   return GST_FLOW_OK;
 }
 
@@ -312,24 +347,30 @@ gst_mpp_dec_set_format (GstVideoDecoder * decoder, GstVideoCodecState * state)
 
   GST_DEBUG_OBJECT (self, "setting format: %" GST_PTR_FORMAT, state->caps);
 
+  /* The MPP m2vd's PTS is buggy */
+  if (self->mpp_type == MPP_VIDEO_CodingMPEG2)
+    self->use_mpp_pts = FALSE;
+
   if (self->input_state) {
     if (gst_caps_is_strictly_equal (self->input_state->caps, state->caps))
       return TRUE;
 
     gst_mpp_dec_reset (decoder, TRUE, FALSE);
 
+    /* Clear cached buffers when format info changed */
+    gst_mpp_dec_clear_allocator (decoder);
+
     gst_video_codec_state_unref (self->input_state);
     self->input_state = NULL;
   } else {
-    MppBufferGroup group;
+    /* NOTE: MPP fast mode must be applied before mpp_init() */
+    self->mpi->control (self->mpp_ctx, MPP_DEC_SET_PARSER_FAST_MODE,
+        &self->fast_mode);
 
     if (mpp_init (self->mpp_ctx, MPP_CTX_DEC, self->mpp_type)) {
       GST_ERROR_OBJECT (self, "failed to init mpp ctx");
       return FALSE;
     }
-
-    group = gst_mpp_allocator_get_mpp_group (self->allocator);
-    self->mpi->control (self->mpp_ctx, MPP_DEC_SET_EXT_BUF_GROUP, group);
   }
 
   if (self->ignore_error)
@@ -367,6 +408,18 @@ gst_mpp_dec_update_video_info (GstVideoDecoder * decoder, GstVideoFormat format,
     GST_VIDEO_INFO_SET_AFBC (&output_state->info);
   } else {
     GST_VIDEO_INFO_UNSET_AFBC (&output_state->info);
+  }
+
+  if (self->dma_feature) {
+    GstCaps *tmp_caps = gst_caps_copy (output_state->caps);
+    gst_caps_set_features (tmp_caps, 0,
+        gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
+
+    /* HACK: Expose dmabuf feature when the subset check is hacked */
+    if (gst_caps_is_subset (tmp_caps, output_state->caps))
+      gst_caps_replace (&output_state->caps, tmp_caps);
+
+    gst_caps_unref (tmp_caps);
   }
 
   *info = output_state->info;
@@ -418,7 +471,13 @@ gst_mpp_dec_fixup_video_info (GstVideoDecoder * decoder, GstVideoFormat format,
     format = GST_VIDEO_FORMAT_NV12;
 #endif
 
-  gst_video_info_set_format (info, format,
+#ifdef HAVE_NV16_10LE40
+  if (format == GST_VIDEO_FORMAT_NV16_10LE40 &&
+      g_getenv ("GST_MPP_DEC_DISABLE_NV16_10"))
+    format = GST_VIDEO_FORMAT_NV12;
+#endif
+
+  gst_mpp_video_info_update_format (info, format,
       self->width ? : width, self->height ? : height);
 }
 
@@ -443,7 +502,6 @@ gst_mpp_dec_apply_info_change (GstVideoDecoder * decoder, MppFrame mframe)
 
   mpp_format = mpp_frame_get_fmt (mframe);
   afbc = !!MPP_FRAME_FMT_IS_FBC (mpp_format);
-  mpp_format &= ~MPP_FRAME_FBC_MASK;
   src_format = gst_mpp_mpp_format_to_gst_format (mpp_format);
 
   GST_INFO_OBJECT (self, "applying %s%s %dx%d (%dx%d)",
@@ -479,9 +537,9 @@ gst_mpp_dec_apply_info_change (GstVideoDecoder * decoder, MppFrame mframe)
     /* HACK: MPP would align width to 64 for AFBC */
     dst_width = GST_ROUND_UP_64 (dst_width);
 
-    /* HACK: MPP would has extra 16 lines for AFBC */
-    dst_height += 16;
-    vstride += 16;
+    /* HACK: MPP might have extra offsets for AFBC */
+    dst_height += offset_y;
+    vstride = dst_height;
 
     /* HACK: Fake hstride for Rockchip VOP driver */
     hstride = 0;
@@ -500,7 +558,10 @@ gst_mpp_dec_get_frame (GstVideoDecoder * decoder, GstClockTime pts)
   GstMppDec *self = GST_MPP_DEC (decoder);
   GstVideoCodecFrame *frame;
   GList *frames, *l;
+  gboolean is_first_frame = !self->decoded_frames;
   gint i;
+
+  self->decoded_frames++;
 
   frames = gst_video_decoder_get_frames (decoder);
   if (!frames) {
@@ -508,9 +569,9 @@ gst_mpp_dec_get_frame (GstVideoDecoder * decoder, GstClockTime pts)
     return NULL;
   }
 
-  frame = frames->data;
-  if (!frame->system_frame_number) {
-    /* Choose PTS source when getting the first frame */
+  /* Choose PTS source when getting the first frame */
+  if (is_first_frame) {
+    frame = frames->data;
 
     if (self->use_mpp_pts) {
       if (!GST_CLOCK_TIME_IS_VALID (pts)) {
@@ -520,7 +581,7 @@ gst_mpp_dec_get_frame (GstVideoDecoder * decoder, GstClockTime pts)
         if (GST_CLOCK_TIME_IS_VALID (frame->pts))
           self->mpp_delta_pts = frame->pts - MPP_TO_GST_PTS (pts);
 
-        pts = frame->pts;
+        pts = GST_CLOCK_TIME_NONE;
 
         GST_DEBUG_OBJECT (self, "MPP delta pts=%" GST_TIME_FORMAT,
             GST_TIME_ARGS (self->mpp_delta_pts));
@@ -566,7 +627,7 @@ gst_mpp_dec_get_frame (GstVideoDecoder * decoder, GstClockTime pts)
 
     if (GST_CLOCK_TIME_IS_VALID (f->pts)) {
       /* Prefer frame with close PTS */
-      if (abs ((gint) f->pts - (gint) pts) < 3000000) {
+      if (abs ((gint) f->pts - (gint) pts) < 3 * GST_MSECOND) {
         frame = f;
 
         GST_DEBUG_OBJECT (self, "using matched frame (#%d)",
@@ -605,8 +666,7 @@ out:
     gst_video_codec_frame_ref (frame);
 
     /* Prefer using MPP PTS */
-    pts -= self->mpp_delta_pts;
-    if (GST_CLOCK_TIME_IS_VALID (pts))
+    if (self->use_mpp_pts)
       frame->pts = pts;
   }
 
@@ -659,6 +719,9 @@ gst_mpp_dec_get_gst_buffer (GstVideoDecoder * decoder, MppFrame mframe)
   guint crop_h = self->crop_h;
   gboolean afbc = !!MPP_FRAME_FMT_IS_FBC (mpp_frame_get_fmt (mframe));
 
+  if (!self->allocator)
+    return NULL;
+
   mbuf = mpp_frame_get_buffer (mframe);
   if (!mbuf)
     return NULL;
@@ -702,9 +765,6 @@ gst_mpp_dec_get_gst_buffer (GstVideoDecoder * decoder, MppFrame mframe)
         GST_VIDEO_INFO_WIDTH (info), GST_VIDEO_INFO_HEIGHT (info));
   }
 
-  if (GST_VIDEO_INFO_IS_AFBC (info))
-    GST_MEMORY_FLAGS (mem) |= GST_MEMORY_FLAG_NOT_MAPPABLE;
-
   gst_buffer_append_memory (buffer, mem);
 
   gst_buffer_add_video_meta_full (buffer, GST_VIDEO_FRAME_FLAG_NONE,
@@ -716,9 +776,11 @@ gst_mpp_dec_get_gst_buffer (GstVideoDecoder * decoder, MppFrame mframe)
     return buffer;
 
 #ifdef HAVE_RGA
-  if (!GST_VIDEO_INFO_IS_AFBC (info) && !offset_x && !offset_y &&
-      gst_mpp_dec_rga_convert (decoder, mframe, buffer))
-    return buffer;
+  if (gst_mpp_use_rga ()) {
+    if (!GST_VIDEO_INFO_IS_AFBC (info) && !offset_x && !offset_y &&
+        gst_mpp_dec_rga_convert (decoder, mframe, buffer))
+      return buffer;
+  }
 #endif
 
   GST_WARNING_OBJECT (self, "unable to convert frame");
@@ -764,6 +826,7 @@ gst_mpp_dec_update_interlace_mode (GstVideoDecoder * decoder,
       gst_caps_set_simple (caps, "interlace-mode", G_TYPE_STRING,
           gst_video_interlace_mode_to_string (interlace_mode), NULL);
       gst_caps_replace (&output_state->caps, caps);
+      gst_caps_unref (caps);
 
       GST_VIDEO_INFO_INTERLACE_MODE (&output_state->info) = interlace_mode;
       self->interlace_mode = interlace_mode;
@@ -780,23 +843,29 @@ gst_mpp_dec_loop (GstVideoDecoder * decoder)
   GstVideoCodecFrame *frame;
   GstBuffer *buffer;
   MppFrame mframe;
-  int mode;
+  int timeout, mode;
 
-  mframe = klass->poll_mpp_frame (decoder, MPP_OUTPUT_TIMEOUT_MS);
+  timeout = self->flushing ? MPP_TIMEOUT_NON_BLOCK : MPP_OUTPUT_TIMEOUT_MS;
+
+  mframe = klass->poll_mpp_frame (decoder, timeout);
   /* Likely due to timeout */
   if (!mframe)
     return;
 
   GST_VIDEO_DECODER_STREAM_LOCK (decoder);
 
-  if (mpp_frame_get_eos (mframe))
-    goto eos;
-
   if (mpp_frame_get_info_change (mframe)) {
     self->mpi->control (self->mpp_ctx, MPP_DEC_SET_INFO_CHANGE_READY, NULL);
     self->task_ret = gst_mpp_dec_apply_info_change (decoder, mframe);
     goto info_change;
   }
+
+  if (!mpp_frame_get_buffer (mframe))
+    goto out;
+
+  /* Apply info change when video info not unavaliable (no info-change event) */
+  if (!self->info.size)
+    self->task_ret = gst_mpp_dec_apply_info_change (decoder, mframe);
 
   mode = mpp_frame_get_mode (mframe);
 #ifdef MPP_FRAME_FLAG_IEP_DEI_MASK
@@ -845,6 +914,11 @@ gst_mpp_dec_loop (GstVideoDecoder * decoder)
   gst_video_decoder_finish_frame (decoder, frame);
 
 out:
+  if (mpp_frame_get_eos (mframe)) {
+    GST_INFO_OBJECT (self, "got eos");
+    self->task_ret = GST_FLOW_EOS;
+  }
+
   mpp_frame_deinit (&mframe);
 
   if (self->task_ret != GST_FLOW_OK) {
@@ -856,10 +930,6 @@ out:
 
   GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
   return;
-eos:
-  GST_INFO_OBJECT (self, "got eos");
-  self->task_ret = GST_FLOW_EOS;
-  goto out;
 info_change:
   GST_INFO_OBJECT (self, "video info changed");
   goto out;
@@ -893,6 +963,17 @@ gst_mpp_dec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
 
   if (G_UNLIKELY (self->flushing))
     goto flushing;
+
+  if (!self->allocator) {
+    MppBufferGroup group;
+
+    self->allocator = gst_mpp_allocator_new ();
+    if (!self->allocator)
+      goto no_allocator;
+
+    group = gst_mpp_allocator_get_mpp_group (self->allocator);
+    self->mpi->control (self->mpp_ctx, MPP_DEC_SET_EXT_BUF_GROUP, group);
+  }
 
   if (G_UNLIKELY (!GST_MPP_DEC_TASK_STARTED (decoder))) {
     if (klass->startup && !klass->startup (decoder))
@@ -951,6 +1032,10 @@ flushing:
   GST_WARNING_OBJECT (self, "flushing");
   ret = GST_FLOW_FLUSHING;
   goto drop;
+no_allocator:
+  GST_ERROR_OBJECT (self, "failed to create mpp allocator");
+  ret = GST_FLOW_ERROR;
+  goto drop;
 not_negotiated:
   GST_ERROR_OBJECT (self, "not negotiated");
   ret = GST_FLOW_NOT_NEGOTIATED;
@@ -997,6 +1082,8 @@ gst_mpp_dec_init (GstMppDec * self)
   GstVideoDecoder *decoder = GST_VIDEO_DECODER (self);
 
   self->ignore_error = DEFAULT_PROP_IGNORE_ERROR;
+  self->fast_mode = DEFAULT_PROP_FAST_MODE;
+  self->dma_feature = DEFAULT_PROP_DMA_FEATURE;
 
   gst_video_decoder_set_packetized (decoder, TRUE);
 }
@@ -1028,6 +1115,7 @@ gst_mpp_dec_class_init (GstMppDecClass * klass)
   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
+  const gchar *env;
 
   GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "mppdec", 0, "MPP decoder");
 
@@ -1043,6 +1131,9 @@ gst_mpp_dec_class_init (GstMppDecClass * klass)
   gobject_class->get_property = GST_DEBUG_FUNCPTR (gst_mpp_dec_get_property);
 
 #ifdef HAVE_RGA
+  if (!gst_mpp_use_rga ())
+    goto no_rga;
+
   g_object_class_install_property (gobject_class, PROP_ROTATION,
       g_param_spec_enum ("rotation", "Rotation",
           "Rotation",
@@ -1060,6 +1151,8 @@ gst_mpp_dec_class_init (GstMppDecClass * klass)
           "Height (0 = original)",
           0, G_MAXINT, DEFAULT_PROP_HEIGHT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+no_rga:
 #endif
 
   g_object_class_install_property (gobject_class, PROP_CROP_RECTANGLE,
@@ -1070,12 +1163,31 @@ gst_mpp_dec_class_init (GstMppDecClass * klass)
               G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 
-  if (g_getenv ("GST_MPP_DEC_DEFAULT_IGNORE_ERROR"))
-    DEFAULT_PROP_IGNORE_ERROR = TRUE;
+  env = g_getenv ("GST_MPP_DEC_DEFAULT_IGNORE_ERROR");
+  if (env && !strcmp (env, "0"))
+    DEFAULT_PROP_IGNORE_ERROR = FALSE;
 
   g_object_class_install_property (gobject_class, PROP_IGNORE_ERROR,
       g_param_spec_boolean ("ignore-error", "Ignore error",
           "Ignore MPP decode errors", DEFAULT_PROP_IGNORE_ERROR,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  env = g_getenv ("GST_MPP_DEC_DEFAULT_FAST_MODE");
+  if (env && !strcmp (env, "0"))
+    DEFAULT_PROP_FAST_MODE = FALSE;
+
+  g_object_class_install_property (gobject_class, PROP_FAST_MODE,
+      g_param_spec_boolean ("fast-mode", "Fast mode",
+          "Enable MPP fast decode mode", DEFAULT_PROP_FAST_MODE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  env = g_getenv ("GST_MPP_DEC_DMA_FEATURE");
+  if (env && !strcmp (env, "1"))
+    DEFAULT_PROP_DMA_FEATURE = TRUE;
+
+  g_object_class_install_property (gobject_class, PROP_DMA_FEATURE,
+      g_param_spec_boolean ("dma-feature", "DMA feature",
+          "Enable GST DMA feature", DEFAULT_PROP_DMA_FEATURE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   element_class->change_state = GST_DEBUG_FUNCPTR (gst_mpp_dec_change_state);

@@ -1,25 +1,13 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMM_ADEC_H_
 #define INCLUDE_RT_MPI_RK_COMM_ADEC_H_
 
+#include "rk_type.h"
 #include "rk_common.h"
 #include "rk_comm_mb.h"
+#include "rk_comm_aio.h"
 
 #ifdef __cplusplus
 #if __cplusplus
@@ -45,18 +33,34 @@ typedef enum rkADEC_MODE_E {
 } ADEC_MODE_E;
 
 typedef struct rkADEC_ATTR_CODEC_S {
-    RK_U32 u32Channels;
-    RK_U32 u32SampleRate;
-    RK_U32 u32BitPerCodedSample;     // codewords
+    RK_CODEC_ID_E  enType;
+    RK_U32         u32Channels;
+    RK_U32         u32SampleRate;
+	RK_U32         u32BitPerCodedSample;  /* codewords */
+    RK_U32         u32Bitrate;
+
+    RK_VOID       *pExtraData;
+    RK_U32         u32ExtraDataSize;
+
+    RK_U32         u32Resv[4];           /* resv for user */
+    RK_VOID       *pstResv;              /* resv for user */
 } ADEC_ATTR_CODEC_S;
 
+typedef struct rkADEC_FRAME_INFO_S {
+    RK_U32         u32SampleRate;
+    RK_U32         u32Channels;
+    RK_U64         u64ChnLayout;
+    AUDIO_BIT_WIDTH_E enBitWidth;
+    RK_U32         resv[2];
+} ADEC_FRAME_INFO_S;
+
 typedef struct rkADEC_CH_ATTR_S {
-    RK_CODEC_ID_E     enType;         /* audio codec id */
-    ADEC_MODE_E       enMode;         /* decode mode */
-    ADEC_ATTR_CODEC_S stAdecCodec;    /* channel count & samplerate */
-    RK_U32            u32BufCount;    /* decode buffer count */
-    MB_BLK            extraData;      /* decode key parameters */
-    RK_U32            extraDataSize;  /* key parameters size */
+    RK_CODEC_ID_E   enType;         /* audio codec id */
+    ADEC_MODE_E     enMode;         /* decode mode */
+    RK_U32          u32BufCount;    /* decode buffer count */
+    RK_U32          u32BufSize;     /* decode buffer size(buffer size to store pcm data) */
+
+    ADEC_ATTR_CODEC_S stCodecAttr;
 } ADEC_CHN_ATTR_S;
 
 typedef struct rkADEC_CH_STATE_S {
@@ -69,7 +73,30 @@ typedef struct rkADEC_CH_STATE_S {
 typedef enum rkEN_ADEC_ERR_CODE_E {
     ADEC_ERR_DECODER_ERR     = 64,
     ADEC_ERR_BUF_LACK,
+    ADEC_ERR_REGISTER_ERR,
 } RK_ADEC_ERR_CODE_E;
+
+typedef struct rkADEC_DECODER_S {
+    RK_CODEC_ID_E enType;
+    RK_UCHAR aszName[17];
+    // open decoder
+    RK_S32 (*pfnOpenDecoder)(RK_VOID *pDecoderAttr, RK_VOID **ppDecoder);
+    RK_S32 (*pfnDecodeFrm)(RK_VOID *pDecoder, RK_VOID *pParam);
+    // get audio frames infor
+    RK_S32 (*pfnGetFrmInfo)(RK_VOID *pDecoder, RK_VOID *pInfo);
+    // close audio decoder
+    RK_S32 (*pfnCloseDecoder)(RK_VOID *pDecoder);
+    // reset audio decoder
+    RK_S32 (*pfnResetDecoder)(RK_VOID *pDecoder);
+} ADEC_DECODER_S;
+
+/* result of register ADEC */
+typedef enum rkADEC_DECODER_RESULT {
+    ADEC_DECODER_OK = RK_SUCCESS,
+    ADEC_DECODER_TRY_AGAIN,
+    ADEC_DECODER_ERROR,
+    ADEC_DECODER_EOS,
+} ADEC_DECODER_RESULT;
 
 /* invlalid device ID */
 #define RK_ERR_ADEC_INVALID_DEVID     RK_DEF_ERR(RK_ID_ADEC, RK_ERR_LEVEL_ERROR, RK_ERR_INVALID_DEVID)
@@ -103,6 +130,8 @@ typedef enum rkEN_ADEC_ERR_CODE_E {
 #define RK_ERR_ADEC_DECODER_ERR       RK_DEF_ERR(RK_ID_ADEC, RK_ERR_LEVEL_ERROR, ADEC_ERR_DECODER_ERR)
 /* input buffer not enough to decode one frame */
 #define RK_ERR_ADEC_BUF_LACK          RK_DEF_ERR(RK_ID_ADEC, RK_ERR_LEVEL_ERROR, ADEC_ERR_BUF_LACK)
+/* register ADec fail */
+#define RK_ERR_ADEC_REGISTER_ERR      RK_DEF_ERR(RK_ID_ADEC, RK_ERR_LEVEL_ERROR, ADEC_ERR_REGISTER_ERR)
 
 
 #ifdef __cplusplus

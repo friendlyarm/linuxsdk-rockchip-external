@@ -11,6 +11,7 @@ do {\
 		return TEE_ERROR_BAD_PARAMETERS;\
 } while (0)
 
+void ta_dump_hex(const char *name, const uint8_t *array, uint32_t len);
 TEE_Result handle_crypto_sha(void);
 TEE_Result handle_crypto_aes(void);
 TEE_Result handle_crypto_rsa(void);
@@ -23,5 +24,7 @@ TEE_Result handle_transfer_data(uint32_t param_types, TEE_Param params[4]);
 TEE_Result handle_storage_speed(uint32_t param_types, TEE_Param params[4]);
 TEE_Result handle_trng_read(void);
 TEE_Result handle_socket(void);
+TEE_Result handle_crypto_hw(uint32_t param_types, TEE_Param params[4]);
+TEE_Result handle_derive_key(void);
 
 #endif /*RKTEST_HANDLE_H*/

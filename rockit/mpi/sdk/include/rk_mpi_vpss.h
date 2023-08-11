@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_MPI_VPSS_H_
 #define INCLUDE_RT_MPI_RK_MPI_VPSS_H_
@@ -43,6 +29,9 @@ RK_S32 RK_MPI_VPSS_SetGrpAttr(VPSS_GRP VpssGrp, const VPSS_GRP_ATTR_S *pstGrpAtt
 
 RK_S32 RK_MPI_VPSS_SetGrpCrop(VPSS_GRP VpssGrp, const VPSS_CROP_INFO_S *pstCropInfo);
 RK_S32 RK_MPI_VPSS_GetGrpCrop(VPSS_GRP VpssGrp, VPSS_CROP_INFO_S *pstCropInfo);
+
+RK_S32 RK_MPI_VPSS_SetGrpRotation(VPSS_GRP VpssGrp, ROTATION_E enRotation);
+RK_S32 RK_MPI_VPSS_GetGrpRotation(VPSS_GRP VpssGrp, ROTATION_E *penRotation);
 
 RK_S32 RK_MPI_VPSS_SendFrame(VPSS_GRP VpssGrp, VPSS_GRP_PIPE VpssGrpPipe,
                                       const VIDEO_FRAME_INFO_S *pstVideoFrame, RK_S32 s32MilliSec);
@@ -95,8 +84,11 @@ RK_S32 RK_MPI_VPSS_DisableBufferShare(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
 RK_S32 RK_MPI_VPSS_GetChnFd(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
 RK_S32 RK_MPI_VPSS_CloseFd(VPSS_GRP VpssGrp, VPSS_CHN VpssChn);
 
-RK_S32 RK_MPI_VPSS_SetWorkUnit(VPSS_GRP VpssGrp, VPSS_WORK_UNIT_E enWorkUnit);
-RK_S32 RK_MPI_VPSS_GetWorkUnit(VPSS_GRP VpssGrp, VPSS_WORK_UNIT_E *enWorkUnit);
+RK_S32 RK_MPI_VPSS_SetVProcDev(VPSS_GRP VpssGrp, VIDEO_PROC_DEV_TYPE_E enVProcDev);
+RK_S32 RK_MPI_VPSS_GetVProcDev(VPSS_GRP VpssGrp, VIDEO_PROC_DEV_TYPE_E *enVProcDev);
+
+RK_S32 RK_MPI_VPSS_SetModParam(const VPSS_MOD_PARAM_S *pstModParam);
+RK_S32 RK_MPI_VPSS_GetModParam(VPSS_MOD_PARAM_S *pstModParam);
 
 #ifdef __cplusplus
 #if __cplusplus

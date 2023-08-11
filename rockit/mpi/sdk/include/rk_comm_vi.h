@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMM_VI_H_
 #define INCLUDE_RT_MPI_RK_COMM_VI_H_
@@ -32,6 +18,8 @@ extern "C" {
 #define VI_CHN1                       1
 #define VI_CHN2                       2
 #define VI_CHN3                       3
+#define VI_CHN4                       4
+#define VI_CHN5                       5
 
 #define MAX_VI_FILE_PATH_LEN   256
 #define MAX_VI_FILE_NAME_LEN   256
@@ -126,6 +114,12 @@ typedef struct rkVI_DEV_ATTR_S {
     DATA_RATE_E         enDataRate;
 } VI_DEV_ATTR_S;
 
+/* The status of chn */
+typedef struct rkVI_DEV_STATUS_S {
+    SIZE_S  stSize;                     /* RO;chn output size */
+    RK_BOOL bProbeOk;                   /* RO;whether sensor is probed success */
+} VI_DEV_STATUS_S;
+
 /* Information of pipe binded to device */
 typedef struct rkVI_DEV_BIND_PIPE_S {
     RK_U32  u32Num;                                     /* RW;Range [1,VI_MAX_PHY_PIPE_NUM] */
@@ -180,7 +174,7 @@ typedef struct rkVI_ISP_OPT_S {
     VI_V4L2_CAPTURE_TYPE  enCaptureType;      /* RW;isp capture type */
     VI_V4L2_MEMORY_TYPE   enMemoryType;       /* RW;isp buf memory type */
     RK_CHAR               aEntityName[MAX_VI_ENTITY_NAME_LEN];       /* RW;isp capture entity name*/
-    RK_BOOL               bNoUseLibV4L2;      /* RW;is use libv4l2 */
+    RK_BOOL               bNoUseLibV4L2;      /* RW;is no use libv4l2 */
     SIZE_S                stMaxSize;          /* RW;isp bypass resolution */
 } VI_ISP_OPT_S;
 
@@ -203,12 +197,14 @@ typedef struct rkVI_CHN_ATTR_S {
 typedef struct rkVI_CHN_STATUS_S {
     RK_BOOL bEnable;                    /* RO;Whether this channel is enabled */
     RK_U32  u32FrameRate;               /* RO;current frame rate */
-    RK_U32  u32LostFrame;               /* RO;Lost frame count */
+    RK_U32  u32CurFrameID;              /* RO;current frame id */
+    RK_U32  u32InputLostFrame;          /* RO;input lost frame count */
+    RK_U32  u32OutputLostFrame;         /* RO;output lost frame count */
     RK_U32  u32VbFail;                  /* RO;Video buffer malloc failure */
     SIZE_S  stSize;                     /* RO;chn output size */
 } VI_CHN_STATUS_S;
 
-/*Defines the configure parameters of AI saving file.*/
+/* Defines the configure parameters of VI saving file. */
 typedef struct rkVI_SAVE_FILE_INFO_S {
     RK_BOOL     bCfg;
     RK_CHAR     aFilePath[MAX_VI_FILE_PATH_LEN];
@@ -216,18 +212,100 @@ typedef struct rkVI_SAVE_FILE_INFO_S {
     RK_U32      u32FileSize;  /*in KB*/
 } VI_SAVE_FILE_INFO_S;
 
-/* Defines the features of an frame */
-typedef struct rkVI_FRAME_S {
-    MB_BLK            pMbBlk;                     /* R; the mediabuf of frame */
-    RK_U32            u32UniqueId;                /* R; the UniqueId of frame */
-    RK_U32            u32Fd;                      /* R; the fd of frame */
-    RK_U32            u32Len;                     /* R; the length of frame */
-    RK_S64            s64PTS;                     /* R; PTS */
-    RK_S32            s32Seq;                     /* R; the list number of frame*/
-    PIXEL_FORMAT_E    enPixelFormat;              /* R; the pixel format */
-    SIZE_S            stSize;                     /* R; the frame out put size */
-    COMPRESS_MODE_E   enCompressMode;             /* R; 256B Segment compress or no compress. */
-} VI_FRAME_S;
+typedef struct rkVI_CHN_BUF_WRAP_S {
+    RK_BOOL bEnable;
+    RK_U32  u32BufLine;             /* RW; Range: [128, H]; Chn buffer allocated by line. */
+    RK_U32  u32WrapBufferSize;      /* RW; Whether to allocate buffer according to compression. */
+} VI_CHN_BUF_WRAP_S;
+
+/* struct rkisp_mirror_flip
+ * mirror: global for all output stream
+ * flip: independent for all output stream
+ */
+typedef struct rkISP_MIRROR_FLIP_S {
+    RK_U8 mirror;
+    RK_U8 flip;
+} __attribute__((packed)) VI_ISP_MIRROR_FLIP_S;
+
+typedef enum rkVI_CROP_COORDINATE_E {
+    VI_CROP_RATIO_COOR = 0,
+    VI_CROP_ABS_COOR,
+    VI_CROP_BUTT
+} VI_CROP_COORDINATE_E;
+
+typedef struct rkVI_CROP_INFO_S {
+    RK_BOOL bEnable;
+    VI_CROP_COORDINATE_E enCropCoordinate;
+    RECT_S stCropRect;
+} VI_CROP_INFO_S;
+
+/* User picture mode */
+typedef enum rk_VI_USERPIC_MODE_E {
+    VI_USERPIC_MODE_PIC = 0,
+    VI_USERPIC_MODE_BGC,
+    VI_USERPIC_MODE_BUTT,
+} VI_USERPIC_MODE_E;
+
+/* User picture background color */
+typedef struct rkVI_USERPIC_BGC_S {
+    RK_U32 u32BgColor;
+} VI_USERPIC_BGC_S;
+
+/* User picture attr */
+typedef struct rkVI_USERPIC_ATTR_S {
+    VI_USERPIC_MODE_E enUsrPicMode;
+    union {
+        VIDEO_FRAME_INFO_S stUsrPicFrm;
+        VI_USERPIC_BGC_S stUsrPicBg;
+    } unUsrPic;
+} VI_USERPIC_ATTR_S;
+
+typedef enum rkVI_CONNECT_STATE_E {
+    VI_CONNECT_STATE_UNKNOWN = 0,
+    VI_CONNECT_STATE_CONNECT,
+    VI_CONNECT_STATE_DISCONNECT,
+    VI_CONNECT_STATE_BUTT
+} VI_CONNECT_STATE_E;
+
+typedef struct rkVI_CONNECT_INFO_S {
+    RK_U32 u32Width;
+    RK_U32 u32Height;
+    RK_FLOAT f32FrameRate;
+    PIXEL_FORMAT_E enPixFmt;
+    VI_CONNECT_STATE_E enConnect;
+} VI_CONNECT_INFO_S;
+
+typedef struct rkVI_EDID_S {
+    RK_U32 u32Pad;
+    RK_U32 u32StartBlock;
+    RK_U32 u32Blocks;
+    RK_U32 au32Reserved[5];
+    RK_U8 *pu8Edid;
+} VI_EDID_S;
+
+typedef struct rkVI_STREAM_S {
+    MB_BLK  pMbBlk;
+    RK_U32  u32Len;
+    RK_U32  u32Seq;
+    RK_U64  u64PTS;
+} VI_STREAM_S;
+
+typedef enum rkVI_EVENT_E {
+    VI_EVENT_CONNECT_CHANGE = 1 << 0,
+    VI_EVENT_SOURCE_CHANGE = 1 << 1,
+} VI_EVENT_E;
+
+typedef struct rkVI_CB_INFO_S {
+    RK_U32 u32Event;
+} VI_CB_INFO_S;
+
+/** change event handling callback function */
+typedef void (*RK_VI_EventCallback)(RK_VOID *pPrivateData, VI_CB_INFO_S *pstInfo);
+
+typedef struct rkVI_EVENT_CALL_BACK_S {
+    RK_VI_EventCallback pfnCallback;
+    RK_VOID            *pPrivateData;
+} VI_EVENT_CALL_BACK_S;
 
 #define RK_ERR_VI_INVALID_PARA        RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_ILLEGAL_PARAM)
 #define RK_ERR_VI_INVALID_DEVID       RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_INVALID_DEVID)
@@ -244,7 +322,9 @@ typedef struct rkVI_FRAME_S {
 #define RK_ERR_VI_NOT_PERM            RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_NOT_PERM)
 /* try to enable or initialize system,device or pipe or channel, before configing attribute */
 #define RK_ERR_VI_NOT_CONFIG          RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_NOT_CONFIG)
-/* the channle is not existed  */
+/* channel exists */
+#define RK_ERR_VI_EXIST               RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_EXIST)
+/* the channel is not existed  */
 #define RK_ERR_VI_UNEXIST             RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_UNEXIST)
 
 #ifdef __cplusplus

@@ -1,9 +1,18 @@
-/*************************************************************************
-    > File Name: defineHeader.h
-    > Author: jkand.huang
-    > Mail: jkand.huang@rock-chips.com
-    > Created Time: Tue 04 Jun 2019 09:06:31 AM CST
- ************************************************************************/
+/*
+ * Copyright (C) 2023 Rockchip Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #ifndef _DEFINEHEADER_H
 #define _DEFINEHEADER_H
@@ -25,31 +34,29 @@ typedef unsigned char UCHAR;
 typedef unsigned short WCHAR;
 typedef signed char CHAR;
 
-typedef enum
-{
-    RKNONE_DEVICE=0,
-    RK27_DEVICE=0x10,
+typedef enum {
+    RKNONE_DEVICE = 0,
+    RK27_DEVICE = 0x10,
     RKCAYMAN_DEVICE,
-    RK28_DEVICE=0x20,
+    RK28_DEVICE = 0x20,
     RK281X_DEVICE,
     RKPANDA_DEVICE,
-    RKNANO_DEVICE=0x30,
+    RKNANO_DEVICE = 0x30,
     RKSMART_DEVICE,
-    RKCROWN_DEVICE=0x40,
-    RK29_DEVICE=0x50,
+    RKCROWN_DEVICE = 0x40,
+    RK29_DEVICE = 0x50,
     RK292X_DEVICE,
-    RK30_DEVICE=0x60,
+    RK30_DEVICE = 0x60,
     RK30B_DEVICE,
-    RK31_DEVICE=0x70,
-    RK32_DEVICE=0x80
-}ENUM_RKDEVICE_TYPE;
+    RK31_DEVICE = 0x70,
+    RK32_DEVICE = 0x80
+} ENUM_RKDEVICE_TYPE;
 
-typedef enum
-{
-        ENTRY471=1,
-        ENTRY472=2,
-        ENTRYLOADER=4
-}ENUM_RKBOOTENTRY;
+typedef enum {
+    ENTRY471 = 1,
+    ENTRY472 = 2,
+    ENTRYLOADER = 4
+} ENUM_RKBOOTENTRY;
 
 #define SHA_DIGEST_SIZE 20
 #define PART_NAME 32

@@ -23,6 +23,7 @@ subversion = get_option('subversion')
 platform = get_option('platform')
 opencl_icd = get_option('opencl-icd')
 vendor_package = get_option('vendor-package')
+hooks_opts = get_option('hooks')
 wrappers_opts = get_option('wrappers')
 optimize = get_option('optimize-level')
 
@@ -32,7 +33,7 @@ message('Building for ' + '|'.join([arch, gpu, version, subversion,
 # Grab libraries with specified configs
 cmd = run_command('scripts/grabber.sh',
   arch, gpu, version, subversion, platform, optimize, check : false)
-libs = cmd.stdout().strip().split('\n')
+libs = cmd.stdout().strip().split(' ')
 
 # Use the first one as default library
 default_lib = libs[0]
@@ -46,17 +47,24 @@ is_rk3288 = gpu == 'midgard-t76x'
 is_utgard = gpu.split('-')[0] == 'utgard'
 is_px3se = gpu == 'utgard-400' and subversion == 'r3p0'
 
+platforms = platform.split('-')
+has_gbm = platforms.contains('gbm')
+has_x11 = platforms.contains('x11')
+has_wayland = platforms.contains('wayland')
+
 # Required packages
 requires = []
-if platform == 'gbm'
+if has_gbm
   requires = ['libdrm']
-elif platform == 'wayland'
+endif
+if has_wayland
   requires = ['libdrm', 'wayland-client', 'wayland-server']
 
   if is_px3se
     requires += ['libffi', 'libcrypto']
   endif
-elif platform == 'x11'
+endif
+if has_x11
   requires = ['libdrm', 'x11', 'xcb']
 
   if is_utgard
@@ -97,6 +105,7 @@ glesv1_wrappers = {'GLESv1_CM' : '1'}
 glesv2_wrappers = {'GLESv2' : '2'}
 wayland_wrappers = {'wayland-egl' : '1'}
 cl_wrappers = opencl_icd ? {'MaliOpenCL' : '1'} : {'OpenCL' : '1'}
+vk_wrappers = {'MaliVulkan' : '1'}
 
 # Source dir : dest dir
 gbm_headers = {
@@ -115,12 +124,27 @@ glesv2_headers = {
   'include/GLES2' : 'GLES2',
   'include/GLES3' : 'GLES3',
 }
+wayland_egl_headers = {
+  'include/WAYLAND' : '',
+}
 cl_headers = {
   'include/CL' : 'CL',
 }
 
+# Load original mali library for later function checks and linking
+mali = cc.find_library(fs.stem(default_lib),
+  dirs : meson.current_source_dir() / fs.parent(default_lib))
+
 # Provide newer GBM version with hook library
-gbm_version = get_option('hooks') ? '21.2.6' : '10.4.0'
+if hooks_opts
+  gbm_version = '21.2.6'
+elif cc.has_function('gbm_bo_get_fd_for_plane', dependencies : mali)
+  gbm_version = '21.1.0'
+elif cc.has_function('gbm_bo_get_modifier', dependencies : mali)
+  gbm_version = '17.1.0'
+else
+  gbm_version = '10.4.0'
+endif
 
 # Package name : required symbol, wrappers, headers, package version
 map = {
@@ -128,15 +152,14 @@ map = {
   'egl' : ['eglCreateContext', egl_wrappers, egl_headers, '7.10'],
   'glesv1_cm' : ['eglCreateContext', glesv1_wrappers, glesv1_headers, '7.10'],
   'glesv2' : ['eglCreateContext', glesv2_wrappers, glesv2_headers, '7.10'],
-  'wayland-egl' : ['wl_egl_window_create', wayland_wrappers, {}, '18.1.0'],
+  'wayland-egl' : ['wl_egl_window_create', wayland_wrappers,
+    wayland_egl_headers, '18.1.0'],
   'OpenCL' : ['clCreateContext', cl_wrappers, cl_headers, '1.2'],
+  'vulkan' : ['vk_icdGetInstanceProcAddr', vk_wrappers, {}, mali_version],
 }
 
-# Load original mali library for later function checks and linking
-mali = cc.find_library(fs.stem(default_lib),
-  dirs : meson.current_source_dir() / fs.parent(default_lib))
-
-if get_option('hooks')
+libhook = []
+if hooks_opts
   # Build hook library
   subdir('hook')
 
@@ -170,7 +193,8 @@ if is_utgard
   custom_target(
     'libMali',
     output : 'libMali.so',
-    command : ['ln', '-sf', 'libmali.so', '@OUTPUT@'],
+    command : ['echo'],
+    capture : true,
     install_dir : get_option('libdir'),
     install : true)
 endif
@@ -181,6 +205,7 @@ foreach name, values : map
   headers = values[2]
   pkg_version = values[3]
   is_opencl_icd = opencl_icd and name == 'OpenCL'
+  is_vulkan_icd = name == 'vulkan'
 
   if not cc.has_function(symbol, dependencies : mali)
     continue
@@ -190,7 +215,7 @@ foreach name, values : map
     shared_library(
       wrapper,
       dummy_source,
-      link_with : libhook,
+      link_with : [libhook, libmali],
       install : true,
       install_dir : wrapper_libdir,
       version : version)
@@ -199,7 +224,7 @@ foreach name, values : map
   # Install ICD OpenCL vendor config
   if is_opencl_icd
     custom_target(
-      'vendor icd',
+      'OpenCL vendor icd',
       output : 'mali.icd',
       command : ['echo', 'libMaliOpenCL.so.1'],
       capture : true,
@@ -207,8 +232,20 @@ foreach name, values : map
       install : true)
   endif
 
-  # No {headers, pkgconfig} for {ICD OpenGL, vendor packages}
-  if is_opencl_icd or vendor_package
+  # Install ICD Vulkan vendor config
+  if is_vulkan_icd
+    custom_target(
+      'Vulkan vendor icd',
+      input : 'data/vulkan/mali.json.in',
+      output : 'mali.json',
+      command : ['sed', 's/@LIB@/libMaliVulkan.so.1/', '@INPUT@'],
+      capture : true,
+      install_dir : get_option('datadir') / 'vulkan' / 'icd.d',
+      install : true)
+  endif
+
+  # No {headers, pkgconfig} for {ICD, vendor packages}
+  if is_opencl_icd or is_vulkan_icd or vendor_package
     continue
   endif
 
@@ -277,7 +314,7 @@ if not wrappers
   meson.add_install_script('scripts/fixup_nowrap.sh', get_option('libdir'))
 endif
 
-if platform != 'x11' and not vendor_package
+if not has_x11 and not vendor_package
   # Disable X11 in EGL header
   meson.add_install_script('scripts/fixup_nox11.sh', get_option('includedir'))
 endif

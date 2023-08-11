@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMMON_VPSS_H_
 #define INCLUDE_RT_MPI_RK_COMMON_VPSS_H_
@@ -54,6 +40,10 @@ extern "C" {
 #define VPSS_CHN3                    3
 #define VPSS_INVALID_CHN             -1
 
+typedef struct rkVPSS_MOD_PARAM_S {
+    MB_SOURCE_E enVpssMBSource;
+} VPSS_MOD_PARAM_S;
+
 typedef struct rkVPSS_GRP_ATTR_S {
     RK_U32                     u32MaxW;           /* RW; Range: [64, 16384]; Width of source image. */
     RK_U32                     u32MaxH;           /* RW; Range: [64, 16384]; Height of source image. */
@@ -61,6 +51,7 @@ typedef struct rkVPSS_GRP_ATTR_S {
     DYNAMIC_RANGE_E            enDynamicRange;    /* RW; DynamicRange of source image. */
     FRAME_RATE_CTRL_S          stFrameRate;       /* Grp frame rate contrl. */
     COMPRESS_MODE_E            enCompressMode;    /* RW; Reference frame compress mode */
+    RK_U32                     u32MaxQueue;       /* RW; Grp Max input queue length */
 } VPSS_GRP_ATTR_S;
 
 typedef enum rkVPSS_CHN_MODE_E {
@@ -83,17 +74,13 @@ typedef struct rkVPSS_CHN_ATTR_S {
     RK_BOOL             bFlip;              /* RW; Flip enable. */
     RK_U32              u32Depth;           /* RW; Range: [0, 8]; User get list depth. */
     ASPECT_RATIO_S      stAspectRatio;      /* Aspect Ratio info. */
+    RK_U32              u32FrameBufCnt;     /* RW; frame buffer cnt only used by MB_SOURCE_PRIVATE */
 } VPSS_CHN_ATTR_S;
 
 typedef enum rkVPSS_CROP_COORDINATE_E {
     VPSS_CROP_RATIO_COOR = 0,   /* Ratio coordinate. */
     VPSS_CROP_ABS_COOR          /* Absolute coordinate. */
 } VPSS_CROP_COORDINATE_E;
-
-typedef enum rkVPSS_WORK_UNIT_E {
-    VPSS_WORK_UNIT_RGA = 0,       /*  */
-    VPSS_WORK_UNIT_GPU            /*  */
-} VPSS_WORK_UNIT_E;
 
 typedef struct rkVPSS_CROP_INFO_S {
     RK_BOOL                 bEnable;            /* RW; Range: [0, 1];  CROP enable. */

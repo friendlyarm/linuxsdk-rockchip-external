@@ -15,6 +15,7 @@
 #include <rktest_ta.h>
 #include <rktest.h>
 #include <pta_secstor_ta_mgmt.h>
+#include <sys/time.h>
 
 #define STORAGE_UUID \
 		{ 0x2d26d8a8, 0x5134, 0x4dd8, \
@@ -374,6 +375,61 @@ static TEEC_Result invoke_socket(TEEC_Session *session,
 	return res;
 }
 
+static TEEC_Result invoke_crypto_hw(TEEC_Context *context, TEEC_Session *session,
+				     TEEC_Operation *operation, uint32_t *error_origin)
+{
+	TEEC_Result res;
+	TEEC_SharedMemory sm;
+	uint8_t data[128 * 1024];
+	uint8_t check_data[128 * 1024];
+
+	memset(data, 0xab, sizeof(data));
+	memset(check_data, 0xab, sizeof(check_data));
+	memset(operation, 0, sizeof(TEEC_Operation));
+
+	operation->paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_PARTIAL_INOUT,
+						 TEEC_NONE,
+						 TEEC_NONE,
+						 TEEC_NONE);
+
+	sm.size = sizeof(data);
+	sm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+	res = TEEC_AllocateSharedMemory(context, &sm);
+	if (res != TEEC_SUCCESS) {
+		printf("AllocateSharedMemory ERR! TEEC res= 0x%x", res);
+		return res;
+	}
+	memcpy(sm.buffer, data, sm.size);
+	operation->params[0].memref.parent = &sm;
+	operation->params[0].memref.offset = 0;
+	operation->params[0].memref.size   = sm.size;
+
+	struct timeval time;
+	gettimeofday(&time, NULL);
+	res = TEEC_InvokeCommand(session, RKTEST_TA_CMD_CRYPTO_HW,
+				  operation, error_origin);
+	struct timeval time2;
+	gettimeofday(&time2, NULL);
+	printf("invoke_crypto_hw use time: %ld us \n",
+	       (time2.tv_sec - time.tv_sec) * 1000000 + (time2.tv_usec - time.tv_usec));
+
+	if (res == TEEC_SUCCESS) {
+		if (memcmp(data, check_data, sizeof(data)) == 0) {
+			printf("hardware crypto success!\n");
+		} else {
+			printf("hardware crypto fail!\n");
+		}
+	}
+	return res;
+};
+
+static TEEC_Result invoke_derive_key(TEEC_Session *session,
+				 TEEC_Operation *operation, uint32_t *error_origin)
+{
+	return TEEC_InvokeCommand(session, RKTEST_TA_CMD_DERIVE_KEY,
+				  operation, error_origin);
+}
+
 TEEC_Result rk_test(uint32_t invoke_command)
 {
 	TEEC_Result res = TEEC_SUCCESS;
@@ -472,6 +528,12 @@ TEEC_Result rk_test(uint32_t invoke_command)
 		break;
 	case  SOCKET:
 		res = invoke_socket(&session, &operation, &error_origin);
+		break;
+	case  CRYPTO_HW:
+		res = invoke_crypto_hw(&contex, &session, &operation, &error_origin);
+		break;
+	case  DERIVE_KEY:
+		res = invoke_derive_key(&session, &operation, &error_origin);
 		break;
 	default:
 		printf("Doing nothing.\n");

@@ -30,11 +30,13 @@
 #include <gbm.h>
 #endif
 
-#ifdef HAS_X11_EGL
-#include <pthread.h>
-
+#ifdef HAS_EGL
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#endif
+
+#ifdef HAS_X11
+#include <pthread.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xlibint.h>
@@ -42,6 +44,10 @@
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+#endif
+
+#ifndef DRM_FORMAT_MOD_LINEAR
+#define DRM_FORMAT_MOD_LINEAR 0
 #endif
 
 #ifndef DRM_FORMAT_MOD_INVALID
@@ -56,13 +62,19 @@ int mali_injected = 0;
 #ifdef HAS_GBM
 static struct gbm_surface * (* _gbm_surface_create)(struct gbm_device *, uint32_t, uint32_t, uint32_t, uint32_t) = NULL;
 static struct gbm_bo * (* _gbm_bo_create) (struct gbm_device *, uint32_t, uint32_t, uint32_t, uint32_t) = NULL;
+#ifdef HAS_gbm_bo_get_modifier
+static uint64_t (* _gbm_bo_get_modifier) (struct gbm_bo *bo) = NULL;
+#endif
 #endif
 
-#ifdef HAS_X11_EGL
-static PFNEGLGETPROCADDRESSPROC _eglGetProcAddress = NULL;
+#ifdef HAS_EGL
 static PFNEGLGETDISPLAYPROC _eglGetDisplay = NULL;
+
+#ifdef HAS_X11
+static PFNEGLGETPROCADDRESSPROC _eglGetProcAddress = NULL;
 static PFNEGLGETPLATFORMDISPLAYPROC _eglGetPlatformDisplay = NULL;
 static PFNEGLGETPLATFORMDISPLAYEXTPROC _eglGetPlatformDisplayEXT = NULL;
+#endif
 #endif
 
 #define MALI_SYMBOL(func) { #func, (void **)(&_ ## func), }
@@ -73,10 +85,15 @@ static struct {
 #ifdef HAS_GBM
    MALI_SYMBOL(gbm_surface_create),
    MALI_SYMBOL(gbm_bo_create),
+#ifdef HAS_gbm_bo_get_modifier
+   MALI_SYMBOL(gbm_bo_get_modifier),
 #endif
-#ifdef HAS_X11_EGL
-   MALI_SYMBOL(eglGetProcAddress),
+#endif
+#ifdef HAS_EGL
    MALI_SYMBOL(eglGetDisplay),
+#ifdef HAS_X11
+   MALI_SYMBOL(eglGetProcAddress),
+#endif
 #endif
 };
 
@@ -113,11 +130,13 @@ load_mali_symbols(void)
 
    dlclose(handle);
 
-#ifdef HAS_X11_EGL
+#ifdef HAS_EGL
+#ifdef HAS_X11
    _eglGetPlatformDisplay =
       (PFNEGLGETPLATFORMDISPLAYPROC)_eglGetProcAddress("eglGetPlatformDisplay");
    _eglGetPlatformDisplayEXT =
       (PFNEGLGETPLATFORMDISPLAYEXTPROC)_eglGetProcAddress("eglGetPlatformDisplayEXT");
+#endif
 #endif
 }
 
@@ -144,14 +163,6 @@ uint32_t
 gbm_bo_get_offset(struct gbm_bo *bo, int plane)
 {
    return 0;
-}
-#endif
-
-#ifndef HAS_gbm_bo_get_modifier
-uint64_t
-gbm_bo_get_modifier(struct gbm_bo *bo)
-{
-   return DRM_FORMAT_MOD_INVALID;
 }
 #endif
 
@@ -383,6 +394,19 @@ gbm_format_get_name(uint32_t gbm_format, struct gbm_format_name_desc *desc)
 }
 #endif
 
+/* Wrappers for invalid modifier */
+
+uint64_t
+gbm_bo_get_modifier(struct gbm_bo *bo)
+{
+#ifdef HAS_gbm_bo_get_modifier
+   uint64_t modifier = _gbm_bo_get_modifier(bo);
+   if (modifier != DRM_FORMAT_MOD_INVALID)
+      return modifier;
+#endif
+   return DRM_FORMAT_MOD_LINEAR;
+}
+
 /* Wrappers for unsupported flags */
 
 struct gbm_surface *
@@ -418,7 +442,8 @@ gbm_bo_create(struct gbm_device *gbm,
 
 #endif // HAS_GBM
 
-#ifdef HAS_X11_EGL
+#ifdef HAS_EGL
+#ifdef HAS_X11
 
 /* Hacked displays (should not be much) */
 #define MAX_X11_DISPLAY 32
@@ -477,15 +502,7 @@ fixup_x11_display(Display *display)
    return display;
 }
 
-/* Override libmali symbols */
-
-EGLAPI EGLDisplay EGLAPIENTRY
-eglGetDisplay (EGLNativeDisplayType display_id)
-{
-   Display *display = fixup_x11_display((void *)display_id);
-
-   return _eglGetDisplay((EGLNativeDisplayType)display);
-}
+/* Override EGL symbols */
 
 EGLAPI EGLDisplay EGLAPIENTRY
 eglGetPlatformDisplay(EGLenum platform, void *native_display, const EGLAttrib *attrib_list)
@@ -545,3 +562,36 @@ eglGetProcAddress(const char *procname)
 }
 
 #endif // HAS_X11
+
+EGLAPI EGLDisplay EGLAPIENTRY
+eglGetDisplay (EGLNativeDisplayType display_id)
+{
+    const char *type = getenv("MALI_DEFAULT_WINSYS");
+
+    static PFNEGLGETPLATFORMDISPLAYEXTPROC get_platform_display = NULL;
+    if (!get_platform_display)
+        get_platform_display = (PFNEGLGETPLATFORMDISPLAYEXTPROC)
+            eglGetProcAddress("eglGetPlatformDisplayEXT");
+    if (!get_platform_display)
+        goto bail;
+
+#ifdef HAS_GBM
+    if (type && !strcmp(type, "gbm"))
+        return get_platform_display(EGL_PLATFORM_GBM_KHR, display_id, NULL);
+#endif
+
+#ifdef HAS_WAYLAND
+    if (type && !strcmp(type, "wayland"))
+        return get_platform_display(EGL_PLATFORM_WAYLAND_EXT, display_id, NULL);
+#endif
+
+#ifdef HAS_X11
+    /* Use X11 by default when avaiable */
+    return get_platform_display(EGL_PLATFORM_X11_KHR, display_id, NULL);
+#endif
+
+bail:
+    return _eglGetDisplay(display_id);
+}
+
+#endif // HAS_EGL

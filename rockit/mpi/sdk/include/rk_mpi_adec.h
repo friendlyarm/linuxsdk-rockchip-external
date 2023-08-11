@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_MPI_ADEC_H_
 #define INCLUDE_RT_MPI_MPI_ADEC_H_
@@ -37,6 +23,9 @@ RK_S32 RK_MPI_ADEC_GetFrame(ADEC_CHN AdChn, AUDIO_FRAME_INFO_S *pstFrmInfo, RK_B
 RK_S32 RK_MPI_ADEC_ReleaseFrame(ADEC_CHN AdChn, AUDIO_FRAME_INFO_S *pstFrmInfo);
 RK_S32 RK_MPI_ADEC_SendEndOfStream(ADEC_CHN AdChn, RK_BOOL bInstant);
 RK_S32 RK_MPI_ADEC_QueryChnStat(ADEC_CHN AdChn, ADEC_CHN_STATE_S *pstBufferStatus);
+
+RK_S32 RK_MPI_ADEC_RegisterDecoder(RK_S32 *ps32Handle, const ADEC_DECODER_S *pstDecoder);
+RK_S32 RK_MPI_ADEC_UnRegisterDecoder(RK_S32 s32Handle);
 
 #ifdef __cplusplus
 #if __cplusplus

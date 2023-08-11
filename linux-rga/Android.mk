@@ -28,8 +28,6 @@
 
 LOCAL_PATH:= $(call my-dir)
 
-$(info $(shell $(LOCAL_PATH)/genversion.sh Android.mk))
-
 ifeq (1,$(strip $(shell expr $(PLATFORM_SDK_VERSION) \< 28)))
 
 ifneq ($(strip $(BOARD_USE_DRM)), true)
@@ -50,6 +48,10 @@ LOCAL_C_INCLUDES += hardware/rockchip/libgralloc
 LOCAL_C_INCLUDES += hardware/rk29/libgralloc_ump
 LOCAL_C_INCLUDES += hardware/libhardware/include/hardware
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/include
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/im2d_api
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/utils
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/3rdparty/libdrm/include/drm
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/hardware
 
 LOCAL_CFLAGS := \
         -DLOG_TAG=\"librga\"
@@ -77,13 +79,19 @@ LOCAL_C_INCLUDES += bionic
 endif
 
 LOCAL_SRC_FILES:= \
+    core/utils/android_utils/src/android_utils.cpp \
+    core/utils/drm_utils/src/drm_utils.cpp \
+    core/utils/utils.cpp \
     core/RockchipRga.cpp \
     core/GrallocOps.cpp \
     core/NormalRga.cpp \
     core/NormalRgaApi.cpp \
     core/RgaApi.cpp \
     core/RgaUtils.cpp \
-    im2d_api/im2d.cpp
+    core/rga_sync.cpp \
+    im2d_api/src/im2d_log.cpp \
+    im2d_api/src/im2d_impl.cpp \
+    im2d_api/src/im2d.cpp
 
 ifneq (1,$(strip $(shell expr $(PLATFORM_VERSION) \< 6.0)))
 ifeq ($(strip $(TARGET_BOARD_PLATFORM_GPU)), mali-t720)
@@ -124,13 +132,19 @@ ifeq ($(strip $(BOARD_USE_DRM)), true)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES += \
+    core/utils/android_utils/src/android_utils.cpp \
+    core/utils/drm_utils/src/drm_utils.cpp \
+    core/utils/utils.cpp \
     core/RockchipRga.cpp \
     core/GrallocOps.cpp \
     core/NormalRga.cpp \
     core/NormalRgaApi.cpp \
     core/RgaApi.cpp \
     core/RgaUtils.cpp \
-    im2d_api/im2d.cpp
+    core/rga_sync.cpp \
+    im2d_api/src/im2d_log.cpp \
+    im2d_api/src/im2d_impl.cpp \
+    im2d_api/src/im2d.cpp
 
 LOCAL_MODULE := librga
 LOCAL_PROPRIETARY_MODULE := true
@@ -141,6 +155,10 @@ LOCAL_C_INCLUDES += hardware/libhardware/include/hardware
 LOCAL_C_INCLUDES += hardware/libhardware/modules/gralloc
 LOCAL_C_INCLUDES += frameworks/native/libs/nativewindow/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/include
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/im2d_api
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/utils
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/3rdparty/libdrm/include/drm
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/hardware
 
 LOCAL_SHARED_LIBRARIES := libdrm
 LOCAL_SHARED_LIBRARIES += \
@@ -160,7 +178,7 @@ LOCAL_CFLAGS += -DUSE_AHARDWAREBUFFER=1
 endif
 
 ifneq ($(strip $(TARGET_BOARD_PLATFORM)),rk3368)
-LOCAL_SHARED_LIBRARIES += libgralloc_drm 
+LOCAL_SHARED_LIBRARIES += libgralloc_drm
 endif
 
 ifneq (1,$(strip $(shell expr $(PLATFORM_VERSION) \< 6.9)))
@@ -195,12 +213,18 @@ ifeq ($(strip $(BOARD_USE_DRM)), true)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES += \
+    core/utils/android_utils/src/android_utils.cpp \
+    core/utils/drm_utils/src/drm_utils.cpp \
+    core/utils/utils.cpp \
     core/RockchipRga.cpp \
     core/GrallocOps.cpp \
     drm/DrmmodeRga.cpp \
     core/RgaApi.cpp \
     core/RgaUtils.cpp \
-    im2d_api/im2d.cpp
+    core/rga_sync.cpp \
+    im2d_api/src/im2d_log.cpp \
+    im2d_api/src/im2d_impl.cpp \
+    im2d_api/src/im2d.cpp
 
 LOCAL_MODULE := librga
 
@@ -208,6 +232,11 @@ LOCAL_C_INCLUDES += external/libdrm/rockchip
 LOCAL_C_INCLUDES += hardware/rockchip/libgralloc
 LOCAL_C_INCLUDES += hardware/rk29/libgralloc_ump
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/drm
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/im2d_api
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/utils
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/3rdparty/libdrm/include/drm
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/core/hardware
 
 LOCAL_SHARED_LIBRARIES := libdrm
 LOCAL_SHARED_LIBRARIES += \

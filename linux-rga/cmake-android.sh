@@ -1,13 +1,24 @@
 #!/bin/bash
 
-ANDROID_NDK_HOME=/Users/jacobchen/Library/Android/sdk/ndk/21.3.6528147
-CMAKE_ANDROID=/Users/jacobchen/Library/Android/sdk/cmake/3.6.4111459/bin/cmake
+SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE[0]}); pwd)
+SOURCE_PATH=${SCRIPT_DIR}
 
-${CMAKE_ANDROID} -DCMAKE_BUILD_TARGET=android_ndk -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-      -DANDROID_NDK=$ANDROID_NDK_HOME \
-      -DANDROID_ABI=armeabi-v7a \
-      -DANDROID_TOOLCHAIN=clang \
-      -DANDROID_PLATFORM=android-27 \
-      -DANDROID_STL=c++_shared \
-	  ..
-make
+# Modify to the local toolchain path.
+TOOLCHAIN_PATH=${SOURCE_PATH}/toolchains/toolchain_android_ndk.cmake
+BUILD_DIR=build/build_android_ndk
+BUILD_TYPE=Release
+
+rm -rf $BUILD_DIR
+mkdir -p $BUILD_DIR
+pushd $BUILD_DIR
+
+cmake ../.. \
+	-DCMAKE_BUILD_TARGET=android_ndk \
+	-DBUILD_TOOLCHAINS_PATH=${TOOLCHAIN_PATH} \
+	-DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+	-DCMAKE_INSTALL_PREFIX=install \
+
+make -j8
+make install
+
+popd

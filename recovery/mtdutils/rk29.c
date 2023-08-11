@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2023 Rockchip Electronics Co., Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #define _GNU_SOURCE
 
 #include <dirent.h>
@@ -13,6 +29,7 @@
 #include <errno.h>
 #include "mtdutils.h"
 #include "rk29.h"
+#include "common.h"
 
 int run(const char *filename, char *const argv[])
 {
@@ -21,11 +38,11 @@ int run(const char *filename, char *const argv[])
     pid_t pid;
 
     if (stat(filename, &s) != 0) {
-        fprintf(stderr, "cannot find '%s'", filename);
+        LOGE("cannot find '%s'", filename);
         return -1;
     }
 
-    printf("executing '%s'\n", filename);
+    LOGI("executing '%s'\n", filename);
 
     pid = fork();
 
@@ -33,172 +50,129 @@ int run(const char *filename, char *const argv[])
         setpgid(0, getpid());
         /* execute */
         execv(filename, argv);
-        fprintf(stderr, "can't run %s (%s)\n", filename, strerror(errno));
+        LOGE("can't run %s (%s)\n", filename, strerror(errno));
         /* exit */
         _exit(0);
     }
 
     if (pid < 0) {
-        fprintf(stderr, "failed to fork and start '%s'\n", filename);
+        LOGE("failed to fork and start '%s'\n", filename);
         return -1;
     }
 
     if (-1 == waitpid(pid, &status, WCONTINUED | WUNTRACED)) {
-        fprintf(stderr, "wait for child error\n");
+        LOGE("wait for child error\n");
         return -1;
     }
 
     if (WIFEXITED(status)) {
-        printf("executed '%s' done\n", filename);
+        LOGI("executed '%s' done\n", filename);
     }
 
-    printf("executed '%s' return %d\n", filename, WEXITSTATUS(status));
+    LOGI("executed '%s' return %d\n", filename, WEXITSTATUS(status));
     return 0;
 }
 
-//int rk_make_ext4fs(const char *filename, s64 len)
-//{
-//    const char *const mke2fs_argv[] = { "/sbin/mke2fs", "-t", "ext4", "-O", "^huge_file", "-m", "0", "-q", filename, NULL };
-//    printf("format '%s' to ext4 filesystem\n", filename);
-//    return run(mke2fs_argv[0], (char **) mke2fs_argv);
-//}
-
-int rk_make_ext4fs(const char *filename,long long len, const char *mountpoint)
+int rk_check_and_resizefs(const char *filename)
 {
-    int result;
-
-    const char *const mke2fs_argv[] = { "/sbin/mke2fs", "-t", "ext4", "-b", "4096", "-O", "^huge_file", "-m", "0", "-q", "-F", filename, NULL };
-    const char *const e2fsck_argv[] = { "/sbin/e2fsck", "-fy", filename, NULL };
-    printf("format '%s' to ext4 filesystem\n", filename);
-    result = run(mke2fs_argv[0], (char **) mke2fs_argv);
-    if(result) {
-        printf("format '%s' to ext4 error!\n", filename);
-        return result;
-    }
-
-    result = run(e2fsck_argv[0], (char **) e2fsck_argv);
-    if(result) {
-        printf("e2fsck check '%s' fail!\n", filename);
-        return result;
-    }
-
-    if(mountpoint != NULL) {
-        int result2 = mount(filename, mountpoint, "ext4",
-                                   MS_NOATIME | MS_NODEV | MS_NODIRATIME, "");
-        if(result2) {
-            printf("mount '%s' to %s fail!\n", filename, mountpoint);
-        }
-    }
-
-    return result;
-}
-
-int rk_check_and_resizefs(const char *filename) {
     int result;
 
     const char *const e2fsck_argv[] = { "/sbin/e2fsck", "-fy", filename, NULL };
     const char *const resizefs_argv[] = { "/sbin/resize2fs", filename, NULL  };
 
     result = run(e2fsck_argv[0], (char **) e2fsck_argv);
-    if(result) {
-        printf("e2fsck check '%s' failed!\n", filename);
+    if (result) {
+        LOGI("e2fsck check '%s' failed!\n", filename);
         return result;
     }
 
     result = run(resizefs_argv[0], (char **) resizefs_argv);
-    if(result) {
-        printf("resizefs '%s' failed!\n", filename);
+    if (result) {
+        LOGI("resizefs '%s' failed!\n", filename);
     }
 
     return result;
 }
 
-int rk_check_and_resizefs_f2fs(const char *filename) {
-	int result;
-
-	const char *const e2fsck_argv[] = { "fsck_f2fs", filename, NULL };
-	const char *const resizefs_argv[] = { "resize.f2fs", filename, NULL  };
-
-	result = run(e2fsck_argv[0], (char **) e2fsck_argv);
-	if(result) {
-		printf("fsck_f2fs check '%s' failed!\n", filename);
-		return result;
-	}
-
-	result = run(resizefs_argv[0], (char **) resizefs_argv);
-	if(result) {
-		printf("resize.f2fs '%s' failed!\n", filename);
-	}
-
-	return result;
-}
-
-
-int rk_make_ext3fs(const char *filename)
+int rk_check_and_resizefs_f2fs(const char *filename)
 {
     int result;
 
-    const char *const mke2fs_argv[] = { "mke2fs", "-t", "ext3", "-b", "4096", "-O", "^huge_file", "-m", "0", "-q", filename, NULL };
-    const char *const e2fsck_argv[] = { "e2fsck", "-fy", filename, NULL };
-    printf("format '%s' to ext3 filesystem\n", filename);
-    result = run(mke2fs_argv[0], (char **) mke2fs_argv);
-    if(result) {
-        printf("format '%s' to ext3 fail!\n", filename);
+    const char *const e2fsck_argv[] = { "fsck_f2fs", filename, NULL };
+    const char *const resizefs_argv[] = { "resize.f2fs", filename, NULL  };
+
+    result = run(e2fsck_argv[0], (char **) e2fsck_argv);
+    if (result) {
+        LOGI("fsck_f2fs check '%s' failed!\n", filename);
         return result;
     }
 
-    result = run(e2fsck_argv[0], (char **) e2fsck_argv);
-    if(result) {
-        printf("e2fsck check '%s' fail!\n", filename);
+    result = run(resizefs_argv[0], (char **) resizefs_argv);
+    if (result) {
+        LOGI("resize.f2fs '%s' failed!\n", filename);
     }
 
     return result;
 }
 
-int rk_make_ext2fs(const char *filename)
+static int make_extfs(const char *path, const char *label, const char *type)
 {
+    const char *const mke2fs[] = {
+        "/sbin/mke2fs", "-t", type, "-q", path, NULL,
+    };
+
+    // max-mount-counts(0) + time-dependent checking(0) + fslabel
+    const char *const tune2fs[] = {
+        "/sbin/tune2fs", "-c", "0", "-i", "0", "-L", label, path, NULL,
+    };
     int result;
 
-    //const char *const mke2fs_argv[] = { "/sbin/mke2fs", "-t", "ext2", "-b", "4096", "-O", "^huge_file", "-m", "0", "-q", filename, NULL };
-    const char *const mke2fs_argv[] = { "/sbin/mke2fs", "-t", "ext2", "-b", "1024", "-O", "^huge_file", "-m", "0", "-q", filename, NULL };
-    const char *const e2fsck_argv[] = { "/sbin/e2fsck", "-fy", filename, NULL };
-    printf("format '%s' to ext2 filesystem\n", filename);
-    result = run(mke2fs_argv[0], (char **) mke2fs_argv);
-    if(result) {
-        printf("format '%s' to ext2 fail!\n", filename);
+    LOGI("format '%s' to %s filesystem\n", path, type);
+    result = run(mke2fs[0], (char **) mke2fs);
+    if (result) {
+        LOGI("failed!\n");
         return result;
     }
 
-    result = run(e2fsck_argv[0], (char **) e2fsck_argv);
-    if(result) {
-        printf("e2fsck check '%s' fail!\n", filename);
+    result = run(tune2fs[0], (char **) tune2fs);
+    if (result) {
+        LOGI("failed!\n");
+        return result;
     }
 
     return result;
 }
 
-int make_vfat(const char *filename,const char* volumelabel)
+int make_ext2(const char *path, const char *label)
 {
-    printf("format '%s' to vfat filesystem\n", filename);
-    if(volumelabel == NULL){
-         const char *const mke2fs_argv[] = { "/sbin/mkdosfs", filename, NULL };
-         return run(mke2fs_argv[0], (char **) mke2fs_argv);
-    }else{
-         const char *const mke2fs_withLabel_argv[] = { "/sbin/mkdosfs", "-n", volumelabel, filename, NULL };
-         return run(mke2fs_withLabel_argv[0], (char **) mke2fs_withLabel_argv);
-    }
+    return make_extfs(path, label, "ext2");
 }
 
-int make_ntfs(const char *filename,const char* volumelabel) {
-    printf("format '%s' to NTFS filesystem.\n", filename);
+int make_ext4(const char *path, const char *label)
+{
+    return make_extfs(path, label, "ext4");
+}
 
-    if(volumelabel == NULL){
-         const char *const mkntfs_argv[] = { "mkntfs", "-F", "C", "Q", filename, NULL };
-         return run(mkntfs_argv[0], (char **) mkntfs_argv);
-    }else{
-         const char *const mkntfs_withLabel_argv[] = { "mkntfs", "-F", "C", "Q", "-L", volumelabel, filename, NULL };
-         return run(mkntfs_withLabel_argv[0], (char **) mkntfs_withLabel_argv);
-    }
+int make_vfat(const char *path, const char *label)
+{
+    // fat32
+    const char *const mkdosfs[] = {
+        "/sbin/mkdosfs", "-F", "32", "-n", label, path, NULL,
+    };
+
+    LOGI("format '%s' to vfat filesystem\n", path);
+    return run(mkdosfs[0], (char **) mkdosfs);
+}
+
+int make_ntfs(const char *path, const char *label)
+{
+    // compression
+    const char *const mkntfs[] = {
+        "mkntfs", "-F", "C", "Q", "-L", label, path, NULL,
+    };
+
+    LOGI("format '%s' to ntfs filesystem\n", path);
+    return run(mkntfs[0], (char **) mkntfs);
 }
 
 #ifndef min

@@ -19,18 +19,22 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <cstring>
+#include <cstdlib>
 
 #include "rk_debug.h"
 #include "rk_mpi_sys.h"
 #include "rk_mpi_ao.h"
 #include "rk_mpi_adec.h"
-#include "argparse.h"
+
+#include "test_comm_argparse.h"
 
 typedef struct _rkTestSysCtx {
     RK_S32      s32LoopCount;
     RK_S32      s32DevId;
     RK_S32      s32SrcChnId;
     RK_S32      s32DstChnNum;
+
+    ADEC_CHN_ATTR_S *pstADecChnAttr;
 } TEST_SYS_CTX_S;
 
 RK_S32 test_ao_dev_init(TEST_SYS_CTX_S *pstCtx) {
@@ -64,18 +68,49 @@ RK_S32 test_ao_dev_deinit(TEST_SYS_CTX_S *pstCtx) {
     return s32Ret;
 }
 
-RK_S32 test_adec_create_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
-    RK_S32 s32Ret = RK_SUCCESS;
-    ADEC_CHN_ATTR_S stAdecAttr;
-    ADEC_CHN AdChn    = (ADEC_CHN)s32ChnId;
-    stAdecAttr.enType = RK_AUDIO_ID_MP2;
-    stAdecAttr.enMode = ADEC_MODE_PACK;
-    stAdecAttr.stAdecCodec.u32Channels   = 2;
-    stAdecAttr.stAdecCodec.u32SampleRate = 44100;
-    stAdecAttr.extraDataSize = 0;
-    stAdecAttr.extraData = RK_NULL;
+ADEC_CHN_ATTR_S* test_adec_create_chn_attr() {
+    ADEC_CHN_ATTR_S *pstChnAttr = reinterpret_cast<ADEC_CHN_ATTR_S *>
+                                        (malloc(sizeof(ADEC_CHN_ATTR_S)));
+    memset(pstChnAttr, 0, sizeof(ADEC_CHN_ATTR_S));
+    ADEC_ATTR_CODEC_S *pstCodecAttr = &pstChnAttr->stCodecAttr;
 
-    s32Ret = RK_MPI_ADEC_CreateChn(AdChn, &stAdecAttr);
+    // attr of adec
+    pstCodecAttr->u32Channels      = 2;
+    pstCodecAttr->u32SampleRate    = 16000;
+    pstCodecAttr->u32ExtraDataSize = 0;
+    pstCodecAttr->pExtraData       = RK_NULL;
+
+    // attr of chn
+    pstChnAttr->enType          = RK_AUDIO_ID_ADPCM_G726;
+    pstChnAttr->enMode          = ADEC_MODE_PACK;
+    pstChnAttr->u32BufCount     = 4;
+    pstChnAttr->u32BufSize      = 8192;
+
+    return pstChnAttr;
+}
+
+void test_adec_destroy_chn_attr(ADEC_CHN_ATTR_S **ppstChnAttr) {
+    ADEC_CHN_ATTR_S *pstChnAttr = *ppstChnAttr;
+    if (pstChnAttr == RK_NULL) {
+        return;
+    }
+
+    ADEC_ATTR_CODEC_S *pstCodecAttr = &pstChnAttr->stCodecAttr;
+    if (pstCodecAttr->pExtraData != RK_NULL) {
+        free(pstCodecAttr->pExtraData);
+        pstCodecAttr->pExtraData = RK_NULL;
+    }
+    pstCodecAttr->u32ExtraDataSize = 0;
+
+    free(pstChnAttr);
+    *ppstChnAttr = RK_NULL;
+}
+
+RK_S32 test_adec_create_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
+    RK_S32 s32Ret  = RK_SUCCESS;
+    ADEC_CHN AdChn = (ADEC_CHN)s32ChnId;
+    ADEC_CHN_ATTR_S *pstChnAttr = test_adec_create_chn_attr();
+    s32Ret = RK_MPI_ADEC_CreateChn(AdChn, pstChnAttr);
     if (s32Ret) {
         RK_LOGE("failed to create adec chn %d, err %d", AdChn, s32Ret);
         return RK_FAILURE;
@@ -92,9 +127,9 @@ RK_S32 test_adec_destroy_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
     s32Ret = RK_MPI_ADEC_DestroyChn(AdChn);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("failed to destroy adec channel(%d), err: %d", AdChn, s32Ret);
-        return RK_FAILURE;
     }
 
+    test_adec_destroy_chn_attr(&pstCtx->pstADecChnAttr);
     return s32Ret;
 }
 

@@ -8,7 +8,7 @@
 #include "../rk_public_api/rk_trng_api.h"
 
 
-static void my_dump_hex(const char *name, const uint8_t *array, uint32_t len)
+void ta_dump_hex(const char *name, const uint8_t *array, uint32_t len)
 {
 	uint32_t i;
 	char buffer[256];
@@ -44,7 +44,7 @@ TEE_Result handle_trng_read(void)
 	if (res != TEE_SUCCESS)
 		EMSG("rk_get_trng failed with code 0x%x", res);
 	else
-		my_dump_hex("rk_get_trng success with data:", read_data, read_len);
+		ta_dump_hex("rk_get_trng success with data:", read_data, read_len);
 
 	TEE_Free(read_data);
 	return res;

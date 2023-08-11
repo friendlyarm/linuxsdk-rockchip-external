@@ -5,4 +5,11 @@ cmake_install.cmake
 install_manifest.txt
 librga.so
 rgaImDemo
-version.h
+.vscode/
+*.patch
+build/
+build_linux/
+build_android_ndk/
+.DS_Store
+local_*
+*.cpp.*

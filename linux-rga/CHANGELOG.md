@@ -1,5 +1,208 @@
 # 更新日志
 
+## 1.9.3 （2023-06-28）
+
+该版本RGA驱动建议更新至1.2.27及以上版本，最低支持1.2.4。
+
+### 优化
+
+- 补充对samples目录下示例代码功能说明。
+- 增加RK_FORMAT_XX格式的描述。
+
+### 修复
+
+- 修复FBC输入对实宽、实高的过度约束。（驱动须更新至1.2.27）
+- 修复示例代码中部分笔误。
+
+
+
+## 1.9.2 （2023-04-13）
+
+该版本RGA驱动建议更新至1.2.25及以上版本，最低支持1.2.4。
+
+### 新增
+
+- 补全对FBC/TILE8×8 限制的检查。
+- 增加FBC/Tile8×8的示例代码。
+- 增加在不支持UV均值下采样的芯片上针对YUV422->YUV420场景下采样方法的示例代码。
+
+### 优化
+
+- 移除对libdrm.so的依赖，避免受libdrm版本影响导致编译失败。
+
+### 修复
+
+- 修复immakeBorder()配置top/bottom/left/right为0时输出画面异常。
+- 修复部分fill/color_palette模式无法返回release_fence fd的问题。
+
+
+
+## 1.9.1 （2023-02-06）
+
+该版本RGA驱动建议更新至1.2.24及以上版本，最低支持1.2.4。
+
+### 新增
+
+- 新增支持芯片RK3562。
+- 增加TILE8x8、FBC示例代码。
+
+### 优化
+
+- 编译阶段无需依赖libdrm.so。
+- 完善TILE8x8、FBC的参数限制。
+
+### 修复
+
+- 修复TILE8x8格式运行异常问题。（驱动须更新至1.2.24）
+- 修复 imcheckHeader() 在编译C程序时的报错。
+- 修复meson无法编译librga。
+
+
+
+## 1.9.0 （2022-12-20）
+
+该版本RGA驱动建议更新至1.2.22及以上版本，最低支持1.2.4。
+
+### 新增
+
+- 新增支持芯片RK3528。
+
+- 适配Android 12 gralloc 0.3
+- 新增头文件校验接口。
+- 新增批处理接口（im2d_task.h）。
+- 新增数组模式接口。
+- 新增padding接口。
+- 支持通过Android属性/环境变量动态的开启/关闭 librga 运行日志。
+- 增加对drm_fourcc格式支持。
+- 增加示例代码单独编译说明。
+- 增加多种常见场景示例代码。
+  - allocator_demo
+  - alpha_demo
+  - async_demo
+  - config_demo
+  - copy_demo
+  - crop_demo
+  - cvtcolor_demo
+  - fill_demo
+  - mosaic_demo
+  - resize_demo
+  - rop_demo
+  - transform_demo
+  - padding_demo
+
+### 优化
+
+- 兼容rga2 driver、multi_rga driver。
+- 优化librga与驱动之间版本校验机制。
+- 优化头文件结构。
+- 头文件添加更多描述信息。
+- 优化cmake编译脚本。
+
+### 修复
+
+- 修复RGA3 dst-over模式对YUV格式处理异常问题。
+
+
+
+## 1.8.1 （2022-06-20）
+
+### 修复
+
+- 更正wrapbuffer_handle宏函数与C++函数定义不同的问题，更正后与宏函数传参相同。。
+- 修复部分编译warning。
+
+
+
+## 1.8.0 （2022-05-25）
+
+该版本RGA驱动须更新至1.2.6。
+
+### 新增
+
+- 新增支持芯片RK3326S、RV1106、RV1103。
+- 增加英文说明文档。
+- 增加马赛克、OSD接口（部分芯片支持）。
+- 支持Rockit-ko在内核的调用。
+- 新增importbuffer接口支持使用buffer_size作为传参（RGA驱动1.2.9及以上版本支持）。
+- 增加默认编译静态库、动态库。
+
+### 优化
+
+- 针对部分接口的异常返回，增加更多的报错信息。
+
+### 修复
+
+- 更正文档中部分描述。
+- 修复部分格式无法importbuffer的问题。
+
+## 1.7.2 （2022-01-20）
+
+该版本RGA驱动须更新至1.2.6。
+
+### 新增
+
+- Android/Linux平台支持异步模式。
+- 支持多硬件约束条件融合校验。
+- 增加librga对驱动版本校验功能。
+- 支持查询RGA负载。
+- 针对外部buffer增加import/release接口。
+
+### 优化
+
+- 优化cmake编译脚本。
+- 异步模式支持查询指定任务完成情况。
+
+### 变更
+
+- C++接口实现与C实现隔离。
+- librga支持12及以前的Android版本。
+
+### 修复
+
+- 修复软件信号导致异常退出的问题。
+
+### 移除
+
+- 弃用genversion.sh
+
+## 1.6.0 (2021-11-23)
+
+### 新增
+
+- 支持RGA3硬件。
+- 增加任务核心指定、优先级配置。
+- 异步模式引入fence机制。
+- utils支持AFBC图像的读写。
+- 3588 RGA支持ROP功能。
+- CMAKE编译支持C接口。
+
+### 变更
+
+- 驱动支持变更为 multi_rga。
+- improcess增加传参：input_fence_fd、output_fence_fd、im_opt_t结构体。
+- imsync增加传参：release_fence_fd。
+- im2d_api 中 color/colorkey/nn/rop 模式将通过 im_opt_t 结构体进行配置。
+- Linux平台暂时不支持Async模式。
+- 头文件的数据类型与驱动重新对齐。（头文件存在修改）
+
+### 修复
+
+- 改正部分错误的格式命名。
+- 更正YUYV420的像素大小。
+- 修改宏函数内临时变量名称，避免非预期错误。
+
+## 1.4.0 （2021-11-10）
+
+### 新增
+
+- 支持Android 12编译。
+
+### 变更
+
+- RockchipRga接口demo目录变更：
+
+  librga/sample/ -> librga/sample/legacy/。
+
 ## 1.3.1 （2021-11-05）
 
 ### 新增

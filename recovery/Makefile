@@ -16,17 +16,18 @@ OBJ = recovery.o \
 	strlcat.o \
 	rkupdate.o \
 	sdboot.o \
+	usbboot.o \
 	mtdutils/mounts.o \
 	mtdutils/mtdutils.o \
 	mtdutils/rk29.o \
-	minzip/DirUtil.o
+	minzip/DirUtil.o \
+	update_engine/log.o
 
 ifdef RecoveryNoUi
 OBJ += noui.o
 else
 OBJ += ui.o\
 	minzip/Hash.o \
-	minzip/Inlines.o \
 	minzip/SysUtil.o \
 	minzip/Zip.o \
 	minui/events.o \
@@ -38,9 +39,9 @@ endif
 CFLAGS += -I$(PROJECT_DIR) -I/usr/include -I/usr/include/libdrm/ -lc -DUSE_UPDATEENGINE=ON
 
 ifdef RecoveryNoUi
-CFLAGS += -lpthread
+CFLAGS += -lpthread -lbz2
 else
-CFLAGS += -lz -lpng -ldrm -lpthread -lcurl -lcrypto
+CFLAGS += -lz -lpng -ldrm -lpthread -lcurl -lcrypto -lbz2
 endif
 
 UPDATE_ENGINE_OBJ = mtdutils/mounts.o \
@@ -56,7 +57,18 @@ UPDATE_ENGINE_OBJ = mtdutils/mounts.o \
 	update_engine/rktools.o \
 	update_engine/rkboot.o \
 	update_engine/crc.o \
-	update_engine/update.o
+	update_engine/update.o \
+	update_engine/do_patch.o
+
+# build in buildroot, it need change work directory
+recovery_version:
+	cd $(PROJECT_DIR)/../../../../../external/recovery && \
+	COMMIT_HASH=$$(git rev-parse --verify --short HEAD) && \
+	GIT_COMMIT_TIME=$$(git log -1 --format=%cd --date=format:%y%m%d) && \
+	GIT_DIRTY=$$(git diff-index --quiet HEAD -- || echo "-dirty") && \
+	commit_info=-g$${COMMIT_HASH}-$${GIT_COMMIT_TIME}$${GIT_DIRTY} && \
+	cd $(PROJECT_DIR) && \
+	echo "#define GIT_COMMIT_INFO $${commit_info}" > recovery_autogenerate.h
 
 $(PROM): $(OBJ)
 	$(CC) -o $(PROM) $(OBJ) $(CFLAGS)
@@ -67,7 +79,7 @@ $(UPDATE_ENGINE): $(UPDATE_ENGINE_OBJ)
 %.o: %.cpp
 	$(CC) -c $< -o $@ $(CFLAGS)
 
-%.o: %.c
+%.o: %.c recovery_version
 	$(CC) -c $< -o $@ $(CFLAGS)
 
 clean:

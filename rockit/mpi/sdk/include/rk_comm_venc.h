@@ -1,19 +1,5 @@
-/*
- * Copyright 2020 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
+/* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMM_VENC_H_
 
@@ -371,7 +357,10 @@ typedef struct rkVENC_ATTR_H265_S {
 /*the attribute of the Venc*/
 typedef struct rkVENC_ATTR_S {
     RK_CODEC_ID_E enType;
+    RK_U32 u32MaxPicWidth;
+    RK_U32 u32MaxPicHeight;
     PIXEL_FORMAT_E enPixelFormat;
+    MIRROR_E enMirror;  // mirror type
     RK_U32 u32BufSize;
     RK_U32 u32Profile;
     RK_BOOL bByFrame;
@@ -392,6 +381,7 @@ typedef struct rkVENC_ATTR_S {
 typedef struct rkVENC_GOP_ATTR_S {
     VENC_GOP_MODE_E enGopMode;   /* RW;  reference gop mode */
     RK_S32 s32VirIdrLen;         /* RW;  virtual IDR frame length for smartp mode*/
+    RK_U32 u32MaxLtrCount;       /* RW;  normalp and smartp mode switch without free Ltr buffer, setting to 1 */
 } VENC_GOP_ATTR_S;
 
 /* the attribute of the venc chnl */
@@ -400,6 +390,24 @@ typedef struct rkVENC_CHN_ATTR_S {
     VENC_RC_ATTR_S  stRcAttr;                     /*the attribute of rate ctrl*/
     VENC_GOP_ATTR_S stGopAttr;                    /*the attribute of gop*/
 } VENC_CHN_ATTR_S;
+
+/* the attribute of the buf wrap */
+typedef struct rkVENC_CHN_BUF_WRAP_S {
+    RK_BOOL bEnable;
+    RK_U32  u32BufLine;          /* RW; Range: [128, H]; Chn buffer allocated by line. */
+    RK_U32  u32WrapBufferSize;   /* RW; Whether to allocate buffer according to compression. */
+} VENC_CHN_BUF_WRAP_S;
+
+/* the attribute of the buf share */
+typedef struct rkVENC_CHN_REF_BUF_SHARE_S {
+    RK_BOOL bEnable;
+} VENC_CHN_REF_BUF_SHARE_S;
+
+/* the attribute of the combo */
+typedef struct rkVENC_COMBO_ATTR_S {
+    RK_BOOL bEnable;
+    RK_S32  s32ChnId;           /* RW; Range: [0, VENC_MAX_CHN_NUM); The src combo channel */
+} VENC_COMBO_ATTR_S;
 
 /* the param of receive picture */
 typedef struct rkVENC_RECV_PIC_PARAM_S {
@@ -422,13 +430,18 @@ typedef struct rkVENC_CHN_STATUS_S {
     VENC_STREAM_INFO_S stVencStrmInfo;
 } VENC_CHN_STATUS_S;
 
-/* the param of the h264e slice split */
-typedef struct rkVENC_H264_SLICE_SPLIT_S {
+/* the param of the slice split */
+typedef struct rkVENC_SLICE_SPLIT_S {
     /* RW; Range:[0,1]; slice split enable, RK_TRUE:enable, RK_FALSE:diable, default value:RK_FALSE*/
     RK_BOOL bSplitEnable;
-    /* RW; the max number is (Picture height + 15)/16; this value presents the mb line number of one slice*/
-    RK_U32  u32MbLineNum;
-} VENC_H264_SLICE_SPLIT_S;
+    /* RW; this value presents slice split mode;0:slice is split by byte number;1:slice is split by mb/ctu number*/
+    RK_U32  u32SplitMode;
+    /* RW; this value presents the mb number of one slice;
+    * When u32SplitMode = 0 this value is the max byte number for each slice.
+    * When u32SplitMode = 1 this value is the MB/CTU number for each slice.
+    */
+    RK_U32  u32SplitSize;
+} VENC_SLICE_SPLIT_S;
 
 /* the param of the h264e intra pred */
 typedef struct rkVENC_H264_INTRA_PRED_S {
@@ -441,7 +454,7 @@ typedef struct rkVENC_H264_TRANS_S {
     /* RW; Range:[0,2]; Conversion mode for inter-prediction&intra-prediction,0: trans4x4, trans8x8; 1: trans4x4*/
     RK_U32     u32TransMode;
 
-    RK_BOOL    bScalingListValid;                 /* RW; Range:[0,1]; enable Scaling,default: RK_FALSE  */
+    RK_U32     bScalingListValid;                 /* RW; Range:[0,1,2]; enable Scaling, default: 0(disable), 1(scaling list 1), 2(scaling list 2) */
     RK_U8      InterScalingList8X8[64];           /* RW; Range:[1,255]; A quantization table for 8x8 inter-prediction*/
     RK_U8      IntraScalingList8X8[64];           /* RW; Range:[1,255]; A quantization table for 8x8 intra-prediction*/
     /* RW; Range:[-12,12];default value: -6, see the H.264 protocol for the meaning*/
@@ -656,7 +669,7 @@ typedef struct rkVENC_H265_TRANS_S {
     RK_S32  cb_qp_offset;                          /* RW; Range:[-12,12]; see the H.265 protocol for the meaning. */
     RK_S32  cr_qp_offset;                          /* RW; Range:[-12,12]; see the H.265 protocol for the meaning. */
 
-    RK_BOOL bScalingListEnabled;                   /* RW; Range:[0,1]; If 1, specifies that a scaling list is used.*/
+    RK_U32  bScalingListEnabled;                   /* RW; Range:[0,1,2]; enable Scaling, default: 0(disable), 1(scaling list 1), 2(scaling list 2) */
 
     RK_BOOL bScalingListTu4Valid;                  /* RW; Range:[0,1]; If 1, ScalingList4X4 belows will be encoded.*/
     RK_U8   InterScalingList4X4[2][16];            /* RW; Range:[1,255]; Scaling List for inter 4X4 block.*/
@@ -693,6 +706,8 @@ typedef struct rkVENC_H265_SAO_S {
     RK_U32  slice_sao_luma_flag;
     /*RW; Range:[0,1]; Indicates whether SAO filtering is performed on the chrominance component of the current slice*/
     RK_U32  slice_sao_chroma_flag;
+    /*RW; Range:[0,7]*/
+    RK_U32  slice_sao_bit_ratio;
 } VENC_H265_SAO_S;
 
 /* venc mode type */
@@ -785,8 +800,8 @@ typedef struct rkUSER_RC_INFO_S {
     RK_BOOL bSkipWeightValid;
     /* RW; Range:[0,51];QP value of the first 16 x 16 block in QpMap mode */
     RK_U32  u32BlkStartQp;
-    RK_U64  u64QpMapPhyAddr;      /* RW; Physical address of the QP table in QpMap mode*/
-    RK_U64  u64SkipWeightPhyAddr; /* RW; Physical address of the SkipWeight table in QpMap mode*/
+    MB_BLK  pMbBlkQpMap;      /* RW; Blk of the QP table in QpMap mode*/
+    MB_BLK  pMbBlkSkipWeight; /* RW; Blk of the SkipWeight table in QpMap mode*/
     VENC_FRAME_TYPE_E enFrameType;/* RW; Encoding frame type of the current frame */
 } USER_RC_INFO_S;
 

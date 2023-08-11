@@ -62,41 +62,36 @@ static GstStaticPadTemplate gst_mpp_video_dec_sink_template =
     GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-h264,"
-        "stream-format = (string) { avc, avc3, byte-stream },"
-        "alignment = (string) { au },"
-        "parsed = (boolean) true"
-        ";"
-        "video/x-h265,"
-        "stream-format = (string) { hvc1, hev1, byte-stream },"
-        "alignment = (string) { au },"
-        "parsed = (boolean) true"
-        ";"
-        "video/mpeg,"
-        "mpegversion = (int) { 1, 2, 4 },"
-        "parsed = (boolean) true,"
-        "systemstream = (boolean) false"
-        ";" "video/x-vp8" ";" "video/x-vp9" ";"));
+    GST_STATIC_CAPS ("video/x-h263, parsed = (boolean) true;"
+        "video/x-h264, parsed = (boolean) true;"
+        "video/x-h265, parsed = (boolean) true;"
+        "video/x-av1, parsed = (boolean) true;"
+        "video/x-vp8; video/x-vp9;"
+        "video/mpeg, parsed = (boolean) true,"
+        "mpegversion = (int) { 1, 2, 4 }, systemstream = (boolean) false;"));
 
 static GstStaticPadTemplate gst_mpp_video_dec_src_template =
     GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{" MPP_DEC_FORMATS "}") ";"
-        GST_VIDEO_CAPS_MAKE ("{NV12, NV12_10LE40}") ", "
-        MPP_DEC_FEATURE_ARM_AFBC " = (int) 1" ";"));
+    GST_STATIC_CAPS (MPP_DEC_CAPS_MAKE ("{" MPP_DEC_FORMATS "}") ";"
+        MPP_DEC_CAPS_MAKE_AFBC ("{" MPP_DEC_FORMATS "}") ";")
+    );
 
 static MppCodingType
 gst_mpp_video_dec_get_mpp_type (GstStructure * s)
 {
+  if (gst_structure_has_name (s, "video/x-h263"))
+    return MPP_VIDEO_CodingH263;
+
   if (gst_structure_has_name (s, "video/x-h264"))
     return MPP_VIDEO_CodingAVC;
 
   if (gst_structure_has_name (s, "video/x-h265"))
     return MPP_VIDEO_CodingHEVC;
 
-  if (gst_structure_has_name (s, "video/x-h263"))
-    return MPP_VIDEO_CodingH263;
+  if (gst_structure_has_name (s, "video/x-av1"))
+    return MPP_VIDEO_CodingAV1;
 
   if (gst_structure_has_name (s, "video/mpeg")) {
     gint mpegversion = 0;
@@ -202,7 +197,6 @@ gst_mpp_video_dec_startup (GstVideoDecoder * decoder)
   GstVideoCodecState *state = mppdec->input_state;
   GstBuffer *codec_data = state->codec_data;
   GstMapInfo mapinfo = { 0, };
-  MppFrame mframe;
   MppPacket mpkt;
 
   /* Send extra codec data */
@@ -218,15 +212,6 @@ gst_mpp_video_dec_startup (GstVideoDecoder * decoder)
     gst_buffer_unmap (codec_data, &mapinfo);
     gst_buffer_unref (codec_data);
   }
-
-  /* Legacy way to inform MPP codec of video info, needed by RKVDEC */
-  mpp_frame_init (&mframe);
-  mpp_frame_set_width (mframe, GST_VIDEO_INFO_WIDTH (&state->info));
-  mpp_frame_set_height (mframe, GST_VIDEO_INFO_HEIGHT (&state->info));
-  mpp_frame_set_fmt (mframe, (MppFrameFormat) mppdec->mpp_type);
-  mppdec->mpi->control (mppdec->mpp_ctx, MPP_DEC_SET_FRAME_INFO,
-      (MppParam) mframe);
-  mpp_frame_deinit (&mframe);
 
   if (mppdec->arm_afbc) {
     MppFrameFormat mpp_format = MPP_FMT_YUV420SP | MPP_FRAME_FBC_AFBC_V2;
@@ -295,8 +280,11 @@ gst_mpp_video_dec_shutdown (GstVideoDecoder * decoder, gboolean drain)
   MPP_RET ret;
 
   /* It's safe to stop decoding immediately */
-  if (!drain)
+  if (!drain) {
+    /* Interrupt the frame polling */
+    mppdec->mpi->reset (mppdec->mpp_ctx);
     return FALSE;
+  }
 
   mpp_packet_init (&mpkt, NULL, 0);
   mpp_packet_set_eos (mpkt);

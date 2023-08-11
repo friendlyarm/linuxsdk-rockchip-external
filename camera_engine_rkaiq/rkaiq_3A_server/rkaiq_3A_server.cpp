@@ -10,7 +10,7 @@
 #include <pthread.h>
 
 #include <linux/videodev2.h>
-#include "rk_aiq_user_api_sysctl.h"
+#include "uAPI2/rk_aiq_user_api2_sysctl.h"
 #include "common/mediactl/mediactl.h"
 
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
@@ -28,7 +28,7 @@
 #define RKAIQ_FLASH_NUM_MAX                       2
 
 /* 1 vicap + 2 mipi + 1 bridge + 1 redundance */
-#define MAX_MEDIA_NODES                           5
+#define MAX_MEDIA_NODES                           16
 
 #define IQ_PATH "/etc/iqfiles/"
 
@@ -124,7 +124,7 @@ int rkaiq_get_media_info(struct rkaiq_media_info *media_info)
         return ret;
     }
 
-    sensor_name = rk_aiq_uapi_sysctl_getBindedSnsEntNmByVd(media_info->mainpath);
+    sensor_name = rk_aiq_uapi2_sysctl_getBindedSnsEntNmByVd(media_info->mainpath);
     if (sensor_name == NULL || strlen(sensor_name) == 0) {
         fprintf(stderr, "ERR: No sensor attached to %s\n", media_info->mdev_path);
         media_device_unref (device);
@@ -142,12 +142,12 @@ static void init_engine(struct rkaiq_media_info *media_info)
 {
     int index;
 
-    media_info->aiq_ctx = rk_aiq_uapi_sysctl_init(media_info->sensor_entity_name,
+    media_info->aiq_ctx = rk_aiq_uapi2_sysctl_init(media_info->sensor_entity_name,
                                                   IQ_PATH, NULL, NULL);
     if (has_mul_cam)
-        rk_aiq_uapi_sysctl_setMulCamConc(media_info->aiq_ctx, 1);
+        rk_aiq_uapi2_sysctl_setMulCamConc(media_info->aiq_ctx, 1);
 
-    if (rk_aiq_uapi_sysctl_prepare(media_info->aiq_ctx,
+    if (rk_aiq_uapi2_sysctl_prepare(media_info->aiq_ctx,
             width, height, RK_AIQ_WORKING_MODE_NORMAL)) {
         ERR("rkaiq engine prepare failed !\n");
         exit(-1);
@@ -157,7 +157,7 @@ static void init_engine(struct rkaiq_media_info *media_info)
 static void start_engine(struct rkaiq_media_info *media_info)
 {
     DBG("device manager start\n");
-    rk_aiq_uapi_sysctl_start(media_info->aiq_ctx);
+    rk_aiq_uapi2_sysctl_start(media_info->aiq_ctx);
     if (media_info->aiq_ctx == NULL) {
         ERR("rkisp_init engine failed\n");
         exit(-1);
@@ -168,12 +168,12 @@ static void start_engine(struct rkaiq_media_info *media_info)
 
 static void stop_engine(struct rkaiq_media_info *media_info)
 {
-    rk_aiq_uapi_sysctl_stop(media_info->aiq_ctx, false);
+    rk_aiq_uapi2_sysctl_stop(media_info->aiq_ctx, false);
 }
 
 static void deinit_engine(struct rkaiq_media_info *media_info)
 {
-    rk_aiq_uapi_sysctl_deinit(media_info->aiq_ctx);
+    rk_aiq_uapi2_sysctl_deinit(media_info->aiq_ctx);
 }
 
 // blocked func
@@ -284,15 +284,14 @@ void *engine_thread(void *arg)
         return NULL;
     }
 
-    subscrible_stream_event(media_info, isp_fd, true);
     init_engine(media_info);
+    subscrible_stream_event(media_info, isp_fd, true);
 
     for (;;) {
+        start_engine(media_info);
         DBG("%s: wait stream start event...\n", media_info->mdev_path);
         wait_stream_event(isp_fd, CIFISP_V4L2_EVENT_STREAM_START, -1);
         DBG("%s: wait stream start event success ...\n", media_info->mdev_path);
-
-        start_engine(media_info);
 
         DBG("%s: wait stream stop event...\n", media_info->mdev_path);
         wait_stream_event(isp_fd, CIFISP_V4L2_EVENT_STREAM_STOP, -1);
@@ -301,8 +300,8 @@ void *engine_thread(void *arg)
         stop_engine(media_info);
     }
 
-    deinit_engine(media_info);
     subscrible_stream_event(media_info, isp_fd, false);
+    deinit_engine(media_info);
     close(isp_fd);
 
     return NULL;
@@ -331,7 +330,7 @@ int main(int argc, char **argv)
         threads++;
     }
 
-    if (1 || threads > 1)
+    if (threads > 1)
         has_mul_cam = 1;
 
     for (i = 0; i < MAX_MEDIA_NODES; i++) {

@@ -36,11 +36,11 @@ typedef struct {
 typedef GRSurface* gr_surface;
 
 typedef enum GRRotation_e {
-  ROTATION_NONE = 0,
-  ROTATION_RIGHT = 1,
-  ROTATION_DOWN = 2,
-  ROTATION_LEFT = 3,
-}GRRotation;
+    ROTATION_NONE = 0,
+    ROTATION_RIGHT = 1,
+    ROTATION_DOWN = 2,
+    ROTATION_LEFT = 3,
+} GRRotation;
 
 int gr_init(void);
 void gr_exit(void);
@@ -127,6 +127,7 @@ int res_create_localized_alpha_surface(const char* name, const char* locale,
 // functions.
 void res_free_surface(gr_surface surface);
 
+void gr_set_rotate(int val);
 #ifdef __cplusplus
 }
 #endif
