@@ -1,8 +1,8 @@
 /* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
 /* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
-#ifndef SRC_RT_MPI_INCLUDE_RK_COMM_TDE_H_
-#define SRC_RT_MPI_INCLUDE_RK_COMM_TDE_H_
+#ifndef SRC_TDE_MPI_INCLUDE_RK_COMM_TDE_H_
+#define SRC_TDE_MPI_INCLUDE_RK_COMM_TDE_H_
 
 #include "rk_type.h"
 #include "rk_common.h"
@@ -83,6 +83,25 @@ typedef enum rkTDE_COLORKEY_MODE_E {
     TDE_COLORKEY_MODE_BUTT
 } TDE_COLORKEY_MODE_E;
 
+typedef enum rkTDE_BLENDCMD_E {
+    TDE_BLENDCMD_NONE = 0x0,     /**< fs: sa      fd: 1.0-sa */
+    TDE_BLENDCMD_CLEAR,    /**< fs: 0.0     fd: 0.0 */
+    TDE_BLENDCMD_SRC,      /**< fs: 1.0     fd: 0.0 */
+    TDE_BLENDCMD_SRCOVER,  /**< fs: 1.0     fd: 1.0-sa */
+    TDE_BLENDCMD_DSTOVER,  /**< fs: 1.0-da  fd: 1.0 */
+    TDE_BLENDCMD_SRCIN,    /**< fs: da      fd: 0.0 */
+    TDE_BLENDCMD_DSTIN,    /**< fs: 0.0     fd: sa */
+    TDE_BLENDCMD_SRCOUT,   /**< fs: 1.0-da  fd: 0.0 */
+    TDE_BLENDCMD_DSTOUT,   /**< fs: 0.0     fd: 1.0-sa */
+    TDE_BLENDCMD_SRCATOP,  /**< fs: da      fd: 1.0-sa */
+    TDE_BLENDCMD_DSTATOP,  /**< fs: 1.0-da  fd: sa */
+    TDE_BLENDCMD_ADD,      /**< fs: 1.0     fd: 1.0 */
+    TDE_BLENDCMD_XOR,      /**< fs: 1.0-da  fd: 1.0-sa */
+    TDE_BLENDCMD_DST,      /**< fs: 0.0     fd: 1.0 */
+    TDE_BLENDCMD_CONFIG,   /**<You can set the parameteres.*/
+    TDE_BLENDCMD_BUTT,
+} TDE_BLENDCMD_E;
+
 /* Definition of blit operation options */
 typedef struct rkTDE_OPT_S {
     TDE_COLORKEY_MODE_E enColorKeyMode;  /* <Colorkey mode */
@@ -90,6 +109,7 @@ typedef struct rkTDE_OPT_S {
     MIRROR_E            enMirror;        /* <Mirror type */
     TDE_RECT_S          stClipRect;      /* <Definition of the clipping area */
     RK_U32              u32GlobalAlpha;   /* <Global alpha value */
+    TDE_BLENDCMD_E      eBlendCmd;       /* Blend cmd */
 } TDE_OPT_S;
 
 #ifdef __cplusplus
@@ -98,4 +118,4 @@ typedef struct rkTDE_OPT_S {
 #endif
 #endif /* __cplusplus */
 
-#endif /* SRC_RT_MPI_INCLUDE_RK_COMM_TDE_H_ */
+#endif /* SRC_TDE_MPI_INCLUDE_RK_COMM_TDE_H_ */

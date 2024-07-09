@@ -19,15 +19,6 @@
 #ifndef _RGA_DRIVER_H_
 #define _RGA_DRIVER_H_
 
-
-#ifndef ENABLE
-#define ENABLE 1
-#endif
-
-#ifndef DISABLE
-#define DISABLE 0
-#endif
-
 #ifdef __cplusplus
 extern "C"
 {
@@ -136,6 +127,15 @@ typedef enum _Rga_SURF_FORMAT {
     RK_FORMAT_ABGR_4444    = 0x2f << 8, /* [0:16] A:B:G:R 4:4:4:4 little endian */
 
     RK_FORMAT_RGBA2BPP     = 0x30 << 8, /* [0:1] Color:Alpha 1:1 little endian */
+    RK_FORMAT_A8           = 0x31 << 8, /* [0:7] Alpha */
+
+    RK_FORMAT_YCbCr_444_SP = 0x32 << 8, /*  2 plane YCbCr little endian
+                                         * plane 0: [0:7] Y
+                                         * plane 1: non-subsampled [0:15] Cb:Cr 8:8  */
+	RK_FORMAT_YCrCb_444_SP = 0x33 << 8, /*  2 plane YCrCb little endian
+                                         * plane 0: [0:7] Y
+                                         * plane 1: non-subsampled [0:15] Cr:Cb 8:8  */
+    RK_FORMAT_Y8           = 0x34 << 8, /* [0:7] zero:Y 4:4 little endian */
 
     RK_FORMAT_UNKNOWN      = 0x100 << 8,
 } RgaSURF_FORMAT;
@@ -155,6 +155,12 @@ enum {
     yuv2yuv_601_full_2_709_full     = 0x8 << 8,     //not support
     yuv2yuv_709_full_2_601_limit    = 0x9 << 8,     //not support
     yuv2yuv_709_full_2_601_full     = 0xa << 8,     //not support
+    rgb2yuv_709_limit               = 0xb << 8,
+    yuv2rgb_709_full                = 0xc << 8,     //not support
+    yuv2yuv_601_limit_2_601_full    = 0xd << 8,     //not support
+    yuv2yuv_601_full_2_601_limit    = 0xe << 8,     //not support
+    yuv2yuv_709_limit_2_709_full    = 0xf << 8,     //not support
+    yuv2yuv_709_full_2_709_limit    = 0x10 << 8,     //not support
     full_csc_mask = 0xf00,
 };
 
@@ -162,6 +168,9 @@ enum {
     RGA3_SCHEDULER_CORE0    = 1 << 0,
     RGA3_SCHEDULER_CORE1    = 1 << 1,
     RGA2_SCHEDULER_CORE0    = 1 << 2,
+    RGA2_SCHEDULER_CORE1    = 1 << 3,
+    RGA_CORE_MASK			= 0xf,
+    RGA_NONE_CORE			= 0x0,
 };
 
 /* RGA3 rd_mode */

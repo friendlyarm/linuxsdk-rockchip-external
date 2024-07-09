@@ -1,9 +1,9 @@
 /*
  * DHD PROP_TXSTATUS Module.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -2917,7 +2917,7 @@ int dhd_wlfc_enable(dhd_pub_t *dhd)
 	}
 
 	_dhd_wlfc_mac_entry_update(wlfc, &wlfc->destination_entries.other,
-		eWLFC_MAC_ENTRY_ACTION_ADD, 0xff, 0, NULL, NULL, NULL);
+		eWLFC_MAC_ENTRY_ACTION_ADD, 0, 0, NULL, NULL, NULL);
 
 	wlfc->allow_credit_borrow = 0;
 	wlfc->single_ac = 0;
@@ -3536,7 +3536,6 @@ dhd_wlfc_txcomplete(dhd_pub_t *dhd, void *txp, bool success)
 		}
 	}
 
-	ASSERT(entry->onbus_pkts_count > 0);
 	if (entry->onbus_pkts_count > 0)
 		entry->onbus_pkts_count--;
 	if (entry->suppressed &&

@@ -91,10 +91,18 @@ prepare(RkAiqAlgoCom* params)
         void *pCalibDbV2 = (void*)(pCfgParam->com.u.prepare.calibv2);
         CalibDbV2_YnrV2_t *ynr_v2 = (CalibDbV2_YnrV2_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCalibDbV2, ynr_v2));
         pAynrCtx->ynr_v2 = *ynr_v2;
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR) {
+            return XCAM_RETURN_NO_ERROR;
+        }
 #else
         void *pCalibDb = (void*)(pCfgParam->com.u.prepare.calib);
         pAynrCtx->list_ynr_v2 =
             (struct list_head*)(CALIBDB_GET_MODULE_PTR((void*)pCalibDb, list_ynr_v2));
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR) {
+            return XCAM_RETURN_NO_ERROR;
+        }
 #endif
         pAynrCtx->isIQParaUpdate = true;
         pAynrCtx->isReCalculate |= 1;

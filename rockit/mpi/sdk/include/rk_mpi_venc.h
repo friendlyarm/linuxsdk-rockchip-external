@@ -49,6 +49,8 @@ RK_S32 RK_MPI_VENC_SetRoiAttr(VENC_CHN VeChn, const VENC_ROI_ATTR_S *pstRoiAttr)
 RK_S32 RK_MPI_VENC_GetRoiAttr(VENC_CHN VeChn, RK_U32 u32Index, VENC_ROI_ATTR_S *pstRoiAttr);
 RK_S32 RK_MPI_VENC_SetRcParam(VENC_CHN VeChn, const VENC_RC_PARAM_S *pstRcParam);
 RK_S32 RK_MPI_VENC_GetRcParam(VENC_CHN VeChn, VENC_RC_PARAM_S *pstRcParam);
+RK_S32 RK_MPI_VENC_SetRcParam2(VENC_CHN VeChn, const VENC_RC_PARAM2_S *pstRcParam2);
+RK_S32 RK_MPI_VENC_GetRcParam2(VENC_CHN VeChn, VENC_RC_PARAM2_S *pstRcParam2);
 RK_S32 RK_MPI_VENC_SetRcAdvParam(VENC_CHN VeChn, const VENC_RC_ADVPARAM_S *pstRcAdvParam);
 RK_S32 RK_MPI_VENC_GetRcAdvParam(VENC_CHN VeChn, VENC_RC_ADVPARAM_S *pstRcAdvParam);
 RK_S32 RK_MPI_VENC_SetFrameLostStrategy(VENC_CHN VeChn, const VENC_FRAMELOST_S *pstFrmLostParam);
@@ -59,6 +61,10 @@ RK_S32 RK_MPI_VENC_SetIntraRefresh(VENC_CHN VeChn, const VENC_INTRA_REFRESH_S *p
 RK_S32 RK_MPI_VENC_GetIntraRefresh(VENC_CHN VeChn, VENC_INTRA_REFRESH_S *pstIntraRefresh);
 RK_S32 RK_MPI_VENC_SetHierarchicalQp(VENC_CHN VeChn, const VENC_HIERARCHICAL_QP_S *pstHierarchicalQp);
 RK_S32 RK_MPI_VENC_GetHierarchicalQp(VENC_CHN VeChn, VENC_HIERARCHICAL_QP_S *pstHierarchicalQp);
+RK_S32 RK_MPI_VENC_SetCuPrediction(VENC_CHN VeChn, const VENC_CU_PREDICTION_S *pstCuPrediction);
+RK_S32 RK_MPI_VENC_GetCuPrediction(VENC_CHN VeChn, VENC_CU_PREDICTION_S *pstCuPrediction);
+RK_S32 RK_MPI_VENC_SetSkipBias(VENC_CHN VeChn, const VENC_SKIP_BIAS_S *pstSkipBias);
+RK_S32 RK_MPI_VENC_GetSkipBias(VENC_CHN VeChn, VENC_SKIP_BIAS_S *pstSkipBias);
 RK_S32 RK_MPI_VENC_SetDeBreathEffect(VENC_CHN VeChn, const VENC_DEBREATHEFFECT_S *pstDeBreathEffect);
 RK_S32 RK_MPI_VENC_GetDeBreathEffect(VENC_CHN VeChn, VENC_DEBREATHEFFECT_S *pstDeBreathEffect);
 RK_S32 RK_MPI_VENC_SetJpegParam(VENC_CHN VeChn, const VENC_JPEG_PARAM_S *pstJpegParam);
@@ -74,6 +80,16 @@ RK_S32 RK_MPI_VENC_AttachMbPool(VENC_CHN VeChn, MB_POOL hMbPool);
 RK_S32 RK_MPI_VENC_DetachMbPool(VENC_CHN VeChn);
 RK_S32 RK_MPI_VENC_SetSliceSplit(VENC_CHN VeChn, const VENC_SLICE_SPLIT_S *pstSliceSplit);
 RK_S32 RK_MPI_VENC_GetSliceSplit(VENC_CHN VeChn, VENC_SLICE_SPLIT_S *pstSliceSplit);
+RK_S32 RK_MPI_VENC_SetFilter(VENC_CHN VeChn, const VENC_FILTER_S *pstFilter);
+RK_S32 RK_MPI_VENC_GetFilter(VENC_CHN VeChn, VENC_FILTER_S *pstFilter);
+RK_S32 RK_MPI_VENC_SetMotionDeblurStrength(VENC_CHN VeChn, const RK_U32 u32Strength);
+RK_S32 RK_MPI_VENC_GetMotionDeblurStrength(VENC_CHN VeChn, RK_U32 *pu32Strength);
+RK_S32 RK_MPI_VENC_SetAntiRing(VENC_CHN VeChn, const VENC_ANTI_RING_S *pstAntiRing);
+RK_S32 RK_MPI_VENC_GetAntiRing(VENC_CHN VeChn, VENC_ANTI_RING_S *pstAntiRing);
+RK_S32 RK_MPI_VENC_SetAntiLine(VENC_CHN VeChn, const VENC_ANTI_LINE_S *pstAntiLine);
+RK_S32 RK_MPI_VENC_GetAntiLine(VENC_CHN VeChn, VENC_ANTI_LINE_S *pstAntiLine);
+RK_S32 RK_MPI_VENC_SetLambda(VENC_CHN VeChn, const VENC_LAMBDA_S *pstLambda);
+RK_S32 RK_MPI_VENC_GetLambda(VENC_CHN VeChn, VENC_LAMBDA_S *pstLambda);
 
 // H264
 RK_S32 RK_MPI_VENC_SetH264IntraPred(VENC_CHN VeChn, const VENC_H264_INTRA_PRED_S *pstH264IntraPred);
@@ -86,6 +102,8 @@ RK_S32 RK_MPI_VENC_SetH264Dblk(VENC_CHN VeChn, const VENC_H264_DBLK_S *pstH264Db
 RK_S32 RK_MPI_VENC_GetH264Dblk(VENC_CHN VeChn, VENC_H264_DBLK_S *pstH264Dblk);
 RK_S32 RK_MPI_VENC_SetH264Vui(VENC_CHN VeChn, const VENC_H264_VUI_S *pstH264Vui);
 RK_S32 RK_MPI_VENC_GetH264Vui(VENC_CHN VeChn, VENC_H264_VUI_S *pstH264Vui);
+RK_S32 RK_MPI_VENC_SetH264Qbias(VENC_CHN VeChn, const VENC_H264_QBIAS_S *pstQbias);
+RK_S32 RK_MPI_VENC_GetH264Qbias(VENC_CHN VeChn, VENC_H264_QBIAS_S *pstQbias);
 
 // H265
 RK_S32 RK_MPI_VENC_SetH265Trans(VENC_CHN VeChn, const VENC_H265_TRANS_S *pstH265Trans);
@@ -104,6 +122,10 @@ RK_S32 RK_MPI_VENC_GetH265Vui(VENC_CHN VeChn, VENC_H265_VUI_S *pstH265Vui);
 // H264&H265 common
 RK_S32 RK_MPI_VENC_SetRefParam(VENC_CHN VeChn, const VENC_REF_PARAM_S *pstRefParam);
 RK_S32 RK_MPI_VENC_GetRefParam(VENC_CHN VeChn, VENC_REF_PARAM_S *pstRefParam);
+RK_S32 RK_MPI_VENC_SetH265Qbias(VENC_CHN VeChn, const VENC_H265_QBIAS_S *pstQbias);
+RK_S32 RK_MPI_VENC_GetH265Qbias(VENC_CHN VeChn, VENC_H265_QBIAS_S *pstQbias);
+RK_S32 RK_MPI_VENC_SetH265CuDqp(VENC_CHN VeChn, const VENC_H265_CU_DQP_S *pstCuDqp);
+RK_S32 RK_MPI_VENC_GetH265CuDqp(VENC_CHN VeChn, VENC_H265_CU_DQP_S *pstCuDqp);
 
 // MJPEG
 RK_S32 RK_MPI_VENC_SetMjpegParam(VENC_CHN VeChn, const VENC_MJPEG_PARAM_S *pstMjpegParam);

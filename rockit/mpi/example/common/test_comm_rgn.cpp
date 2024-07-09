@@ -217,8 +217,15 @@ RK_S32 TEST_RGN_ChangePosition(
         stChnAttr.unChnAttr.stCoverChn.stRect.s32Y = s32Y;
       } break;
       case MOSAIC_RGN: {
-        stChnAttr.unChnAttr.stMosaicChn.stRect.s32X = s32X;
-        stChnAttr.unChnAttr.stMosaicChn.stRect.s32Y = s32Y;
+        if (AREA_RECT == stChnAttr.unChnAttr.stMosaicChn.enMosaicType) {
+            stChnAttr.unChnAttr.stMosaicChn.stRect.s32X = s32X;
+            stChnAttr.unChnAttr.stMosaicChn.stRect.s32Y = s32Y;
+        } else if (AREA_QUAD_RANGLE == stChnAttr.unChnAttr.stMosaicChn.enMosaicType) {
+            for (RK_S32 i = 0; i < 4; i++) {
+                stChnAttr.unChnAttr.stMosaicChn.stQuadRangle.stPoint[i].s32X += s32X;
+                stChnAttr.unChnAttr.stMosaicChn.stQuadRangle.stPoint[i].s32Y += s32Y;
+            }
+        }
       } break;
       case LINE_RGN: {
         stChnAttr.unChnAttr.stLineChn.stStartPoint.s32X = s32X;

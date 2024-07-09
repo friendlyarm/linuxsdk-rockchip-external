@@ -24,24 +24,65 @@
 #include "RkAiqCalibDbTypesV2.h"
 #include "RkAiqCalibDbV2Helper.h"
 
+#ifndef CCM_CURVE_DOT_NUM_HALF
+#define CCM_CURVE_DOT_NUM_HALF (CCM_CURVE_DOT_NUM_V2>>1)
+#endif
 
 RKAIQ_BEGIN_DECLARE
 
 XCamReturn illuminant_index_estimation_ccm(int light_num, const CalibDbV2_Ccm_Accm_Cof_Para_t illAll[], float awbGain[2], int* illuminant_index);
 XCamReturn Damping(const float damp, float *pMatrixUndamped, float *pMatrixDamped, float *pOffsetUndamped, float *pOffsetDamped, bool *converge_flag);
 void Saturationadjust(float fScale, float flevel1, float *pccMatrixA);
-XCamReturn CamCalibDbGetCcmProfileByName(const CalibDbV2_Ccm_Tuning_Para_t *calibCcm, char* name, const CalibDbV2_Ccm_Matrix_Para_t **pCcmMatrixProfile);
-XCamReturn interpCCMbywbgain(const CalibDbV2_Ccm_Tuning_Para_t* pCcm, accm_handle_t hAccm,
-                             float fSaturation);
-XCamReturn selectCCM(const CalibDbV2_Ccm_Tuning_Para_t* pCcm, accm_handle_t hAccm,
-                     float fSaturation);
-bool JudgeCcmRes3aConverge(ccm_3ares_info_t *res3a_info, accm_sw_info_t *accmSwInfo, float gain_th, float wbgain_th);
-XCamReturn Swinfo_wbgain_init(float awbGain[2], const CalibDbV2_Ccm_Tuning_Para_t *pCalib, const char* illuName);
-XCamReturn pCcmMatrixAll_init(accm_context_t* accm_context, const CalibDbV2_Ccm_Tuning_Para_t *pCalib );
-#if RKAIQ_ACCM_ILLU_VOTE
-XCamReturn ReloadCCMCalibV2(accm_handle_t hAccm, const CalibDbV2_Ccm_Tuning_Para_t* TuningPara);
-#endif
 
+XCamReturn CamCalibDbGetCcmProfileByName(const CalibDbV2_Ccm_Matrix_Para_t* matrixAll,
+                                         int matrixAll_len,
+                                         char* name,
+                                         const CalibDbV2_Ccm_Matrix_Para_t **pCcmMatrixProfile);
+
+XCamReturn interpCCMbywbgain(const CalibDbV2_Ccm_illu_est_Para_t* illu_estim,
+                             const CalibDbV2_Ccm_Accm_Cof_Para_t  aCcmCof[],
+                             int                                  aCcmCof_len,
+                             accm_handle_t                        hAccm,
+                             float                                fSaturation);
+
+XCamReturn selectCCM(const CalibDbV2_Ccm_Accm_Cof_Para_t aCcmCof[],
+                     int                                 aCcmCof_len,
+                     accm_handle_t                       hAccm,
+                     float                               fSaturation,
+                     bool*                               updUndampMat);
+
+bool JudgeCcmRes3aConverge(ccm_3ares_info_t *res3a_info, accm_sw_info_t *accmSwInfo, float gain_th, float wbgain_th);
+
+XCamReturn Swinfo_wbgain_init(float                               awbGain[2],
+                              const CalibDbV2_Ccm_Accm_Cof_Para_t aCcmCof[],
+                              int                                 aCcmCof_len,
+                              const char*                         illuName);
+
+XCamReturn pCcmMatrixAll_init(const CalibDbV2_Ccm_Accm_Cof_Para_t*   aCcmCof,
+                              int                                    aCcmCof_len,
+                              const CalibDbV2_Ccm_Matrix_Para_t*     matrixAll,
+                              int                                    matrixAll_len,
+                              const CalibDbV2_Ccm_Matrix_Para_t*     pCcmMatrixAll[][CCM_PROFILES_NUM_MAX]);
+
+XCamReturn YAlpSymAutoCfg(const int isoNum,
+                              const CalibDbV2_Ccm_Gain_Yalp_t* alpTbl,
+                              float lastscl,
+                              int lastTidx,
+                              const float iso,
+                              const bool update,
+                              float* alp,
+                              bool *update_flag
+                              );
+
+XCamReturn YAlpAsymAutoCfg(const int isoNum,
+                              const CalibDbV2_Ccm_Gain_Yalp_Asym_t* alpTbl,
+                              float lastscl,
+                              int lastTidx,
+                              const float iso,
+                              const bool update,
+                              float* alp,
+                              bool *update_flag
+                              );
 
 
 RKAIQ_END_DECLARE

@@ -14,6 +14,8 @@ include(BuildOptions)
 include(CompileOptions)
 include(GNUInstallDirs)
 
+add_compile_options(${ISP_HW_VERSION})
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMakeTargets")
 
@@ -139,6 +141,7 @@ include_directories(
     ${RK_AIQ_SOURCE_DIR}/include/algos/acac
     ${RK_AIQ_SOURCE_DIR}/include/algos_camgroup/ae
     ${RK_AIQ_SOURCE_DIR}/include/algos_camgroup/awb
+    ${RK_AIQ_SOURCE_DIR}/include/isp
     )
 
 set(DIR_SRCS
@@ -148,8 +151,8 @@ set(DIR_SRCS
     )
 
 set(XCORE_SRC
-    ${RK_AIQ_SOURCE_DIR}/xcore/xcam_common.cpp
-    ${RK_AIQ_SOURCE_DIR}/xcore/xcam_log.cpp
+    ${RK_AIQ_SOURCE_DIR}/xcore/xcam_common.c
+    ${RK_AIQ_SOURCE_DIR}/xcore/xcam_log.c
     ${RK_AIQ_SOURCE_DIR}/xcore/xcam_buffer.cpp
     ${RK_AIQ_SOURCE_DIR}/xcore/video_buffer.cpp
     ${RK_AIQ_SOURCE_DIR}/xcore/v4l2_buffer_proxy.cpp
@@ -160,8 +163,6 @@ set(XCORE_SRC
     ${RK_AIQ_SOURCE_DIR}/xcore/smart_buffer_priv.cpp
     ${RK_AIQ_SOURCE_DIR}/xcore/xcam_thread.cpp
     )
-
-
 
 if(WIN32)
     SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/exe)
@@ -181,4 +182,6 @@ message(${LIBRARY_OUTPUT_PATH})
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 
 add_executable(media_enquiry ${DIR_SRCS} ${XCORE_SRC})
-target_link_libraries(media_enquiry pthread)
+if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Android")
+    target_link_libraries(media_enquiry pthread)
+endif()

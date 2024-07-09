@@ -1,9 +1,9 @@
 /*
  * DHD Bus Module for PCIE
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -90,6 +90,9 @@ extern uint32 hw_module_variant;
 #endif /* DHD_CONTROL_PCIE_CPUCORE_WIFI_TURNON */
 
 #include <otpdefs.h>
+#ifdef WL_DHD_XR
+#include <sbgci.h>
+#endif /* WL_DHD_XR */
 #define EXTENDED_PCIE_DEBUG_DUMP 1	/* Enable Extended pcie registers dump */
 
 #define MEMBLOCK	2048		/* Block size used for downloading of dongle image */
@@ -682,8 +685,7 @@ dhdpcie_chip_support_msi(dhd_bus_t *bus)
 		si_chipid(bus->sih) == BCM4375_CHIP_ID ||
 		si_chipid(bus->sih) == BCM4362_CHIP_ID ||
 		si_chipid(bus->sih) == BCM43751_CHIP_ID ||
-		si_chipid(bus->sih) == BCM4361_CHIP_ID ||
-		si_chipid(bus->sih) == CYW55560_CHIP_ID) {
+		si_chipid(bus->sih) == BCM4361_CHIP_ID) {
 		return FALSE;
 	} else {
 		return TRUE;
@@ -755,6 +757,7 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 		/* read otp variable customvar and store in dhd->customvar1 and dhd->customvar2 */
 		if (dhdpcie_sromotp_customvar(bus, &customvar1, &customvar2)) {
 			DHD_ERROR(("%s: dhdpcie_sromotp_customvar failed\n", __FUNCTION__));
+			ret = BCME_ERROR;
 			break;
 		}
 		if (!customvar2) {
@@ -773,6 +776,7 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 				"hw_module_variant=0x%x and "
 				"OTPed-module_variant=0x%x didn't match\n",
 				__FUNCTION__, hw_module_variant, otp_hw_module_variant));
+			ret = BCME_ERROR;
 			break;
 		}
 		DHD_TRACE(("%s: Going to enumerate this module as "
@@ -783,6 +787,7 @@ enumerate_module:
 		/* software resources */
 		if (!(bus->dhd = dhd_attach(osh, bus, PCMSGBUF_HDRLEN))) {
 			DHD_ERROR(("%s: dhd_attach failed\n", __FUNCTION__));
+			ret = BCME_ERROR;
 			break;
 		}
 
@@ -1229,7 +1234,6 @@ skip_intstatus_read:
 		* interrupt from the host side, so that host will not recieve
 		* any interrupts at all, even though dongle raises interrupts
 		*/
-        dhdpcie_bus_intr_disable(bus);
 		dhdpcie_disable_irq_nosync(bus); /* Disable interrupt!! */
 
 		bus->intdis = TRUE;
@@ -1546,6 +1550,8 @@ dhdpcie_dongle_attach(dhd_bus_t *bus)
 		DHD_INFO(("%s: before read reg_val:%d\n", __FUNCTION__, reg_val));
 		reg_val = R_REG(osh, &sbpcieregs->u1.dar_64.d2h_msg_reg0);
 		DHD_INFO(("%s: after reg_val:%d\n", __FUNCTION__, reg_val));
+		
+#if (0)
 		if (reg_val != D2H_HS_START_STATE || reg_val != (D2H_HS_READY_STATE)) {
 		/* si_attach() will provide an SI handle and scan the backplane */
 			if (!(bus->sih = si_attach((uint)devid, osh, regsva, PCI_BUS, bus,
@@ -1556,6 +1562,7 @@ dhdpcie_dongle_attach(dhd_bus_t *bus)
 			dhdpcie_dongle_reset(bus);
 			is_pcie_reset = TRUE;
 		}
+#endif
 
 		/* Pre ChipID access sequence, make sure that
 		 * bootloader is ready before ChipID access.
@@ -3520,6 +3527,11 @@ dhdpcie_bus_readconsole(dhd_bus_t *bus)
 	 */
 	addr = ltoh32(c->log.buf);
 
+#ifdef CONFIG_ARCH_BCM2835
+	if (!addr)
+		return BCME_OK;
+#endif // endif
+
 	/* wrap around case - write ptr < read ptr */
 	if (idx < c->last) {
 		/* from read ptr to end of buffer */
@@ -3563,7 +3575,11 @@ dhdpcie_bus_readconsole(dhd_bus_t *bus)
 			if (line[n - 1] == '\r')
 				n--;
 			line[n] = 0;
+#ifndef WL_DHD_XR_LOG
 			DHD_FWLOG(("CONSOLE: %s\n", line));
+#else
+			DHD_FWLOG(("%d CONSOLE: %s\n", XR_ROLE, line));
+#endif /* WL_DHD_XR_LOG */
 		}
 	}
 
@@ -3636,8 +3652,11 @@ dhd_bus_dump_console_buffer(dhd_bus_t *bus)
 			 * a lot of information quickly. The macro
 			 * will truncate a lot of the printfs
 			 */
-
+#ifndef WL_DHD_XR_LOG
 			DHD_FWLOG(("CONSOLE: %s\n", line));
+#else
+			DHD_FWLOG(("%d CONSOLE: %s\n", XR_ROLE, line));
+#endif /* WL_DHD_XR_LOG */
 		}
 	}
 
@@ -6938,12 +6957,19 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 			/* If wait_for_d3_ack was not updated because D2H MB was not received */
 			uint32 intstatus = si_corereg(bus->sih, bus->sih->buscoreidx,
 				bus->pcie_mailbox_int, 0, 0);
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 			int host_irq_disabled = dhdpcie_irq_disabled(bus);
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 			if ((intstatus) && (intstatus != (uint32)-1) &&
 				(timeleft == 0) && (!dhd_query_bus_erros(bus->dhd))) {
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 				DHD_ERROR(("%s: D3 ACK trying again intstatus=%x"
 					" host_irq_disabled=%d\n",
 					__FUNCTION__, intstatus, host_irq_disabled));
+#else /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
+				DHD_ERROR(("%s: D3 ACK trying again intstatus=%x\n",
+					__FUNCTION__, intstatus));
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 				dhd_pcie_intr_count_dump(bus->dhd);
 				dhd_print_tasklet_status(bus->dhd);
 				if (bus->api.fw_rev >= PCIE_SHARED_VERSION_6 &&
@@ -8989,7 +9015,6 @@ dhd_bus_dpc(struct dhd_bus *bus)
 		/* For Linux, Macos etc (otherthan NDIS) enable back the host interrupts
 		 * which has been disabled in the dhdpcie_bus_isr()
 		 */
-		 dhdpcie_bus_intr_enable(bus);
 		 dhdpcie_enable_irq(bus); /* Enable back interrupt!! */
 		bus->dpc_exit_time = OSL_LOCALTIME_NS();
 	} else {
@@ -10296,7 +10321,7 @@ dhdpcie_chipmatch(uint16 vendor, uint16 device)
 #endif /* CHIPS_CUSTOMER_HW6 */
 
 	/* CYW55560 */
-	if (device == CYW55560_WLAN_ID) {
+	if ((device == CYW55560_WLAN_ID) || (device == CYW89570_WLAN_ID)) {
 		return 0;
 	}
 	DHD_ERROR(("%s: Unsupported vendor %x device %x\n", __FUNCTION__, vendor, device));
@@ -10316,20 +10341,45 @@ static int
 dhdpcie_sromotp_customvar(dhd_bus_t *bus,  uint32 *customvar1, uint32 *customvar2)
 {
 	uint16 dump_offset = 0;
-	uint32 dump_size = 0, otp_size = 0, sprom_size = 0;
+	uint32 dump_size = 0, otp_size = 0;
+#ifndef WL_DHD_XR
+	uint32 sprom_size = 0;
 	/* Table for 65nm OTP Size (in bits) */
 	int  otp_size_65nm[8] = {0, 2048, 4096, 8192, 4096, 6144, 512, 1024};
 	volatile uint16 *nvm_shadow;
-	uint cur_coreid;
 	uint chipc_corerev;
 	chipcregs_t *chipcregs;
+#endif /* !WL_DHD_XR  */
+	uint cur_coreid;
+#ifdef WL_DHD_XR
+	uint32 *otp_dump;
+#else
 	uint16 *otp_dump;
+#endif /* WL_DHD_XR */
 	uint8 *cis;
 	uint8 tup, tlen;
 	int i = 0;
 
+#ifdef WL_DHD_XR
+	gciregs_t *gciregs;
+	uint gci_corerev;
+	uint32 otp_size_28nm = 0;
+	uint32 addr;
+	uint byte_access_size;
+#endif /* WL_DHD_XR */
 	/* Save the current core */
 	cur_coreid = si_coreid(bus->sih);
+#ifdef WL_DHD_XR
+	/* Switch to GCI Core */
+	gciregs = (gciregs_t *)si_setcore(bus->sih, GCI_CORE_ID, 0);
+	ASSERT(gciregs != NULL);
+	gci_corerev = si_corerev(bus->sih);
+	/* Check GCIcore Rev */
+	if (gci_corerev != 20) {
+		DHD_ERROR(("%s: GciCore Rev %d != 20\n", __FUNCTION__, gci_corerev));
+		return BCME_UNSUPPORTED;
+	}
+#else
 	/* Switch to ChipC */
 	chipcregs = (chipcregs_t *)si_setcore(bus->sih, CC_CORE_ID, 0);
 	ASSERT(chipcregs != NULL);
@@ -10339,15 +10389,37 @@ dhdpcie_sromotp_customvar(dhd_bus_t *bus,  uint32 *customvar1, uint32 *customvar
 		DHD_ERROR(("%s: ChipcommonCore Rev %d < 44\n", __FUNCTION__, chipc_corerev));
 		return BCME_UNSUPPORTED;
 	}
+#endif /* WL_DHD_XR */
 	/* Check ChipID */
 	if (((uint16)bus->sih->chip != BCM4350_CHIP_ID) && !BCM4345_CHIP((uint16)bus->sih->chip) &&
 		((uint16)bus->sih->chip != BCM4355_CHIP_ID) &&
 		((uint16)bus->sih->chip != BCM4359_CHIP_ID) &&
+		((uint16)bus->sih->chip != CYW55560_CHIP_ID) &&
 		((uint16)bus->sih->chip != BCM4349_CHIP_ID)) {
 		DHD_ERROR(("%s: supported for chips"
-				"4350/4345/4355/4364/4349/4359 only\n", __FUNCTION__));
+				"4350/4345/4355/4364/4349/4359/89570 only\n", __FUNCTION__));
 		return BCME_UNSUPPORTED;
 	}
+#ifdef WL_DHD_XR
+	if (gci_corerev == 20) {
+		otp_size = ((gciregs->otplayout & OTPL_ROW_SIZE_MASK)
+				>> OTPL_ROW_SIZE_SHIFT);
+		DHD_TRACE(("(Size %d bits) \n", otp_size));
+	} else {
+		otp_size =  ((bus->sih->cccaps & CC_CAP_OTPSIZE)
+				>> CC_CAP_OTPSIZE_SHIFT);
+		DHD_TRACE(("(Size %d bits) \n", otp_size));
+	}
+
+	/* For H2 A1 = 16Kb (512x32: 16384 bits) */
+	if (otp_size == OTPSIZE_28NM_15) {
+		otp_size_28nm = OTPSIZE_28NM_15_ROWS * OTPSIZE_28NM_15_COLS;
+	} else {
+		/*  For 43012 = 6Kb (192x32: 6144 bits) */
+		otp_size_28nm = OTPSIZE_28NM_5_ROWS * OTPSIZE_28NM_5_COLS;
+	}
+	dump_size = otp_size_28nm / 32; /* 32bit words */
+#else
 	/* Check if SRC_PRESENT in SpromCtrl(0x190 in ChipCommon Regs) is set */
 	if (chipcregs->sromcontrol & SRC_PRESENT) {
 		/* SPROM Size: 1Kbits (0x0), 4Kbits (0x1), 16Kbits(0x2) */
@@ -10430,10 +10502,20 @@ dhdpcie_sromotp_customvar(dhd_bus_t *bus,  uint32 *customvar1, uint32 *customvar
 				__FUNCTION__));
 		return BCME_NOTFOUND;
 	}
+#endif /* WL_DHD_XR */
 	if (bus->regs == NULL) {
+#ifdef WL_DHD_XR
+		DHD_ERROR(("GCI core Regs. not initialized\n"));
+#else
 		DHD_ERROR(("ChipCommon Regs. not initialized\n"));
+#endif /* WL_DHD_XR */
 		return BCME_NOTREADY;
 	} else {
+#ifdef WL_DHD_XR
+		/* OTP backplane start address = 0x18011000 */
+		addr = si_addrspace(bus->sih, CORE_SLAVE_PORT_0, CORE_BASE_ADDR_0) + SI_CORE_SIZE;
+		DHD_TRACE((" addr = 0x%x \n", addr));
+#else
 		/* Chipcommon rev51 is a variation on rev45 and does not support
 		* the latest OTP configuration.
 		*/
@@ -10450,20 +10532,42 @@ dhdpcie_sromotp_customvar(dhd_bus_t *bus,  uint32 *customvar1, uint32 *customvar
 			DHD_ERROR(("%s: NVM Shadow is not intialized\n", __FUNCTION__));
 			return BCME_NOTFOUND;
 		}
+#endif /* WL_DHD_XR */
+#ifdef WL_DHD_XR
+		otp_dump = kzalloc(dump_size*4, GFP_KERNEL);
+#else
 		otp_dump = kzalloc(dump_size*2, GFP_KERNEL);
+#endif /* WL_DHD_XR */
 		if (otp_dump == NULL) {
 			DHD_ERROR(("%s: Insufficient system memory of size %d\n",
 				__FUNCTION__, dump_size));
 			return BCME_NOMEM;
 		}
+#ifdef WL_DHD_XR
 		/*
-		* Read 16 bits / iteration.
-		* dump_size & dump_offset in 16-bit words
-		*/
+		 *  Read 32 bits / iteration.
+		 *  dump_size & dump_offset in 32-bit words
+		 */
+		byte_access_size = 4; /* 32 bit alligned */
+		while (dump_offset < dump_size) {
+			if (serialized_backplane_access(bus,
+				(addr + (dump_offset * byte_access_size)), byte_access_size,
+				(otp_dump  + dump_offset), TRUE) != BCME_OK) {
+				DHD_TRACE(("Invalid size/addr combination \n"));
+				return  BCME_ERROR;
+			}
+			dump_offset += 0x1;
+		}
+#else
+		/*
+		 * Read 16 bits / iteration.
+		 * dump_size & dump_offset in 16-bit words
+		 */
 		while (dump_offset < dump_size) {
 			*(otp_dump + dump_offset) = *(nvm_shadow + dump_offset);
 			dump_offset += 0x1;
 		}
+#endif /* WL_DHD_XR */
 		/* Read from cis tuple start address */
 		cis = (uint8 *)otp_dump + CISTPL_OFFSET;
 		/* parse value of customvar2 tuple */
@@ -10473,7 +10577,11 @@ dhdpcie_sromotp_customvar(dhd_bus_t *bus,  uint32 *customvar1, uint32 *customvar
 				tlen = 0;
 			else
 				tlen = cis[i++];
+#ifdef WL_DHD_XR
+			if ((i + tlen) >= dump_size*4)
+#else
 			if ((i + tlen) >= dump_size*2)
+#endif /* WL_DHD_XR */
 				break;
 			switch (tup) {
 				case CISTPL_BRCM_HNBU:
@@ -12683,11 +12791,15 @@ dhd_pcie_dump_rc_conf_space_cap(dhd_pub_t *dhd)
 int
 dhd_pcie_debug_info_dump(dhd_pub_t *dhd)
 {
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 	int host_irq_disabled;
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 
 	DHD_ERROR(("bus->bus_low_power_state = %d\n", dhd->bus->bus_low_power_state));
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 	host_irq_disabled = dhdpcie_irq_disabled(dhd->bus);
 	DHD_ERROR(("host pcie_irq disabled = %d\n", host_irq_disabled));
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 	dhd_print_tasklet_status(dhd);
 	dhd_pcie_intr_count_dump(dhd);
 

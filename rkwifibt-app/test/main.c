@@ -23,17 +23,20 @@
 #include <math.h>
 #include <sys/select.h>
 #include <linux/input.h>
-#include <linux/rtc.h>
+#include <stdbool.h>
+
+#include <signal.h>
 
 #include "bt_test.h"
 #include "rk_ble_app.h"
 #include "rk_wifi_test.h"
+#include "utility.h"
+
+static bool main_loop_flag;
 
 static void rkwifibt_test_bluetooth();
 static void rkwifibt_test_wifi_config();
-#ifdef BLUEZ_USE
-static void rkwifibt_test_bluetooth_1s2();
-#endif
+static void rkwifibt_test_network_config();
 
 typedef struct {
 	const char *cmd;
@@ -42,119 +45,79 @@ typedef struct {
 } menu_command_t;
 
 static menu_command_t menu_command_table[] = {
-	{"bluetooth", "show bluetooth test cmd menu", rkwifibt_test_bluetooth},
-	{"wificonfig", "show wifi config test cmd menu", rkwifibt_test_wifi_config},
+	{"BT", "show bluetooth test cmd menu", rkwifibt_test_bluetooth},
+	{"WiFi", "show wifi config test cmd menu", rkwifibt_test_wifi_config},
+	{"Network", "show ble wifi config test cmd menu", rkwifibt_test_network_config},
 };
 
 static void show_bt_cmd();
-static void show_wifi_config_cmd();
-
-typedef struct {
-	const char *cmd;
-	void (*action)(void *data);
-} command_t;
+static void show_wifi_cmd();
+static void show_config_cmd();
 
 typedef struct {
 	const char *cmd;
 	void (*action)(char *data);
-} command_bt_t;
+} command_t;
+
+static command_t network_config_command_table[] = {
+	{"", NULL},
+	{"ble config wifi start     	(num_index)", rk_ble_wifi_init},
+	{"ble config wifi stop      	(num_index)", rk_ble_wifi_deinit},
+	{"ble config wifi looptest  	(num_index)", rk_ble_wifi_init_onoff_test},
+	{"softap config start       	(num_index)", rk_wifi_softap_start},
+	{"softap config stop        	(num_index)", rk_wifi_softap_stop},
+};
 
 static command_t wifi_config_command_table[] = {
 	{"", NULL},
-	{"ble_wifi_config_start", rk_ble_wifi_init},
-	{"ble_wifi_config_stop", rk_ble_wifi_deinit},
-	{"softap_wifi_config_start", rk_wifi_softap_start},
-	{"softap_wifi_config_stop", rk_wifi_softap_stop},
-	{"wifi_open", rk_wifi_open},
-	{"wifi_onoff_test", rk_wifi_openoff_test},
-	{"wifi_close", rk_wifi_close},
-	{"wifi_connect", rk_wifi_connect},
-	{"wifi_ping", rk_wifi_ping},
-	{"wifi_scan", rk_wifi_scan},
-	{"wifi_getSavedInfo", rk_wifi_getSavedInfo},
-	{"rk_wifi_getConnectionInfo", rk_wifi_getConnectionInfo},
-	{"wifi_connect_with_ssid", rk_wifi_connect_with_ssid},
-	{"wifi_cancel", rk_wifi_cancel},
-	{"wifi_forget_with_ssid", rk_wifi_forget_with_ssid},
-	{"wifi_connect1", rk_wifi_connect1},
-	{"rk_wifi_disconnect", rk_wifi_disconnect},
+	{"wifi open                 	(num_index)", rk_wifi_open},
+	{"wifi open/close looptest  	(num_index)", rk_wifi_openoff_test},
+	{"wifi close                	(num_index)", rk_wifi_close},
+	{"wifi connect              	(num_index input ssid:password)", rk_wifi_connect},
+	{"wifi scan                 	(num_index)", rk_wifi_scan},
+	{"wifi get saved info       	(num_index)", rk_wifi_getSavedInfo},
+	{"wifi get currit conn info 	(num_index)", rk_wifi_getConnectionInfo},
+	{"wifi connect with ssid    	(num_index input ssid)", rk_wifi_connect_with_ssid},
+	{"wifi connect with bssid    	(num_index input ssid)", rk_wifi_connect_with_bssid},
+	{"wifi cancel               	(num_index)", rk_wifi_cancel},
+	{"wifi forget with ssid     	(num_index)", rk_wifi_forget_with_ssid},
+	{"wifi forget with bssid     	(num_index)", rk_wifi_forget_with_bssid},
+	{"wifi discon currit ssid   	(num_index)", rk_wifi_disconnect},
+	{"wifi version              	(num_index)", rk_wifi_version},
+	{"wifi setbssid             	(num_index)", rk_wifi_setbssid},
 };
 
-static command_bt_t bt_command_table[] = {
+static command_t bt_command_table[] = {
 	{"", NULL},
-	{"bt_server_open", bt_test_bluetooth_init},
-	{"bt_onoff_test", bt_test_bluetooth_onff_init},
-	{"bt_test_set_class", bt_test_set_class},
-	{"bt_test_get_device_name", bt_test_get_device_name},
-	{"bt_test_get_device_addr", bt_test_get_device_addr},
-	{"bt_test_set_device_name", bt_test_set_device_name},
-	{"bt_test_enable_reconnect", bt_test_enable_reconnect},
-	{"bt_test_disable_reconnect", bt_test_disable_reconnect},
-	{"bt_test_start_discovery", bt_test_start_discovery},
-	{"bt_test_start_discovery_le", bt_test_start_discovery_le},
-	{"bt_test_start_discovery_bredr", bt_test_start_discovery_bredr},
-	{"bt_test_start_discovery_pan", bt_test_start_discovery_pan},
-	{"bt_test_cancel_discovery", bt_test_cancel_discovery},
-	{"bt_test_is_discovering", bt_test_is_discovering},
-	{"bt_test_display_devices", bt_test_display_devices},
-	{"bt_test_read_remote_device_name", bt_test_read_remote_device_name},
-	{"bt_test_get_scaned_devices", bt_test_get_scaned_devices},
-	{"bt_test_display_paired_devices", bt_test_display_paired_devices},
-	{"bt_test_get_paired_devices", bt_test_get_paired_devices},
-	{"bt_test_free_paired_devices", bt_test_free_paired_devices},
-	{"bt_test_pair_by_addr", bt_test_pair_by_addr},
-	{"bt_test_unpair_by_addr", bt_test_unpair_by_addr},
-	{"bt_test_get_connected_properties", bt_test_get_connected_properties},
-	{"bt_test_source_auto_start", bt_test_source_auto_start},
-	{"bt_test_source_connect_status", bt_test_source_connect_status},
-	{"bt_test_source_auto_stop", bt_test_source_auto_stop},
-	{"bt_test_source_open", bt_test_source_open},
-	{"bt_test_source_close", bt_test_source_close},
-	{"bt_test_source_connect_by_addr", bt_test_source_connect_by_addr},
-	{"bt_test_source_disconnect", bt_test_source_disconnect},
-	{"bt_test_source_disconnect_by_addr", bt_test_source_disconnect_by_addr},
-	{"bt_test_source_remove_by_addr", bt_test_source_remove_by_addr},
-	{"bt_test_sink_open", bt_test_sink_open},
-	{"bt_test_sink_visibility00", bt_test_sink_visibility00},
-	{"bt_test_sink_visibility01", bt_test_sink_visibility01},
-	{"bt_test_sink_visibility10", bt_test_sink_visibility10},
-	{"bt_test_sink_visibility11", bt_test_sink_visibility11},
-	{"bt_test_ble_visibility00", bt_test_ble_visibility00},
-	{"bt_test_ble_visibility11", bt_test_ble_visibility11},
-	{"bt_test_sink_status", bt_test_sink_status},
-	{"bt_test_sink_music_play", bt_test_sink_music_play},
-	{"bt_test_sink_music_pause", bt_test_sink_music_pause},
-	{"bt_test_sink_music_next", bt_test_sink_music_next},
-	{"bt_test_sink_music_previous", bt_test_sink_music_previous},
-	{"bt_test_sink_music_stop", bt_test_sink_music_stop},
-	{"bt_test_sink_set_volume", bt_test_sink_set_volume},
-	{"bt_test_sink_connect_by_addr", bt_test_sink_connect_by_addr},
-	{"bt_test_sink_disconnect_by_addr", bt_test_sink_disconnect_by_addr},
-	{"bt_test_sink_get_play_status", bt_test_sink_get_play_status},
-	{"bt_test_sink_get_poschange", bt_test_sink_get_poschange},
-	{"bt_test_sink_disconnect", bt_test_sink_disconnect},
-	{"bt_test_sink_close", bt_test_sink_close},
-	{"bt_test_ble_start", bt_test_ble_start},
-	{"bt_test_ble_set_address", bt_test_ble_set_address},
-	{"bt_test_ble_set_adv_interval", bt_test_ble_set_adv_interval},
-	{"bt_test_ble_write", bt_test_ble_write},
-	{"bt_test_ble_disconnect", bt_test_ble_disconnect},
-	{"bt_test_ble_stop", bt_test_ble_stop},
-	{"bt_test_ble_get_status", bt_test_ble_get_status},
-	{"bt_test_ble_client_open", bt_test_ble_client_open},
-	{"bt_test_ble_client_close", bt_test_ble_client_close},
-	{"bt_test_ble_client_connect", bt_test_ble_client_connect},
-	{"bt_test_ble_client_disconnect", bt_test_ble_client_disconnect},
-	{"bt_test_ble_client_get_status", bt_test_ble_client_get_status},
-	{"bt_test_ble_client_get_service_info", bt_test_ble_client_get_service_info},
-	{"bt_test_ble_client_read", bt_test_ble_client_read},
-	{"bt_test_ble_client_write", bt_test_ble_client_write},
-	{"bt_test_ble_client_is_notify", bt_test_ble_client_is_notify},
-	{"bt_test_ble_client_notify_on", bt_test_ble_client_notify_on},
-	{"bt_test_ble_client_notify_off", bt_test_ble_client_notify_off},
-	{"bt_test_ble_client_indicate_on", bt_test_ble_client_indicate_on},
-	{"bt_test_ble_client_indicate_off", bt_test_ble_client_indicate_off},
-	{"bt_test_ble_client_get_eir_data", bt_test_ble_client_get_eir_data},
+	{"bt init                   	(num_index)", bt_test_bluetooth_init},
+	{"bt on/off looptest        	(num_index input test_cnt)", bt_test_bluetooth_onoff_init},
+	{"bt version                	(num_index)", bt_test_version},
+	{"bt on/off power           	(num_index input on/off)", bt_test_set_power},
+	{"bt on/off discoverable    	(num_index input on/off)", bt_test_set_discoverable},
+	{"bt on/off pairable        	(num_index input on/off)", bt_test_set_pairable},
+	{"bt start scan             	(num_index input auto/bredr/le)", bt_test_start_discovery},
+	{"bt stop scan              	(num_index)", bt_test_cancel_discovery},
+	{"bt read remote device info	(num_index input addr)", bt_test_read_remote_device_info},
+	{"bt get all devices info   	(num_index)", bt_test_get_all_devices},
+	{"bt pair ble by addr       	(num_index input addr)", bt_test_pair_by_addr},
+	{"bt connect by addr        	(num_index input addr)", bt_test_connect_by_addr},
+	{"bt disconnect by addr     	(num_index input addr)", bt_test_disconnect_by_addr},
+	{"bt_test_remove_by_addr    	(num_index input addr)", bt_test_unpair_by_addr},
+	{"bt set a2dp volume        	(num_index input volume)", bt_test_a2dp_test_volume},
+	{"bt enable a2dp sink       	(num_index)", bt_test_enable_a2dp_sink},
+	{"bt enable a2dp source     	(num_index)", bt_test_enable_a2dp_source},
+	{"bt a2dp source play       	(num_index)", bt_test_source_play},
+	{"bt a2dp sink avrcp control	(num_index input play/pause/next/previous)", bt_test_sink_media_control},
+	{"ble adv start             	(num_index)", bt_test_ble_start},
+	{"ble adv stop              	(num_index)", bt_test_ble_stop},
+	{"ble set adv interval      	(num_index)", bt_test_ble_set_adv_interval},
+	{"ble server send notify    	(num_index input raw(ascii))", bt_test_ble_write},
+	{"ble client get s/c/d info 	(num_index)", bt_test_ble_client_get_service_info},
+	{"ble client read           	(num_index)", bt_test_ble_client_read},
+	{"ble client write          	(num_index)", bt_test_ble_client_write},
+	{"ble client enable notify  	(num_index)", bt_test_ble_client_notify_on},
+	{"ble client disable notify  	(num_index)", bt_test_ble_client_notify_off},
+#ifdef SPP
 	{"bt_test_spp_open", bt_test_spp_open},
 	{"bt_test_spp_write", bt_test_spp_write},
 	{"bt_test_spp_close", bt_test_spp_close},
@@ -163,58 +126,42 @@ static command_bt_t bt_command_table[] = {
 	{"bt_test_spp_connect", bt_test_spp_connect},
 	{"bt_test_spp_disconnect", bt_test_spp_disconnect},
 	{"bt_test_start_discovery_spp", bt_test_start_discovery_spp},
-	{"bt_test_hfp_sink_open", bt_test_hfp_sink_open},
-	{"bt_test_hfp_hp_open", bt_test_hfp_hp_open},
-	{"bt_test_hfp_hp_accept", bt_test_hfp_hp_accept},
-	{"bt_test_hfp_hp_hungup", bt_test_hfp_hp_hungup},
-	{"bt_test_hfp_hp_redail", bt_test_hfp_hp_redial},
-	{"bt_test_hfp_hp_dial_number", bt_test_hfp_hp_dial_number},
-	{"bt_test_hfp_hp_report_battery", bt_test_hfp_hp_report_battery},
-	{"bt_test_hfp_hp_set_volume", bt_test_hfp_hp_set_volume},
-	{"bt_test_hfp_hp_close", bt_test_hfp_hp_close},
-	{"bt_test_hfp_hp_disconnect", bt_test_hfp_hp_disconnect},
-	{"bt_test_obex_init", bt_test_obex_init},
-	{"bt_test_obex_pbap_init", bt_test_obex_pbap_init},
-	{"bt_test_obex_pbap_connect", bt_test_obex_pbap_connect},
-	{"bt_test_obex_pbap_get_pb_vcf", bt_test_obex_pbap_get_pb_vcf},
-	{"bt_test_obex_pbap_get_ich_vcf", bt_test_obex_pbap_get_ich_vcf},
-	{"bt_test_obex_pbap_get_och_vcf", bt_test_obex_pbap_get_och_vcf},
-	{"bt_test_obex_pbap_get_mch_vcf", bt_test_obex_pbap_get_mch_vcf},
-	{"bt_test_obex_pbap_get_spd_vcf", bt_test_obex_pbap_get_spd_vcf},
-	{"bt_test_obex_pbap_get_fav_vcf", bt_test_obex_pbap_get_fav_vcf},
-	{"bt_test_obex_pbap_disconnect", bt_test_obex_pbap_disconnect},
-	{"bt_test_obex_pbap_deinit", bt_test_obex_pbap_deinit},
-	{"bt_test_obex_deinit", bt_test_obex_deinit},
-	{"bt_test_pan_init", bt_test_pan_init},
-	{"bt_test_pan_deinit", bt_test_pan_deinit},
-	{"bt_test_pan_connect", bt_test_pan_connect},
-	{"bt_test_pan_disconnect", bt_test_pan_disconnect},
-	{"bt_test_get_eir_data", bt_test_get_eir_data},
+#endif
 	{"bt_server_close", bt_test_bluetooth_deinit},
 };
 
-static void show_wifi_config_cmd() {
+static void show_config_cmd() {
 	unsigned int i;
-	for (i = 1; i < sizeof(wifi_config_command_table) / sizeof(wifi_config_command_table[0]); i++) {
+	for (i = 1; i < sizeof(network_config_command_table) /
+		 sizeof(network_config_command_table[0]); i++)
+		printf("%02d.  %s \n", i, network_config_command_table[i].cmd);
+}
+
+static void show_wifi_cmd() {
+	unsigned int i;
+	for (i = 1; i < sizeof(wifi_config_command_table)
+		 / sizeof(wifi_config_command_table[0]); i++)
 		printf("%02d.  %s \n", i, wifi_config_command_table[i].cmd);
-	}
 }
 
 static void show_bt_cmd() {
 	unsigned int i;
-	for (i = 1; i < sizeof(bt_command_table) / sizeof(bt_command_table[0]); i++) {
+	for (i = 1; i < sizeof(bt_command_table)
+		 / sizeof(bt_command_table[0]); i++)
 		printf("%02d.  %s \n", i, bt_command_table[i].cmd);
-	}
 }
 
 static void show_help(char *bin_name) {
 	unsigned int i;
 	printf("%s [Usage]:\n", bin_name);
-	for (i = 0; i < sizeof(menu_command_table)/sizeof(menu_command_t); i++)
-		printf("\t\"%s %s\":%s.\n", bin_name, menu_command_table[i].cmd, menu_command_table[i].desc);
+	for (i = 0; i < sizeof(menu_command_table)
+		 /sizeof(menu_command_t); i++)
+		printf("\t\"%s %s\":%s.\n", bin_name,
+				menu_command_table[i].cmd,
+				menu_command_table[i].desc);
 }
 
-static void rkwifibt_test_wifi_config()
+static void rkwifibt_test_network_config()
 {
 	int i, item_cnt;
 	char *input_start;
@@ -222,24 +169,63 @@ static void rkwifibt_test_wifi_config()
 	char szBuf[64] = {0};
 	char szBuf_space[64] = {0};
 
-	item_cnt = sizeof(wifi_config_command_table) / sizeof(command_t);
-	show_wifi_config_cmd();
+	item_cnt = sizeof(network_config_command_table) / sizeof(command_t);
+	show_config_cmd();
 
-	while(true) {
-		printf("Please input number or help to run: ");
+	while (main_loop_flag) {
+		printf("Please input number or help to run: \n");
 
 		memset(szBuf, 0, sizeof(szBuf));
 		if (fgets(szBuf_space, 64, stdin) == NULL)
 			continue;
 
 		if (!strncmp("help", szBuf_space, 4) || !strncmp("h", szBuf_space, 1))
-			show_wifi_config_cmd();
+			show_config_cmd();
 
-		//printf("szBuf_space: %s:len\n", szBuf_space, sizeof(szBuf_space));
 		strncpy(szBuf, szBuf_space, strlen(szBuf_space) - 1);
 
 		input_start = strstr(szBuf, "input");
-		if(input_start == NULL) {
+		if (input_start == NULL) {
+			i = atoi(szBuf);
+			if ((i >= 1) && (i < item_cnt))
+				network_config_command_table[i].action(NULL);
+		} else {
+			memset(cmdBuf, 0, sizeof(cmdBuf));
+			strncpy(cmdBuf, szBuf, strlen(szBuf) - strlen(input_start) - 1);
+			i = atoi(cmdBuf);
+			if ((i >= 1) && (i < item_cnt))
+				network_config_command_table[i].action(input_start + strlen("input") + 1);
+		}
+	}
+
+	return;
+}
+
+static void rkwifibt_test_wifi_config()
+{
+	int i, item_cnt;
+	char *input_start;
+	char cmdBuf[256] = {0};
+	char szBuf[256] = {0};
+	char szBuf_space[256] = {0};
+
+	item_cnt = sizeof(wifi_config_command_table) / sizeof(command_t);
+	show_wifi_cmd();
+
+	while (main_loop_flag) {
+		printf("Please input number or help to run: \n");
+
+		memset(szBuf, 0, sizeof(szBuf));
+		if (fgets(szBuf_space, 64, stdin) == NULL)
+			continue;
+
+		if (!strncmp("help", szBuf_space, 4) || !strncmp("h", szBuf_space, 1))
+			show_wifi_cmd();
+
+		strncpy(szBuf, szBuf_space, strlen(szBuf_space) - 1);
+
+		input_start = strstr(szBuf, "input");
+		if (input_start == NULL) {
 			i = atoi(szBuf);
 			if ((i >= 1) && (i < item_cnt))
 				wifi_config_command_table[i].action(NULL);
@@ -247,7 +233,6 @@ static void rkwifibt_test_wifi_config()
 			memset(cmdBuf, 0, sizeof(cmdBuf));
 			strncpy(cmdBuf, szBuf, strlen(szBuf) - strlen(input_start) - 1);
 			i = atoi(cmdBuf);
-			printf("%s: i = %d\n", __func__, i);
 			if ((i >= 1) && (i < item_cnt))
 				wifi_config_command_table[i].action(input_start + strlen("input") + 1);
 		}
@@ -264,34 +249,33 @@ static void rkwifibt_test_bluetooth()
 	char szBuf[64] = {0};
 	char szBuf_space[64] = {0};
 
-	item_cnt = sizeof(bt_command_table) / sizeof(command_bt_t);
+	item_cnt = sizeof(bt_command_table) / sizeof(command_t);
 	show_bt_cmd();
 
-	while(true) {
+	while (main_loop_flag) {
 		memset(szBuf, 0, sizeof(szBuf));
-		printf("Please input number or help to run: ");
+		printf("Please input number or help to run: \n");
 
 		if (fgets(szBuf_space, 64, stdin) == NULL)
 			continue;
 
-		if (!strncmp("help", szBuf_space, 4) || !strncmp("h", szBuf_space, 1))
+		if (!strncmp("help", szBuf_space, 4)
+			|| !strncmp("h", szBuf_space, 1)
+			|| !strncmp("H", szBuf_space, 1)
+			)
 			show_bt_cmd();
 
-		///printf("szBuf_space: %s:len\n", szBuf_space, sizeof(szBuf_space));
 		strncpy(szBuf, szBuf_space, strlen(szBuf_space) - 1);
 
 		input_start = strstr(szBuf, "input");
-		if(input_start == NULL) {
+		if (input_start == NULL) {
 			i = atoi(szBuf);
-			//printf("%s: select %d\n", __func__, i);
 			if ((i >= 1) && (i < item_cnt))
 				bt_command_table[i].action(NULL);
 		} else {
 			memset(cmdBuf, 0, sizeof(cmdBuf));
 			strncpy(cmdBuf, szBuf, strlen(szBuf) - strlen(input_start) - 1);
-			//printf("%s: cmdBuf = %s\n", __func__, cmdBuf);
 			i = atoi(cmdBuf);
-			printf("%s: i = %d\n", __func__, i);
 			if ((i >= 1) && (i < item_cnt))
 				bt_command_table[i].action(input_start + strlen("input") + 1);
 		}
@@ -300,10 +284,27 @@ static void rkwifibt_test_bluetooth()
 	return;
 }
 
+static void main_loop_stop(int sig)
+{
+	/* Call to this handler restores the default action, so on the
+	 * second call the program will be forcefully terminated.
+	 */
+	struct sigaction sigact = { .sa_handler = SIG_DFL };
+	sigaction(sig, &sigact, NULL);
+	main_loop_flag = false;
+
+	exec_command_system("echo 0 > /sys/class/rfkill/rfkill0/state");
+}
+
 int main(int argc, char *argv[])
 {
 	int i, item_cnt;
-	char version[64] = {0};
+
+	struct sigaction sigact = { .sa_handler = main_loop_stop };
+	sigaction(SIGTERM, &sigact, NULL);
+	sigaction(SIGINT, &sigact, NULL);
+
+	main_loop_flag = true;
 
 	//RK_read_version(version, 64);
 	item_cnt = sizeof(menu_command_table) / sizeof(menu_command_t);
@@ -330,9 +331,16 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	//ensure wpa_supplicant.conf
+	system("ls -al /data/ && cat /data/cfg/wpa_supplicant.conf");
+	if (access("/data/cfg/wpa_supplicant.conf", F_OK) != 0) {
+		system("mkdir -p /data/cfg");
+		printf("/data/cfg/wpa_supplicant.conf isn't exist!!!\n");
+		system("cp /etc/wpa_supplicant.conf /data/cfg/wpa_supplicant.conf");
+	}
 	menu_command_table[i].action();
 
-	while(true)
+	while (main_loop_flag)
 		sleep(1);
 
 	return 0;

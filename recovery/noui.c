@@ -92,3 +92,7 @@ int ui_key_pressed(int key)
 void ui_clear_key_queue()
 {
 }
+
+void gr_set_rotate(int val)
+{
+}

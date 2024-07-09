@@ -1,9 +1,9 @@
 /*
  * Linux OS Independent Layer
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -41,6 +41,9 @@
 #endif /* __ARM_ARCH_7A__ && !DHD_USE_COHERENT_MEM_FOR_RING */
 
 #include <linux/random.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+#include <linux/prandom.h>
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)) */
 
 #include <osl.h>
 #include <bcmutils.h>
@@ -771,7 +774,11 @@ original:
 #endif /* CONFIG_DHD_USE_STATIC_BUF */
 
 	flags = CAN_SLEEP() ? GFP_KERNEL: GFP_ATOMIC;
+#if defined(DHD_USE_KVMALLOC) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
+	if ((addr = kvmalloc(size, flags)) == NULL) {
+#else
 	if ((addr = kmalloc(size, flags)) == NULL) {
+#endif // endif
 		if (osh)
 			osh->failed++;
 		return (NULL);
@@ -830,7 +837,11 @@ osl_mfree(osl_t *osh, void *addr, uint size)
 
 		atomic_sub(size, &osh->cmn->malloced);
 	}
+#if defined(DHD_USE_KVMALLOC) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
+	kvfree(addr);
+#else
 	kfree(addr);
+#endif // endif
 }
 
 void *
@@ -1147,15 +1158,6 @@ osl_assert(const char *exp, const char *file, int line)
 	}
 }
 #endif // endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 1))
-void do_gettimeofday(struct timeval *tv)
-{
-	struct timespec64 ts;
-	ktime_get_real_ts64(&ts);
-	tv->tv_sec = ts.tv_sec;
-	tv->tv_usec = ts.tv_nsec;
-}
-#endif  /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 1) */
 void
 osl_delay(uint usec)
 {
@@ -1180,12 +1182,12 @@ osl_sleep(uint ms)
 uint64
 osl_sysuptime_us(void)
 {
-	struct timeval tv;
+	struct timespec64 ts;
 	uint64 usec;
 
-	do_gettimeofday(&tv);
+	ktime_get_real_ts64(&ts);
 	/* tv_usec content is fraction of a second */
-	usec = (uint64)tv.tv_sec * 1000000ul + tv.tv_usec;
+	usec = (uint64)ts.tv_sec * 1000000ul + (ts.tv_nsec / NSEC_PER_USEC);
 	return usec;
 }
 
@@ -1214,14 +1216,14 @@ osl_get_localtime(uint64 *sec, uint64 *usec)
 uint64
 osl_systztime_us(void)
 {
-	struct timeval tv;
+	struct timespec64 ts;
 	uint64 tzusec;
 
-	do_gettimeofday(&tv);
+	ktime_get_real_ts64(&ts);
 	/* apply timezone */
-	tzusec = (uint64)((tv.tv_sec - (sys_tz.tz_minuteswest * 60)) *
+	tzusec = (uint64)((ts.tv_sec - (sys_tz.tz_minuteswest * 60)) *
 		USEC_PER_SEC);
-	tzusec += tv.tv_usec;
+	tzusec += ts.tv_nsec / NSEC_PER_USEC;
 
 	return tzusec;
 }
@@ -1815,7 +1817,7 @@ timer_cb_compat(struct timer_list *tl)
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0) */
 
 osl_timer_t *
-osl_timer_init(osl_t *osh, const char *name, void (*fn)(void *arg), void *arg)
+osl_timer_init(osl_t *osh, const char *name, void (*fn)(ulong arg), void *arg)
 {
 	osl_timer_t *t;
 	BCM_REFERENCE(fn);
@@ -1970,3 +1972,22 @@ osl_dma_lock_init(osl_t *osh)
 	osh->dma_lock_bh = FALSE;
 }
 #endif /* USE_DMA_LOCK */
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+static struct rnd_state dhd_random_state;
+
+void prandom_seed(u32 entropy)
+{
+    prandom_seed_state(&dhd_random_state, entropy);
+}
+
+u32 prandom_u32(void)
+{
+    return prandom_u32_state(&dhd_random_state);
+}
+
+void prandom_bytes(void *buf, size_t bytes)
+{
+    return prandom_bytes_state(&dhd_random_state, buf, bytes);
+}
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)) */

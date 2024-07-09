@@ -51,19 +51,44 @@ public:
                                           SmartPtr<RkAiqAtmoStatsProxy>& to);
 #if RKAIQ_HAVE_DEHAZE_V10
     virtual XCamReturn translateAdehazeStats(const SmartPtr<VideoBuffer>& from,
-                                             SmartPtr<RkAiqAdehazeStatsProxy>& to);
+            SmartPtr<RkAiqAdehazeStatsProxy>& to);
 #endif
 #if RKAIQ_HAVE_PDAF
+    bool getFileValue(const char* path, int* pos);
     virtual XCamReturn translatePdafStats(const SmartPtr<VideoBuffer>& from,
                                           SmartPtr<RkAiqPdafStatsProxy>& to, bool sns_mirror);
 #endif
 
     virtual XCamReturn getParams(const SmartPtr<VideoBuffer>& from);
     virtual void releaseParams();
- protected:
+    void setAeAlgoStatsCfg(const RkAiqSetStatsCfg* cfg) {
+        _aeAlgoStatsCfg.UpdateStats = cfg->UpdateStats;
+        _aeAlgoStatsCfg.RawStatsChnSel = cfg->RawStatsChnSel;
+        _aeAlgoStatsCfg.YRangeMode = cfg->YRangeMode;
+        memcpy(_aeAlgoStatsCfg.BigWeight, cfg->BigWeight, RAWHISTBIG_WIN_NUM);
+        memcpy(_aeAlgoStatsCfg.LiteWeight, cfg->LiteWeight, RAWHISTLITE_WIN_NUM);
+    }
+    bool getAeStatsRunFlag(uint16_t* HistMean);
+
+protected:
     rkisp_effect_params_v20 _ispParams;
     SmartPtr<RkAiqSensorExpParamsProxy> _expParams;
- private:
+    typedef struct aeAlgoStatsCfg_s {
+        bool UpdateStats;           /* update stats every frame */
+        int8_t RawStatsChnSel;      /* RawStatsChnEn_t */
+        int8_t YRangeMode;          /* CalibDb_CamYRangeModeV2_t */
+        unsigned char BigWeight[RAWHISTBIG_WIN_NUM];
+        unsigned char LiteWeight[RAWHISTLITE_WIN_NUM];
+    } aeAlgoStatsCfg_t;
+    aeAlgoStatsCfg_t _aeAlgoStatsCfg;
+    uint16_t _lastHistMean[3] {0, 0, 0};
+    RKAiqAecStats_t _lastAeStats;
+
+#if RKAIQ_HAVE_PDAF
+    int mPdafDumpCnt;
+    bool mEnPdDump;
+#endif
+private:
     XCAM_DEAD_COPY (RkAiqResourceTranslator);
 };
 

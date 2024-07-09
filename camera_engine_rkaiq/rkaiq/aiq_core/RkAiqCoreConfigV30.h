@@ -224,7 +224,7 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
     { &g_RkIspAlgoDescAfec.common,          RK_AIQ_CORE_ANALYZE_OTHER, 0, 0, 0,     otherGrpCondsV3x   },
 #endif
 #if (RKAIQ_HAVE_AFD_V2)
-	{ &g_RkIspAlgoDescAfd.common,			 RK_AIQ_CORE_ANALYZE_AFD,	  0, 1, 0,	  grpAfdConds	   },
+    { &g_RkIspAlgoDescAfd.common,            RK_AIQ_CORE_ANALYZE_AFD,     0, 1, 0,    grpAfdConds      },
 #endif
     { NULL,                                 RK_AIQ_CORE_ANALYZE_ALL,    0, 0, 0,    {0, 0}             },
     // clang-format on
@@ -233,7 +233,7 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 #if RKAIQ_ENABLE_CAMGROUP
 const static struct RkAiqAlgoDesCommExt g_camgroup_algos[] = {
     // clang-format off
-    { &g_RkIspAlgoDescCamgroupAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0,  3,  0, {0, 0} },
+    { &g_RkIspAlgoDescCamgroupAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0,  2,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAblc.common,          RK_AIQ_CORE_ANALYZE_AWB,    0,  0,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAwb.common,           RK_AIQ_CORE_ANALYZE_AWB,    1,  2, 32, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAlsc.common,          RK_AIQ_CORE_ANALYZE_AWB,    0,  0,  0, {0, 0} },
@@ -242,7 +242,7 @@ const static struct RkAiqAlgoDesCommExt g_camgroup_algos[] = {
     // { &g_RkIspAlgoDescCamgroupAdpcc.common,      RK_AIQ_CORE_ANALYZE_AWB,    0,  0,  0, {0, 0} },
     // { &g_RkIspAlgoDescamgroupAgamma.common,      RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAdrc.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0,  1,  0, {0, 0} },
-    // { &g_RkIspAlgoDescCamgroupAmerge.common,     RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
+    { &g_RkIspAlgoDescCamgroupAmerge.common,        RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAynrV3.common,        RK_AIQ_CORE_ANALYZE_OTHER,  3,  3,  3, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAcnrV2.common,        RK_AIQ_CORE_ANALYZE_OTHER,  2,  2,  2, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAbayertnrV2.common,   RK_AIQ_CORE_ANALYZE_OTHER,  2,  2,  2, {0, 0} },

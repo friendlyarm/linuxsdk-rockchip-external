@@ -125,10 +125,6 @@ XCamReturn RkAiqAieHandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "aie handle prepare failed");
 
-    RkAiqAlgoConfigAie* aie_config_int = (RkAiqAlgoConfigAie*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "aie algo prepare failed");
@@ -229,7 +225,7 @@ XCamReturn RkAiqAieHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPar
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAie* aie_com = (RkAiqAlgoProcResAie*)mProcOutParam;
 
-    rk_aiq_isp_ie_params_v20_t* ie_param = params->mIeParams->data().ptr();
+    rk_aiq_isp_ie_params_t* ie_param = params->mIeParams->data().ptr();
     if (sharedCom->init) {
         ie_param->frame_id = 0;
     } else {

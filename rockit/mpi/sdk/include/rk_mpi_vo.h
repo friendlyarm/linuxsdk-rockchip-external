@@ -149,6 +149,9 @@ RK_S32 RK_MPI_VO_ReleaseWbcFrame(VO_WBC VoWbc, VIDEO_FRAME_INFO_S *pstVFrame);
 RK_S32 RK_MPI_VO_SetLayerSpliceMode(VO_LAYER VoLayer, VO_SPLICE_MODE_E enSpliceMode);
 RK_S32 RK_MPI_VO_GetLayerSpliceMode(VO_LAYER VoLayer, VO_SPLICE_MODE_E *enSpliceMode);
 
+RK_S32 RK_MPI_VO_SetLowDelayCh(VO_LAYER VoLayer, RK_U32 Chn);
+RK_S32 RK_MPI_VO_GetLowDelayCh(VO_LAYER VoLayer, RK_U32 *Chn);
+
 #ifdef __cplusplus
 #if __cplusplus
 }

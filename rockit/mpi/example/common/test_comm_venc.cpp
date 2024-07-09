@@ -78,6 +78,7 @@ RK_S32 TEST_VENC_Create(COMMON_TEST_VENC_CTX_S *vencCtx) {
     stAttr.stVencAttr.u32VirHeight = vencCtx->u32Height;
     stAttr.stVencAttr.u32StreamBufCnt = vencCtx->u32StreamBufCnt;
     stAttr.stVencAttr.u32BufSize = vencCtx->u32Width * vencCtx->u32Height;
+    memcpy(&stAttr.stRcAttr, &vencCtx->stRcAttr, sizeof(stAttr.stRcAttr));
     s32Ret = RK_MPI_VENC_CreateChn(vencCtx->VencChn, &stAttr);
 
     return s32Ret;
@@ -98,11 +99,14 @@ RK_S32 TEST_VENC_Start(COMMON_TEST_VENC_CTX_S *vencCtx) {
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
-    s32Ret = TEST_VENC_StartSendFrame(vencCtx);
-    if (s32Ret != RK_SUCCESS) {
-        return s32Ret;
+
+    if (vencCtx->enVencSource == TEST_MPI_SOURCE_SEND) {
+        s32Ret = TEST_VENC_StartSendFrame(vencCtx);
+        if (s32Ret != RK_SUCCESS) {
+            return s32Ret;
+        }
+        s32Ret = TEST_VENC_StartGetStream(vencCtx);
     }
-    s32Ret = TEST_VENC_StartGetStream(vencCtx);
 
     return s32Ret;
 }
@@ -217,8 +221,9 @@ RK_S32 TEST_VENC_SnapProcess(COMMON_TEST_VENC_CTX_S *vencCtx) {
 }
 
 static RK_VOID TEST_VECN_DestroyPool(VENC_CHN VencChn) {
-    if (gSFThread[VencChn].pool)
+    if (gSFThread[VencChn].pool != MB_INVALID_POOLID) {
         RK_MPI_MB_DestroyPool(gSFThread[VencChn].pool);
+    }
 }
 
 static RK_VOID* TEST_VENC_GetVencStreamProc(RK_VOID *p) {
@@ -259,6 +264,7 @@ static RK_VOID* TEST_VENC_GetVencStreamProc(RK_VOID *p) {
 static RK_S32 TEST_VENC_StartGetStream(COMMON_TEST_VENC_CTX_S *vencCtx) {
     RK_S32 s32Ret = 0;
 
+    gGSThread[vencCtx->VencChn].pool = MB_INVALID_POOLID;
     if (vencCtx->pSaveStreamPath != RK_NULL) {
         gGSThread[vencCtx->VencChn].fp = fopen(vencCtx->pSaveStreamPath, "wb");
         if (gGSThread[vencCtx->VencChn].fp == RK_NULL) {
@@ -330,7 +336,11 @@ static void* TEST_VENC_SendVencFrameProc(void *pArgs) {
     pstThreadInfo->pool = RK_MPI_MB_CreatePool(&stMbPoolCfg);
 
     while (RK_TRUE == pstThreadInfo->bThreadStart) {
-        blk = RK_MPI_MB_GetMB(pstThreadInfo->pool, u32BufferSize, RK_TRUE);
+        blk = RK_MPI_MB_GetMB(pstThreadInfo->pool, u32BufferSize, RK_FALSE);
+        if (!blk) {
+            usleep(10000llu);
+            continue;
+        }
         pVirAddr = reinterpret_cast<RK_U8 *>(RK_MPI_MB_Handle2VirAddr(blk));
         if (pstThreadInfo->fp != RK_NULL) {
             u32SrcSize = fread(pVirAddr, 1, u32BufferSize, pstThreadInfo->fp);
@@ -404,6 +414,7 @@ __FAILED:
 static RK_S32 TEST_VENC_StartSendFrame(COMMON_TEST_VENC_CTX_S *vencCtx) {
     RK_S32 s32Ret = 0;
 
+    gSFThread[vencCtx->VencChn].pool = MB_INVALID_POOLID;
     if (vencCtx->pSrcFramePath != RK_NULL) {
         gSFThread[vencCtx->VencChn].fp = fopen(vencCtx->pSrcFramePath, "r");
         if (gSFThread[vencCtx->VencChn].fp == RK_NULL) {

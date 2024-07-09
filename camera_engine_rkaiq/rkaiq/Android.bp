@@ -74,6 +74,7 @@ cc_rkaiq_library_shared {
         "hwi/isp21",
         "hwi/isp3x",
         "hwi/isp32",
+        "hwi/isp39",
         "iq_parser",
         "iq_parser_v2",
         "uAPI",
@@ -92,6 +93,9 @@ cc_rkaiq_library_shared {
         "include/uAPI2",
         "include/ipc_server",
         "include/algos/amerge",
+		"modules",
+        "include/isp",
+        "c_base",
     ],
 
     header_libs: [
@@ -116,17 +120,16 @@ cc_rkaiq_library_shared {
         "aiq_core/RkAiqResourceTranslatorV21.cpp",
         "aiq_core/RkAiqResourceTranslatorV3x.cpp",
         "aiq_core/RkAiqResourceTranslatorV32.cpp",
+        "aiq_core/RkAiqResourceTranslatorV39.cpp",
         "aiq_core/thumbnails.cpp",
 
         // ALGO_COMMON_SRC
-        "algos/interpolation.cpp",
+        "algos/interpolation.c",
 
         // COMMON_SRC
         "common/mediactl/mediactl.c",
         "common/gen_mesh/genMesh.cpp",
         "common/code_to_pixel_format.cpp",
-        "common/media_buffer/media_buffer.c",
-        "common/media_buffer/media_buffer_pool.c",
 
         // HWI_SRC
         "hwi/CamHwBase.cpp",
@@ -148,6 +151,7 @@ cc_rkaiq_library_shared {
         "hwi/image_processor.cpp",
         "hwi/isp20/Isp20Evts.cpp",
         "hwi/isp20/CifScaleStream.cpp",
+        "hwi/isp20/DumpRkRaw.cpp",
 
         // // IQ_PARSER_SRC
         // "iq_parser/RkAiqCalibParser.cpp",
@@ -198,7 +202,19 @@ cc_rkaiq_library_shared {
         "ipc_server/MessageParser.cpp",
 
         "RkAiqManager.cpp",
+        "RkAiqGlobalParamsManager.cpp",
         "RkAiqCamProfiles.cpp",
+
+		// C_BASE
+		"c_base/aiq_base.c",
+		"c_base/aiq_mutex.c",
+		"c_base/aiq_cond.c",
+		"c_base/aiq_thread.c",
+		"c_base/aiq_queue.c",
+		"c_base/aiq_pool.c",
+		"c_base/aiq_map.c",
+		"c_base/aiq_list.c",
+		"c_base/aiq_cbase_test.c",
     ],
 
     static_libs: [
@@ -281,8 +297,10 @@ cc_rkaiq_library_shared {
         "include/common/mediactl",
         "include/xcore/base",
         "include/algos",
+        "include/isp",
         "include/ipc_server",
         "ipc_server",
+        "c_base",
     ],
 }
 
@@ -324,6 +342,8 @@ cc_library_shared {
         "include/iq_parser_v2/j2s",
         "include/uAPI2",
         "include/ipc_server",
+        "include/isp",
+        "c_base",
     ],
 
     shared_libs: [
@@ -334,6 +354,7 @@ cc_library_shared {
 
 
     srcs: [
+        "rk_stream/stream_cfg/IspStreamCapUnit.cpp",
         "rk_stream/stream_cfg/rk_vi_user_api_stream_cfg.cpp",
         "rk_stream/stream_cfg/RawStreamCapUnit.cpp",
         "rk_stream/stream_cfg/RawStreamProcUnit.cpp",

@@ -40,7 +40,7 @@ XCamReturn AdrcStart(AdrcContext_t* pAdrcCtx) {
     return (XCAM_RETURN_NO_ERROR);
 }
 
-float DrcGetInterpRatioV12(float* pX, int lo, int hi, float CtrlValue, int length_max) {
+float DrcGetInterpRatioV12(float* pX, int& lo, int& hi, float CtrlValue, int length_max) {
     float ratio = 0.0f;
 
     if (CtrlValue < pX[0]) {
@@ -164,8 +164,9 @@ void AdrcV12ClipStAutoParams(AdrcContext_t* pAdrcCtx) {
                     SPACESGMMAX, SPACESGMMIN);
     for (int i = 0; i < ADRC_Y_NUM; i++) {
         pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[i] =
-            LIMIT_VALUE(pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[i],
-                        SCALEYMAX, SCALEYMIN);
+            LIMIT_VALUE_UNSIGNED(
+                pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[i],
+                MANUALCURVEMAX);
         pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[i] =
             LIMIT_VALUE(pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[i], SCALEYMAX, SCALEYMIN);
     }
@@ -195,8 +196,8 @@ void AdrcV12ClipStAutoParams(AdrcContext_t* pAdrcCtx) {
 /******************************************************************************
  * CalibrateDrcGainYV12()
  *****************************************************************************/
-void CalibrateDrcGainYV12(DrcProcRes_t* para, float DrcGain, bool obEnable, float predgain,
-                          float alpha) {
+void CalibrateDrcGainYV12(DrcProcRes_t* para, float DrcGain, float alpha, bool OB_enable,
+                          float predgain) {
     LOG1_ATMO("%s:Enter!\n", __FUNCTION__);
 
     float tmp = 0.0f;
@@ -206,11 +207,10 @@ void CalibrateDrcGainYV12(DrcProcRes_t* para, float DrcGain, bool obEnable, floa
                                  0.0625f, 0.0352f, 0.0156f, 0.0039f, 0.0f};
 
     for (int i = 0; i < DRC_V12_Y_NUM; ++i) {
-        tmp = 1 - alpha * luma[i];
-        if (obEnable)
-            tmp = 1024.0f * pow(DrcGain * predgain, tmp);
+        if (OB_enable)
+            tmp = 1024.0f * pow(DrcGain, 1.0f - alpha * luma[i]) * pow(predgain, -alpha * luma[i]);
         else
-            tmp = 1024.0f * pow(DrcGain, tmp);
+            tmp = 1024.0f * pow(DrcGain, 1.0f - alpha * luma[i]);
         para->Drc_v12.gain_y[i] = (unsigned short)(tmp);
     }
 
@@ -224,7 +224,8 @@ void CalibrateDrcGainYV12(DrcProcRes_t* para, float DrcGain, bool obEnable, floa
 bool DrcEnableSetting(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pAdrcProcRes) {
     LOG1_ATMO("%s:enter!\n", __FUNCTION__);
 
-    if (pAdrcCtx->FrameNumber == HDR_2X_NUM || pAdrcCtx->FrameNumber == HDR_3X_NUM)
+    if (pAdrcCtx->FrameNumber == HDR_2X_NUM || pAdrcCtx->FrameNumber == HDR_3X_NUM ||
+        pAdrcCtx->FrameNumber == SENSOR_MGE)
         pAdrcProcRes->bDrcEn = true;
     else if (pAdrcCtx->FrameNumber == LINEAR_NUM) {
         if (pAdrcCtx->ablcV32_proc_res.blc_ob_enable)
@@ -392,44 +393,44 @@ void AdrcGetTuningProcResV12(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pAd
     pAdrcProcRes->DrcProcRes.Drc_v12.gas_t =
         (unsigned short)(SHIFT11BIT(pAdrcCtx->NextData.dynParams.Drc_v12.gas_t) + 0.5);
     pAdrcProcRes->DrcProcRes.Drc_v12.gas_t =
-        LIMIT_VALUE_UNSIGNED(pAdrcProcRes->DrcProcRes.Drc_v12.gas_t, INT13BITMAX);
+        LIMIT_VALUE_UNSIGNED(pAdrcProcRes->DrcProcRes.Drc_v12.gas_t, BIT_13_MAX);
     pAdrcProcRes->DrcProcRes.Drc_v12.position =
         (unsigned short)(SHIFT8BIT(pAdrcCtx->NextData.dynParams.Drc_v12.Clip) + 0.5f);
     pAdrcProcRes->DrcProcRes.Drc_v12.hpdetail_ratio = LIMIT_VALUE_UNSIGNED(
-        pAdrcCtx->NextData.dynParams.Drc_v12.LoLitContrast * INT12BITMAX, INT12BITMAX);
+        pAdrcCtx->NextData.dynParams.Drc_v12.LoLitContrast * BIT_12_MAX, BIT_12_MAX);
     pAdrcProcRes->DrcProcRes.Drc_v12.lpdetail_ratio = LIMIT_VALUE_UNSIGNED(
-        pAdrcCtx->NextData.dynParams.Drc_v12.GlobalContrast * INT12BITMAX, INT12BITMAX);
-    pAdrcProcRes->DrcProcRes.Drc_v12.bilat_wt_off = LIMIT_VALUE_UNSIGNED(
-        pAdrcCtx->NextData.dynParams.Drc_v12.MotionStr * INT8BITMAX, INT8BITMAX);
+        pAdrcCtx->NextData.dynParams.Drc_v12.GlobalContrast * BIT_12_MAX, BIT_12_MAX);
+    pAdrcProcRes->DrcProcRes.Drc_v12.bilat_wt_off =
+        LIMIT_VALUE_UNSIGNED(pAdrcCtx->NextData.dynParams.Drc_v12.MotionStr * BIT_8_MAX, BIT_8_MAX);
     pAdrcProcRes->DrcProcRes.Drc_v12.weig_maxl =
         (unsigned char)(SHIFT4BIT(pAdrcCtx->NextData.dynParams.Drc_v12.Strength) + 0.5f);
     pAdrcProcRes->DrcProcRes.Drc_v12.weig_bilat = LIMIT_VALUE_UNSIGNED(
-        pAdrcCtx->NextData.dynParams.Drc_v12.LocalWeit * (INT4BITMAX + 1), INT4BITMAX + 1);
+        pAdrcCtx->NextData.dynParams.Drc_v12.LocalWeit * (BIT_4_MAX + 1), BIT_4_MAX + 1);
     pAdrcProcRes->DrcProcRes.Drc_v12.enable_soft_thd =
         pAdrcCtx->NextData.dynParams.Drc_v12.LocalAutoEnable;
     pAdrcProcRes->DrcProcRes.Drc_v12.bilat_soft_thd = LIMIT_VALUE_UNSIGNED(
-        pAdrcCtx->NextData.dynParams.Drc_v12.LocalAutoWeit * INT14BITMAX, INT14BITMAX);
+        pAdrcCtx->NextData.dynParams.Drc_v12.LocalAutoWeit * BIT_14_MAX, BIT_14_MAX);
     pAdrcProcRes->DrcProcRes.Drc_v12.bilat_soft_thd =
-        LIMIT_VALUE_UNSIGNED(pAdrcProcRes->DrcProcRes.Drc_v12.bilat_soft_thd, INT14BITMAX);
+        LIMIT_VALUE_UNSIGNED(pAdrcProcRes->DrcProcRes.Drc_v12.bilat_soft_thd, BIT_14_MAX);
     // get sw_drc_gain_y
     CalibrateDrcGainYV12(&pAdrcProcRes->DrcProcRes, pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain,
+                         pAdrcCtx->NextData.dynParams.Drc_v12.Alpha,
                          pAdrcCtx->ablcV32_proc_res.blc_ob_enable,
-                         pAdrcCtx->ablcV32_proc_res.isp_ob_predgain,
-                         pAdrcCtx->NextData.dynParams.Drc_v12.Alpha);
+                         pAdrcCtx->ablcV32_proc_res.isp_ob_predgain);
 
     pAdrcProcRes->DrcProcRes.Drc_v12.gas_l0 = (unsigned char)pAdrcCtx->NextData.staticParams.gas_l0;
     pAdrcProcRes->DrcProcRes.Drc_v12.gas_l1 = (unsigned char)pAdrcCtx->NextData.staticParams.gas_l1;
     pAdrcProcRes->DrcProcRes.Drc_v12.gas_l2 = (unsigned char)pAdrcCtx->NextData.staticParams.gas_l2;
     pAdrcProcRes->DrcProcRes.Drc_v12.gas_l3 = (unsigned char)pAdrcCtx->NextData.staticParams.gas_l3;
     pAdrcProcRes->DrcProcRes.Drc_v12.weicur_pix =
-        LIMIT_VALUE_UNSIGNED(pAdrcCtx->NextData.staticParams.curPixWeit * INT8BITMAX, INT8BITMAX);
+        LIMIT_VALUE_UNSIGNED(pAdrcCtx->NextData.staticParams.curPixWeit * BIT_8_MAX, BIT_8_MAX);
     pAdrcProcRes->DrcProcRes.Drc_v12.weipre_frame =
-        LIMIT_VALUE_UNSIGNED(pAdrcCtx->NextData.staticParams.preFrameWeit * INT8BITMAX, INT8BITMAX);
+        LIMIT_VALUE_UNSIGNED(pAdrcCtx->NextData.staticParams.preFrameWeit * BIT_8_MAX, BIT_8_MAX);
 
     pAdrcProcRes->DrcProcRes.Drc_v12.force_sgm_inv0 =
         (unsigned short)(SHIFT13BIT(pAdrcCtx->NextData.staticParams.Range_force_sgm) + 0.5f);
     pAdrcProcRes->DrcProcRes.Drc_v12.edge_scl =
-        LIMIT_VALUE_UNSIGNED(pAdrcCtx->NextData.staticParams.Edge_Weit * INT8BITMAX, INT8BITMAX);
+        LIMIT_VALUE_UNSIGNED(pAdrcCtx->NextData.staticParams.Edge_Weit * BIT_8_MAX, BIT_8_MAX);
     pAdrcProcRes->DrcProcRes.Drc_v12.motion_scl = SW_DRC_MOTION_SCL_FIX;
     pAdrcProcRes->DrcProcRes.Drc_v12.space_sgm_inv1 =
         (unsigned short)(pAdrcCtx->NextData.staticParams.Space_sgm_cur);
@@ -788,20 +789,35 @@ void AdrcTuningParaProcessing(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pA
     if (pAdrcCtx->FrameNumber == HDR_2X_NUM || pAdrcCtx->FrameNumber == HDR_3X_NUM) {
         if (pAdrcCtx->NextData.AEData.L2S_Ratio * pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain >
             MAX_AE_DRC_GAIN) {
-            LOGE_ATMO("%s:  AERatio*DrcGain > 256!!!\n", __FUNCTION__);
             pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain =
                 MAX(MAX_AE_DRC_GAIN / pAdrcCtx->NextData.AEData.L2S_Ratio, GAINMIN);
+            LOGI_ATMO("%s:  AERatio*DrcGain > 256x, DrcGain Clip to %f!!!\n", __FUNCTION__,
+                      pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain);
         }
     } else if (pAdrcCtx->FrameNumber == LINEAR_NUM) {
         if (pAdrcCtx->ablcV32_proc_res.isp_ob_predgain *
                 pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain >
             MAX_AE_DRC_GAIN) {
-            LOGE_ATMO("%s:  predgain*DrcGain > 256!!!\n", __FUNCTION__);
             if (pAdrcCtx->ablcV32_proc_res.isp_ob_predgain > MAX_AE_DRC_GAIN)
-                LOGE_ATMO("%s:  predgain > 256!!!\n", __FUNCTION__);
+                LOGE_ATMO("%s:  predgain > 256x!!!\n", __FUNCTION__);
             else
                 pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain =
                     MAX(MAX_AE_DRC_GAIN / pAdrcCtx->ablcV32_proc_res.isp_ob_predgain, GAINMIN);
+            LOGI_ATMO("%s:  predgain*DrcGain > 256x, DrcGain clip to %f!!!\n", __FUNCTION__,
+                      pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain);
+        }
+    } else if (pAdrcCtx->FrameNumber == SENSOR_MGE) {
+        if (pow(2.0f, float(pAdrcCtx->compr_bit - ISP_HDR_BIT_NUM_MIN)) *
+                pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain >
+            MAX_AE_DRC_GAIN) {
+            if (pow(2.0f, float(pAdrcCtx->compr_bit - ISP_HDR_BIT_NUM_MIN)) > MAX_AE_DRC_GAIN)
+                LOGE_ATMO("%s:  SensorMgeRatio > 256x!!!\n", __FUNCTION__);
+            else
+                pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain = MAX(
+                    MAX_AE_DRC_GAIN / pow(2.0f, float(pAdrcCtx->compr_bit - ISP_HDR_BIT_NUM_MIN)),
+                    GAINMIN);
+            LOGI_ATMO("%s:  SensorMgeRatio*DrcGain > 256x, DrcGain clip to %f!!!\n", __FUNCTION__,
+                      pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain);
         }
     }
     // clip gas_l0~3
@@ -823,12 +839,14 @@ void AdrcTuningParaProcessing(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pA
         pAdrcCtx->NextData.staticParams.gas_l3 = GAS_L3_DEFAULT;
     }
 
-    LOGD_ATMO("%s: Current ob_on:%d predgain:%f DrcGain:%f Alpha:%f Clip:%f CompressMode:%d\n",
-              __FUNCTION__, pAdrcCtx->ablcV32_proc_res.blc_ob_enable,
-              pAdrcCtx->ablcV32_proc_res.isp_ob_predgain,
-              pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain,
-              pAdrcCtx->NextData.dynParams.Drc_v12.Alpha, pAdrcCtx->NextData.dynParams.Drc_v12.Clip,
-              pAdrcCtx->NextData.staticParams.CompressMode);
+    LOGD_ATMO(
+        "%s: Current ob_on:%d predgain:%f DrcGain:%f Alpha:%f Clip:%f CompressMode:%d "
+        "OutPutLongFrame:%d\n",
+        __FUNCTION__, pAdrcCtx->ablcV32_proc_res.blc_ob_enable,
+        pAdrcCtx->ablcV32_proc_res.isp_ob_predgain, pAdrcCtx->NextData.dynParams.Drc_v12.DrcGain,
+        pAdrcCtx->NextData.dynParams.Drc_v12.Alpha, pAdrcCtx->NextData.dynParams.Drc_v12.Clip,
+        pAdrcCtx->NextData.staticParams.CompressMode,
+        pAdrcCtx->NextData.staticParams.OutPutLongFrame);
     LOGD_ATMO("%s: Current HiLight Strength:%f gas_t:%f\n", __FUNCTION__,
               pAdrcCtx->NextData.dynParams.Drc_v12.Strength,
               pAdrcCtx->NextData.dynParams.Drc_v12.gas_t);
@@ -1078,6 +1096,233 @@ bool AdrcByPassTuningProcessing(AdrcContext_t* pAdrcCtx) {
     LOG1_ATMO("%s:exit!\n", __FUNCTION__);
     return bypass;
 }
+
+/******************************************************************************
+ * AdrcSetDefaultManuAttrParmasV12()
+ *****************************************************************************/
+void AdrcSetDefaultManuAttrParmasV12(AdrcContext_t* pAdrcCtx) {
+    LOG1_ATMO("%s:enter!\n", __FUNCTION__);
+
+#if RKAIQ_HAVE_DRC_V12
+    pAdrcCtx->drcAttrV12.stManual.Enable = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Enable;
+    pAdrcCtx->drcAttrV12.stManual.DrcGain.Alpha =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.DrcGain.Alpha[0];
+    pAdrcCtx->drcAttrV12.stManual.DrcGain.DrcGain =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.DrcGain.DrcGain[0];
+    pAdrcCtx->drcAttrV12.stManual.DrcGain.Clip =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.DrcGain.Clip[0];
+    pAdrcCtx->drcAttrV12.stManual.HiLight.HiLightData.Strength =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.HiLightData.Strength[0];
+    pAdrcCtx->drcAttrV12.stManual.HiLight.HiLightData.gas_t =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.HiLightData.gas_t[0];
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l0 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l0;
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l1 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l1;
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l2 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l2;
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l3 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l3;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LocalWeit =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LocalWeit[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LocalAutoEnable =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LocalAutoEnable[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LocalAutoWeit =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LocalAutoWeit[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.GlobalContrast =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.GlobalContrast[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LoLitContrast =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LoLitContrast[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.MotionData.MotionStr =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.MotionData.MotionStr[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.curPixWeit =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.curPixWeit;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.preFrameWeit =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.preFrameWeit;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Range_force_sgm =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Range_force_sgm;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Range_sgm_cur =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Range_sgm_cur;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Range_sgm_pre =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Range_sgm_pre;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Space_sgm_cur =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Space_sgm_cur;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Space_sgm_pre =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Space_sgm_pre;
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Mode =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Mode;
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[0] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[0];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[1] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[1];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[2] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[2];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[3] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[3];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[4] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[4];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[5] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[5];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[6] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[6];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[7] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[7];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[8] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[8];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[9] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[9];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[10] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[10];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[11] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[11];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[12] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[12];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[13] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[13];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[14] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[14];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[15] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[15];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[16] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[16];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[0] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[0];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[1] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[1];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[2] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[2];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[3] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[3];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[4] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[4];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[5] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[5];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[6] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[6];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[7] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[7];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[8] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[8];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[9] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[9];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[10] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[10];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[11] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[11];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[12] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[12];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[13] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[13];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[14] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[14];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[15] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[15];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[16] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[16];
+    pAdrcCtx->drcAttrV12.stManual.Edge_Weit = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Edge_Weit;
+    pAdrcCtx->drcAttrV12.stManual.OutPutLongFrame =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.OutPutLongFrame;
+    pAdrcCtx->drcAttrV12.stManual.IIR_frame = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.IIR_frame;
+#endif
+#if RKAIQ_HAVE_DRC_V12_LITE
+    pAdrcCtx->drcAttrV12.stManual.Enable = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Enable;
+    pAdrcCtx->drcAttrV12.stManual.DrcGain.Alpha =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.DrcGain.Alpha[0];
+    pAdrcCtx->drcAttrV12.stManual.DrcGain.DrcGain =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.DrcGain.DrcGain[0];
+    pAdrcCtx->drcAttrV12.stManual.DrcGain.Clip =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.DrcGain.Clip[0];
+    pAdrcCtx->drcAttrV12.stManual.HiLight.HiLightData.Strength =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.HiLightData.Strength[0];
+    pAdrcCtx->drcAttrV12.stManual.HiLight.HiLightData.gas_t =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.HiLightData.gas_t[0];
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l0 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l0;
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l1 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l1;
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l2 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l2;
+    pAdrcCtx->drcAttrV12.stManual.HiLight.gas_l3 =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.HiLight.gas_l3;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LocalWeit =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LocalWeit[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LocalAutoEnable =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LocalAutoEnable[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LocalAutoWeit =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LocalAutoWeit[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.GlobalContrast =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.GlobalContrast[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.LocalData.LoLitContrast =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.LocalData.LoLitContrast[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.MotionData.MotionStr =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.MotionData.MotionStr[0];
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.curPixWeit =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.curPixWeit;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Range_force_sgm =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Range_force_sgm;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Range_sgm_cur =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Range_sgm_cur;
+    pAdrcCtx->drcAttrV12.stManual.LocalSetting.Space_sgm_cur =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.LocalSetting.Space_sgm_cur;
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Mode =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Mode;
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[0] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[0];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[1] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[1];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[2] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[2];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[3] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[3];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[4] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[4];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[5] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[5];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[6] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[6];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[7] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[7];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[8] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[8];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[9] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[9];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[10] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[10];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[11] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[11];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[12] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[12];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[13] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[13];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[14] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[14];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[15] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[15];
+    pAdrcCtx->drcAttrV12.stManual.CompressSetting.Manual_curve[16] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.CompressSetting.Manual_curve[16];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[0] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[0];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[1] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[1];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[2] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[2];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[3] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[3];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[4] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[4];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[5] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[5];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[6] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[6];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[7] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[7];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[8] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[8];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[9] = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[9];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[10] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[10];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[11] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[11];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[12] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[12];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[13] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[13];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[14] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[14];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[15] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[15];
+    pAdrcCtx->drcAttrV12.stManual.Scale_y[16] =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Scale_y[16];
+    pAdrcCtx->drcAttrV12.stManual.Edge_Weit = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.Edge_Weit;
+    pAdrcCtx->drcAttrV12.stManual.OutPutLongFrame =
+        pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.OutPutLongFrame;
+    pAdrcCtx->drcAttrV12.stManual.IIR_frame = pAdrcCtx->drcAttrV12.stAuto.DrcTuningPara.IIR_frame;
+#endif
+
+    LOG1_ATMO("%s:exit!\n", __FUNCTION__);
+}
+
 /******************************************************************************
  * AdrcInit()
  *****************************************************************************/
@@ -1107,6 +1352,7 @@ XCamReturn AdrcInit(AdrcContext_t** ppAdrcCtx, CamCalibDbV2Context_t* pCalibDb) 
     memcpy(&pAdrcCtx->drcAttrV12.stAuto, calibv2_adrc_calib, sizeof(CalibDbV2_drc_v12_lite_t));
     pAdrcCtx->drcAttrV12.opMode = DRC_OPMODE_AUTO;
 #endif
+    AdrcSetDefaultManuAttrParmasV12(pAdrcCtx);
     pAdrcCtx->ifReCalcStAuto   = true;
     pAdrcCtx->ifReCalcStManual = false;
     pAdrcCtx->isCapture        = false;

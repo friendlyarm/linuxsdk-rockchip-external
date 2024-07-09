@@ -131,11 +131,11 @@ static XCamReturn Damping(const float damp,                        /**< damping 
         /* calc. damped lut */
         for (int i = 0; i < LUT3D_LUT_WSIZE; i++) {
             pDamped->look_up_table_r[i] =
-                (unsigned short) (damp * (float) pDamped->look_up_table_r[i] + f * (float) pUndamped->look_up_table_r[i]);
+                (uint16_t) (damp * (float) pDamped->look_up_table_r[i] + f * (float) pUndamped->look_up_table_r[i]);
             pDamped->look_up_table_g[i] =
-                (unsigned short) (damp * (float) pDamped->look_up_table_g[i] + f * (float) pUndamped->look_up_table_g[i]);
+                (uint16_t) (damp * (float) pDamped->look_up_table_g[i] + f * (float) pUndamped->look_up_table_g[i]);
             pDamped->look_up_table_b[i] =
-                (unsigned short) (damp * (float) pDamped->look_up_table_b[i] + f * (float) pUndamped->look_up_table_b[i]);
+                (uint16_t) (damp * (float) pDamped->look_up_table_b[i] + f * (float) pUndamped->look_up_table_b[i]);
             lutSum[0] += pDamped->look_up_table_r[i];
             lutSum[1] += pDamped->look_up_table_g[i];
             lutSum[2] += pDamped->look_up_table_b[i];
@@ -170,9 +170,9 @@ static XCamReturn InterpLutbyAlp(const float alp,
             const uint32_t beta = 128 - alpha;
 
             for (uint32_t i = 0; i < LUT3D_LUT_WSIZE; i++) {
-                pLutB->look_up_table_r[i] = (unsigned short)(alpha * (uint32_t)pLutA->look_up_table_r[i] + beta * (uint32_t)pLut0->look_up_table_r[i]);
-                pLutB->look_up_table_g[i] = (unsigned short)(alpha * (uint32_t)pLutA->look_up_table_g[i] + beta * (uint32_t)pLut0->look_up_table_g[i]);
-                pLutB->look_up_table_b[i] = (unsigned short)(alpha * (uint32_t)pLutA->look_up_table_b[i] + beta * (uint32_t)pLut0->look_up_table_b[i]);
+                pLutB->look_up_table_r[i] = (uint16_t)((alpha * (uint32_t)pLutA->look_up_table_r[i] + beta * (uint32_t)pLut0->look_up_table_r[i])>>7);
+                pLutB->look_up_table_g[i] = (uint16_t)((alpha * (uint32_t)pLutA->look_up_table_g[i] + beta * (uint32_t)pLut0->look_up_table_g[i])>>7);
+                pLutB->look_up_table_b[i] = (uint16_t)((alpha * (uint32_t)pLutA->look_up_table_b[i] + beta * (uint32_t)pLut0->look_up_table_b[i])>>7);
             }
         }
 
@@ -209,13 +209,13 @@ static XCamReturn InterpLutbyAlpandDamp(const float alp,
 
                 /* calc. damped lut */
                 for (uint32_t i = 0; i < LUT3D_LUT_WSIZE; i++) {
-                    pLutB->look_up_table_r[i] = (unsigned short) (beta * (float) pLutA->look_up_table_r[i] +
+                    pLutB->look_up_table_r[i] = (uint16_t) (beta * (float) pLutA->look_up_table_r[i] +
                             gamma * (float) pLut0->look_up_table_r[i] +
                             f * (float) pLutB->look_up_table_r[i]);
-                    pLutB->look_up_table_g[i] = (unsigned short) (beta * (float) pLutA->look_up_table_g[i] +
+                    pLutB->look_up_table_g[i] = (uint16_t) (beta * (float) pLutA->look_up_table_g[i] +
                             gamma * (float) pLut0->look_up_table_g[i] +
                             f * (float) pLutB->look_up_table_g[i]);
-                    pLutB->look_up_table_b[i] = (unsigned short) (beta * (float) pLutA->look_up_table_b[i] +
+                    pLutB->look_up_table_b[i] = (uint16_t) (beta * (float) pLutA->look_up_table_b[i] +
                             gamma * (float) pLut0->look_up_table_b[i] +
                             f * (float) pLutB->look_up_table_b[i]);
                     lutSum[0] += pLutB->look_up_table_r[i];
@@ -261,7 +261,7 @@ XCamReturn Alut3dAutoConfig
         hAlut3d->restinfo.pLutProfile = &hAlut3d->calibV2_lut3d->ALut3D.lutAll[dominateProfileIdx];
 
         float alp_tmp = 0;
-        interpolation(pLutProfile->gain_alpha.gain, pLutProfile->gain_alpha.alpha, 9, sensorGain,
+        interpolation_f(pLutProfile->gain_alpha.gain, pLutProfile->gain_alpha.alpha, 9, sensorGain,
                       &alp_tmp);
 
         //(3) lut = alpha*lutfile + (1-alpha)*lut0
@@ -270,10 +270,10 @@ XCamReturn Alut3dAutoConfig
                             (dominateProfileIdx != hAlut3d->restinfo.dominateIdx) ||
                             (alpha != uint32_t(hAlut3d->restinfo.alpha * 128.0f));
 
-        LOGD_A3DLUT("sensorGain: %f, lutidx_alp_update: %d, Alpha: %f->%f, LutIdx: %d->%d \n",
-                    hAlut3d->update, sensorGain,
-                    hAlut3d->restinfo.alpha, alp_tmp,
-                    hAlut3d->restinfo.dominateIdx, dominateProfileIdx);
+        LOGD_A3DLUT("update:%d, sensorGain: %f, Alpha: %f->%f, LutIdx: %d->%d \n",
+                            hAlut3d->update, sensorGain,
+                            hAlut3d->restinfo.alpha, alp_tmp,
+                            hAlut3d->restinfo.dominateIdx, dominateProfileIdx);
         if (hAlut3d->update) {
             if (alpha == 0)
                 hAlut3d->restinfo.alpha = 0;

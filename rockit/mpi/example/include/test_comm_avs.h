@@ -120,6 +120,9 @@ RK_S32 TEST_AVS_Start(AVS_GRP AvsGrp, RK_U32 u32ChnNum,
                         AVS_CHN_ATTR_S *pstAvsChnAttr);
 RK_S32 TEST_AVS_Stop(AVS_GRP AvsGrp, RK_U32 u32ChnNum);
 
+RK_S32 TEST_AVS_ModSetCommPool(TEST_AVS_CTX_S *pstCtx);
+RK_S32 TEST_AVS_ModResetCommPool();
+
 RK_S32 TEST_AVS_ModCreateFrame(TEST_AVS_CTX_S *pstCtx,
                                VIDEO_FRAME_INFO_S **pstVideoFramess);
 

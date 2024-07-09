@@ -33,7 +33,7 @@ typedef enum rkMB_UID_E {
 #define MB_MAX_COMM_POOLS              16
 #define MB_MAX_MOD_COMM_POOLS          16
 
-#define MB_MAX_COUNT                   10240
+#define MB_MAX_COUNT                   1024
 
 /* Generall common pool use this owner id, module common pool use VB_UID as owner id */
 #define POOL_OWNER_COMMON              -1
@@ -61,6 +61,7 @@ typedef enum rkMB_REMAP_MODE_E {
     MB_REMAP_MODE_NONE = 0, /* no remap */
     MB_REMAP_MODE_NOCACHE = 1 << 8, /* no cache remap */
     MB_REMAP_MODE_CACHED = 1 << 9,  /* cache remap, if you use this mode, you should flush cache by yourself */
+    MB_REMAP_MODE_SHARE_BUF = 1 << 0xa, /*only a dma buf the whole pool*/
     MB_REMAP_MODE_BUTT
 } MB_REMAP_MODE_E;
 
@@ -77,6 +78,8 @@ typedef struct rkMB_POOL_CONFIG_S {
     MB_ALLOC_TYPE_E enAllocType;
     MB_DMA_TYPE_E enDmaType;
     RK_BOOL bPreAlloc;
+    RK_BOOL bNotDelete;
+    RK_U64 u64Uuid;
 } MB_POOL_CONFIG_S;
 
 typedef struct rkMB_CONFIG_S {

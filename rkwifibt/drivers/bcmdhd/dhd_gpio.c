@@ -12,18 +12,7 @@
 #include <linux/rfkill-wlan.h>
 #endif
 
-#if defined(BUS_POWER_RESTORE) && defined(BCMSDIO)
-#include <linux/mmc/core.h>
-#include <linux/mmc/card.h>
-#include <linux/mmc/host.h>
-#include <linux/mmc/sdio_func.h>
-#endif /* defined(BUS_POWER_RESTORE) && defined(BCMSDIO) */
-
 #ifdef CONFIG_DHD_USE_STATIC_BUF
-#ifdef DHD_STATIC_IN_DRIVER
-extern int dhd_static_buf_init(void);
-extern void dhd_static_buf_exit(void);
-#endif /* DHD_STATIC_IN_DRIVER */
 #if defined(BCMDHD_MDRIVER) && !defined(DHD_STATIC_IN_DRIVER)
 extern void *dhd_wlan_mem_prealloc(uint bus_type, int index,
 	int section, unsigned long size);
@@ -68,19 +57,11 @@ dhd_wlan_set_power(int on, wifi_adapter_info_t *adapter)
 #ifdef CUSTOMER_HW_ROCKCHIP
 		rockchip_wifi_power(1);
 #ifdef BCMPCIE
-		//rk_pcie_power_on_atu_fixup();
+//		rk_pcie_power_on_atu_fixup();
 #endif
 #endif
 #ifdef BUS_POWER_RESTORE
-#ifdef BCMSDIO
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
-		if (adapter->sdio_func && adapter->sdio_func->card && adapter->sdio_func->card->host) {
-			mdelay(100);
-			printf("======== mmc_power_restore_host! ========\n");
-			mmc_power_restore_host(adapter->sdio_func->card->host);
-		}
-#endif
-#elif defined(BCMPCIE)
+#ifdef BCMPCIE
 		if (adapter->pci_dev) {
 			mdelay(100);
 			printf("======== pci_set_power_state PCI_D0! ========\n");
@@ -96,17 +77,9 @@ dhd_wlan_set_power(int on, wifi_adapter_info_t *adapter)
 #endif /* BCMPCIE */
 #endif /* BUS_POWER_RESTORE */
 		/* Lets customer power to get stable */
-		mdelay(100);
 	} else {
 #ifdef BUS_POWER_RESTORE
-#ifdef BCMSDIO
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
-		if (adapter->sdio_func && adapter->sdio_func->card && adapter->sdio_func->card->host) {
-			printf("======== mmc_power_save_host! ========\n");
-			mmc_power_save_host(adapter->sdio_func->card->host);
-		}
-#endif
-#elif defined(BCMPCIE)
+#ifdef BCMPCIE
 		if (adapter->pci_dev) {
 			printf("======== pci_set_power_state PCI_D3hot! ========\n");
 			pci_save_state(adapter->pci_dev);
@@ -144,7 +117,6 @@ dhd_wlan_set_carddetect(int present)
 {
 	int err = 0;
 
-#if !defined(BUS_POWER_RESTORE)
 	if (present) {
 #if defined(BCMSDIO)
 		printf("======== Card detection to detect SDIO card! ========\n");
@@ -170,7 +142,6 @@ dhd_wlan_set_carddetect(int present)
 		printf("======== Card detection to remove PCIE card! ========\n");
 #endif
 	}
-#endif /* BUS_POWER_RESTORE */
 
 	return err;
 }
@@ -178,7 +149,7 @@ dhd_wlan_set_carddetect(int present)
 static int
 dhd_wlan_get_mac_addr(unsigned char *buf, int ifidx)
 {
-	int err = 0;
+	int err = -1;
 
 	if (ifidx == 1) {
 #ifdef EXAMPLE_GET_MAC
@@ -336,6 +307,7 @@ dhd_wlan_init_gpio(wifi_adapter_info_t *adapter)
 	adapter->gpio_wl_reg_on = gpio_wl_reg_on;
 
 #ifdef CUSTOMER_OOB
+	adapter->gpio_wl_host_wake = -1;
 	if (gpio_wl_host_wake >= 0) {
 		err = gpio_request(gpio_wl_host_wake, "bcmdhd");
 		if (err < 0) {
@@ -405,13 +377,13 @@ dhd_wlan_deinit_gpio(wifi_adapter_info_t *adapter)
 	if (gpio_wl_reg_on >= 0) {
 		printf("%s: gpio_free(WL_REG_ON %d)\n", __FUNCTION__, gpio_wl_reg_on);
 		gpio_free(gpio_wl_reg_on);
-		gpio_wl_reg_on = -1;
+		adapter->gpio_wl_reg_on = -1;
 	}
 #ifdef CUSTOMER_OOB
 	if (gpio_wl_host_wake >= 0) {
 		printf("%s: gpio_free(WL_HOST_WAKE %d)\n", __FUNCTION__, gpio_wl_host_wake);
 		gpio_free(gpio_wl_host_wake);
-		gpio_wl_host_wake = -1;
+		adapter->gpio_wl_host_wake = -1;
 	}
 #endif /* CUSTOMER_OOB */
 }
@@ -467,10 +439,6 @@ dhd_wlan_init_plat_data(wifi_adapter_info_t *adapter)
 	if (err)
 		goto exit;
 
-#ifdef DHD_STATIC_IN_DRIVER
-	err = dhd_static_buf_init();
-#endif
-
 exit:
 	return err;
 }
@@ -478,8 +446,5 @@ exit:
 void
 dhd_wlan_deinit_plat_data(wifi_adapter_info_t *adapter)
 {
-#ifdef DHD_STATIC_IN_DRIVER
-	dhd_static_buf_exit();
-#endif
 	dhd_wlan_deinit_gpio(adapter);
 }

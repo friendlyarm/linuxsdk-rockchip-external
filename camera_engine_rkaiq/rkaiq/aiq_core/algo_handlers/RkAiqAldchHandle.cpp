@@ -53,6 +53,8 @@ XCamReturn RkAiqAldchHandleInt::prepare() {
     // memcpy(&aldch_config_int->aldch_calib_cfg, &shared->calib->aldch, sizeof(CalibDb_LDCH_t));
     aldch_config_int->resource_path = sharedCom->resourcePath;
     aldch_config_int->mem_ops_ptr   = mAiqCore->mShareMemOps;
+    aldch_config_int->is_multi_isp = sharedCom->is_multi_isp_mode;
+    aldch_config_int->multi_isp_extended_pixel = sharedCom->multi_isp_extended_pixels;
     RkAiqAlgoDescription* des       = (RkAiqAlgoDescription*)mDes;
     ret                             = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "aldch algo prepare failed");
@@ -101,11 +103,7 @@ XCamReturn RkAiqAldchHandleInt::processing() {
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
-#if (RKAIQ_HAVE_LDCH_V21)
-    aldch_proc_res_int->ldch_result = &shared->fullParams->mLdchV32Params->data()->result;
-#else
     aldch_proc_res_int->ldch_result = &shared->fullParams->mLdchParams->data()->result;
-#endif
 
     ret = RkAiqHandle::processing();
     if (ret) {
@@ -190,7 +188,9 @@ XCamReturn RkAiqAldchHandleInt::setAttrib(const rk_aiq_ldch_v21_attrib_t* att) {
     // the new params will be effective later when updateConfig
     // called by RkAiqCore
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
     ret = rk_aiq_uapi_aldch_v21_SetAttrib(mAlgoCtx, *att, false);
+#endif
 #else
     bool isChanged = false;
     if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
@@ -219,9 +219,11 @@ XCamReturn RkAiqAldchHandleInt::getAttrib(rk_aiq_ldch_v21_attrib_t* att) {
     ENTER_ANALYZER_FUNCTION();
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
     mCfgMutex.lock();
     rk_aiq_uapi_aldch_v21_GetAttrib(mAlgoCtx, att);
     mCfgMutex.unlock();
+#endif
 #else
 
     if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
@@ -351,10 +353,10 @@ XCamReturn RkAiqAldchHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullP
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 #if (RKAIQ_HAVE_LDCH_V21)
     RkAiqAlgoProcResAldchV21* aldch_com         = (RkAiqAlgoProcResAldchV21*)mProcOutParam;
-    rk_aiq_isp_ldch_params_v32_t* ldch_param    = params->mLdchV32Params->data().ptr();
+    rk_aiq_isp_ldch_params_t* ldch_param    = params->mLdchParams->data().ptr();
 #else
     RkAiqAlgoProcResAldch* aldch_com         = (RkAiqAlgoProcResAldch*)mProcOutParam;
-    rk_aiq_isp_ldch_params_v20_t* ldch_param = params->mLdchParams->data().ptr();
+    rk_aiq_isp_ldch_params_t* ldch_param = params->mLdchParams->data().ptr();
 #endif
 
     if (!aldch_com) {
@@ -364,6 +366,7 @@ XCamReturn RkAiqAldchHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullP
 
     if (sharedCom->init) {
         ldch_param->frame_id = 0;
+        shared->frameId = 0;
     } else {
         ldch_param->frame_id = shared->frameId;
     }
@@ -373,25 +376,12 @@ XCamReturn RkAiqAldchHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullP
         ldch_param->sync_flag = mSyncFlag;
         // copy from algo result
         // set as the latest result
-#if (RKAIQ_HAVE_LDCH_V21)
-        cur_params->mLdchV32Params = params->mLdchV32Params;
-#else
         cur_params->mLdchParams = params->mLdchParams;
-#endif
         ldch_param->is_update = true;
         LOGD_ALDCH("[%d] params from algo", mSyncFlag);
     } else if (mSyncFlag != ldch_param->sync_flag) {
         ldch_param->sync_flag = mSyncFlag;
         // copy from latest result
-#if (RKAIQ_HAVE_LDCH_V21)
-        if (cur_params->mLdchV32Params.ptr()) {
-            ldch_param->is_update = true;
-            ldch_param->result = cur_params->mLdchV32Params->data()->result;
-        } else {
-            LOGE_ALDCH("no latest params !");
-            ldch_param->is_update = false;
-        }
-#else
         if (cur_params->mLdchParams.ptr()) {
             ldch_param->is_update = true;
             ldch_param->result = cur_params->mLdchParams->data()->result;
@@ -399,12 +389,11 @@ XCamReturn RkAiqAldchHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullP
             LOGE_ALDCH("no latest params !");
             ldch_param->is_update = false;
         }
-#endif
         LOGD_ALDCH("[%d] params from latest [%d]", shared->frameId, mSyncFlag);
     } else {
         // do nothing, result in buf needn't update
         ldch_param->is_update = false;
-        LOGD_ALDCH("[%d] params needn't update", shared->frameId);
+        LOG1_ALDCH("[%d] params needn't update", shared->frameId);
     }
 
     EXIT_ANALYZER_FUNCTION();

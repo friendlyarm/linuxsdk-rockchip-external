@@ -40,7 +40,7 @@ XCamReturn AdrcStart(AdrcContext_t* pAdrcCtx) {
     return (XCAM_RETURN_NO_ERROR);
 }
 
-float DrcGetInterpRatioV11(float* pX, int lo, int hi, float CtrlValue, int length_max) {
+float DrcGetInterpRatioV11(float* pX, int& lo, int& hi, float CtrlValue, int length_max) {
     float ratio = 0.0f;
 
     if (CtrlValue < pX[0]) {
@@ -128,21 +128,31 @@ void AdrcV11ClipStAutoParams(AdrcContext_t* pAdrcCtx) {
     pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.curPixWeit =
         LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.curPixWeit,
                     NORMALIZE_MAX, NORMALIZE_MIN);
+    pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.preFrameWeit =
+        LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.preFrameWeit,
+                    NORMALIZE_MAX, NORMALIZE_MIN);
     pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Range_force_sgm =
         LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Range_force_sgm,
                     NORMALIZE_MAX, NORMALIZE_MIN);
     pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Range_sgm_cur =
         LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Range_sgm_cur,
                     NORMALIZE_MAX, NORMALIZE_MIN);
+    pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Range_sgm_pre =
+        LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Range_sgm_pre,
+                    NORMALIZE_MAX, NORMALIZE_MIN);
     pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Space_sgm_cur =
         LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Space_sgm_cur,
+                    SPACESGMMAX, SPACESGMMIN);
+    pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Space_sgm_pre =
+        LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Space_sgm_pre,
                     SPACESGMMAX, SPACESGMMIN);
     for (int i = 0; i < ADRC_Y_NUM; i++) {
         pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.Scale_y[i] =
             LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.Scale_y[i], SCALEYMAX, SCALEYMIN);
         pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.CompressSetting.Manual_curve[i] =
-            LIMIT_VALUE(pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.CompressSetting.Manual_curve[i],
-                        MANUALCURVEMAX, MANUALCURVEMIN);
+            LIMIT_VALUE_UNSIGNED(
+                pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.CompressSetting.Manual_curve[i],
+                MANUALCURVEMAX);
     }
     pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.ByPassThr = LIMIT_VALUE(
         pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.ByPassThr, NORMALIZE_MAX, NORMALIZE_MIN);
@@ -327,7 +337,7 @@ void AdrcGetTuningProcResV11(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pAd
     pAdrcProcRes->DrcProcRes.Drc_v11.lpdetail_ratio =
         (unsigned short)(SHIFT12BIT(pAdrcCtx->NextData.dynParams.Drc_v11.GlobalContrast) + 0.5f);
     pAdrcProcRes->DrcProcRes.Drc_v11.weipre_frame =
-        LIMIT_VALUE(pAdrcProcRes->DrcProcRes.Drc_v11.weipre_frame, INT8BITMAX, 0);
+        LIMIT_VALUE_UNSIGNED(pAdrcProcRes->DrcProcRes.Drc_v11.weipre_frame, BIT_8_MAX);
     pAdrcProcRes->DrcProcRes.Drc_v11.weig_maxl =
         (unsigned char)(SHIFT4BIT(pAdrcCtx->NextData.dynParams.Drc_v11.Strength) + 0.5f);
     pAdrcProcRes->DrcProcRes.Drc_v11.weig_bilat =
@@ -337,14 +347,14 @@ void AdrcGetTuningProcResV11(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pAd
     pAdrcProcRes->DrcProcRes.Drc_v11.bilat_soft_thd =
         (unsigned short)(SHIFT14BIT(pAdrcCtx->NextData.dynParams.Drc_v11.LocalAutoWeit) + 0.5f);
     pAdrcProcRes->DrcProcRes.Drc_v11.bilat_soft_thd =
-        LIMIT_VALUE(pAdrcProcRes->DrcProcRes.Drc_v11.bilat_soft_thd, INT14BITMAX, 0);
+        LIMIT_VALUE_UNSIGNED(pAdrcProcRes->DrcProcRes.Drc_v11.bilat_soft_thd, BIT_14_MAX);
     // get sw_drc_gain_y
     CalibrateDrcGainYV11(&pAdrcProcRes->DrcProcRes, pAdrcCtx->NextData.dynParams.Drc_v11.DrcGain,
                          pAdrcCtx->NextData.dynParams.Drc_v11.Alpha);
 
     pAdrcProcRes->DrcProcRes.Drc_v11.bilat_wt_off =
         SW_DRC_BILAT_WT_OFF_FIX;  // LIMIT_VALUE(pAdrcCtx->NextData.dynParams.Drc_v11.MotionStr
-                                  // *INT8BITMAX, INT8BITMAX, 0);
+                                  // *BIT_8_MAX, BIT_8_MAX, 0);
     pAdrcProcRes->DrcProcRes.Drc_v11.weicur_pix =
         (unsigned char)(SHIFT8BIT(pAdrcCtx->NextData.staticParams.curPixWeit) + 0.5f);
     pAdrcProcRes->DrcProcRes.Drc_v11.weipre_frame =
@@ -516,7 +526,7 @@ void AdrcTuningParaProcessing(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pA
             pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.LocalSetting.Space_sgm_pre;
         // scale y
         for (int i = 0; i < ADRC_Y_NUM; i++)
-            pAdrcProcRes->DrcProcRes.Drc_v11.scale_y[i] =
+            pAdrcCtx->NextData.staticParams.Scale_y[i] =
                 pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.Scale_y[i];
         pAdrcCtx->NextData.staticParams.ByPassThr =
             pAdrcCtx->drcAttrV11.stAuto.DrcTuningPara.ByPassThr;
@@ -590,7 +600,7 @@ void AdrcTuningParaProcessing(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pA
         pAdrcCtx->NextData.staticParams.Space_sgm_pre = LIMIT_VALUE(
             pAdrcCtx->drcAttrV11.stManual.LocalSetting.Space_sgm_pre, SPACESGMMAX, SPACESGMMIN);
         for (int i = 0; i < ADRC_Y_NUM; i++)
-            pAdrcProcRes->DrcProcRes.Drc_v11.scale_y[i] =
+            pAdrcCtx->NextData.staticParams.Scale_y[i] =
                 LIMIT_VALUE(pAdrcCtx->drcAttrV11.stManual.Scale_y[i], SCALEYMAX, SCALEYMIN);
         pAdrcCtx->NextData.staticParams.Edge_Weit =
             LIMIT_VALUE(pAdrcCtx->drcAttrV11.stManual.Edge_Weit, NORMALIZE_MAX, NORMALIZE_MIN);
@@ -604,16 +614,19 @@ void AdrcTuningParaProcessing(AdrcContext_t* pAdrcCtx, RkAiqAdrcProcResult_t* pA
     // clip drc gain
     if (pAdrcCtx->NextData.AEData.L2S_Ratio * pAdrcCtx->NextData.dynParams.Drc_v11.DrcGain >
         MAX_AE_DRC_GAIN) {
-        LOGE_ATMO("%s:  AERatio*DrcGain > 256!!!\n", __FUNCTION__);
         pAdrcCtx->NextData.dynParams.Drc_v11.DrcGain =
             MAX(MAX_AE_DRC_GAIN / pAdrcCtx->NextData.AEData.L2S_Ratio, GAINMIN);
+        LOGI_ATMO("%s:  AERatio*DrcGain > 256x, clip to %f!!!\n", __FUNCTION__,
+                  pAdrcCtx->NextData.dynParams.Drc_v11.DrcGain);
     }
 
-    LOGD_ATMO("%s: Current Enable:%d DrcGain:%f Alpha:%f Clip:%f Strength:%f CompressMode:%d\n",
-              __FUNCTION__, pAdrcProcRes->bDrcEn, pAdrcCtx->NextData.dynParams.Drc_v11.DrcGain,
-              pAdrcCtx->NextData.dynParams.Drc_v11.Alpha, pAdrcCtx->NextData.dynParams.Drc_v11.Clip,
-              pAdrcCtx->NextData.dynParams.Drc_v11.Strength,
-              pAdrcCtx->NextData.staticParams.CompressMode);
+    LOGD_ATMO(
+        "%s: Current Enable:%d DrcGain:%f Alpha:%f Clip:%f Strength:%f CompressMode:%d "
+        "OutPutLongFrame:%d\n",
+        __FUNCTION__, pAdrcProcRes->bDrcEn, pAdrcCtx->NextData.dynParams.Drc_v11.DrcGain,
+        pAdrcCtx->NextData.dynParams.Drc_v11.Alpha, pAdrcCtx->NextData.dynParams.Drc_v11.Clip,
+        pAdrcCtx->NextData.dynParams.Drc_v11.Strength, pAdrcCtx->NextData.staticParams.CompressMode,
+        pAdrcCtx->NextData.staticParams.OutPutLongFrame);
     LOGD_ATMO(
         "%s: Current LocalWeit:%f LocalAutoEnable:%d LocalAutoWeit:%f GlobalContrast:%f "
         "LoLitContrast:%f\n",

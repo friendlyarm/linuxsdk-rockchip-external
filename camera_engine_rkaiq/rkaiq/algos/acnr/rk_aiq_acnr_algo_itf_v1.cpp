@@ -93,10 +93,16 @@ prepare(RkAiqAlgoCom* params)
         CalibDbV2_CNR_t *cnr_v1 =
             (CalibDbV2_CNR_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCalibDbV2, cnr_v1));
         pAcnrCtx->cnr_v1 = *cnr_v1;
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
 #else
         void *pCalibDb = (void*)(pCfgParam->com.u.prepare.calib);
         pAcnrCtx->list_cnr_v1 =
             (struct list_head*)(CALIBDB_GET_MODULE_PTR((void*)pCalibDb, uvnr));
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
 
 #endif
         pAcnrCtx->isIQParaUpdate = true;

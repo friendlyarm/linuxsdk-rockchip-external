@@ -1,9 +1,9 @@
 #ifndef _RK_AIQ_UAPI_ADEHAZE_INT_H_
 #define _RK_AIQ_UAPI_ADEHAZE_INT_H_
 
-#include "base/xcam_common.h"
-#include "rk_aiq_algo_des.h"
-#include "adehaze/rk_aiq_types_adehaze_algo_int.h"
+#include "xcore/base/xcam_common.h"
+#include "algos/rk_aiq_algo_des.h"
+#include "algos/adehaze/rk_aiq_types_adehaze_algo_int.h"
 
 // need_sync means the implementation should consider
 // the thread synchronization
@@ -21,5 +21,8 @@ XCamReturn rk_aiq_uapi_adehaze_v11_GetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v
 XCamReturn rk_aiq_uapi_adehaze_v12_SetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v12_t* attr,
                                              bool need_sync);
 XCamReturn rk_aiq_uapi_adehaze_v12_GetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v12_t* attr);
+XCamReturn rk_aiq_uapi_adehaze_v14_SetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v14_t* attr,
+                                             bool need_sync);
+XCamReturn rk_aiq_uapi_adehaze_v14_GetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v14_t* attr);
 
 #endif

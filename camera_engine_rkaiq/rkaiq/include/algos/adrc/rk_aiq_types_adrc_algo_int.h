@@ -11,9 +11,9 @@
 #ifndef __RK_AIQ_TYPES_ADRC_ALGO_INT_H__
 #define __RK_AIQ_TYPES_ADRC_ALGO_INT_H__
 
-#include "RkAiqCalibDbTypes.h"
-#include "adrc_head.h"
-#include "adrc_uapi_head.h"
+#include "iq_parser/RkAiqCalibDbTypes.h"
+#include "iq_parser_v2/adrc_head.h"
+#include "iq_parser_v2/adrc_uapi_head.h"
 
 typedef struct adrc_blcRes_V32_s {
     bool blc_ob_enable;
@@ -36,7 +36,6 @@ typedef struct drcAttrV10_s {
 } drcAttrV10_t;
 
 // drc attr V11
-
 typedef struct drcAttrV11_s {
     rk_aiq_uapi_sync_t sync;
 
@@ -65,5 +64,15 @@ typedef struct drcAttrV12Lite_s {
     mdrcAttr_v12_lite_t stManual;
     DrcInfoV12Lite_t Info;
 } drcAttrV12Lite_t;
+
+// drc attr V20
+typedef struct drcAttrV20_s {
+    rk_aiq_uapi_sync_t sync;
+
+    drc_OpMode_t opMode;
+    CalibDbV2_drc_V20_t stAuto;
+    mdrcAttr_V20_t stManual;
+    DrcInfoV20_t Info;
+} drcAttrV20_t;
 
 #endif

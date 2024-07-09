@@ -2,9 +2,9 @@
  * Broadcom Dongle Host Driver (DHD), Generic work queue framework
  * Generic interface to handle dhd deferred work events
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -61,6 +61,9 @@ enum _wq_event {
 #ifdef DHD_BANDSTEER
 	DHD_WQ_WORK_BANDSTEER_STEP_MOVE,
 #endif /* DHD_BANDSTEER */
+#ifdef WL_DHD_XR
+	DHD_WQ_WORK_XR_CMD_HANDLER,
+#endif /* WL_DHD_XR */
 	DHD_MAX_WQ_EVENTS
 };
 

@@ -39,6 +39,7 @@
 #include "test_common.h"
 #include "test_comm_utils.h"
 #include "test_comm_argparse.h"
+#include "test_comm_app_vdec.h"
 #include "rk_mpi_cal.h"
 #include "rk_mpi_mmz.h"
 
@@ -86,12 +87,14 @@ typedef struct rkRGN_CFG_S {
 } RGN_CFG_S;
 
 typedef enum rkTestVIMODE_E {
-    TEST_VI_MODE_VI_ONLY = 0,
+    TEST_VI_MODE_VI_FRAME_ONLY = 0,
     TEST_VI_MODE_BIND_VENC = 1,
     TEST_VI_MODE_BIND_VENC_MULTI = 2,
     TEST_VI_MODE_BIND_VPSS_BIND_VENC = 3,
     TEST_VI_MODE_BIND_VO = 4,
     TEST_VI_MODE_MUTI_VI = 5,
+    TEST_VI_MODE_VI_STREAM_ONLY = 6,
+    TEST_VI_MODE_BIND_VDEC_BIND_VO = 7,
 } TEST_VI_MODE_E;
 
 typedef struct _rkMpiVICtx {
@@ -110,6 +113,8 @@ typedef struct _rkMpiVICtx {
     RK_BOOL bGetConnecInfo;
     RK_BOOL bGetEdid;
     RK_BOOL bSetEdid;
+    RK_BOOL bNoUseLibv4l2;
+    RK_BOOL bEnSwcac;
     COMPRESS_MODE_E enCompressMode;
     VI_DEV_ATTR_S stDevAttr;
     VI_DEV_BIND_PIPE_S stBindPipe;
@@ -129,6 +134,8 @@ typedef struct _rkMpiVICtx {
     // for vo
     VO_LAYER s32VoLayer;
     VO_DEV s32VoDev;
+    // for stream
+    RK_CODEC_ID_E enCodecId;
 } TEST_VI_CTX_S;
 
 RK_U8 test_edid[2][128] = {
@@ -260,7 +267,7 @@ static RK_S32 create_vo(TEST_VI_CTX_S *ctx, RK_U32 u32Ch) {
     memset(&VoPubAttr, 0, sizeof(VO_PUB_ATTR_S));
     memset(&stLayerAttr, 0, sizeof(VO_VIDEO_LAYER_ATTR_S));
 
-    stLayerAttr.enPixFormat = RK_FMT_RGB888;
+    stLayerAttr.enPixFormat = RK_FMT_YUV420SP;
     stLayerAttr.stDispRect.s32X = 0;
     stLayerAttr.stDispRect.s32Y = 0;
     stLayerAttr.u32DispFrmRt = 30;
@@ -275,7 +282,7 @@ static RK_S32 create_vo(TEST_VI_CTX_S *ctx, RK_U32 u32Ch) {
     }
 
     VoPubAttr.enIntfType = VO_INTF_HDMI;
-    VoPubAttr.enIntfSync = VO_OUTPUT_DEFAULT;
+    VoPubAttr.enIntfSync = VO_OUTPUT_1080P60;
 
     s32Ret = RK_MPI_VO_SetPubAttr(VoDev, &VoPubAttr);
     if (s32Ret != RK_SUCCESS) {
@@ -286,17 +293,18 @@ static RK_S32 create_vo(TEST_VI_CTX_S *ctx, RK_U32 u32Ch) {
         return s32Ret;
     }
 
-    s32Ret = RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_GRAPHIC);
-    if (s32Ret != RK_SUCCESS) {
-        RK_LOGE("RK_MPI_VO_BindLayer failed,s32Ret:%d\n", s32Ret);
-        return RK_FAILURE;
-    }
-
     s32Ret = RK_MPI_VO_SetLayerAttr(VoLayer, &stLayerAttr);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("RK_MPI_VO_SetLayerAttr failed,s32Ret:%d\n", s32Ret);
         return RK_FAILURE;
     }
+
+    s32Ret = RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("RK_MPI_VO_BindLayer failed,s32Ret:%d\n", s32Ret);
+        return RK_FAILURE;
+    }
+
 
     s32Ret = RK_MPI_VO_EnableLayer(VoLayer);
     if (s32Ret != RK_SUCCESS) {
@@ -559,9 +567,11 @@ static RK_S32 test_vi_hdmi_rx_infomation(TEST_VI_CTX_S *ctx) {
     if (ctx->bGetConnecInfo) {
         VI_CONNECT_INFO_S stConnectInfo;
         s32Ret = RK_MPI_VI_GetChnConnectInfo(ctx->pipeId, ctx->channelId, &stConnectInfo);
-        RK_LOGE("RK_MPI_VI_GetChnConnectInfo %x, w:%d,h:%d,fmt:0x%x,connect:%d", s32Ret,
+        RK_LOGE("RK_MPI_VI_GetChnConnectInfo %x, w:%d,h:%d, fmt:0x%x, connect:%d, frameRate:%d",
+                 s32Ret,
                  stConnectInfo.u32Width, stConnectInfo.u32Height,
-                 stConnectInfo.enPixFmt, stConnectInfo.enConnect);
+                 stConnectInfo.enPixFmt, stConnectInfo.enConnect,
+                 stConnectInfo.f32FrameRate);
     }
     if (ctx->bGetEdid) {
         VI_EDID_S stEdid;
@@ -594,6 +604,68 @@ static RK_S32 test_vi_hdmi_rx_infomation(TEST_VI_CTX_S *ctx) {
     return s32Ret;
 }
 
+static RK_S32 test_vi_set_stream_codec(TEST_VI_CTX_S *ctx) {
+    RK_S32 s32Ret = RK_FAILURE;
+
+    /* test set stream codec before enable chn(need after RK_MPI_VI_SetChnAttr)*/
+    if (ctx->enCodecId != RK_VIDEO_ID_Unused) {
+        RK_CODEC_ID_E enCodecId;
+
+        s32Ret = RK_MPI_VI_SetChnStreamCodec(ctx->pipeId, ctx->channelId, ctx->enCodecId);
+        if (s32Ret != RK_SUCCESS) {
+            RK_LOGE("RK_MPI_VI_SetChnStreamCodec %x", s32Ret);
+            return s32Ret;
+        }
+    }
+
+    return s32Ret;
+}
+
+static void test_vi_event_source_change(TEST_VI_CTX_S *ctx) {
+    if (ctx) {
+        VI_CONNECT_INFO_S stConnectInfo;
+        RK_MPI_VI_GetChnConnectInfo(ctx->pipeId, ctx->channelId, &stConnectInfo);
+        if (stConnectInfo.u32Width == ctx->width &&
+            stConnectInfo.u32Height == ctx->height &&
+            stConnectInfo.enPixFmt == ctx->stChnAttr.enPixelFormat) {  // not change, just need pause/resume.
+            RK_LOGI("reset vi!");
+            RK_MPI_VI_PauseChn(ctx->pipeId, ctx->channelId);
+            RK_MPI_VI_ResumeChn(ctx->pipeId, ctx->channelId);
+        } else {  // TODO(user): need rebuild vi when w/h/format change.
+            RK_LOGE("need signal to rebuild vi!");
+        }
+    }
+}
+
+static void test_vi_event_call_back(RK_VOID *pPrivateData, VI_CB_INFO_S *info) {
+    TEST_VI_CTX_S *ctx = (TEST_VI_CTX_S *)pPrivateData;
+
+    if (info) {
+        if (info->u32Event & VI_EVENT_CONNECT_CHANGE)
+            RK_LOGI("event connect change");
+        if (info->u32Event & VI_EVENT_SOURCE_CHANGE) {
+            RK_LOGI("event source change");
+            test_vi_event_source_change(ctx);
+        }
+    }
+}
+
+static RK_S32 test_vi_set_event_call_back(TEST_VI_CTX_S *ctx) {
+    RK_S32 s32Ret = RK_FAILURE;
+    VI_EVENT_CALL_BACK_S stCallbackFunc;
+
+    stCallbackFunc.pfnCallback = test_vi_event_call_back;
+    stCallbackFunc.pPrivateData = ctx;
+
+    /* test set change event call back(need after RK_MPI_VI_SetChnAttr)*/
+    s32Ret = RK_MPI_VI_RegChnEventCallback(ctx->pipeId, ctx->channelId, &stCallbackFunc);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("RK_MPI_VI_RegChnEventCallback %x", s32Ret);
+        return s32Ret;
+    }
+
+    return s32Ret;
+}
 
 static RK_S32 test_vi_init(TEST_VI_CTX_S *ctx) {
     RK_S32 s32Ret = RK_FAILURE;
@@ -634,6 +706,7 @@ static RK_S32 test_vi_init(TEST_VI_CTX_S *ctx) {
     ctx->stChnAttr.stSize.u32Width = ctx->width;
     ctx->stChnAttr.stSize.u32Height = ctx->height;
     ctx->stChnAttr.enCompressMode = ctx->enCompressMode;
+    ctx->stChnAttr.stIspOpt.bNoUseLibV4L2 = ctx->bNoUseLibv4l2;
     s32Ret = RK_MPI_VI_SetChnAttr(ctx->pipeId, ctx->channelId, &ctx->stChnAttr);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("RK_MPI_VI_SetChnAttr %x", s32Ret);
@@ -666,9 +739,35 @@ static RK_S32 test_vi_init(TEST_VI_CTX_S *ctx) {
     }
 
     test_vi_hdmi_rx_infomation(ctx);
+    test_vi_set_stream_codec(ctx);
+    test_vi_set_event_call_back(ctx);
 
     ctx->stViRgn.stRgnAttr.enType = (RGN_TYPE_E)ctx->rgnType;
     ctx->stViRgn.stRgnChnAttr.bShow = RK_TRUE;
+
+    // do swcac
+    if (ctx->bEnSwcac) {
+        SWCAC_CONFIG_S stSwcacCfg;
+        memset(&stSwcacCfg, 0, sizeof(SWCAC_CONFIG_S));
+        stSwcacCfg.bEnable = RK_TRUE;
+        stSwcacCfg.stCacEffectAttr.u32AutoHighLightDetect = 1;
+        stSwcacCfg.stCacEffectAttr.u32AutoHighLightOffset = 0;
+        stSwcacCfg.stCacEffectAttr.u32FixHighLightBase    = 0;
+        stSwcacCfg.stCacEffectAttr.fYCompensate         = 0.0f;
+        stSwcacCfg.stCacEffectAttr.fAutoStrengthU       = 1.0f;
+        stSwcacCfg.stCacEffectAttr.fAutoStrengthV       = 1.0f;
+        stSwcacCfg.stCacEffectAttr.fGrayStrengthU       = 0.6f;
+        stSwcacCfg.stCacEffectAttr.fGrayStrengthV       = 0.2f;
+
+        s32Ret = RK_MPI_VI_SetSwcacConfig(ctx->pipeId, ctx->channelId, &stSwcacCfg);
+        RK_LOGD("RK_MPI_VI_SetSwcacConfig ret = %x", s32Ret);
+    } else {
+        SWCAC_CONFIG_S stSwcacCfg;
+        memset(&stSwcacCfg, 0, sizeof(SWCAC_CONFIG_S));
+        stSwcacCfg.bEnable = RK_FALSE;
+        s32Ret = RK_MPI_VI_SetSwcacConfig(ctx->pipeId, ctx->channelId, &stSwcacCfg);
+        RK_LOGD("RK_MPI_VI_SetSwcacConfig ret = %x", s32Ret);
+    }
 
     // open fd before enable chn will be better
 #if TEST_WITH_FD
@@ -697,6 +796,164 @@ static RK_S32 test_vi_init(TEST_VI_CTX_S *ctx) {
     }
 
 __FAILED:
+    return s32Ret;
+}
+
+static RK_S32 test_vi_bind_vdec_bind_vo_loop(TEST_VI_CTX_S *ctx) {
+    MPP_CHN_S stSrcChn, stDestChn;
+    RK_S32 loopCount = 0;
+    void *pData = RK_NULL;
+    RK_S32 s32Ret = RK_FAILURE;
+    RK_U32 i;
+    TEST_VDEC_CFG_S stVdecCfg;
+
+    if (ctx->enCodecId == RK_VIDEO_ID_Unused) {
+        RK_LOGE("this mode need set codec id", ctx->enCodecId);
+        return RK_FAILURE;
+    }
+
+    s32Ret = test_vi_init(ctx);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("vi %d:%d init failed:%x", ctx->devId, ctx->channelId, s32Ret);
+        goto __FAILED;
+    }
+
+    // vo  init and create
+    ctx->s32VoLayer = RK356X_VOP_LAYER_CLUSTER_0;
+    ctx->s32VoDev = RK356X_VO_DEV_HD0;
+    s32Ret = create_vo(ctx, 0);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("create vo ch:%d failed", ctx->channelId);
+        goto __FAILED;
+    }
+    // bind vi to vdec to vo
+    stVdecCfg.s32VdecChn = 0;
+    stVdecCfg.u32CompressMode = 0;
+    if (ctx->enCodecId == RK_VIDEO_ID_MJPEG)  // mjpeg vdec only support frame mode
+        stVdecCfg.enVideoMode = VIDEO_MODE_FRAME;
+    else
+        stVdecCfg.enVideoMode = VIDEO_MODE_STREAM;
+    stVdecCfg.enVdecSource = TEST_MPI_SOURCE_BIND;
+    stVdecCfg.stStream.pSrcFilePath = RK_NULL;
+    stVdecCfg.stStream.s32ReadLoopCnt = 1;
+    // stVdecCfg.bUseSeqAsPts = RK_FALSE;
+    stVdecCfg.stBindSrc.enCodecId = ctx->enCodecId;
+    stVdecCfg.stBindSrc.u32PicWidth = ctx->width;
+    stVdecCfg.stBindSrc.u32PicHeight = ctx->height;
+    stVdecCfg.stBindSrc.stSrcChn.enModId = RK_ID_VI;
+    stVdecCfg.stBindSrc.stSrcChn.s32DevId = ctx->devId;
+    stVdecCfg.stBindSrc.stSrcChn.s32ChnId = ctx->channelId;
+    stDestChn.enModId   = RK_ID_VO;
+    stDestChn.s32DevId  = ctx->s32VoLayer;
+    stDestChn.s32ChnId  = 0;
+    TEST_COMM_APP_VDEC_StartProcWithDstChn(&stVdecCfg, &stDestChn);
+
+    // enable vo
+    s32Ret = RK_MPI_VO_EnableChn(ctx->s32VoLayer, 0);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("Enalbe vo chn failed, s32Ret = %d\n", s32Ret);
+        goto __FAILED;
+    }
+
+    while (loopCount < ctx->loopCountSet) {
+        loopCount++;
+        RK_LOGE("loopCount:%d", loopCount);
+        // can not get the vo frameout count . so here regard as 33ms one frame.
+        usleep(33*1000);
+    }
+
+__FAILED:
+    TEST_COMM_APP_VDEC_StopProcWithDstChn(&stVdecCfg, &stDestChn);
+    TEST_COMM_APP_VDEC_Stop(&stVdecCfg);
+    // disable vo
+    RK_MPI_VO_DisableChn(ctx->s32VoLayer, 0);
+    RK_MPI_VO_DisableLayer(ctx->s32VoLayer);
+    RK_MPI_VO_Disable(ctx->s32VoDev);
+
+    // 5. disable one chn
+    s32Ret = RK_MPI_VI_DisableChn(ctx->pipeId, ctx->channelId);
+    RK_LOGE("RK_MPI_VI_DisableChn %x", s32Ret);
+
+    RK_MPI_VO_DisableChn(ctx->s32VoLayer, 0);
+
+    // 6.disable dev(will diabled all chn)
+    s32Ret = RK_MPI_VI_DisableDev(ctx->devId);
+    RK_LOGE("RK_MPI_VI_DisableDev %x", s32Ret);
+
+    return s32Ret;
+}
+
+static RK_S32 test_vi_get_release_stream_loop(TEST_VI_CTX_S *ctx) {
+    RK_S32 s32Ret;
+    RK_S32 loopCount = 0;
+    RK_S32 waitTime = 33;
+    RK_S64 s64FirstStreamTime = 0;
+    RK_S64 s64StartTime;
+    VI_STREAM_S stStream;
+
+    if (ctx->enCodecId == RK_VIDEO_ID_Unused) {
+        RK_LOGE("this mode need set codec id", ctx->enCodecId);
+        return RK_FAILURE;
+    }
+
+    s64StartTime = TEST_COMM_GetNowUs();
+
+    /* test use getframe&release_stream */
+    s32Ret = test_vi_init(ctx);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("vi %d:%d init failed:%x", ctx->devId, ctx->channelId, s32Ret);
+        goto __FAILED;
+    }
+
+    while (loopCount < ctx->loopCountSet) {
+        // get the stream
+        s32Ret = RK_MPI_VI_GetChnStream(ctx->pipeId, ctx->channelId, &stStream, waitTime);
+        if (s32Ret == RK_SUCCESS) {
+            RK_U64 nowUs = TEST_COMM_GetNowUs();
+            if (!s64FirstStreamTime) {
+                s64FirstStreamTime = nowUs - s64StartTime;
+                RK_LOGE("get first stream use time:%d ms", s64FirstStreamTime / 1000);
+            }
+            void *data = RK_MPI_MB_Handle2VirAddr(stStream.pMbBlk);
+
+            RK_LOGD("RK_MPI_VI_GetChnFrame ok:data %p loop:%d seq:%d pts:%lld ms len=%d", data, loopCount,
+                     stStream.u32Seq, stStream.u64PTS/1000,
+                     stStream.u32Len);
+            // 6.get the channel status
+            s32Ret = RK_MPI_VI_QueryChnStatus(ctx->pipeId, ctx->channelId, &ctx->stChnStatus);
+            RK_LOGD("RK_MPI_VI_QueryChnStatus ret %x, w:%d,h:%d,enable:%d," \
+                    "current frame id:%d,input lost:%d,output lost:%d," \
+                    "framerate:%d,vbfail:%d delay=%lldus",
+                     s32Ret,
+                     ctx->stChnStatus.stSize.u32Width,
+                     ctx->stChnStatus.stSize.u32Height,
+                     ctx->stChnStatus.bEnable,
+                     ctx->stChnStatus.u32CurFrameID,
+                     ctx->stChnStatus.u32InputLostFrame,
+                     ctx->stChnStatus.u32OutputLostFrame,
+                     ctx->stChnStatus.u32FrameRate,
+                     ctx->stChnStatus.u32VbFail,
+                     nowUs - stStream.u64PTS);
+
+            // 7.release the stream
+            s32Ret = RK_MPI_VI_ReleaseChnStream(ctx->pipeId, ctx->channelId, &stStream);
+            if (s32Ret != RK_SUCCESS) {
+                RK_LOGE("RK_MPI_VI_ReleaseChnFrame fail %x", s32Ret);
+            }
+            loopCount++;
+        } else {
+            RK_LOGE("RK_MPI_VI_GetChnFrame timeout %x", s32Ret);
+        }
+
+        usleep(10*1000);
+    }
+
+__FAILED:
+    // 9. disable one chn
+    s32Ret = RK_MPI_VI_DisableChn(ctx->pipeId, ctx->channelId);
+    // 10.disable dev(will diabled all chn)
+    s32Ret = RK_MPI_VI_DisableDev(ctx->devId);
+
     return s32Ret;
 }
 
@@ -745,7 +1002,7 @@ static RK_S32 test_vi_bind_vo_loop(TEST_VI_CTX_S *ctx) {
 
     while (loopCount < ctx->loopCountSet) {
         loopCount++;
-        //RK_LOGE("loopCount:%d", loopCount);
+        RK_LOGE("loopCount:%d", loopCount);
         // can not get the vo frameout count . so here regard as 33ms one frame.
         usleep(33*1000);
     }
@@ -756,12 +1013,8 @@ __FAILED:
         RK_LOGE("RK_MPI_SYS_UnBind fail %x", s32Ret);
     }
     // disable vo
-    RK_MPI_VO_DisableLayer(ctx->s32VoLayer);
-    RK_MPI_VO_DisableLayer(RK356X_VOP_LAYER_ESMART_0);
-    RK_MPI_VO_DisableLayer(RK356X_VOP_LAYER_ESMART_1);
-    RK_MPI_VO_DisableLayer(RK356X_VOP_LAYER_SMART_0);
-    RK_MPI_VO_DisableLayer(RK356X_VOP_LAYER_SMART_1);
     RK_MPI_VO_DisableChn(ctx->s32VoLayer, 0);
+    RK_MPI_VO_DisableLayer(ctx->s32VoLayer);
     RK_MPI_VO_Disable(ctx->s32VoDev);
 
     // 5. disable one chn
@@ -1050,6 +1303,10 @@ static RK_S32 test_vi_get_release_frame_loop(TEST_VI_CTX_S *ctx) {
     RK_S32 s32Ret;
     RK_S32 loopCount = 0;
     RK_S32 waitTime = 33;
+    RK_S64 s64FirstFrameTime = 0;
+    RK_S64 s64StartTime;
+
+    s64StartTime = TEST_COMM_GetNowUs();
 
     /* test use getframe&release_frame */
     s32Ret = test_vi_init(ctx);
@@ -1098,6 +1355,11 @@ static RK_S32 test_vi_get_release_frame_loop(TEST_VI_CTX_S *ctx) {
         s32Ret = RK_MPI_VI_GetChnFrame(ctx->pipeId, ctx->channelId, &ctx->stViFrame, waitTime);
         if (s32Ret == RK_SUCCESS) {
             RK_U64 nowUs = TEST_COMM_GetNowUs();
+            if (!s64FirstFrameTime) {
+                s64FirstFrameTime = nowUs - s64StartTime;
+                RK_LOGE("get first frame use time:%d ms", s64FirstFrameTime / 1000);
+            }
+
             void *data = RK_MPI_MB_Handle2VirAddr(ctx->stViFrame.stVFrame.pMbBlk);
 
             RK_LOGD("RK_MPI_VI_GetChnFrame ok:data %p loop:%d seq:%d pts:%lld ms len=%d", data, loopCount,
@@ -1345,6 +1607,9 @@ static void mpi_vi_test_show_options(const TEST_VI_CTX_S *ctx) {
     RK_PRINT("bGetConnecInfo        : %d\n", ctx->bGetConnecInfo);
     RK_PRINT("bGetEdid              : %d\n", ctx->bGetEdid);
     RK_PRINT("bSetEdid              : %d\n", ctx->bSetEdid);
+    RK_PRINT("enCodecId             : %d\n", ctx->enCodecId);
+    RK_PRINT("bNoUseLibv4l2         : %d\n", ctx->bNoUseLibv4l2);
+    RK_PRINT("enable swcac          : %d\n", ctx->bEnSwcac);
 }
 
 static const char *const usages[] = {
@@ -1377,6 +1642,7 @@ int main(int argc, const char **argv) {
     ctx->bEnRgn = RK_FALSE;
     ctx->s32RgnCnt = 1;
     ctx->rgnType = RGN_BUTT;
+    ctx->bEnSwcac = RK_FALSE;
     RK_LOGE("test running enter!");
 
     struct argparse_option options[] = {
@@ -1402,7 +1668,8 @@ int main(int argc, const char **argv) {
         OPT_INTEGER('m', "mode", &(ctx->enMode),
                     "test mode(default 1; 0:vi get&release frame 1:vi bind one venc(h264) \n\t"
                     "2:vi bind two venc(h264)) 3:vi bind vpss bind venc \n\t"
-                    "4:vi bind vo(only support 356x now)", NULL, 0, 0),
+                    "4:vi bind vo 5:multi vi 6:vi get&release stream \n\t"
+                    "7:vi bind vdec bind vo", NULL, 0, 0),
         OPT_INTEGER('t', "memorytype", &(ctx->stChnAttr.stIspOpt.enMemoryType),
                     "set the buf memorytype(required, default 4; 1:mmap(hdmiin/bt1120/sensor input) "
                     "2:userptr(invalid) 3:overlay(invalid) 4:dma(sensor))", NULL, 0, 0),
@@ -1438,7 +1705,12 @@ int main(int argc, const char **argv) {
                     "get edid. default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "set_edid", &(ctx->bSetEdid),
                     "set edid. default(0)", NULL, 0, 0),
-
+        OPT_INTEGER('\0', "stream_codec", &(ctx->enCodecId),
+                    "stream codec(0:disable 8:h264, 9:mjpeg, 12:h265). default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "bNoUseLibv4l2", &(ctx->bNoUseLibv4l2), "vi if no use libv4l2, 0: use, 1: no use."
+                    "dafault(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "en_swcac", &(ctx->bEnSwcac),
+                    "enable swcac. default(0)", NULL, 0, 0),
         OPT_END(),
     };
 
@@ -1497,7 +1769,7 @@ int main(int argc, const char **argv) {
         goto __FAILED;
     }
     switch (ctx->enMode) {
-        case TEST_VI_MODE_VI_ONLY:
+        case TEST_VI_MODE_VI_FRAME_ONLY:
             if (!ctx->stChnAttr.u32Depth) {
                 RK_LOGE("depth need > 0 when vi not bind any other module!");
                 ctx->stChnAttr.u32Depth = ctx->stChnAttr.stIspOpt.u32BufCount;
@@ -1516,7 +1788,17 @@ int main(int argc, const char **argv) {
         break;
         case TEST_VI_MODE_MUTI_VI:
             s32Ret = test_vi_muti_vi_loop(ctx);
-            break;
+        break;
+        case TEST_VI_MODE_VI_STREAM_ONLY:
+            if (!ctx->stChnAttr.u32Depth) {
+                RK_LOGE("depth need > 0 when vi not bind any other module!");
+                ctx->stChnAttr.u32Depth = ctx->stChnAttr.stIspOpt.u32BufCount;
+            }
+            s32Ret = test_vi_get_release_stream_loop(ctx);
+        break;
+        case TEST_VI_MODE_BIND_VDEC_BIND_VO:
+            s32Ret = test_vi_bind_vdec_bind_vo_loop(ctx);
+        break;
         default:
             RK_LOGE("no support such test mode:%d", ctx->enMode);
         break;

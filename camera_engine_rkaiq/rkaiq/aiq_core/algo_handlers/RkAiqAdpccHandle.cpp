@@ -60,7 +60,9 @@ XCamReturn RkAiqAdpccHandleInt::setAttrib(rk_aiq_dpcc_attrib_V20_t* att) {
     mCfgMutex.lock();
 
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
     ret = rk_aiq_uapi_adpcc_SetAttrib(mAlgoCtx, att, false);
+#endif
 #else
     // check if there is different between att & mCurAtt(sync)/mNewAtt(async)
     // if something changed, set att to mNewAtt, and
@@ -93,9 +95,11 @@ XCamReturn RkAiqAdpccHandleInt::getAttrib(rk_aiq_dpcc_attrib_V20_t* att) {
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
       mCfgMutex.lock();
       ret = rk_aiq_uapi_adpcc_GetAttrib(mAlgoCtx, att);
       mCfgMutex.unlock();
+#endif
 #else
     if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
       mCfgMutex.lock();
@@ -125,10 +129,6 @@ XCamReturn RkAiqAdpccHandleInt::prepare() {
 
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "adpcc handle prepare failed");
-
-    RkAiqAlgoConfigAdpcc* adpcc_config_int = (RkAiqAlgoConfigAdpcc*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
 
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
@@ -171,7 +171,8 @@ XCamReturn RkAiqAdpccHandleInt::processing() {
     RkAiqAlgoProcAdpcc* adpcc_proc_int        = (RkAiqAlgoProcAdpcc*)mProcInParam;
     RkAiqAlgoProcResAdpcc* adpcc_proc_res_int = (RkAiqAlgoProcResAdpcc*)mProcOutParam;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
+            (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
+
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     adpcc_proc_res_int->stAdpccProcResult = &shared->fullParams->mDpccParams->data()->result;
@@ -233,7 +234,7 @@ XCamReturn RkAiqAdpccHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullP
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAdpcc* adpcc_com            = (RkAiqAlgoProcResAdpcc*)mProcOutParam;
-    rk_aiq_isp_dpcc_params_v20_t* dpcc_param    = params->mDpccParams->data().ptr();
+    rk_aiq_isp_dpcc_params_t* dpcc_param    = params->mDpccParams->data().ptr();
 
     if (!adpcc_com) {
         LOGD_ANALYZER("no adpcc result");

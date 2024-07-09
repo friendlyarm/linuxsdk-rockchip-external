@@ -55,6 +55,28 @@ RK_S32 TEST_SYS_CreateVideoFrame(const PIC_BUF_ATTR_S *pstBufAttr, VIDEO_FRAME_I
     return RK_SUCCESS;
 }
 
+RK_S32 TEST_SYS_AvsBindVenc(AVS_GRP AvsGrp, AVS_CHN AvsChn, VENC_CHN VencChn) {
+    RK_S32    s32Ret = RK_SUCCESS;
+    MPP_CHN_S stSrcChn;
+    MPP_CHN_S stDestChn;
+
+    stSrcChn.enModId = RK_ID_AVS;
+    stSrcChn.s32DevId = AvsGrp;
+    stSrcChn.s32ChnId = AvsChn;
+
+    stDestChn.enModId = RK_ID_VENC;
+    stDestChn.s32DevId = 0;
+    stDestChn.s32ChnId = VencChn;
+
+    s32Ret = RK_MPI_SYS_Bind(&stSrcChn, &stDestChn);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("failed with %#x!", s32Ret);
+        return RK_FAILURE;
+    }
+
+    return s32Ret;
+}
+
 RK_S32 TEST_SYS_AvsUnbindVenc(AVS_GRP AvsGrp, AVS_CHN AvsChn, VENC_CHN VencChn) {
     RK_S32    s32Ret = RK_SUCCESS;
     MPP_CHN_S stSrcChn;
@@ -200,6 +222,51 @@ RK_S32 TEST_SYS_ViUnbindAvs(VI_DEV ViDev, VI_CHN ViChn, AVS_GRP AvsGrp, AVS_PIPE
     stDestChn.enModId = RK_ID_AVS;
     stDestChn.s32DevId = AvsGrp;
     stDestChn.s32ChnId = AvsPipe;
+
+    s32Ret = RK_MPI_SYS_UnBind(&stSrcChn, &stDestChn);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("failed with %#x!", s32Ret);
+        return RK_FAILURE;
+    }
+
+    return s32Ret;
+}
+
+
+RK_S32 TEST_SYS_ViBindVo(VI_DEV ViDev, VI_CHN ViChn, VO_DEV VoDev, VO_CHN VoChn) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    MPP_CHN_S stSrcChn;
+    MPP_CHN_S stDestChn;
+
+    stSrcChn.enModId = RK_ID_VI;
+    stSrcChn.s32DevId = ViDev;
+    stSrcChn.s32ChnId = ViChn;
+
+    stDestChn.enModId = RK_ID_VO;
+    stDestChn.s32DevId = VoDev;
+    stDestChn.s32ChnId = VoChn;
+
+    s32Ret = RK_MPI_SYS_Bind(&stSrcChn, &stDestChn);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("failed with %#x!", s32Ret);
+        return RK_FAILURE;
+    }
+
+    return s32Ret;
+}
+
+RK_S32 TEST_SYS_ViUnbindVo(VI_DEV ViDev, VI_CHN ViChn, VO_DEV VoDev, VO_CHN VoChn) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    MPP_CHN_S stSrcChn;
+    MPP_CHN_S stDestChn;
+
+    stSrcChn.enModId = RK_ID_VI;
+    stSrcChn.s32DevId = ViDev;
+    stSrcChn.s32ChnId = ViChn;
+
+    stDestChn.enModId = RK_ID_VO;
+    stDestChn.s32DevId = VoDev;
+    stDestChn.s32ChnId = VoChn;
 
     s32Ret = RK_MPI_SYS_UnBind(&stSrcChn, &stDestChn);
     if (s32Ret != RK_SUCCESS) {
@@ -475,7 +542,7 @@ RK_S32 TEST_SYS_VdecUnbindVo(VDEC_CHN VdecChn, VO_DEV VoDev, VO_CHN VoChn) {
 }
 
 RK_S32 TEST_SYS_FuzzyCompareFrameByFile(
-        const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame, RK_DOUBLE dThreshold) {
+        const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame, RK_DOUBLE dThreshold, RK_U32 index) {
     RK_S32 s32Ret = RK_SUCCESS;
     RK_BOOL bDiff = RK_TRUE;
     VIDEO_FRAME_INFO_S stCompareFrame;
@@ -493,7 +560,7 @@ RK_S32 TEST_SYS_FuzzyCompareFrameByFile(
         return s32Ret;
     }
 
-    s32Ret = TEST_COMM_FileReadOneFrame(pFileName, &stCompareFrame);
+    s32Ret = TEST_COMM_FileReadOneFrame(pFileName, &stCompareFrame, index);
     if (s32Ret != RK_SUCCESS) {
         goto __FAILED;
     }
@@ -518,7 +585,7 @@ __FAILED:
     return s32Ret;
 }
 
-RK_S32 TEST_SYS_FuzzyCompareFrame(VIDEO_FRAME_INFO_S *pstVideoFrame, RK_DOUBLE dThreshold) {
+RK_S32 TEST_SYS_FuzzyCompareFrame(VIDEO_FRAME_INFO_S *pstVideoFrame, RK_DOUBLE dThreshold, RK_U32 frmIdx) {
     RK_S32 s32Ret = RK_SUCCESS;
     RK_BOOL bDiff = RK_TRUE;
     VIDEO_FRAME_INFO_S stCompareFrame;
@@ -541,7 +608,7 @@ RK_S32 TEST_SYS_FuzzyCompareFrame(VIDEO_FRAME_INFO_S *pstVideoFrame, RK_DOUBLE d
                         RK_MPI_CAL_COMM_GetHorStride(pstVideoFrame->stVFrame.u32VirWidth,
                                         pstVideoFrame->stVFrame.enPixelFormat),
                         pstVideoFrame->stVFrame.u32VirHeight,
-                        pstVideoFrame->stVFrame.enPixelFormat, 1);
+                        pstVideoFrame->stVFrame.enPixelFormat, frmIdx);
     if (s32Ret != RK_SUCCESS) {
         goto __FAILED;
     }
@@ -557,7 +624,7 @@ RK_S32 TEST_SYS_FuzzyCompareFrame(VIDEO_FRAME_INFO_S *pstVideoFrame, RK_DOUBLE d
                 pstVideoFrame->stVFrame.u32Height,
                 dThreshold);
     if (bDiff) {
-        RK_LOGE("image compare has too large different.");
+        RK_LOGE("image(%d) compare has too large different.", frmIdx);
         s32Ret = RK_FAILURE;
         goto __FAILED;
     }

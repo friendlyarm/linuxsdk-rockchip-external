@@ -3,9 +3,9 @@
  *     export functions to client drivers
  *     abstract OS and BUS specific details of SDIO
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -77,8 +77,8 @@ struct bcmsdh_info
 	void	*os_cxt;        /* Pointer to per-OS private data */
 	bool	force_sbwad_calc; /* forces calculation of sbwad instead of using cached value */
 #ifdef DHD_WAKE_STATUS
-    unsigned int total_wake_count;
-    int pkt_wake;
+	unsigned int    total_wake_count;
+	int             pkt_wake;
 #endif /* DHD_WAKE_STATUS */
 };
 
@@ -242,9 +242,15 @@ extern int bcmsdh_oob_intr_register(bcmsdh_info_t *bcmsdh, bcmsdh_cb_fn_t oob_ir
 extern void bcmsdh_oob_intr_unregister(bcmsdh_info_t *sdh);
 extern void bcmsdh_oob_intr_set(bcmsdh_info_t *sdh, bool enable);
 #endif /* defined(OOB_INTR_ONLY) || defined(BCMSPI_ANDROID) */
+extern void *bcmsdh_get_dev(bcmsdh_info_t *sdh);
 extern void bcmsdh_dev_pm_stay_awake(bcmsdh_info_t *sdh);
 extern void bcmsdh_dev_relax(bcmsdh_info_t *sdh);
 extern bool bcmsdh_dev_pm_enabled(bcmsdh_info_t *sdh);
+
+#ifdef DHD_WAKE_STATUS
+int bcmsdh_get_total_wake(bcmsdh_info_t *bcmsdh);
+int bcmsdh_set_get_wake(bcmsdh_info_t *bcmsdh, int flag);
+#endif /* DHD_WAKE_STATUS */
 
 int bcmsdh_suspend(bcmsdh_info_t *bcmsdh);
 int bcmsdh_resume(bcmsdh_info_t *bcmsdh);
@@ -272,10 +278,5 @@ extern int bcmsdh_gpio_init(void *sd);
 extern bool bcmsdh_gpioin(void *sd, uint32 gpio);
 extern int bcmsdh_gpioouten(void *sd, uint32 gpio);
 extern int bcmsdh_gpioout(void *sd, uint32 gpio, bool enab);
-
-#ifdef DHD_WAKE_STATUS
-extern int bcmsdh_get_total_wake(bcmsdh_info_t *bcmsdh);
-extern int bcmsdh_set_get_wake(bcmsdh_info_t *bcmsdh, int flag);
-#endif /* DHD_WAKE_STATUS */
 
 #endif	/* _bcmsdh_h_ */

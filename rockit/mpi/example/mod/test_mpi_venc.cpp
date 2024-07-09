@@ -37,6 +37,7 @@
 #define MAX_TIME_OUT_MS          20
 #define TEST_RC_MODE             0
 #define TEST_CROP_PARAM_CHANGE   0
+#define MAX_PACKET_NUM           16
 
 typedef struct _rkMpiVENCCtx {
     const char     *srcFileUri;
@@ -61,9 +62,13 @@ typedef struct _rkMpiVENCCtx {
     RK_U32          u32FixQp;
     RK_U32          u32DeBreath;
     RK_U32          u32StatTime;
+    RK_U32          u32OneStreamBuffer;
+    RK_U32          u32Profile;
     RK_S32          s32SnapPicCount;
     RK_S32          s32FrameRateIn;
     RK_S32          s32FrameRateOut;
+    RK_U32          u32SliceMode;
+    RK_U32          u32SliceSize;
     RK_BOOL         threadExit;
     RK_BOOL         bFrameRate;
     RK_BOOL         bInsertUserData;
@@ -77,6 +82,8 @@ typedef struct _rkMpiVENCCtx {
     RK_BOOL    bFrmLost;
     RK_BOOL    bIntraRefresh;
     RK_BOOL    bHierarchicalQp;
+    RK_BOOL    bCuPrediction;
+    RK_BOOL    bSkipBias;
     RK_BOOL    bMjpegParam;
     RK_BOOL    bMjpegRcParam;
     RK_BOOL    bForceIdr;
@@ -89,6 +96,7 @@ typedef struct _rkMpiVENCCtx {
     RK_BOOL    bAttachPool;
     RK_BOOL    bPerformance;
     RK_BOOL    bSliceSplit;
+    RK_U32     u32SceneMode;
 } TEST_VENC_CTX_S;
 
 static RK_S32 read_with_pixel_width(RK_U8 *pBuf, RK_U32 u32Width, RK_U32 u32VirHeight,
@@ -134,6 +142,7 @@ static RK_S32 read_image(RK_U8 *pVirAddr, RK_U32 u32Width, RK_U32 u32Height,
                 }
             }
         } break;
+        case RK_FMT_YUV444SP:
         case RK_FMT_RGB888:
         case RK_FMT_BGR888: {
             s32Ret = read_with_pixel_width(pBufy, u32Width, u32VirHeight, u32VirWidth, 3, fp);
@@ -161,6 +170,33 @@ __FAILED:
     return RK_ERR_VENC_ILLEGAL_PARAM;
 }
 
+static RK_S32 venc_set_one_stream_buffer(const TEST_VENC_CTX_S *ctx) {
+    VENC_PARAM_MOD_S stModParam;
+
+    switch (ctx->u32DstCodec) {
+      case RK_VIDEO_ID_AVC:
+        stModParam.enVencModType = MODTYPE_H264E;
+        stModParam.stH264eModParam.u32OneStreamBuffer = ctx->u32OneStreamBuffer;
+        RK_MPI_VENC_SetModParam(&stModParam);
+      break;
+      case RK_VIDEO_ID_HEVC:
+        stModParam.enVencModType = MODTYPE_H265E;
+        stModParam.stH265eModParam.u32OneStreamBuffer = ctx->u32OneStreamBuffer;
+        RK_MPI_VENC_SetModParam(&stModParam);
+      break;
+      case RK_VIDEO_ID_JPEG:
+      case RK_VIDEO_ID_MJPEG:
+        stModParam.enVencModType = MODTYPE_JPEGE;
+        stModParam.stJpegeModParam.u32OneStreamBuffer = ctx->u32OneStreamBuffer;
+        RK_MPI_VENC_SetModParam(&stModParam);
+      break;
+      default:
+      break;
+    }
+
+    return RK_SUCCESS;
+}
+
 void* venc_force_idr(void *pArgs) {
     TEST_VENC_CTX_S *pstCtx     = reinterpret_cast<TEST_VENC_CTX_S *>(pArgs);
     RK_U32           u32Ch      = pstCtx->u32ChnIndex;
@@ -175,7 +211,7 @@ void* venc_force_idr(void *pArgs) {
 
 void* venc_get_stream(void *pArgs) {
     TEST_VENC_CTX_S *pstCtx     = reinterpret_cast<TEST_VENC_CTX_S *>(pArgs);
-    void            *pData      = RK_NULL;
+    char            *pData      = RK_NULL;
     RK_S32           s32Ret     = RK_SUCCESS;
     FILE            *fp         = RK_NULL;
     char             name[256]  = {0};
@@ -195,17 +231,47 @@ void* venc_get_stream(void *pArgs) {
             return RK_NULL;
         }
     }
-    stFrame.pstPack = reinterpret_cast<VENC_PACK_S *>(malloc(sizeof(VENC_PACK_S)));
+    if (pstCtx->u32OneStreamBuffer) {
+        stFrame.pstPack = reinterpret_cast<VENC_PACK_S *>(malloc(sizeof(VENC_PACK_S)));
+    } else {
+        stFrame.pstPack = reinterpret_cast<VENC_PACK_S *>(malloc(MAX_PACKET_NUM * sizeof(VENC_PACK_S)));
+    }
 
     while (!pstCtx->threadExit) {
+        if (pstCtx->u32OneStreamBuffer) {
+            stFrame.u32PackCount = 1;
+        } else {
+            stFrame.u32PackCount = MAX_PACKET_NUM;
+        }
         s32Ret = RK_MPI_VENC_GetStream(u32Ch, &stFrame, -1);
         if (s32Ret >= 0) {
             s32StreamCnt++;
-            RK_LOGD("get chn %d stream %d", u32Ch, s32StreamCnt);
-            if (pstCtx->dstFilePath != RK_NULL) {
-                pData = RK_MPI_MB_Handle2VirAddr(stFrame.pstPack->pMbBlk);
-                fwrite(pData, 1, stFrame.pstPack->u32Len, fp);
-                fflush(fp);
+            if (pstCtx->u32OneStreamBuffer) {  // simple pkt
+                for (RK_U32 i = 0; i < stFrame.pstPack->u32DataNum; i++) {
+                    RK_LOGD("get chn %d stream %d index %d type %d offset %d lenth %d", u32Ch, s32StreamCnt, i,
+                             stFrame.pstPack->stPackInfo[i].u32PackType,
+                             stFrame.pstPack->stPackInfo[i].u32PackOffset,
+                             stFrame.pstPack->stPackInfo[i].u32PackLength);
+                }
+                if (pstCtx->dstFilePath != RK_NULL) {
+                    pData = (char *)RK_MPI_MB_Handle2VirAddr(stFrame.pstPack->pMbBlk);
+                    fwrite(pData, 1, stFrame.pstPack->u32Len, fp);
+                    fflush(fp);
+                }
+            } else {  // multi pkt
+                for (RK_U32 i = 0; i < stFrame.u32PackCount; i++) {
+                    RK_LOGD("get chn(%d) stream(%d) packet(%d) eoi(%d) type(%d) offset(%d) lenth(%d)",
+                             u32Ch, s32StreamCnt, i,
+                             stFrame.pstPack[i].bFrameEnd,
+                             stFrame.pstPack[i].DataType,
+                             stFrame.pstPack[i].u32Offset,
+                             stFrame.pstPack[i].u32Len);
+                    if (pstCtx->dstFilePath != RK_NULL) {
+                        pData = (char *)RK_MPI_MB_Handle2VirAddr(stFrame.pstPack[i].pMbBlk);
+                        fwrite(pData + stFrame.pstPack[i].u32Offset, 1, stFrame.pstPack[i].u32Len, fp);
+                        fflush(fp);
+                    }
+                }
             }
             RK_MPI_VENC_ReleaseStream(u32Ch, &stFrame);
             if (stFrame.pstPack->bStreamEnd == RK_TRUE) {
@@ -216,7 +282,7 @@ void* venc_get_stream(void *pArgs) {
              if (pstCtx->threadExit) {
                 break;
              }
-
+             RK_LOGE("chn(%d) get stream err(0x%x)", u32Ch, s32Ret);
              usleep(1000llu);
         }
     }
@@ -530,6 +596,22 @@ RK_S32 unit_test_mpi_venc(TEST_VENC_CTX_S *ctx) {
             ctx->u32ChnIndex = u32Ch;
         }
 
+        if (ctx->enRcMode == 0) {
+            switch (ctx->u32DstCodec) {
+                case RK_VIDEO_ID_MJPEG:
+                    ctx->enRcMode = VENC_RC_MODE_MJPEGCBR;
+                break;
+                case RK_VIDEO_ID_AVC:
+                    ctx->enRcMode = VENC_RC_MODE_H264CBR;
+                break;
+                case RK_VIDEO_ID_HEVC:
+                    ctx->enRcMode = VENC_RC_MODE_H265CBR;
+                break;
+                default:
+                break;
+            }
+        }
+
         stAttr.stRcAttr.enRcMode = ctx->enRcMode;
         stAttr.stRcAttr.stH264Cbr.u32Gop = ctx->u32GopSize;
         stAttr.stRcAttr.stH264Cbr.u32BitRate = ctx->u32BitRateKb;
@@ -538,7 +620,7 @@ RK_S32 unit_test_mpi_venc(TEST_VENC_CTX_S *ctx) {
         TEST_VENC_SET_StatTime(&stAttr.stRcAttr, ctx->u32StatTime);
 
         stAttr.stVencAttr.enType = (RK_CODEC_ID_E)ctx->u32DstCodec;
-        stAttr.stVencAttr.u32Profile = H264E_PROFILE_HIGH;
+        stAttr.stVencAttr.u32Profile = ctx->u32Profile;
         stAttr.stVencAttr.enPixelFormat = (PIXEL_FORMAT_E)ctx->u32SrcPixFormat;
         stAttr.stVencAttr.u32PicWidth = ctx->u32SrcWidth;
         stAttr.stVencAttr.u32PicHeight = ctx->u32SrcHeight;
@@ -562,6 +644,7 @@ RK_S32 unit_test_mpi_venc(TEST_VENC_CTX_S *ctx) {
             stAttr.stVencAttr.stAttrJpege.enReceiveMode = VENC_PIC_RECEIVE_SINGLE;
         }
 
+        venc_set_one_stream_buffer(ctx);
         RK_MPI_VENC_CreateChn(u32Ch, &stAttr);
 
         stParam.stCropCfg.enCropType = ctx->enCropType;
@@ -639,9 +722,16 @@ RK_S32 unit_test_mpi_venc(TEST_VENC_CTX_S *ctx) {
 
         if (stAttr.stVencAttr.enType == RK_VIDEO_ID_JPEG) {
             VENC_JPEG_PARAM_S stJpegParam;
-            memset(&stJpegParam, 0, sizeof(stJpegParam));
-            stJpegParam.u32Qfactor = 77;
+            RK_MPI_VENC_GetJpegParam(u32Ch, &stJpegParam);
+            if (ctx->u32FixQp)
+                stJpegParam.u32Qfactor = ctx->u32FixQp;
+            else
+                stJpegParam.u32Qfactor = 77;
             RK_MPI_VENC_SetJpegParam(u32Ch, &stJpegParam);
+        }
+
+        if (ctx->u32SceneMode) {
+            RK_MPI_VENC_SetSceneMode(u32Ch, (VENC_SCENE_MODE_E)ctx->u32SceneMode);
         }
 
         for (RK_U32 i = 0; i < ctx->u32RoiTestCount; i++) {
@@ -714,6 +804,30 @@ RK_S32 unit_test_mpi_venc(TEST_VENC_CTX_S *ctx) {
             RK_MPI_VENC_SetHierarchicalQp(u32Ch, &stHierarchicalQp);
         }
 
+        if (ctx->bCuPrediction) {
+            VENC_CU_PREDICTION_S stCuPrediction;
+            memset(&stCuPrediction, 0, sizeof(stCuPrediction));
+            stCuPrediction.enPredMode =  OPERATION_MODE_MANUAL;
+            stCuPrediction.u32Intra32Cost = 4;
+            stCuPrediction.u32Intra16Cost = 6;
+            stCuPrediction.u32Intra8Cost = 10;
+            stCuPrediction.u32Intra4Cost = 12;
+            stCuPrediction.u32Inter64Cost = 4;
+            stCuPrediction.u32Inter32Cost = 6;
+            stCuPrediction.u32Inter16Cost = 10;
+            stCuPrediction.u32Inter8Cost = 12;
+            RK_MPI_VENC_SetCuPrediction(u32Ch, &stCuPrediction);
+        }
+
+        if (ctx->bSkipBias) {
+            VENC_SKIP_BIAS_S stSkipBias;
+            memset(&stSkipBias, 0, sizeof(stSkipBias));
+            stSkipBias.bSkipBiasEn = RK_TRUE;
+            stSkipBias.u32SkipThreshOffset = 20;
+            stSkipBias.u32SkipForegroundCost = 12;
+            RK_MPI_VENC_SetSkipBias(u32Ch, &stSkipBias);
+        }
+
         if (ctx->bMjpegParam && stAttr.stVencAttr.enType == RK_VIDEO_ID_MJPEG) {
             VENC_MJPEG_PARAM_S stMjpegParam;
             memset(&stMjpegParam, 0, sizeof(stMjpegParam));
@@ -761,8 +875,8 @@ RK_S32 unit_test_mpi_venc(TEST_VENC_CTX_S *ctx) {
             VENC_SLICE_SPLIT_S stSliceSplit;
             RK_MPI_VENC_GetSliceSplit(u32Ch, &stSliceSplit);
             stSliceSplit.bSplitEnable = RK_TRUE;
-            stSliceSplit.u32SplitMode = 1;
-            stSliceSplit.u32SplitSize = 16;
+            stSliceSplit.u32SplitMode = ctx->u32SliceMode;
+            stSliceSplit.u32SplitSize = ctx->u32SliceSize;
             RK_MPI_VENC_SetSliceSplit(u32Ch, &stSliceSplit);
         }
 
@@ -839,7 +953,11 @@ static void mpi_venc_test_show_options(const TEST_VENC_CTX_S *ctx) {
     RK_PRINT("enable attach mb pool  : %d\n", ctx->bAttachPool);
     RK_PRINT("performance test       : %d\n", ctx->bPerformance);
     RK_PRINT("rc stat time           : %d\n", ctx->u32StatTime);
+    RK_PRINT("one stream buffer      : %d\n", ctx->u32OneStreamBuffer);
     RK_PRINT("slice split            : %d\n", ctx->bSliceSplit);
+    RK_PRINT("slice mode             : %d\n", ctx->u32SliceMode);
+    RK_PRINT("slice size             : %d\n", ctx->u32SliceSize);
+    RK_PRINT("profile                : %d\n", ctx->u32Profile);
 
     return;
 }
@@ -858,12 +976,15 @@ int main(int argc, const char **argv) {
     ctx.bFrameRate      = RK_FALSE;
     ctx.s32SnapPicCount = -1;
     ctx.u32GopSize      = 60;
-    ctx.enRcMode        = VENC_RC_MODE_H264CBR;
     ctx.u32BitRateKb    = 10 * 1024;
     ctx.bFullRange      = RK_TRUE;
     ctx.s32FrameRateIn  = 25;
     ctx.s32FrameRateOut = 10;
     ctx.u32StatTime = 3;
+    ctx.u32OneStreamBuffer = 1;
+    ctx.u32Profile = H264E_PROFILE_HIGH;
+    ctx.u32SliceMode = 2;
+    ctx.u32SliceSize = 6;
 
     struct argparse_option options[] = {
         OPT_HELP(),
@@ -916,9 +1037,9 @@ int main(int argc, const char **argv) {
         OPT_INTEGER('\0', "compress_mode", &(ctx.enCompressMode),
                     "set input compressmode(default 0; 0:MODE_NONE 1:AFBC_16x16)", NULL, 0, 0),
         OPT_INTEGER('\0', "rc_mode", &(ctx.enRcMode),
-                    "rc mode(0:NULL 1:H264CBR 2:H264VBR 3:H264AVBR 4:H264FIXQP"
+                    "rc mode(0:CBR 1:H264CBR 2:H264VBR 3:H264AVBR 4:H264FIXQP"
                     "5:MJPEGCBR 6:MJPEGVBR 7:MJPEGFIXQP"
-                    "8:H265CBR 9:H265VBR 10:H265AVBR 11:H265FIXQP default(1)",
+                    "8:H265CBR 9:H265VBR 10:H265AVBR 11:H265FIXQP default(0)",
                     NULL, 0, 0),
         OPT_INTEGER('b', "bit_rate", &(ctx.u32BitRateKb),
                     "bit rate kbps(h264/h265:range[3-200000],jpeg/mjpeg:range[5-800000] default(10*1024kb))",
@@ -943,6 +1064,10 @@ int main(int argc, const char **argv) {
                     "intra refresh enable(0:disable 1:enable) default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "hier_qp", &(ctx.bHierarchicalQp),
                     "hierarchical qp enable(0:disable 1:enable) default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "cu_pred", &(ctx.bCuPrediction),
+                    "cu prediction enable(0:disable 1:enable) default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "skip_bias", &(ctx.bSkipBias),
+                    "skip bias enable(0:disable 1:enable) default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "mjpeg_param", &(ctx.bMjpegParam),
                     "mjpeg param enable(0:disable 1:enable) default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "mjpeg_rc_param", &(ctx.bMjpegRcParam),
@@ -971,6 +1096,17 @@ int main(int argc, const char **argv) {
                     "rc statistic time(range[1,60]) default(3)", NULL, 0, 0),
         OPT_INTEGER('\0', "slice_split", &(ctx.bSliceSplit),
                     "slice split test(0:disable 1:enable) default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "one_stream_buffer", &(ctx.u32OneStreamBuffer),
+                    "stream out mode(0:multi packet 1:simple packet) default(1)", NULL, 0, 0),
+        OPT_INTEGER('\0', "profile", &(ctx.u32Profile),
+                    "profile(H264: 66:base 77:main 100:high default(100)) (H265: 0:main 1:main10 default(0))",
+                    NULL, 0, 0),
+        OPT_INTEGER('\0', "slice_mode", &(ctx.u32SliceMode),
+                    "slice mode(when slice_split enable valid) default(2),range[0,3]", NULL, 0, 0),
+        OPT_INTEGER('\0', "slice_size", &(ctx.u32SliceSize),
+                    "slice size(when slice_split enable valid) default(6)", NULL, 0, 0),
+        OPT_INTEGER('\0', "scene_mode", &(ctx.u32SceneMode),
+                    "set scene mode(0: ipc, 1: sport dv, 2: cvr), default(0)", NULL, 0, 0),
 
         OPT_END(),
     };

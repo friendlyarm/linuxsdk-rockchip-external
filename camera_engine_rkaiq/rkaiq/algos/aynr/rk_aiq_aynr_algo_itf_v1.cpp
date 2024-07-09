@@ -95,6 +95,10 @@ prepare(RkAiqAlgoCom* params)
         pAynrCtx->stYnrCalib=
             *(CalibDb_YNR_2_t*)(CALIBDB_GET_MODULE_PTR((void*)pCalibDb, ynr));
 		#endif
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR) {
+            return XCAM_RETURN_NO_ERROR;
+        }
 		pAynrCtx->isIQParaUpdate = true;
 	}
 	

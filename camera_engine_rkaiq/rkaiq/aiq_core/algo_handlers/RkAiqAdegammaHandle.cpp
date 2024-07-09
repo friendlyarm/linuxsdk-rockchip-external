@@ -147,7 +147,7 @@ XCamReturn RkAiqAdegammaHandleInt::processing() {
     RkAiqAlgoProcAdegamma* adegamma_proc_int        = (RkAiqAlgoProcAdegamma*)mProcInParam;
     RkAiqAlgoProcResAdegamma* adegamma_proc_res_int = (RkAiqAlgoProcResAdegamma*)mProcOutParam;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
+            (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     adegamma_proc_res_int->adegamma_proc_res = &shared->fullParams->mAdegammaParams->data()->result;
@@ -210,7 +210,7 @@ XCamReturn RkAiqAdegammaHandleInt::genIspResult(RkAiqFullParams* params,
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom     = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAdegamma* adegamma_com          = (RkAiqAlgoProcResAdegamma*)mProcOutParam;
-    rk_aiq_isp_adegamma_params_v20_t* degamma_param = params->mAdegammaParams->data().ptr();
+    rk_aiq_isp_adegamma_params_t* degamma_param = params->mAdegammaParams->data().ptr();
 
     if (!adegamma_com) {
         LOGD_ANALYZER("no adegamma result");

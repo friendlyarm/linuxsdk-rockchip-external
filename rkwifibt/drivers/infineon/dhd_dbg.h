@@ -1,9 +1,9 @@
 /*
  * Debug/trace/assert driver definitions for Dongle Host Driver.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -366,7 +366,7 @@ do {	\
 #define DHD_BLOG(cp, size)
 
 #define DHD_NONE(args)
-extern int dhd_msg_level;
+extern uint dhd_msg_level;
 #ifdef DHD_LOG_PRINT_RATE_LIMIT
 extern int log_print_threshold;
 #endif /* DHD_LOG_PRINT_RATE_LIMIT */
@@ -374,6 +374,168 @@ extern int log_print_threshold;
 #define DHD_RTT_MEM(args) DHD_LOG_MEM(args)
 #define DHD_RTT_ERR(args) DHD_ERROR(args)
 
+#if defined(WL_DHD_XR_LOG) && defined(DHD_LOG_DUMP)
+
+#ifndef XR_ROLE
+#ifdef WL_DHD_XR
+#define XR_MASTER 0
+#define XR_SLAVE 1
+#ifdef WL_DHD_XR_MASTER
+#define XR_ROLE XR_MASTER
+#else
+#define XR_ROLE XR_SLAVE
+#endif /* WL_DHD_XR_MASTER */
+#else
+#define XR_ROLE 0
+#endif /* WL_DHD_XR */
+#endif /* XR_ROLE */
+
+#ifdef DHD_ERROR
+#undef DHD_ERROR
+#define DHD_ERROR(args)	\
+do {	\
+	if (dhd_msg_level & DHD_ERROR_VAL) {	\
+		printk(KERN_INFO "%d ", XR_ROLE); \
+		pr_cont args;	\
+		DHD_LOG_DUMP_WRITE("[%s]: ", dhd_log_dump_get_timestamp());	\
+		DHD_LOG_DUMP_WRITE args;	\
+	}	\
+} while (0)
+#endif /* DHD_ERROR */
+
+#ifdef DHD_INFO
+#undef DHD_INFO
+#define DHD_INFO(args)	\
+do {	\
+	if (dhd_msg_level & DHD_INFO_VAL) { 	\
+		printk(KERN_INFO "%d ", XR_ROLE); \
+		pr_cont args;	\
+	}	\
+} while (0)
+#endif /* DHD_INFO */
+#ifdef DHD_TRACE
+#undef DHD_TRACE
+#define DHD_TRACE(args)	\
+do {	\
+	if (dhd_msg_level & DHD_TRACE_VAL) { 	\
+		printk(KERN_INFO "%d ", XR_ROLE);	\
+		pr_cont args;	\
+		DHD_LOG_DUMP_WRITE("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp());	\
+		DHD_LOG_DUMP_WRITE args;	\
+	}	\
+} while (0)
+#endif /* DHD_TRACE */
+
+#ifdef DHD_ERROR_MEM
+#undef DHD_ERROR_MEM
+#define DHD_ERROR_MEM(args) \
+do {	\
+	if (dhd_msg_level & DHD_ERROR_VAL) {	\
+		if (dhd_msg_level & DHD_ERROR_MEM_VAL) {	\
+			printk(KERN_INFO "%d ", XR_ROLE);	\
+			pr_cont args;	\
+		}	\
+		DHD_LOG_DUMP_WRITE("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp());	\
+		DHD_LOG_DUMP_WRITE args;	\
+	}	\
+} while (0)
+#endif /* DHD_ERROR_MEM */
+
+#ifdef DHD_IOVAR_MEM
+#undef DHD_IOVAR_MEM
+#define DHD_IOVAR_MEM(args) \
+do {	\
+	if (dhd_msg_level & DHD_ERROR_VAL) {	\
+		if (dhd_msg_level & DHD_IOVAR_MEM_VAL) {	\
+			printk(KERN_INFO "%d ", XR_ROLE);	\
+			pr_cont args;	\
+		}	\
+		DHD_LOG_DUMP_WRITE("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp());	\
+		DHD_LOG_DUMP_WRITE args;	\
+	}	\
+} while (0)
+#endif /* DHD_IOVAR_MEM */
+
+#ifdef DHD_LOG_MEM
+#undef DHD_LOG_MEM
+#define DHD_LOG_MEM(args) \
+do {	\
+	if (dhd_msg_level & DHD_ERROR_VAL) {	\
+		DHD_LOG_DUMP_WRITE("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp());	\
+		DHD_LOG_DUMP_WRITE args;	\
+	}	\
+} while (0)
+#endif /* DHD_LOG_MEM */
+
+#ifdef DHD_EVENT
+#undef DHD_EVENT
+#define DHD_EVENT(args) \
+do {	\
+	if (dhd_msg_level & DHD_EVENT_VAL) {	\
+		printk(KERN_INFO "%d ", XR_ROLE);	\
+		pr_cont args;	\
+		DHD_LOG_DUMP_WRITE("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp());	\
+		DHD_LOG_DUMP_WRITE args;	\
+	}	\
+} while (0)
+#endif /* DHD_EVENT */
+
+#ifdef DHD_PRSRV_MEM
+#undef DHD_PRSRV_MEM
+#define DHD_PRSRV_MEM(args) \
+do {	\
+	if (dhd_msg_level & DHD_EVENT_VAL) {	\
+		if (dhd_msg_level & DHD_PRSRV_MEM_VAL) { \
+			printk args;	\
+		}	\
+		DHD_LOG_DUMP_WRITE_PRSRV("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp()); \
+		DHD_LOG_DUMP_WRITE_PRSRV args;	\
+	}	\
+} while (0)
+#endif /* DHD_PRSRV_MEM */
+
+#ifdef DHD_ECNTR_LOG
+#undef DHD_ECNTR_LOG
+#define DHD_ECNTR_LOG(args) \
+do {	\
+	if (dhd_msg_level & DHD_EVENT_VAL) {	\
+		if (dhd_msg_level & DHD_MSGTRACE_VAL) {	\
+			printk(KERN_INFO "%d ", XR_ROLE);	\
+			pr_cont args;	\
+			DHD_LOG_DUMP_WRITE("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp()); \
+			DHD_LOG_DUMP_WRITE args;	\
+		}	\
+	}	\
+} while (0)
+#endif /* DHD_ECNTR_LOG */
+
+#ifdef DHD_ERROR_EX
+#undef DHD_ERROR_EX
+#define DHD_ERROR_EX(args)					\
+do {										\
+	if (dhd_msg_level & DHD_ERROR_VAL) {    \
+		printk(KERN_INFO "%d ", XR_ROLE);	\
+		pr_cont args;	\
+		DHD_LOG_DUMP_WRITE_EX("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp());	\
+		DHD_LOG_DUMP_WRITE_EX args;	\
+	}	\
+} while (0)
+#endif /* DHD_ERROR_EX */
+
+#ifdef DHD_MSGTRACE_LOG
+#undef DHD_MSGTRACE_LOG
+#define DHD_MSGTRACE_LOG(args)	\
+do {	\
+	if (dhd_msg_level & DHD_MSGTRACE_VAL) {	\
+		printk(KERN_INFO "%d ", XR_ROLE);	\
+		pr_cont args;	\
+	}	\
+	DHD_LOG_DUMP_WRITE("%d [%s]: ", XR_ROLE, dhd_log_dump_get_timestamp());	\
+	DHD_LOG_DUMP_WRITE args;	\
+} while (0)
+#endif /* DHD_MSGTRACE_LOG */
+
+#endif /* WL_DHD_XR_LOG && DHD_LOG_DUMP */
 /* Defines msg bits */
 #include <dhdioctl.h>
 

@@ -174,8 +174,6 @@ XCamReturn RkAiqAsharpHandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "asharp handle prepare failed");
 
-    RkAiqAlgoConfigAsharp* asharp_config_int = (RkAiqAlgoConfigAsharp*)mConfig;
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "asharp algo prepare failed");
@@ -188,12 +186,6 @@ XCamReturn RkAiqAsharpHandleInt::preProcess() {
     ENTER_ANALYZER_FUNCTION();
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-
-    RkAiqAlgoPreAsharp* asharp_pre_int        = (RkAiqAlgoPreAsharp*)mPreInParam;
-    RkAiqAlgoPreResAsharp* asharp_pre_res_int = (RkAiqAlgoPreResAsharp*)mPreOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     ret = RkAiqHandle::preProcess();
     if (ret) {
@@ -214,9 +206,6 @@ XCamReturn RkAiqAsharpHandleInt::processing() {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     RkAiqAlgoProcAsharp* asharp_proc_int        = (RkAiqAlgoProcAsharp*)mProcInParam;
-    RkAiqAlgoProcResAsharp* asharp_proc_res_int = (RkAiqAlgoProcResAsharp*)mProcOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     static int asharp_proc_framecnt             = 0;
     asharp_proc_framecnt++;
@@ -248,12 +237,6 @@ XCamReturn RkAiqAsharpHandleInt::postProcess() {
     ENTER_ANALYZER_FUNCTION();
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-
-    RkAiqAlgoPostAsharp* asharp_post_int        = (RkAiqAlgoPostAsharp*)mPostInParam;
-    RkAiqAlgoPostResAsharp* asharp_post_res_int = (RkAiqAlgoPostResAsharp*)mPostOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     ret = RkAiqHandle::postProcess();
     if (ret) {
@@ -288,12 +271,12 @@ XCamReturn RkAiqAsharpHandleInt::genIspResult(RkAiqFullParams* params,
         RkAiqAlgoProcResAsharp* asharp_rk = (RkAiqAlgoProcResAsharp*)asharp_com;
 
         LOGD_ASHARP("oyyf: %s:%d output isp param start\n", __FUNCTION__, __LINE__);
-        rk_aiq_isp_sharpen_params_v20_t* sharpen_params = params->mSharpenParams->data().ptr();
+        rk_aiq_isp_sharpen_params_t* sharpen_params = params->mSharpenParams->data().ptr();
         sharpen_params->update_mask |= RKAIQ_ISPP_SHARP_ID;
         memcpy(&sharpen_params->result, &asharp_rk->stAsharpProcResult.stSharpFix,
                sizeof(rk_aiq_isp_sharpen_t));
 
-        rk_aiq_isp_edgeflt_params_v20_t* edgeflt_params = params->mEdgefltParams->data().ptr();
+        rk_aiq_isp_edgeflt_params_t* edgeflt_params = params->mEdgefltParams->data().ptr();
         memcpy(&edgeflt_params->result, &asharp_rk->stAsharpProcResult.stEdgefltFix,
                sizeof(rk_aiq_isp_edgeflt_t));
 

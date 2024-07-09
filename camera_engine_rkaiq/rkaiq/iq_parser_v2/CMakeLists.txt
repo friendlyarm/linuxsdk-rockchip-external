@@ -7,11 +7,18 @@ elseif (ARCH STREQUAL "aarch64")
 endif()
 
 set(J2S_SRC
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON_Utils.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s_utils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON_Utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s_utils.c
+    ${rk_aiq_SOURCE_DIR}/c_base/aiq_mutex.c
+    ${rk_aiq_SOURCE_DIR}/c_base/aiq_base.c
+    ${rk_aiq_SOURCE_DIR}/xcore/xcam_log.c
     )
+
+if (RKAIQ_NEWSTRUCT_TEST)
+	set(DEFINE_USE_NEWSTRUCT -DUSE_NEWSTRUCT=1 CACHE INTERNAL "Build with new structure")
+endif()
 
 #########################################################
 #               HEADER MACRO PREPROCESS                 #
@@ -19,7 +26,7 @@ set(J2S_SRC
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/output.h
     COMMAND ${CMAKE_C_COMPILER}
-    ${rk_aiq_SOURCE_DIR}/include/iq_parser_v2/RkAiqCalibDbTypesV2.h -E -C -o .temp.h ${ISP_HW_VERSION}
+    ${rk_aiq_SOURCE_DIR}/include/iq_parser_v2/RkAiqCalibDbTypesV2.h -E -C -o .temp.h ${ISP_HW_VERSION} ${DEFINE_USE_NEWSTRUCT}
     -I${rk_aiq_SOURCE_DIR}/
     -I${rk_aiq_SOURCE_DIR}/include
     -I${rk_aiq_SOURCE_DIR}/include/common
@@ -46,7 +53,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RkAiqCalibDbTypesV2_M4.h
 #########################################################
 add_custom_command(
     OUTPUT ${rk_aiq_BINARY_DIR}/.j2s_generated.h
-    COMMAND gcc ${J2S_HOST_CFLAGS} -DJ2S_ENABLE_DESC ${rk_aiq_SOURCE_DIR}/tools/iq_check/src/parser.c -o parser ${ISP_HW_VERSION}
+    COMMAND gcc ${J2S_HOST_CFLAGS} -DJ2S_ENABLE_DESC ${rk_aiq_SOURCE_DIR}/tools/iq_check/src/parser.c -o parser ${ISP_HW_VERSION} ${DEFINE_USE_NEWSTRUCT}
     -I${rk_aiq_SOURCE_DIR}/include/common
     -I${rk_aiq_SOURCE_DIR}/
     -I${rk_aiq_SOURCE_DIR}/include/uAPI2
@@ -62,23 +69,51 @@ add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/RkAiqCalibDbTypesV2_M4.h
     )
 
-#########################################################
-#                    BUILD HOST CODE2BIN tool               #
-#########################################################
 add_custom_target(
-    j2s_code2bin
-    COMMAND gcc ${J2S_HOST_CFLAGS} ${rk_aiq_SOURCE_DIR}/tools/iq_check/src/tobin.c -o tobin ${ISP_HW_VERSION} -DRKAIQ_HAVE_LSC_V3
-	-I${rk_aiq_BINARY_DIR}
+    parser_v2
+    COMMAND gcc ${J2S_HOST_CFLAGS} -DJ2S_ENABLE_DESC ${rk_aiq_SOURCE_DIR}/tools/iq_check/src/parser_v2.c -o parser_v2 ${ISP_HW_VERSION} ${DEFINE_USE_NEWSTRUCT}
     -I${rk_aiq_SOURCE_DIR}/include/common
     -I${rk_aiq_SOURCE_DIR}/
     -I${rk_aiq_SOURCE_DIR}/include/uAPI2
     -I${rk_aiq_SOURCE_DIR}/include/algos
     -I${rk_aiq_SOURCE_DIR}/include/iq_parser_v2
     -I${rk_aiq_SOURCE_DIR}/include/iq_parser_v2/j2s
+    -I${rk_aiq_SOURCE_DIR}/include
+    -I${rk_aiq_BINARY_DIR}
+
+    DEPENDS ${rk_aiq_BINARY_DIR}/.j2s_generated.h
+    )
+
+add_custom_command(
+    OUTPUT ${rk_aiq_BINARY_DIR}/.j2s_generated_v2.h
+    COMMAND ${rk_aiq_SOURCE_DIR}/tools/iq_check/script/headerprocess.sh
+    ${rk_aiq_SOURCE_DIR}/include/iq_parser_v2/RkAiqCalibDbTypesV2.h
+    ${rk_aiq_BINARY_DIR}/.j2s_generated_v2.h
+    COMMAND ${rk_aiq_BINARY_DIR}/iq_parser_v2/parser_v2 >> ${rk_aiq_BINARY_DIR}/.j2s_generated_v2.h
+
+    DEPENDS parser_v2
+    )
+
+#########################################################
+#                    BUILD HOST CODE2BIN tool               #
+#########################################################
+add_custom_target(
+    j2s_code2bin
+    COMMAND gcc ${J2S_HOST_CFLAGS}
+	${rk_aiq_SOURCE_DIR}/tools/iq_check/src/tobin.c -o tobin ${ISP_HW_VERSION} -DRKAIQ_HAVE_LSC_V3 ${DEFINE_USE_NEWSTRUCT}
+
+	-I${rk_aiq_BINARY_DIR}
+    -I${rk_aiq_SOURCE_DIR}/include/common
+    -I${rk_aiq_SOURCE_DIR}/
+    -I${rk_aiq_SOURCE_DIR}/include/uAPI2
+    -I${rk_aiq_SOURCE_DIR}/include
+    -I${rk_aiq_SOURCE_DIR}/include/algos
+    -I${rk_aiq_SOURCE_DIR}/include/iq_parser_v2
+    -I${rk_aiq_SOURCE_DIR}/include/iq_parser_v2/j2s
 
 	COMMAND ./tobin ${rk_aiq_BINARY_DIR}/j2s_code2bin.bin
 	COMMAND cd ${rk_aiq_BINARY_DIR}/ && xxd -i j2s_code2bin.bin j2s_code2bin.h
-    DEPENDS ${rk_aiq_BINARY_DIR}/.j2s_generated.h
+    DEPENDS ${rk_aiq_BINARY_DIR}/.j2s_generated_v2.h
     )
 
 #########################################################
@@ -86,10 +121,12 @@ add_custom_target(
 #########################################################
 add_custom_target(
     j2s_generated_optim
-    COMMAND gcc ${J2S_HOST_CFLAGS} ${rk_aiq_SOURCE_DIR}/tools/iq_check/src/j2s_generated_optim.c -o j2s_generated_optim ${ISP_HW_VERSION}
+    COMMAND gcc ${J2S_HOST_CFLAGS} ${rk_aiq_SOURCE_DIR}/tools/iq_check/src/j2s_generated_optim.c -o j2s_generated_optim ${ISP_HW_VERSION} ${DEFINE_USE_NEWSTRUCT}
+
 	-I${rk_aiq_BINARY_DIR}
     -I${rk_aiq_SOURCE_DIR}/include/common
     -I${rk_aiq_SOURCE_DIR}/
+    -I${rk_aiq_SOURCE_DIR}/include
     -I${rk_aiq_SOURCE_DIR}/include/uAPI2
     -I${rk_aiq_SOURCE_DIR}/include/algos
     -I${rk_aiq_SOURCE_DIR}/include/iq_parser_v2
@@ -104,21 +141,24 @@ add_custom_target(
 #########################################################
 add_custom_target(
     j2s_parser
-	COMMAND g++ -std=gnu++11 -DJ2S_ENABLE_DESC -DCOMPILE_TEMPLATE -o dump ${J2S_SRC} ${ISP_HW_VERSION}
+	COMMAND g++ -std=gnu++11 -DJ2S_ENABLE_DESC -DCOMPILE_TEMPLATE -o dump -pthread ${J2S_SRC} ${ISP_HW_VERSION} ${DEFINE_USE_NEWSTRUCT}
     ${rk_aiq_SOURCE_DIR}/tools/iq_check/src/dump.cpp
     -I${rk_aiq_SOURCE_DIR}/include/common
     -I${rk_aiq_SOURCE_DIR}/
     -I${rk_aiq_SOURCE_DIR}/include/uAPI2
+    -I${rk_aiq_SOURCE_DIR}/include
     -I${rk_aiq_SOURCE_DIR}/include/algos
     -I${rk_aiq_SOURCE_DIR}/include/iq_parser_v2
     -I${rk_aiq_SOURCE_DIR}/include/iq_parser_v2/j2s
+    -I${rk_aiq_SOURCE_DIR}/include/xcore
+    -I${rk_aiq_SOURCE_DIR}/xcore
     -I${rk_aiq_BINARY_DIR}/
 
     COMMAND ./dump --template > .j2s_template.json
     COMMAND cp ${rk_aiq_SOURCE_DIR}/tools/iq_check/script/dump_template.sh ./
     COMMAND ./dump_template.sh
     ${rk_aiq_BINARY_DIR}/j2s_generated_template_json.h
-	DEPENDS ${rk_aiq_BINARY_DIR}/.j2s_generated.h
+	DEPENDS ${rk_aiq_BINARY_DIR}/.j2s_generated_v2.h
 	DEPENDS j2s_generated_optim
     )
 
@@ -137,6 +177,12 @@ endif ()
 if (${ISP_HW_VERSION} STREQUAL "-DISP_HW_V32_LITE")
     set(IQFILES_DIR_INTERNAL "${rk_aiq_SOURCE_DIR}/iqfiles/isp32_lite")
 endif ()
+if (${ISP_HW_VERSION} STREQUAL "-DISP_HW_V39")
+    set(IQFILES_DIR_INTERNAL "${rk_aiq_SOURCE_DIR}/iqfiles/isp39")
+endif ()
+if (${ISP_HW_VERSION} STREQUAL "-DISP_HW_V33")
+    set(IQFILES_DIR_INTERNAL "${rk_aiq_SOURCE_DIR}/iqfiles/isp33")
+endif ()
 
 add_custom_target(
     j2s4b
@@ -153,13 +199,49 @@ add_custom_target(
 	DEPENDS j2s_parser
     )
 
+#build dev j2s4b-dev
+if (RKAIQ_J2S4B_DEV)
+	# if user has not define CMAKE_INSTALL_PREFIX, do not install dev_bin to
+	# avoid of compile error for buildroot
+	if (${CMAKE_INSTALL_PREFIX} STREQUAL "/usr")
+		set(make_is_install make -C dev_bin)
+	else ()
+		set(make_is_install make -C dev_bin install)
+	endif()
+add_custom_target(
+    j2s4b_dev
+    COMMAND ${CMAKE_COMMAND}
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    -DCMAKE_PROGRAM_PATH=${CMAKE_PROGRAM_PATH}
+    -DCMAKE_SYSROOT=${CMAKE_SYSROOT}
+    -DCMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}
+    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
+    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+    -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
+    -DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}
+    -DRKAIQ_J2S4B_DEV=TRUE
+    -DROOT_PROJ_BIN_DIR:STRING=${rk_aiq_BINARY_DIR}
+    -DRKAIQ_IQFILES_DIR:STRING="${IQFILES_DIR_INTERNAL}"
+    -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH="${rk_aiq_BINARY_DIR}/bin"
+    -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+    -DRKAIQ_TARGET_ARCH=${ARCH}
+    -DANDROID_ABI=${ANDROID_ABI}
+    -B"dev_bin"
+    -H"${rk_aiq_SOURCE_DIR}/tools/j2s4b"
+    COMMAND ${CMAKE_COMMAND} --build dev_bin
+    COMMAND ${make_is_install}
+	DEPENDS j2s_parser
+    )
+endif()
+
 SET(IQ_PARSERV2_SRC
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON_Utils.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s_utils.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/RkAiqCalibDbV2.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/scene/scene_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON_Utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s_utils.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/RkAiqCalibDbV2.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/scene/scene_manager.c
     )
 
 SET(RK_AIQ_SRC ${RK_AIQ_SRC} ${IQ_PARSERV2_SRC} PARENT_SCOPE)

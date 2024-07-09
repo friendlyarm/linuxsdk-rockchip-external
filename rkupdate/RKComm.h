@@ -101,6 +101,10 @@ typedef struct
 //#define EMMC_DRIVER_DEV_LBA "/dev/block/mmcblk0"
 #define EMMC_DRIVER_DEV_LBA "/dev/mmcblk0"
 #define EMMC_POINT_NAME "emmc_point_name"
+#define UFS_SDA_NAME	"/dev/sda"
+#define UFS_SDB_NAME	"/dev/sdb"
+#define UFS_SDC_NAME	"/dev/sdc"
+#define UFS_SDD_NAME	"/dev/sdd"
 
 #define READ_SECTOR_IO          _IOW('r', READ_SECTOR, unsigned int)
 #define WRITE_SECTOR_IO         _IOW('r', WRITE_SECTOR, unsigned int)
@@ -166,6 +170,7 @@ public:
     virtual int RKU_TestDeviceReady(DWORD *dwTotal = NULL, DWORD *dwCurrent = NULL, BYTE bySubCode = TU_NONE_SUBCODE) = 0;
     virtual int RKU_WriteLBA(DWORD dwPos, DWORD dwCount, BYTE *lpBuffer, BYTE bySubCode = RWMETHOD_IMAGE) = 0;
     virtual int RKU_LoaderWriteLBA(DWORD dwPos, DWORD dwCount, BYTE *lpBuffer, BYTE bySubCode = RWMETHOD_IMAGE) = 0;
+    virtual int RKU_WriteUfsLoader(DWORD dwPos, DWORD dwCount, BYTE* lpBuffer, BYTE bySubCode = RWMETHOD_IMAGE) = 0;
     virtual int RKU_WriteSector(DWORD dwPos, DWORD dwCount, BYTE *lpBuffer) = 0;
     virtual int RKU_EndWriteSector(BYTE *lpBuffer) = 0;
     virtual int RKU_GetLockFlag(BYTE *lpBuffer) = 0;
@@ -173,11 +178,14 @@ public:
     virtual void RKU_ReopenLBAHandle() = 0;
     virtual int RKU_ShowNandLBADevice() = 0;
     virtual bool RKU_IsEmmcFlash() = 0;
+    virtual bool RKU_IsUfs() = 0;
     CRKComm(CRKLog *pLog);
     virtual ~CRKComm();
 protected:
     CRKLog *m_log;
     bool m_bEmmc;
+    bool m_ufs;
+    long long m_FlashSize;
     int m_hDev;
     int m_hLbaDev;
 private:
@@ -197,6 +205,7 @@ public:
     virtual int RKU_TestDeviceReady(DWORD *dwTotal = NULL, DWORD *dwCurrent = NULL, BYTE bySubCode = TU_NONE_SUBCODE);
     virtual int RKU_WriteLBA(DWORD dwPos, DWORD dwCount, BYTE *lpBuffer, BYTE bySubCode = RWMETHOD_IMAGE);
     virtual int RKU_LoaderWriteLBA(DWORD dwPos, DWORD dwCount, BYTE *lpBuffer, BYTE bySubCode = RWMETHOD_IMAGE);
+    virtual int RKU_WriteUfsLoader(DWORD dwPos, DWORD dwCount, BYTE* lpBuffer, BYTE bySubCode = RWMETHOD_IMAGE);
     virtual int RKU_WriteSector(DWORD dwPos, DWORD dwCount, BYTE *lpBuffer);
     virtual int RKU_EndWriteSector(BYTE *lpBuffer);
     virtual int RKU_GetLockFlag(BYTE *lpBuffer);
@@ -204,6 +213,7 @@ public:
     virtual void RKU_ReopenLBAHandle();
     virtual int RKU_ShowNandLBADevice();
     virtual bool RKU_IsEmmcFlash();
+    virtual bool RKU_IsUfs();
     CRKUsbComm(CRKLog *pLog);
     ~CRKUsbComm();
 

@@ -69,6 +69,9 @@ static XCamReturn prepare(RkAiqAlgoCom* params) {
         pAgicCtx->full_param.gic_v21 = calibv2_agic_calib_V21;
         GicV2CalibToAttr(calibv2_agic_calib_V21, &pAgicCtx->attr.v2);
 #endif
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
 
         pAgicCtx->calib_changed = true;
     }

@@ -91,10 +91,14 @@ prepare(RkAiqAlgoCom* params)
             (CalibDbV2_CNRV30_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCalibDbV2, cnr_v30));
         pAcnrCtx->cnr_v30 = *cnr_v30;
 #endif
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
         pAcnrCtx->isIQParaUpdate = true;
         pAcnrCtx->isReCalculate |= 1;
 
     }
+
     AcnrV30_result_t ret = Acnr_Prepare_V30(pAcnrCtx, &pCfgParam->stAcnrConfig);
     if(ret != ACNRV30_RET_SUCCESS) {
         result = XCAM_RETURN_ERROR_FAILED;
@@ -167,6 +171,11 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
     if(ret != ACNRV30_RET_SUCCESS) {
         result = XCAM_RETURN_ERROR_FAILED;
         LOGE_ANR("%s: ANRPreProcess failed (%d)\n", __FUNCTION__, ret);
+    }
+
+    if (pAcnrProcParams == NULL) {
+        LOGD_ANR("%s:%d pointer pAcnrProcParams is NULL, return bypass", __FUNCTION__, __LINE__);
+        return XCAM_RETURN_BYPASS;
     }
 
     LOGD_ANR("%s:%d init:%d hdr mode:%d  \n",

@@ -50,7 +50,11 @@ static void guide(void)
 	printf("\t-otpkey        Function of otpkey\n");
 	printf("\t-mem           Maximum buffer size requested by crypto mem alloc, test until alloc failed\n");
 	printf("\t-random        Function of get random\n");
-	printf("\t-throughput    Throughput of all ciphers, MB/s\n");
+	printf("\t-throughput=mode  Throughput of all ciphers, MB/s\n");
+	printf("\t               0 for dma_fd (default)\n");
+	printf("\t               1 for virt\n");
+	printf("\t               2 for otp\n");
+	printf("\t               3 for all \n");
 	printf("\t-stress [cnt]  stress cnt times of all cipher/hash/hmac\n");
 }
 
@@ -59,6 +63,7 @@ int main(int argc, char *argv[])
 	int opt;
 	int option_index = 0;
 	int stress_cnt = 1;
+	int throughput_mode = 0;
 	int verbose = 1;
 	static struct option long_options[] = {
 		{"all",		0,	NULL,	ALL},
@@ -70,7 +75,7 @@ int main(int argc, char *argv[])
 		{"otpkey",	0,	NULL,	OTPKEY},
 		{"mem",		0,	NULL,	MEM},
 		{"random",	0,	NULL,	RANDOM},
-		{"throughput",	0,	NULL,	THROUGHPUT},
+		{"throughput",	optional_argument,	NULL,	THROUGHPUT},
 		{"stress",	1,	NULL,	STRESS},
 		{"multi",	0,	NULL,	MULTI},
 		{"rsa",		0,	NULL,	RSA},
@@ -120,7 +125,18 @@ int main(int argc, char *argv[])
 			test_random();
 			break;
 		case THROUGHPUT:
-			test_throughput();
+			if (optarg != NULL)
+				throughput_mode = atoi(optarg);
+
+			printf("throughput_mode = %d\n", throughput_mode);
+
+			if (throughput_mode >= T_MAX) {
+				printf("throughput_mode = %d is not support\n", throughput_mode);
+				guide();
+				return -1;
+			}
+
+			test_throughput(throughput_mode);
 			break;
 		case STRESS:
 			stress_cnt = atoi(optarg);

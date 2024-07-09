@@ -247,5 +247,99 @@ XCamReturn RkAiqAwbV32HandleInt::writeAwbIn(rk_aiq_uapiV2_awb_wrtIn_attr_t att) 
     return ret;
 }
 
+XCamReturn RkAiqAwbV32HandleInt::setWbV32IQAutoExtPara(const rk_aiq_uapiV2_Wb_Awb_IqAtExtPa_V32_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapiV2_awb_SetIQAutoExtPara(mAlgoCtx, att, false);
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAwbV32HandleInt::getWbV32IQAutoExtPara(rk_aiq_uapiV2_Wb_Awb_IqAtExtPa_V32_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+    rk_aiq_uapiV2_awb_GetIQAutoExtPara(mAlgoCtx, att);
+    //att->sync.done = true;
+    mCfgMutex.unlock();
+#endif
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAwbV32HandleInt::setWbV32IQAutoPara(const rk_aiq_uapiV2_Wb_Awb_IqAtPa_V32_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapiV2_awb_SetIQAutoPara(mAlgoCtx, att, false);
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAwbV32HandleInt::getWbV32IQAutoPara(rk_aiq_uapiV2_Wb_Awb_IqAtPa_V32_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+    rk_aiq_uapiV2_awb_GetIQAutoPara(mAlgoCtx, att);
+    //att->sync.done = true;
+    mCfgMutex.unlock();
+#endif
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+XCamReturn RkAiqAwbV32HandleInt::awbIqMap2Main( rk_aiq_uapiV2_awb_Slave2Main_Cfg_t att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapiV2_awb_IqMap2Main(mAlgoCtx, att, false);
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAwbV32HandleInt::setAwbPreWbgain( const float att[4]) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapiV2_awb_SetPreWbgain(mAlgoCtx, att, false);
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
 
 }  // namespace RkCam

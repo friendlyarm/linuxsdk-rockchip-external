@@ -1,9 +1,9 @@
 /*
  * Linux OS Independent Layer
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -34,14 +34,6 @@
 
 #include <typedefs.h>
 #define DECLSPEC_ALIGN(x)	__attribute__ ((aligned(x)))
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 1))
-#include <linux/time64.h>
-struct timeval {
-	long	tv_sec;		/* seconds */
-	long	tv_usec;	/* microseconds */
-};
-void do_gettimeofday(struct timeval *tv);
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 1) */
 /* Linux Kernel: File Operations: start */
 extern void * osl_os_open_image(char * filename);
 extern int osl_os_get_image_block(char * buf, int len, void * image);
@@ -454,9 +446,20 @@ extern uint64 osl_systztime_us(void);
 
 /* map/unmap physical to virtual I/O */
 #if !defined(CONFIG_MMC_MSM7X00A)
-#define	REG_MAP(pa, size)	ioremap((unsigned long)(pa), (unsigned long)(size))
+/* REG_MAP: Arguments type casted to 'unsigned long' for 32 bit variables.
+ * REG_MAP_XBIT: Arguments not type casted, because variables of type like
+ * phys_addr_t can be 32 or 64 bit depending on platform architecture.
+*/
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0))
+#define	REG_MAP(pa, size)	ioremap_nocache((unsigned long)(pa), (unsigned long)(size))
+#define	REG_MAP_XBIT(pa, size)	ioremap_nocache((pa), (size))
+#else
+#define REG_MAP(pa, size)	ioremap((unsigned long)(pa), (unsigned long)(size))
+#define REG_MAP_XBIT(pa, size)	ioremap((pa), (size))
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0) */
 #else
 #define REG_MAP(pa, size)       (void *)(0)
+#define REG_MAP_XBIT(pa, size)	(void *)(0)
 #endif /* !defined(CONFIG_MMC_MSM7X00A */
 #define	REG_UNMAP(va)		iounmap((va))
 
@@ -584,7 +587,7 @@ typedef struct osl_timer {
 
 typedef void (*linux_timer_fn)(ulong arg);
 
-extern osl_timer_t * osl_timer_init(osl_t *osh, const char *name, void (*fn)(void *arg), void *arg);
+extern osl_timer_t * osl_timer_init(osl_t *osh, const char *name, void (*fn)(ulong arg), void *arg);
 extern void osl_timer_add(osl_t *osh, osl_timer_t *t, uint32 ms, bool periodic);
 extern void osl_timer_update(osl_t *osh, osl_timer_t *t, uint32 ms, bool periodic);
 extern bool osl_timer_del(osl_t *osh, osl_timer_t *t);

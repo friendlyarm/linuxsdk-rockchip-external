@@ -7,9 +7,9 @@
  *
  * $Id: sbchipc.h 701163 2017-05-23 22:21:03Z $
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -4655,5 +4655,13 @@ created for 4369
 /* FISCtrlStatus */
 #define PMU_CLEAR_FIS_DONE_SHIFT	1u
 #define PMU_CLEAR_FIS_DONE_MASK	(1u << PMU_CLEAR_FIS_DONE_SHIFT)
+
+/* 28nm OTP size */
+#define OTPSIZE_28NM_15 15
+#define OTPSIZE_28NM_5 5
+#define OTPSIZE_28NM_15_ROWS 512
+#define OTPSIZE_28NM_15_COLS 32
+#define OTPSIZE_28NM_5_ROWS 192
+#define OTPSIZE_28NM_5_COLS 32
 
 #endif	/* _SBCHIPC_H */

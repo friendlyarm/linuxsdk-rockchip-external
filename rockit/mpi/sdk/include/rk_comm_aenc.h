@@ -19,6 +19,7 @@ typedef struct rkAENC_ATTR_CODEC_S {
     AUDIO_BIT_WIDTH_E enBitwidth;
     RK_U32            u32Channels;
     RK_U32            u32SampleRate;
+    RK_U32            u32BitPerCodedSample;  /* codewords */
     RK_U32            u32Bitrate;
 
     RK_U32            u32Resv[4];  /* resv for user */
@@ -30,6 +31,7 @@ typedef struct rkAENC_CHN_ATTR_S {
     RK_U32            u32BufCount;     /* encode buffer count */
 
     AENC_ATTR_CODEC_S stCodecAttr;
+    RK_U32            u32Depth;
 } AENC_CHN_ATTR_S;
 
 typedef struct rkAENC_ENCODER_S {

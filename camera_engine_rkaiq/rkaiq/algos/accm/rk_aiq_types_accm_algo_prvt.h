@@ -34,6 +34,27 @@ typedef struct ccm_3ares_info_s{
     float awbGain[2];
 } ccm_3ares_info_t;
 
+typedef struct {
+    unsigned int name_len;
+    int matused_len;
+    unsigned int matused_str_len[CCM_PROFILES_NUM_MAX];
+} accmCof_initlen_info_t;
+
+typedef struct {
+    float scl;
+    uint8_t tbl_idx;
+} yalp_tbl_info_t;
+
+typedef struct {
+    unsigned int name_len;
+    unsigned int illu_len;
+} matrixall_initlen_info_t;
+typedef struct {
+    int accmCof_initlen;
+    accmCof_initlen_info_t accmCof_initlen_info[CCM_ILLUMINATION_MAX];
+    int matrixall_initlen;
+    matrixall_initlen_info_t matrixall_initlen_info[CCM_ILLUMINATION_MAX*CCM_PROFILES_NUM_MAX];
+} ccm_calib_initlen_info_t;
 
 typedef struct accm_rest_s {
     float fSaturation;
@@ -42,14 +63,17 @@ typedef struct accm_rest_s {
 #endif
     struct list_head problist;
     int dominateIlluProfileIdx;
-    const CalibDbV2_Ccm_Matrix_Para_t *pCcmProfile1;
-    const CalibDbV2_Ccm_Matrix_Para_t *pCcmProfile2;
+    char CcmProf1Name[25];
+    char CcmProf2Name[25];
     float undampedCcmMatrix[9];
     float undampedCcOffset[3];
     float fScale;
     float color_inhibition_level;
     float color_saturation_level;
     ccm_3ares_info_t res3a_info;
+    int illuNum;
+    ccm_calib_initlen_info_t ccm_calib_initlen_info;
+    yalp_tbl_info_t yalp_tbl_info;
 } accm_rest_t;
 
 typedef struct illu_node_s {
@@ -65,22 +89,24 @@ typedef struct prob_node_s {
 
 typedef struct accm_context_s {
 #if RKAIQ_HAVE_CCM_V1
-    const CalibDbV2_Ccm_Para_V2_t* ccm_v1;
+    CalibDbV2_Ccm_Para_V2_t* ccm_v1;
     rk_aiq_ccm_cfg_t ccmHwConf;
     rk_aiq_ccm_attrib_t mCurAtt;
 #endif
 #if RKAIQ_HAVE_CCM_V2
-    const CalibDbV2_Ccm_Para_V32_t* ccm_v2;
+    CalibDbV2_Ccm_Para_V32_t* ccm_v2;
     rk_aiq_ccm_cfg_v2_t ccmHwConf_v2;
     rk_aiq_ccm_v2_attrib_t mCurAttV2;
+#endif
+#if RKAIQ_HAVE_CCM_V3
+    CalibDbV2_Ccm_Para_V39_t* ccm_v3;
+    rk_aiq_ccm_cfg_v2_t ccmHwConf_v2;
+    rk_aiq_ccm_v3_attrib_t mCurAttV3;
 #endif
     const CalibDbV2_Ccm_Matrix_Para_t *pCcmMatrixAll[CCM_ILLUMINATION_MAX][CCM_PROFILES_NUM_MAX];// reorder para //to do, change to pointer
     accm_sw_info_t accmSwInfo;
     accm_rest_t accmRest;
     unsigned int count;
-#if RKAIQ_ACCM_ILLU_VOTE
-    CalibDbV2_Ccm_Tuning_Para_t ccm_tune;
-#endif
     //ctrl & api
     uint8_t invarMode; // 0- mode change 1- mode unchange
     bool updateAtt;

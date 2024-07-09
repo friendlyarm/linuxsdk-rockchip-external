@@ -54,8 +54,10 @@ static void mpi_vpss_test_show_options(const TEST_VPSS_CTX_S *ctx) {
     RK_PRINT("output pixel format    : %d\n", ctx->s32DstPixFormat);
     RK_PRINT("fixed rotation         : %d\n", ctx->s32Rotation);
     RK_PRINT("any rotation angle     : %d\n", ctx->s32RotationEx);
-    RK_PRINT("enable mirror          : %d\n", ctx->s32Mirror);
-    RK_PRINT("enable flip            : %d\n", ctx->s32Flip);
+    RK_PRINT("group mirror enable    : %d\n", ctx->s32GrpMirror);
+    RK_PRINT("group flip enable      : %d\n", ctx->s32GrpFlip);
+    RK_PRINT("chn mirror enable      : %d\n", ctx->s32Mirror);
+    RK_PRINT("chn flip enable        : %d\n", ctx->s32Flip);
     RK_PRINT("enable attach mb pool  : %d\n", ctx->bAttachPool);
 }
 
@@ -141,9 +143,13 @@ RK_S32 main(int argc, const char **argv) {
                     "channel mode, default(0), 0: USER, 1: AUTO, 2: PASS-THOUGH", NULL, 0, 0),
         OPT_INTEGER('d', "chn_depth", &(ctx.u32ChnDepth),
                     "channel output depth, default(8)", NULL, 0, 0),
-        OPT_INTEGER('\0', "mirror", &(ctx.s32Mirror),
+        OPT_INTEGER('\0', "grp_mirror", &(ctx.s32GrpMirror),
+                    "picture group mirror, default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "grp_flip", &(ctx.s32GrpFlip),
+                    "picture group flip, default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "chn_mirror", &(ctx.s32Mirror),
                     "picture mirror, default(0)", NULL, 0, 0),
-        OPT_INTEGER('\0', "flip", &(ctx.s32Flip),
+        OPT_INTEGER('\0', "chn_flip", &(ctx.s32Flip),
                     "picture flip, default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "src_chn_rate", &(ctx.s32SrcChnRate),
                     "src vpss channel frame rate, default(-1)", NULL, 0, 0),

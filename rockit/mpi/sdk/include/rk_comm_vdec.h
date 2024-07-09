@@ -87,6 +87,7 @@ typedef struct rkVDEC_CHN_ATTR_S {
     RK_U32 u32FrameBufSize; /* RW; frame buffer size(Byte) */
     RK_U32 u32FrameBufCnt; /* RW; frame buffer cnt */
     RK_U32 u32StreamBufCnt; /* RW; stream buffer cnt */
+    RK_U32 u32FrameBufDepth; /* RW; frame buffer depth */
     union {
         VDEC_ATTR_VIDEO_S stVdecVideoAttr; /* structure with video ( h264/h265) */
     };

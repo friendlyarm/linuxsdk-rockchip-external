@@ -1,7 +1,7 @@
 /*
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -324,6 +324,9 @@ typedef float64 float_t;
 
 /* Suppress unused parameter warning */
 #define UNUSED_PARAMETER(x) (void)(x)
+
+/* Suppress unused function warning */
+#define UNUSED_FUNCTION(x) (void)(x)
 
 /* Avoid warning for discarded const or volatile qualifier in special cases (-Wcast-qual) */
 #define DISCARD_QUAL(ptr, type) ((type *)(uintptr)(ptr))

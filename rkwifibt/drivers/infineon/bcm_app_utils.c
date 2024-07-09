@@ -3,9 +3,9 @@
  * Contents are wifi-specific, used by any kernel or app-level
  * software that might want wifi things as it grows.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -36,6 +36,9 @@
 #ifdef BCMDRIVER
 #include <osl.h>
 #define strtoul(nptr, endptr, base) bcm_strtoul((nptr), (endptr), (base))
+#ifdef tolower
+#undef tolower
+#endif
 #define tolower(c) (bcm_isupper((c)) ? ((c) + 'a' - 'A') : (c))
 #else /* BCMDRIVER */
 #include <stdio.h>

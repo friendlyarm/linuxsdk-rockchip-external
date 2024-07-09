@@ -8,9 +8,9 @@ extern "C"
 
 #include <drm_fourcc.h>
 
-int initDrmDsp();
+int initDrmDsp(int crtc_num);
 int drmDspFrame(int srcWidth, int srcHeight, int dispWidth, int dispHeight,
-		int dmaFd, void* dstAddr, int fmt);
+                int dmaFd, void* srcAddr, int fmt);
 void deInitDrmDsp();
 #ifdef __cplusplus
 }

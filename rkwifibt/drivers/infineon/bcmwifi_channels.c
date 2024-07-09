@@ -3,9 +3,9 @@
  * Contents are wifi-specific, used by any kernel or app-level
  * software that might want wifi things as it grows.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -38,6 +38,9 @@
 #ifdef BCMDRIVER
 #include <osl.h>
 #define strtoul(nptr, endptr, base) bcm_strtoul((nptr), (endptr), (base))
+#ifdef tolower
+#undef tolower
+#endif
 #define tolower(c) (bcm_isupper((c)) ? ((c) + 'a' - 'A') : (c))
 #else
 #include <stdio.h>
@@ -159,6 +162,35 @@ static const uint8 wf_5g_160m_chans[] =
 {50, 114};
 #define WF_NUM_5G_160M_CHANS \
 	(sizeof(wf_5g_160m_chans)/sizeof(uint8))
+
+/* Based on IEEE 802.11ax D6.1 */
+/* 40MHz channels in 6GHz band */
+static const uint8 wf_6g_40m_chans[] =
+{3, 11, 19, 27, 35, 43, 51, 59, 67, 75, 83, 91, 99,
+107, 115, 123, 131, 139, 147, 155, 163, 171, 179,
+187, 195, 203, 211, 219, 227};
+#define WF_NUM_6G_40M_CHANS \
+	(sizeof(wf_6g_40m_chans)/sizeof(uint8))
+
+/* 80MHz channels in 6GHz band */
+static const uint8 wf_6g_80m_chans[] =
+{7, 23, 39, 55, 71, 87, 103, 119, 135, 151, 167, 183,
+199, 215};
+#define WF_NUM_6G_80M_CHANS \
+	(sizeof(wf_6g_80m_chans)/sizeof(uint8))
+
+/* 160MHz channels in 6GHz band */
+static const uint8 wf_6g_160m_chans[] =
+{15, 47, 79, 111, 143, 175, 207};
+#define WF_NUM_6G_160M_CHANS \
+	(sizeof(wf_6g_160m_chans)/sizeof(uint8))
+
+/* 6GHz PSC channels */
+uint8 wf_6g_psc_chans[] =
+{5, 21, 37, 53, 69, 85, 101, 117, 133, 149, 165, 181,
+197, 213, 229};
+#define WF_NUM_6G_PSC_CHANS \
+	(sizeof(wf_6g_psc_chans)/sizeof(uint8))
 
 /* opclass and channel information for US. Table E-1 */
 static const uint16 opclass_data[] = {
@@ -645,10 +677,9 @@ wf_chspec_malformed(chanspec_t chanspec)
 	uint chspec_bw = CHSPEC_BW(chanspec);
 	uint chspec_ch = CHSPEC_CHANNEL(chanspec);
 
-	/* must be 2G or 5G band */
 	if (CHSPEC_IS2G(chanspec)) {
-		/* must be valid bandwidth */
-		if (!BW_LE40(chspec_bw)) {
+		/* must be valid bandwidth and channel */
+		if (!BW_LE40(chspec_bw) || (chspec_ch > CH_MAX_2G_CHANNEL)) {
 			return TRUE;
 		}
 	} else if (CHSPEC_IS5G(chanspec)) {
@@ -671,8 +702,29 @@ wf_chspec_malformed(chanspec_t chanspec)
 			/* invalid bandwidth */
 			return TRUE;
 		}
+	} else if (CHSPEC_IS6G(chanspec)) {
+		if (chspec_bw == WL_CHANSPEC_BW_8080) {
+			uint ch1_id, ch2_id;
+
+			/* channel IDs in 80+80 must be in range */
+			ch1_id = CHSPEC_CHAN1(chanspec);
+			ch2_id = CHSPEC_CHAN2(chanspec);
+			if (ch1_id >= WF_NUM_6G_80M_CHANS || ch2_id >= WF_NUM_6G_80M_CHANS)
+				return TRUE;
+
+		} else if (chspec_bw == WL_CHANSPEC_BW_20 || chspec_bw == WL_CHANSPEC_BW_40 ||
+		           chspec_bw == WL_CHANSPEC_BW_80 || chspec_bw == WL_CHANSPEC_BW_160) {
+
+			if (chspec_ch > MAXCHANNEL) {
+				return TRUE;
+			}
+		} else {
+			/* invalid bandwidth */
+			return TRUE;
+		}
 	} else {
-		/* must be 2G or 5G band */
+
+		/* must be 2G, 5G or 6G band */
 		return TRUE;
 	}
 
@@ -786,6 +838,11 @@ wf_chspec_valid(chanspec_t chanspec)
 			}
 		}
 	}
+#ifdef WL_6E
+	else if (CHSPEC_IS6G(chanspec)) {
+		return TRUE;
+	}
+#endif /* WL_6E */
 
 	return FALSE;
 }
@@ -962,6 +1019,61 @@ wf_channel2chspec(uint pri_ch, uint bw)
 
 	return chspec;
 }
+
+#ifdef WL_6E
+/* return chanspec for 6E given primary 20MHz channel and bandwidth
+ * return 0 on error. Below separate func added for 6E as 6ghz channels
+ * overlap with legacy bands and there was no way in older func to
+ * differentiate this through just channel number and bw.
+ */
+uint16
+wf_channel2chspec6E(uint pri_ch, uint bw)
+{
+	uint16 chspec = 0;
+	const uint8 *center_ch = NULL;
+	int num_ch = 0;
+	int sb = -1;
+	int i = 0;
+
+	chspec = WL_CHANSPEC_BAND_6G;
+	chspec |= bw;
+
+	if (bw == WL_CHANSPEC_BW_40) {
+		center_ch = wf_6g_40m_chans;
+		num_ch = WF_NUM_6G_40M_CHANS;
+		bw = 40;
+	} else if (bw == WL_CHANSPEC_BW_80) {
+		center_ch = wf_6g_80m_chans;
+		num_ch = WF_NUM_6G_80M_CHANS;
+		bw = 80;
+	} else if (bw == WL_CHANSPEC_BW_160) {
+		center_ch = wf_6g_160m_chans;
+		num_ch = WF_NUM_6G_160M_CHANS;
+		bw = 160;
+	} else if (bw == WL_CHANSPEC_BW_20) {
+		chspec |= pri_ch;
+		return chspec;
+	} else {
+		return 0;
+	}
+
+	for (i = 0; i < num_ch; i ++) {
+		sb = channel_to_sb(center_ch[i], pri_ch, bw);
+		if (sb >= 0) {
+			chspec |= center_ch[i];
+			chspec |= (sb << WL_CHANSPEC_CTL_SB_SHIFT);
+			break;
+		}
+	}
+
+	/* check for no matching sb/center */
+	if (sb < 0) {
+		return 0;
+	}
+
+	return chspec;
+}
+#endif /* WL_6E */
 
 /*
  * This function returns the chanspec for the primary 40MHz of an 80MHz or wider channel.

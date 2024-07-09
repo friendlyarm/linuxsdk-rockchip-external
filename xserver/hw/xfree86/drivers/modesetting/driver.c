@@ -477,9 +477,6 @@ Probe(DriverPtr drv, int flags)
     const char *dev;
     ScrnInfoPtr scrn = NULL;
 
-    if (XSERVER_PLATFORM_BUS || XSERVER_LIBPCIACCESS)
-        return FALSE;
-
     /* For now, just bail out for PROBE_DETECT. */
     if (flags & PROBE_DETECT)
         return FALSE;
@@ -730,8 +727,12 @@ msBlockHandler(ScreenPtr pScreen, void *timeout)
     }
 
     if (!access(getenv("XSERVER_FREEZE_DISPLAY") ? : "", F_OK)) {
+        ms->freeze = TRUE;
         *((int *)timeout) = 16;
         return FALSE;
+    } else if (ms->freeze) {
+        ms->freeze = FALSE;
+        drmmode_set_desired_modes(pScrn, &ms->drmmode, TRUE, FALSE);
     }
 
     pScreen->BlockHandler = ms->BlockHandler;
@@ -1336,7 +1337,7 @@ msEnableSharedPixmapFlipping(RRCrtcPtr crtc, PixmapPtr front, PixmapPtr back)
         return FALSE;
 
     /* Not supported if we can't flip */
-    if (!ms->drmmode.pageflip)
+    if (ms->freeze || !ms->drmmode.pageflip)
         return FALSE;
 
     /* Not currently supported with reverse PRIME */
@@ -1850,7 +1851,7 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
 
 #ifdef GLAMOR_HAS_GBM
     if (ms->drmmode.glamor) {
-        ms->adaptor = glamor_xv_init(pScreen, 16);
+        ms->adaptor = glamor_xv_init(pScreen, 128);
         if (ms->adaptor != NULL) {
             xf86XVScreenInit(pScreen, &ms->adaptor, 1);
         } else {
@@ -1861,7 +1862,7 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
 #endif
 
     if (ms->drmmode.exa) {
-        ms->adaptor = ms_exa_xv_init(pScreen, 16);
+        ms->adaptor = ms_exa_xv_init(pScreen, 128);
         if (ms->adaptor != NULL) {
             xf86XVScreenInit(pScreen, &ms->adaptor, 1);
         } else {

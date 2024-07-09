@@ -92,6 +92,8 @@ int setCcmAttrib(rk_aiq_sys_ctx_t* ctx, char* data)
     return rk_aiq_user_api_accm_SetAttrib(ctx, (rk_aiq_ccm_attrib_t*) data);
 #elif RKAIQ_HAVE_CCM_V2
     return rk_aiq_user_api_accm_v2_SetAttrib(ctx, (rk_aiq_ccm_v2_attrib_t*) data);
+#elif RKAIQ_HAVE_CCM_V3
+    return rk_aiq_user_api_accm_v3_SetAttrib(ctx, (rk_aiq_ccm_v3_attrib_t*) data);
 #else
     return -1;
 #endif
@@ -103,6 +105,8 @@ int getCcmAttrib(rk_aiq_sys_ctx_t* ctx, char* data)
     return rk_aiq_user_api_accm_GetAttrib(ctx, (rk_aiq_ccm_attrib_t *)data);
 #elif RKAIQ_HAVE_CCM_V2
     return rk_aiq_user_api_accm_v2_GetAttrib(ctx, (rk_aiq_ccm_v2_attrib_t *)data);
+#elif RKAIQ_HAVE_CCM_V3
+    return rk_aiq_user_api_accm_v3_GetAttrib(ctx, (rk_aiq_ccm_v3_attrib_t *)data);
 #else
     return -1;
 #endif
@@ -157,11 +161,83 @@ int get3AStatsBlk(rk_aiq_sys_ctx_t* ctx, char* data)
     rk_aiq_isp_stats_t* new_stats = NULL;
     rk_aiq_uapi_sysctl_get3AStatsBlk(ctx, &new_stats, -1);
     if (new_stats) {
-      memcpy(data, new_stats, sizeof(rk_aiq_isp_stats_t));
-      rk_aiq_uapi_sysctl_release3AStatsRef(ctx, new_stats);
-      return 0;
+        memcpy(data, new_stats, sizeof(rk_aiq_isp_stats_t));
+        rk_aiq_uapi_sysctl_release3AStatsRef(ctx, new_stats);
+        return 0;
     } else {
-      return -1;
+        return -1;
+    }
+}
+
+static void copyRkAiqExpParamComb_t2RkToolExpParam_t(RkAiqExpParamComb_t *in, RkToolExpParam_t *out)
+{
+    // copy exp_real_params
+    out->exp_real_params.analog_gain      = in->exp_real_params.analog_gain;
+    out->exp_real_params.dcg_mode         = in->exp_real_params.dcg_mode;
+    out->exp_real_params.digital_gain     = in->exp_real_params.digital_gain;
+    out->exp_real_params.integration_time = in->exp_real_params.integration_time;
+    out->exp_real_params.iso              = in->exp_real_params.iso;
+    out->exp_real_params.isp_dgain        = in->exp_real_params.isp_dgain;
+    out->exp_real_params.longfrm_mode     = in->exp_real_params.longfrm_mode;
+
+    // copy exp_sensor_params
+    out->exp_sensor_params.analog_gain_code_global = in->exp_sensor_params.analog_gain_code_global;
+    out->exp_sensor_params.coarse_integration_time = in->exp_sensor_params.coarse_integration_time;
+    out->exp_sensor_params.digital_gain_global     = in->exp_sensor_params.digital_gain_global;
+    out->exp_sensor_params.fine_integration_time   = in->exp_sensor_params.fine_integration_time;
+    out->exp_sensor_params.isp_digital_gain        = in->exp_sensor_params.isp_digital_gain;
+}
+
+int getTool3AStats(rk_aiq_sys_ctx_t* ctx, char* data)
+{
+    int ret = 0;
+    rk_aiq_isp_stats_t new_stats;
+    rk_aiq_isp_tool_stats_t *tool_stats = (rk_aiq_isp_tool_stats_t *)data;
+    ret = (int)rk_aiq_uapi_sysctl_get3AStats(ctx, &new_stats);
+    if (ret == 0) {
+        tool_stats->version = 0x0100;
+        tool_stats->frameID = new_stats.frame_id;
+        // copy linearExp
+#ifdef USE_NEWSTRUCT
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats_v25.ae_exp.LinearExp, &tool_stats->linearExp);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats_v25.ae_exp.HdrExp[0], &tool_stats->hdrExp[0]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats_v25.ae_exp.HdrExp[1], &tool_stats->hdrExp[1]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats_v25.ae_exp.HdrExp[2], &tool_stats->hdrExp[2]);
+#else
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats.ae_exp.LinearExp, &tool_stats->linearExp);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats.ae_exp.HdrExp[0], &tool_stats->hdrExp[0]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats.ae_exp.HdrExp[1], &tool_stats->hdrExp[1]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats.aec_stats.ae_exp.HdrExp[2], &tool_stats->hdrExp[2]);
+#endif
+    }
+    return ret;
+}
+
+int getTool3AStatsBlk(rk_aiq_sys_ctx_t* ctx, char* data)
+{
+    int ret = 0;
+    rk_aiq_isp_stats_t* new_stats = NULL;
+    rk_aiq_isp_tool_stats_t *tool_stats = (rk_aiq_isp_tool_stats_t *)data;
+    rk_aiq_uapi_sysctl_get3AStatsBlk(ctx, &new_stats, -1);
+    if (new_stats) {
+        tool_stats->version = 0x0100;
+        tool_stats->frameID = new_stats->frame_id;
+        // copy linearExp
+#ifdef USE_NEWSTRUCT
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats_v25.ae_exp.LinearExp, &tool_stats->linearExp);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats_v25.ae_exp.HdrExp[0], &tool_stats->hdrExp[0]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats_v25.ae_exp.HdrExp[1], &tool_stats->hdrExp[1]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats_v25.ae_exp.HdrExp[2], &tool_stats->hdrExp[2]);
+#else
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats.ae_exp.LinearExp, &tool_stats->linearExp);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats.ae_exp.HdrExp[0], &tool_stats->hdrExp[0]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats.ae_exp.HdrExp[1], &tool_stats->hdrExp[1]);
+        copyRkAiqExpParamComb_t2RkToolExpParam_t(&new_stats->aec_stats.ae_exp.HdrExp[2], &tool_stats->hdrExp[2]);
+#endif
+        rk_aiq_uapi_sysctl_release3AStatsRef(ctx, new_stats);
+        return 0;
+    } else {
+        return -1;
     }
 }
 
@@ -169,10 +245,10 @@ int writeAwbIn(rk_aiq_sys_ctx_t* ctx, char* data)
 {
     static int call_cnt = 0;
     rk_aiq_uapiV2_awb_wrtIn_attr_t attr;
-    memset(&attr,0,sizeof(rk_aiq_uapiV2_awb_wrtIn_attr_t));
+    memset(&attr, 0, sizeof(rk_aiq_uapiV2_awb_wrtIn_attr_t));
     attr.en = true;
     attr.mode = 1; // 1 means rgb ,0 means raw
     attr.call_cnt = call_cnt++;
-    sprintf(attr.path,"/tmp");
+    sprintf(attr.path, "/tmp");
     return rk_aiq_user_api2_awb_WriteAwbIn(ctx, attr);
 }

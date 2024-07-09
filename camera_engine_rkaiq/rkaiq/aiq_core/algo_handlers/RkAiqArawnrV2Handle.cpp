@@ -226,8 +226,6 @@ XCamReturn RkAiqArawnrV2HandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "arawnr handle prepare failed");
 
-    RkAiqAlgoConfigArawnrV2* aynr_config_int = (RkAiqAlgoConfigArawnrV2*)mConfig;
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "arawnr algo prepare failed");
@@ -240,12 +238,6 @@ XCamReturn RkAiqArawnrV2HandleInt::preProcess() {
     ENTER_ANALYZER_FUNCTION();
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-
-    RkAiqAlgoPreArawnrV2* arawnr_pre_int        = (RkAiqAlgoPreArawnrV2*)mPreInParam;
-    RkAiqAlgoPreResArawnrV2* arawnr_pre_res_int = (RkAiqAlgoPreResArawnrV2*)mPreOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     ret = RkAiqHandle::preProcess();
     if (ret) {
@@ -265,14 +257,14 @@ XCamReturn RkAiqArawnrV2HandleInt::processing() {
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
-    RkAiqAlgoProcArawnrV2* arawnr_proc_int        = (RkAiqAlgoProcArawnrV2*)mProcInParam;
+    RkAiqAlgoProcArawnrV2* arawnr_proc_int      = (RkAiqAlgoProcArawnrV2*)mProcInParam;
     RkAiqAlgoProcResArawnrV2* arawnr_proc_res_int = (RkAiqAlgoProcResArawnrV2*)mProcOutParam;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
+            (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
-    arawnr_proc_res_int->stArawnrProcResult.st2DFix = &shared->fullParams->mBaynrV21Params->data()->result.st2DParam;
-    arawnr_proc_res_int->stArawnrProcResult.st3DFix = &shared->fullParams->mBaynrV21Params->data()->result.st3DParam;
+    arawnr_proc_res_int->stArawnrProcResult.st2DFix = &shared->fullParams->mBaynrParams->data()->result.st2DParam;
+    arawnr_proc_res_int->stArawnrProcResult.st3DFix = &shared->fullParams->mBaynrParams->data()->result.st3DParam;
 
     ret = RkAiqHandle::processing();
     if (ret) {
@@ -301,12 +293,6 @@ XCamReturn RkAiqArawnrV2HandleInt::postProcess() {
     ENTER_ANALYZER_FUNCTION();
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-
-    RkAiqAlgoPostArawnrV2* arawnr_post_int        = (RkAiqAlgoPostArawnrV2*)mPostInParam;
-    RkAiqAlgoPostResArawnrV2* arawnr_post_res_int = (RkAiqAlgoPostResArawnrV2*)mPostOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     ret = RkAiqHandle::postProcess();
     if (ret) {
@@ -340,7 +326,7 @@ XCamReturn RkAiqArawnrV2HandleInt::genIspResult(RkAiqFullParams* params,
     if (!this->getAlgoId()) {
         LOGD_ANR("oyyf: %s:%d output isp param start\n", __FUNCTION__, __LINE__);
 
-        rk_aiq_isp_baynr_params_v21_t* rawnr_param = params->mBaynrV21Params->data().ptr();
+        rk_aiq_isp_baynr_params_t* rawnr_param = params->mBaynrParams->data().ptr();
         if (sharedCom->init) {
             rawnr_param->frame_id = 0;
         } else {
@@ -352,14 +338,14 @@ XCamReturn RkAiqArawnrV2HandleInt::genIspResult(RkAiqFullParams* params,
             rawnr_param->sync_flag = mSyncFlag;
             // copy from algo result
             // set as the latest result
-            cur_params->mBaynrV21Params = params->mBaynrV21Params;
+            cur_params->mBaynrParams = params->mBaynrParams;
             rawnr_param->is_update = true;
             LOGD_ANR("[%d] params from algo", mSyncFlag);
         } else if (mSyncFlag != rawnr_param->sync_flag) {
             rawnr_param->sync_flag = mSyncFlag;
             // copy from latest result
-            if (cur_params->mBaynrV21Params.ptr()) {
-                rawnr_param->result = cur_params->mBaynrV21Params->data()->result;
+            if (cur_params->mBaynrParams.ptr()) {
+                rawnr_param->result = cur_params->mBaynrParams->data()->result;
                 rawnr_param->is_update = true;
             } else {
                 LOGE_ANR("no latest params !");

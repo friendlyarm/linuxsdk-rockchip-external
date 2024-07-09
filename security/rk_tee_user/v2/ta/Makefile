@@ -33,7 +33,8 @@ TA_DIRS := create_fail_test \
 	   socket \
 	   supp_plugin \
 	   rk_test \
-	   extra_app
+	   extra_app \
+	   rk_anti_copy_board
 
 ifeq ($(CFG_SECURE_DATA_PATH),y)
 TA_DIRS += sdp_basic

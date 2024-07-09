@@ -16,28 +16,31 @@ module_choice()
     echo "***                                                ***"
     echo "***          *****************************         ***"
     echo "***          *    ROCKCHIPS TEST TOOLS   *         ***"
-    echo "***          *  V2.1 updated on 20230413 *         ***"
+    echo "***          *  V2.4 updated on 20240403 *         ***"
     echo "***          *****************************         ***"
     echo "***                                                ***"
     echo "*****************************************************"
 
 
     echo "*****************************************************"
-    echo "ddr test:              1 (ddr stress test)"
-    echo "cpu test:              2 (cpu stress test)"
-    echo "gpu test:              3 (gpu stress test)"
-    echo "npu test:              4 (npu stress test)"
-    echo "suspend_resume test:   5 (suspend resume)"
-    echo "reboot test:           6 (auto reboot test)"
-    echo "power lost test:       7 (power lost test)"
-    echo "flash stress test:     8 (flash stress test)"
-    echo "recovery test:         9 (recovery wipe all test)"
+    echo "ddr test:             1 (ddr stress test)"
+    echo "cpu test:             2 (cpu stress test)"
+    echo "gpu test:             3 (gpu stress test)"
+    echo "npu test:             4 (npu stress test)"
+    echo "suspend_resume test:  5 (suspend resume)"
+    echo "reboot test:          6 (auto reboot test)"
+    echo "power lost test:      7 (power lost test)"
+    echo "flash stress test:    8 (flash stress test)"
+    echo "recovery test:        9 (recovery wipe all test)"
     echo "audio test:           10 (audio test)"
     echo "camera test:          11 (camera test)"
     echo "video test:           12 (video test)"
-    echo "bluetooth test:       13 (bluetooth on off test)"
-    echo "wifi test:            14 (wifi on off test)"
-    echo "chromium test:        15 (chromium with video test)"
+    echo "bluetooth test:       13 (bluetooth test)"
+    echo "wifi test:            14 (wifi test)"
+    echo "wifibt config test:   15 (wifibt config test)"
+    echo "pcie test:            16 (pcie test)"
+    echo "chromium test:        17 (chromium with video test)"
+    echo "benchmark test:       18 (unixbench、glmark2...)"
     echo "*****************************************************"
 
     read -t 30 -p "please input test moudle: " MODULE_CHOICE
@@ -80,12 +83,39 @@ suspend_resume_test()
 
 wifi_test()
 {
-    bash ${CURRENT_DIR}/wifibt/wifi_onoff.sh &
+    bin=/usr/bin/rkwifibt_app_test;
+    if [ -e "$bin" ]; then
+        $bin WiFi
+    else
+        echo "WiFiBT testfile don't exist! fallback to wifi_onff.sh"
+        bash ${CURRENT_DIR}/wifibt/wifi_onoff.sh &
+    fi
 }
 
 bluetooth_test()
 {
-    bash ${CURRENT_DIR}/wifibt/bt_onoff.sh &
+    bin=/usr/bin/rkwifibt_app_test;
+    if [ -e "$bin" ]; then
+        $bin BT
+    else
+        echo "WiFiBT testfile don't exist! fallback to bt_onoff.sh"
+        bash ${CURRENT_DIR}/wifibt/bt_onoff.sh &
+    fi
+}
+
+wifibt_config_test()
+{
+    bin=/usr/bin/rkwifibt_app_test;
+    if [ -e "$bin" ]; then
+        $bin Network
+    else
+        echo "WiFiBT testfile don't exist! "
+    fi
+}
+
+pcie_test()
+{
+    bash ${CURRENT_DIR}/pcie/pcie_test.sh
 }
 
 audio_test()
@@ -120,6 +150,11 @@ gpu_test()
 chromium_test()
 {
     bash ${CURRENT_DIR}/chromium/chromium_test.sh
+}
+
+benchmark_test()
+{
+    bash ${CURRENT_DIR}/benchmark/benchmark_test.sh
 }
 
 power_lost_test()
@@ -177,7 +212,16 @@ module_test()
 			wifi_test
 			;;
 		15)
+			wifibt_config_test
+			;;
+		16)
+			pcie_test
+			;;
+		17)
 			chromium_test
+			;;
+		18)
+			benchmark_test
 			;;
 	esac
 }

@@ -244,6 +244,7 @@ TEEC_Result rk_test(uint32_t invoke_command)
 		break;
 	case  OTP_SIZE:
 		res = invoke_otp_size(&session, &operation, &error_origin);
+		break;
 	case  TRNG_READ:
 		res = invoke_trng_read(&session, &operation, &error_origin);
 		break;

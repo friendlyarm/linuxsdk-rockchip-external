@@ -225,6 +225,12 @@ RK_S32 TEST_VPSS_ModInit(TEST_VPSS_CTX_S *pstCtx) {
         goto __FAILED;
     }
 
+    s32Ret = RK_MPI_VPSS_SetGrpMirror(pstCtx->s32GrpIndex, (RK_BOOL)pstCtx->s32GrpMirror, (RK_BOOL)pstCtx->s32GrpFlip);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("RK_MPI_VPSS_SetGrpMirror(grp:%d) failed with %#x! mirror %d, flip %d.",
+                pstCtx->s32GrpIndex, s32Ret, pstCtx->s32GrpMirror, pstCtx->s32GrpFlip);
+    }
+
     for (RK_S32 chnIndex = 0; chnIndex < pstCtx->s32ChnNum; chnIndex++) {
         s32Ret = TEST_VPSS_ChnSetZoom(pstCtx->s32GrpIndex, chnIndex, pstCtx->s32ChnCropRatio, pstCtx->bChnCropEn);
         if (s32Ret != RK_SUCCESS) {
@@ -303,7 +309,7 @@ RK_S32 TEST_VPSS_ModSendFrame(TEST_VPSS_CTX_S *pstCtx) {
         goto __FAILED;
     }
     if (pstCtx->srcFileName != RK_NULL) {
-        s32Ret = TEST_COMM_FileReadOneFrame(pstCtx->srcFileName, &stVideoFrame);
+        s32Ret = TEST_COMM_FileReadOneFrame(pstCtx->srcFileName, &stVideoFrame, 0);
         if (s32Ret != RK_SUCCESS) {
             goto __FAILED;
         }

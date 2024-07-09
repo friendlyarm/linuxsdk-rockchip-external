@@ -1,10 +1,9 @@
 /* GStreamer
  *
  * Copyright (C) 2016 Igalia
+ * Copyright (C) <2024> Rockchip Electronics Co., Ltd
  *
- * Authors:
- *  Víctor Manuel Jáquez Leal <vjaquez@igalia.com>
- *  Javier Martin <javiermartin@by.com.es>
+ * Based on kmssink
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -36,6 +35,10 @@ G_BEGIN_DECLS
 
 #ifndef DRM_FORMAT_NV15
 #define DRM_FORMAT_NV15 fourcc_code('N', 'V', '1', '5')
+#endif
+
+#ifndef DRM_FORMAT_NV20
+#define DRM_FORMAT_NV20 fourcc_code('N', 'V', '2', '0')
 #endif
 
 #ifndef DRM_FORMAT_YUV420_8BIT

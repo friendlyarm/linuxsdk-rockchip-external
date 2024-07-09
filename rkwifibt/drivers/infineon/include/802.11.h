@@ -1,9 +1,9 @@
 /*
  * Fundamental types and constants relating to 802.11
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -509,17 +509,23 @@ typedef struct dot11_wide_bw_channel dot11_wide_bw_chan_ie_t;
 #define DOT11_WIDE_BW_IE_LEN     3       /* length of IE data, not including 2 byte header */
 /** VHT Transmit Power Envelope IE data structure */
 BWL_PRE_PACKED_STRUCT struct dot11_vht_transmit_power_envelope {
-	uint8 id;				/* id DOT11_MNG_WIDE_BW_CHANNEL_SWITCH_ID */
+	uint8 id;				/* id DOT11_MNG_TRANSMIT_POWER_ENVELOPE_ID */
 	uint8 len;				/* length of IE */
 	uint8 transmit_power_info;
 	uint8 local_max_transmit_power_20;
 } BWL_POST_PACKED_STRUCT;
 typedef struct dot11_vht_transmit_power_envelope dot11_vht_transmit_power_envelope_ie_t;
 
-/* vht transmit power envelope IE length depends on channel width */
-#define DOT11_VHT_TRANSMIT_PWR_ENVELOPE_IE_LEN_40MHZ	1
-#define DOT11_VHT_TRANSMIT_PWR_ENVELOPE_IE_LEN_80MHZ	2
-#define DOT11_VHT_TRANSMIT_PWR_ENVELOPE_IE_LEN_160MHZ	3
+/* Transmit power envelope IE length depends on channel width */
+#define DOT11_TRANSMIT_PWR_ENVELOPE_IE_LEN_20MHZ	0
+#define DOT11_TRANSMIT_PWR_ENVELOPE_IE_LEN_40MHZ	1
+#define DOT11_TRANSMIT_PWR_ENVELOPE_IE_LEN_80MHZ	2
+#define DOT11_TRANSMIT_PWR_ENVELOPE_IE_LEN_160MHZ	3
+
+/* vht transmit power envelope IE length. (Keeping these for backward compatibility) */
+#define DOT11_VHT_TRANSMIT_PWR_ENVELOPE_IE_LEN_40MHZ	DOT11_TRANSMIT_PWR_ENVELOPE_IE_LEN_40MHZ
+#define DOT11_VHT_TRANSMIT_PWR_ENVELOPE_IE_LEN_80MHZ	DOT11_TRANSMIT_PWR_ENVELOPE_IE_LEN_80MHZ
+#define DOT11_VHT_TRANSMIT_PWR_ENVELOPE_IE_LEN_160MHZ	DOT11_TRANSMIT_PWR_ENVELOPE_IE_LEN_160MHZ
 
 BWL_PRE_PACKED_STRUCT struct dot11_obss_coex {
 	uint8	id;
@@ -1366,9 +1372,11 @@ typedef struct ccx_qfl_ie ccx_qfl_ie_t;
 
 #define	DOT11_SC_DECLINED		37	/* request declined */
 #define	DOT11_SC_INVALID_PARAMS		38	/* One or more params have invalid values */
+#define DOT11_SC_INVALID_GROUP_CIPHER	41	/* invalid group cipher */
 #define DOT11_SC_INVALID_PAIRWISE_CIPHER	42 /* invalid pairwise cipher */
 #define	DOT11_SC_INVALID_AKMP		43	/* Association denied due to invalid AKMP */
 #define DOT11_SC_INVALID_RSNIE_CAP	45	/* invalid RSN IE capabilities */
+#define DOT11_SC_CIPHER_OUT_OF_POLICY	46	/* Association denied due to cipher out of policy */
 #define DOT11_SC_DLS_NOT_ALLOWED	48	/* DLS is not allowed in the BSS by policy */
 #define	DOT11_SC_INVALID_PMKID		53	/* Association denied due to invalid PMKID */
 #define	DOT11_SC_INVALID_MDID		54	/* Association denied due to invalid MDID */
@@ -1513,7 +1521,8 @@ typedef struct ccx_qfl_ie ccx_qfl_ie_t;
 #define	DOT11_MNG_VHT_OPERATION_ID		192	/* d11 mgmt VHT op id */
 #define	DOT11_MNG_EXT_BSSLOAD_ID		193	/* d11 mgmt VHT extended bss load id */
 #define DOT11_MNG_WIDE_BW_CHANNEL_SWITCH_ID	194	/* Wide BW Channel Switch IE */
-#define DOT11_MNG_VHT_TRANSMIT_POWER_ENVELOPE_ID 195	/* VHT transmit Power Envelope IE */
+#define DOT11_MNG_TRANSMIT_POWER_ENVELOPE_ID	195	/* VHT transmit Power Envelope IE */
+#define DOT11_MNG_VHT_TRANSMIT_POWER_ENVELOPE_ID (DOT11_MNG_TRANSMIT_POWER_ENVELOPE_ID)
 #define DOT11_MNG_CHANNEL_SWITCH_WRAPPER_ID	196	/* Channel Switch Wrapper IE */
 #define DOT11_MNG_AID_ID			197	/* Association ID  IE */
 #define	DOT11_MNG_OPER_MODE_NOTIF_ID		199	/* d11 mgmt VHT oper mode notif */
@@ -1641,6 +1650,7 @@ typedef struct ccx_qfl_ie ccx_qfl_ie_t;
 #define DOT11_BSS_MEMBERSHIP_HT         0xFF  /* Basic 0x80 + 127, HT Required to join */
 #define DOT11_BSS_MEMBERSHIP_VHT        0xFE  /* Basic 0x80 + 126, VHT Required to join */
 #define DOT11_BSS_MEMBERSHIP_HE         0xFD  /* Basic 0x80 + 125, HE Required to join */
+#define DOT11_BSS_MEMBERSHIP_SAE_H2E_ONLY         0xFB  /* Basic 0x80 + 123, H2E Required to join */
 
 /* ERP info element bit values */
 #define DOT11_MNG_ERP_LEN			1	/* ERP is currently 1 byte long */
@@ -1935,7 +1945,35 @@ typedef struct dot11_oper_mode_notif_ie dot11_oper_mode_notif_ie_t;
 #define DOT11_UWNM_ACTION_TIM			0
 #define DOT11_UWNM_ACTION_TIMING_MEASUREMENT	1
 
-#define DOT11_MNG_COUNTRY_ID_LEN 3
+/*
+ * Fixed length of country information element
+ *
+ * 1Byte: Tag
+ * 1Byte: Length
+ * 2Byte: Country string as per ISO 3166-1
+ * 1Byte: Environment regulation feild
+ */
+#define DOT11_MNG_COUNTRY_ID_LEN		3
+#define DOT11_MNG_COUNTRY_IE_FIXED_LEN		(TLV_HDR_LEN + DOT11_MNG_COUNTRY_ID_LEN)
+
+/*
+ * Length of one operating triplet field in country IE
+ *
+ * 1Byte: Operating Extension Identifier
+ * 1Byte: Operating class
+ * 1Byte: Coverage class
+ */
+#define DOT11_MNG_COUNTRY_IE_OPER_TRIP_LEN	3
+#define DOT11_MNG_COUNTRY_OPER_EXT_ID		255
+#define DOT11_MNG_COUNTRY_COVERAGE_CLASS	0
+/*
+ * Length of one subband triplet field in country IE
+ *
+ * 1Byte: First channel number
+ * 1Byte: Number of channels
+ * 1Byte: Maximum transmit power for this group of channels
+ */
+#define DOT11_MNG_COUNTRY_IE_SUBBAND_TRIP_LEN	3
 
 /* VHT category action types - 802.11ac D3.0 - 8.5.23.1 */
 #define DOT11_VHT_ACTION_CBF				0	/* Compressed Beamforming */
@@ -4435,6 +4473,9 @@ typedef struct vht_features_ie_hdr vht_features_ie_hdr_t;
 #define WFA_OUI_TYPE_MBO	0x16
 #define WFA_OUI_TYPE_MBO_OCE	0x16
 
+/* DPP authenticated key managment suite */
+#define WFA_AKM_DPP		2
+
 /* RSN authenticated key managment suite */
 #define RSN_AKM_NONE			0	/* None (IBSS) */
 #define RSN_AKM_UNSPECIFIED		1	/* Over 802.1x */
@@ -5067,6 +5108,15 @@ BWL_PRE_PACKED_STRUCT struct sae_token_container_ie {
 
 typedef struct sae_token_container_ie sae_token_container_ie_t;
 
+BWL_PRE_PACKED_STRUCT struct sae_rejected_groups_ie {
+	uint8 id;
+	uint8 len;
+	uint8 id_ext;
+	uint8 data[1]; /* WPA3 SAE Rejected groups */
+} BWL_POST_PACKED_STRUCT;
+
+typedef struct sae_rejected_groups_ie sae_rejected_groups_ie_t;
+
 /* 802.11u interworking access network options */
 #define IW_ANT_MASK					0x0f
 #define IW_INTERNET_MASK				0x10
@@ -5255,6 +5305,9 @@ typedef enum {
 	DOT11_5GHZ_40MHZ_CLASS_30	= 127,	/* Ch 153-161, upper */
 	DOT11_2GHZ_40MHZ_CLASS_32	= 83,	/* Ch 1-7,     lower */
 	DOT11_2GHZ_40MHZ_CLASS_33	= 84,	/* Ch 5-11,    upper */
+	DOT11_6GHZ_20MHZ_CLASS_131	= 131,	/* Ch 1-233  */
+	DOT11_6GHZ_40MHZ_CLASS_132	= 132,	/* Ch 3-227 */
+	DOT11_6GHZ_80MHZ_CLASS_133	= 133,	/* Ch 7-215 */
 } dot11_op_class_t;
 
 /* QoS map */

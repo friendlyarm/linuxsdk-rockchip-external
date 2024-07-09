@@ -2,9 +2,9 @@
  * Broadcom Dongle Host Driver (DHD), Linux-specific network interface
  * Basically selected code segments from usb-cdc.c and usb-rndis.c
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -300,14 +300,17 @@ dhd_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 
 int dhd_register_cpuhp_callback(dhd_info_t *dhd)
 {
-	int cpuhp_ret = 0;
+	dhd->cpuhp_setup_state = 0;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
-	cpuhp_ret = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "dhd",
+	dhd->cpuhp_setup_state = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "dhd",
 		dhd_cpu_startup_callback, dhd_cpu_teardown_callback);
 
-	if (cpuhp_ret < 0) {
+	if (dhd->cpuhp_setup_state < 0) {
 		DHD_ERROR(("%s(): cpuhp_setup_state failed %d RX LB won't happen \r\n",
-			__FUNCTION__, cpuhp_ret));
+			__FUNCTION__, dhd->cpuhp_setup_state));
+	} else {
+		DHD_INFO(("%s(): cpuhp_setup_state returned %d\n",
+			__FUNCTION__, dhd->cpuhp_setup_state));
 	}
 #else
 	/*
@@ -318,15 +321,20 @@ int dhd_register_cpuhp_callback(dhd_info_t *dhd)
 	dhd->cpu_notifier.notifier_call = dhd_cpu_callback;
 	register_hotcpu_notifier(&dhd->cpu_notifier); /* Register a callback */
 #endif /* LINUX_VERSION_CODE < 4.10.0 */
-	return cpuhp_ret;
+	return dhd->cpuhp_setup_state;
 }
 
 int dhd_unregister_cpuhp_callback(dhd_info_t *dhd)
 {
 	int ret = 0;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
-	/* Don't want to call tear down while unregistering */
-	cpuhp_remove_state_nocalls(CPUHP_AP_ONLINE_DYN);
+	DHD_INFO(("%s(): cpuhp_setup_state %d\n",
+		__FUNCTION__, dhd->cpuhp_setup_state));
+
+	if (dhd->cpuhp_setup_state >= 0) {
+		/* Don't want to call tear down while unregistering */
+		cpuhp_remove_state_nocalls(dhd->cpuhp_setup_state);
+	}
 #else
 	if (dhd->cpu_notifier.notifier_call != NULL) {
 		unregister_cpu_notifier(&dhd->cpu_notifier);
@@ -820,13 +828,21 @@ static void dhd_tx_compl_dispatcher_fn(struct work_struct * work)
 		container_of(work, struct dhd_info, tx_compl_dispatcher_work);
 	int cpu;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 	get_online_cpus();
+#else
+	cpus_read_lock();
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) */
 	cpu = atomic_read(&dhd->tx_compl_cpu);
 	if (!cpu_online(cpu))
 		dhd_tasklet_schedule(&dhd->tx_compl_tasklet);
 	else
 		dhd_tasklet_schedule_on(&dhd->tx_compl_tasklet, cpu);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 	put_online_cpus();
+#else
+	cpus_read_unlock();
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) */
 }
 #endif /* DHD_LB_TXC */
 
@@ -872,14 +888,22 @@ void dhd_rx_compl_dispatcher_fn(struct work_struct * work)
 		container_of(work, struct dhd_info, rx_compl_dispatcher_work);
 	int cpu;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 	get_online_cpus();
+#else
+	cpus_read_lock();
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) */
 	cpu = atomic_read(&dhd->rx_compl_cpu);
 	if (!cpu_online(cpu))
 		dhd_tasklet_schedule(&dhd->rx_compl_tasklet);
 	else {
 		dhd_tasklet_schedule_on(&dhd->rx_compl_tasklet, cpu);
 	}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 	put_online_cpus();
+#else
+	cpus_read_unlock();
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) */
 }
 #endif /* DHD_LB_RXC */
 
@@ -1116,7 +1140,11 @@ void dhd_rx_napi_dispatcher_fn(struct work_struct * work)
 #endif // endif
 	int cpu;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 	get_online_cpus();
+#else
+	cpus_read_lock();
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) */
 	cpu = atomic_read(&dhd->rx_napi_cpu);
 
 	if (!cpu_online(cpu))
@@ -1124,7 +1152,11 @@ void dhd_rx_napi_dispatcher_fn(struct work_struct * work)
 	else
 		dhd_napi_schedule_on(dhd, cpu);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 	put_online_cpus();
+#else
+	cpus_read_unlock();
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) */
 }
 
 /**

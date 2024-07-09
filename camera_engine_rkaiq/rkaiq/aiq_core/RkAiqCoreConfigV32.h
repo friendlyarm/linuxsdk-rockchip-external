@@ -53,6 +53,18 @@
 #include "aynr3/rk_aiq_aynr_algo_itf_v3.h"
 #include "aynrV22/rk_aiq_aynr_algo_itf_v22.h"
 #include "afd/rk_aiq_algo_afd_itf.h"
+#if defined(ISP_HW_V32) && USE_NEWSTRUCT
+#include "newStruct/demosaic/include/demosaic_algo_api.h"
+#include "newStruct/bayertnr/include/bayertnr_algo_api.h"
+#include "newStruct/gamma/include/gamma_algo_api.h"
+#include "newStruct/ynr/include/ynr_algo_api.h"
+#include "newStruct/drc/include/drc_algo_api.h"
+#include "newStruct/dehaze/include/dehaze_algo_api.h"
+#include "newStruct/cac/include/cac_algo_api.h"
+#include "newStruct/ldch/include/ldch_algo_api.h"
+#include "newStruct/merge/include/merge_algo_api.h"
+#include "newStruct/lsc/include/lsc_algo_api.h"
+#endif
 
 #if RKAIQ_ENABLE_CAMGROUP
 #include "algos_camgroup/abayer2dnrV23/rk_aiq_algo_camgroup_abayer2dnr_itf_v23.h"
@@ -64,6 +76,9 @@
 #include "algos_camgroup/awb/rk_aiq_algo_camgroup_awb_itf.h"
 #include "algos_camgroup/aynrV22/rk_aiq_algo_camgroup_aynr_itf_v22.h"
 #include "algos_camgroup/misc/rk_aiq_algo_camgroup_misc_itf.h"
+#ifdef ISP_HW_V32
+#include "algos_camgroup/newStruct/bayertnr/rk_aiq_algo_camgroup_btnr.h"
+#endif
 #endif
 
 namespace RkCam {
@@ -73,6 +88,7 @@ namespace RkCam {
  * and the new parameters take effect on frame n+1
  */
 #define ISP_PARAMS_EFFECT_DELAY_CNT 2
+#define ISP_PARAMS_EFFECT_DELAY_CNT3 3
 
 static RkAiqGrpCondition_t aeGrpCondV3x[] = {
     [0] = {XCAM_MESSAGE_AEC_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT},
@@ -106,6 +122,9 @@ static RkAiqGrpCondition_t grp0Cond[] = {
     [1] = {XCAM_MESSAGE_AE_PRE_RES_OK, 0},
     [2] = {XCAM_MESSAGE_BLC_V32_PROC_RES_OK, 0},
     [3] = {XCAM_MESSAGE_AWB_PROC_RES_OK, 0},
+#if RK_GAIN_V2_ENABLE_GAIN2DDR
+    [4] = {XCAM_MESSAGE_AGAIN_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT3},
+#endif
 };
 static RkAiqGrpConditions_t grp0Conds = {grp_conds_array_info(grp0Cond)};
 
@@ -114,7 +133,11 @@ static RkAiqGrpCondition_t grpDhazCond[] = {
     [1] = {XCAM_MESSAGE_AE_PRE_RES_OK, 0},
     [2] = {XCAM_MESSAGE_BLC_V32_PROC_RES_OK, 0},
     [3] = {XCAM_MESSAGE_ADEHAZE_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT},
+#if USE_NEWSTRUCT
+    [4] = {XCAM_MESSAGE_YNR_PROC_RES_OK, 0},
+#else
     [4] = {XCAM_MESSAGE_YNR_V22_PROC_RES_OK, 0},
+#endif
 };
 static RkAiqGrpConditions_t grpDhazConds = {grp_conds_array_info(grpDhazCond)};
 
@@ -158,28 +181,52 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 #endif
 #if defined(ISP_HW_V32)
 #if RKAIQ_HAVE_CAC_V11
+#ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAcac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 11,   grp0Conds          },
+#else
+    { &g_RkIspAlgoDescCac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,   grp0Conds          },
+#endif
 #endif
 #endif
 
 #if RKAIQ_HAVE_DEBAYER_V2
+#if (USE_NEWSTRUCT == 0)
     { &g_RkIspAlgoDescAdebayer.common,      RK_AIQ_CORE_ANALYZE_OTHER,   0, 1, 0,    otherGrpCondsV3x          },
+#else
+    { &g_RkIspAlgoDescDemosaic.common,      RK_AIQ_CORE_ANALYZE_OTHER,   0, 1, 0,    otherGrpCondsV3x          },
+#endif
 #endif
 #if RKAIQ_HAVE_DEBAYER_V2_LITE
     { &g_RkIspAlgoDescAdebayer.common,      RK_AIQ_CORE_ANALYZE_OTHER,   0, 2, 0,    otherGrpCondsV3x          },
 #endif
 
 #if RKAIQ_HAVE_GAMMA_V11
+#ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAgamma.common,        RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    otherGrpCondsV3x          },
+#else
+    { &g_RkIspAlgoDescGamma.common,         RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    otherGrpCondsV3x          },
+#endif
 #endif
 #if RKAIQ_HAVE_DEHAZE_V12
+#ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAdhaz.common,         RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    grpDhazConds         },
+#else
+    { &g_RkIspAlgoDescDehaze.common,         RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    grpDhazConds         },
+#endif
 #endif
 #if RKAIQ_HAVE_MERGE_V12
+#ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAmerge.common,        RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+#else
+    { &g_RkIspAlgoDescMerge.common,        RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+#endif
 #endif
 #if RKAIQ_HAVE_DRC_V12 || RKAIQ_HAVE_DRC_V12_LITE
+#ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAdrc.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+#else
+    { &g_RkIspAlgoDescDrc.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+#endif
 #endif
 #if RKAIQ_HAVE_GAIN_V2
     { &g_RkIspAlgoDescAgainV2.common,       RK_AIQ_CORE_ANALYZE_GRP0,   2, 2, 2,    grp0Conds          },
@@ -191,13 +238,23 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
     { &g_RkIspAlgoDescA3dlut.common,        RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
 #endif
 #if RKAIQ_HAVE_LSC_V3
+#ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAlsc.common,          RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
+#else
+    { &g_RkIspAlgoDescLsc.common,           RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
+#endif
 #endif
 #if RKAIQ_HAVE_DPCC_V1
+#ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAdpcc.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+#else
+    { &g_RkIspAlgoDescDpcc.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+#endif
+#endif
+#if RKAIQ_HAVE_DEGAMMA_V1
+    { &g_RkIspAlgoDescAdegamma.common,      RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
 #endif
 #if 0
-    { &g_RkIspAlgoDescAdegamma.common,      RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
 #if RKAIQ_HAVE_CAC_V10
     { &g_RkIspAlgoDescAcac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
 #endif
@@ -209,7 +266,11 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
     { &g_RkIspAlgoDescAie.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
 #endif
 #if RKAIQ_HAVE_LDCH_V21
-    { &g_RkIspAlgoDescAldch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+#ifndef USE_NEWSTRUCT
+    { &g_RkIspAlgoDescAldch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x },
+#else
+    { &g_RkIspAlgoDescLdch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x },
+#endif
 #endif
 #if RKAIQ_HAVE_CGC_V1
     { &g_RkIspAlgoDescAcgc.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
@@ -225,7 +286,11 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 #endif
 #if defined(ISP_HW_V32)
 #if RKAIQ_HAVE_GIC_V2
+#if USE_NEWSTRUCT
+    { &g_RkIspAlgoDescGic.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 1, 0,    otherGrpCondsV3x   },
+#else
     { &g_RkIspAlgoDescAgic.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 1, 0,    otherGrpCondsV3x   },
+#endif
 #endif
 #endif
 #if defined(ISP_HW_V32)
@@ -237,7 +302,11 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
     { &g_RkIspAlgoDescAwdr.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
 #endif
 #if (RKAIQ_HAVE_BAYERTNR_V23 || RKAIQ_HAVE_BAYERTNR_V23_LITE)
+#if USE_NEWSTRUCT
+    { &g_RkIspAlgoDescBayertnr.common,     RK_AIQ_CORE_ANALYZE_GRP0,    0, 1, 0, grp0Conds          },
+#else
     { &g_RkIspAlgoDescAbayertnrV23.common, RK_AIQ_CORE_ANALYZE_GRP0,    23, 23, 23, grp0Conds          },
+#endif
 #endif
 #if defined(ISP_HW_V32)
 #if RKAIQ_HAVE_BAYER2DNR_V23
@@ -245,13 +314,25 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 #endif
 #endif
 #if RKAIQ_HAVE_YNR_V22
+#if USE_NEWSTRUCT
+    { &g_RkIspAlgoDescYnr.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 1, 0,    grp0Conds          },
+#else
     { &g_RkIspAlgoDescAynrV22.common,       RK_AIQ_CORE_ANALYZE_GRP0,   22, 22, 22, grp0Conds          },
 #endif
+#endif
 #if (RKAIQ_HAVE_CNR_V30 ||RKAIQ_HAVE_CNR_V30_LITE)
+#if USE_NEWSTRUCT
+    { &g_RkIspAlgoDescCnr.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 1, 0,       grp0Conds          },
+#else
     { &g_RkIspAlgoDescAcnrV30.common, RK_AIQ_CORE_ANALYZE_GRP0,    30, 30, 30, grp0Conds          },
 #endif
+#endif
 #if (RKAIQ_HAVE_SHARP_V33 || RKAIQ_HAVE_SHARP_V33_LITE)
+#if (USE_NEWSTRUCT)
+    { &g_RkIspAlgoDescSharp.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 1, 0,       grp0Conds          },
+#else
     { &g_RkIspAlgoDescAsharpV33.common,       RK_AIQ_CORE_ANALYZE_GRP0,   33, 33, 33,    grp0Conds          },
+#endif
 #endif
 #if (RKAIQ_HAVE_AFD_V2)
     { &g_RkIspAlgoDescAfd.common,            RK_AIQ_CORE_ANALYZE_AFD,     0, 1, 0,    grpAfdConds      },
@@ -263,8 +344,12 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 
 #if RKAIQ_ENABLE_CAMGROUP
 const static struct RkAiqAlgoDesCommExt g_camgroup_algos[] = {
-    // clang-format off
+// clang-format off
+#if defined(ISP_HW_V32_LITE)
+    { &g_RkIspAlgoDescCamgroupAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0,  4,  0, {0, 0} },
+#else
     { &g_RkIspAlgoDescCamgroupAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0,  3,  0, {0, 0} },
+#endif
     { &g_RkIspAlgoDescCamgroupAblcV32.common,       RK_AIQ_CORE_ANALYZE_GRP0,  32, 32, 32, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAwb.common,           RK_AIQ_CORE_ANALYZE_AWB,    1,  2, 32, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAlsc.common,          RK_AIQ_CORE_ANALYZE_AWB,    0,  0,  0, {0, 0} },
@@ -273,14 +358,23 @@ const static struct RkAiqAlgoDesCommExt g_camgroup_algos[] = {
     // { &g_RkIspAlgoDescCamgroupAdpcc.common,      RK_AIQ_CORE_ANALYZE_AWB,    0,  0,  0, {0, 0} },
     // { &g_RkIspAlgoDescamgroupAgamma.common,      RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAdrc.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0,  1,  0, {0, 0} },
-    // { &g_RkIspAlgoDescCamgroupAmerge.common,     RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
+    { &g_RkIspAlgoDescCamgroupAmerge.common,        RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAynrV22.common,       RK_AIQ_CORE_ANALYZE_OTHER, 22, 22, 22, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAcnrV30.common,       RK_AIQ_CORE_ANALYZE_OTHER, 30, 30, 30, {0, 0} },
+#if USE_NEWSTRUCT
+    { &g_RkIspAlgoDescCamgroupBtnr.common,          RK_AIQ_CORE_ANALYZE_OTHER, 23, 23, 23, {0, 0} },
+#else
     { &g_RkIspAlgoDescCamgroupAbayertnrV23.common,  RK_AIQ_CORE_ANALYZE_OTHER, 23, 23, 23, {0, 0} },
+#endif
+
 #if RKAIQ_HAVE_BAYER2DNR_V23
     { &g_RkIspAlgoDescCamgroupAbayer2dnrV23.common, RK_AIQ_CORE_ANALYZE_OTHER, 23, 23, 23, {0, 0} },
 #endif
+#if USE_NEWSTRUCT
+    { &g_RkIspAlgoDescCamgroupSharp.common,         RK_AIQ_CORE_ANALYZE_OTHER, 34, 34, 34, {0, 0} },
+#else
     { &g_RkIspAlgoDescCamgroupAsharpV33.common,     RK_AIQ_CORE_ANALYZE_OTHER, 33, 33, 33, {0, 0} },
+#endif
     { &g_RkIspAlgoDescCamgroupAgainV2.common,       RK_AIQ_CORE_ANALYZE_OTHER,  2,  2,  2, {0, 0} },
     { &g_RkIspAlgoDescCamgroupAdhaz.common,         RK_AIQ_CORE_ANALYZE_DHAZ,   0,  1,  0, {0, 0} },
     { NULL,                                         RK_AIQ_CORE_ANALYZE_ALL,    0,  0,  0, {0, 0} },

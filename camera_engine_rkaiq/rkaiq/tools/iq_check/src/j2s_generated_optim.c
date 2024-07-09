@@ -15,12 +15,12 @@
 
 #include "common.h"
 #include <time.h>
-#include ".j2s_generated.h"
+#include ".j2s_generated_v2.h"
 
 int main(int argc, char** argv) {
 
 	FILE* fp = NULL;
-	int magic = 0;
+	// int magic = 0;
 	j2s_struct *struct_obj = NULL;
 
 	DASSERT_MSG(argc > 1, return -1,

@@ -245,13 +245,17 @@ XCamReturn RkAiqA3dlutHandleInt::processing() {
         LOGE("fail to get sensor gain form AE module,use default value ");
     }
 
-#if RKAIQ_HAVE_BLC_V32
+#if RKAIQ_HAVE_BLC_V32 && !USE_NEWSTRUCT
     if (shared->res_comb.ablcV32_proc_res->blc_ob_enable) {
         if (shared->res_comb.ablcV32_proc_res->isp_ob_predgain >= 1.0f) {
             a3dlut_proc_int->sensorGain *=  shared->res_comb.ablcV32_proc_res->isp_ob_predgain;
         }
     }
 #endif
+    if(colorConstFlag==true){
+        memcpy(a3dlut_proc_int->awbGain,colorSwInfo.awbGain,sizeof(colorSwInfo.awbGain));
+        a3dlut_proc_int->sensorGain = colorSwInfo.sensorGain;
+    }
 
 #ifdef DISABLE_HANDLE_ATTRIB
     mCfgMutex.lock();
@@ -302,7 +306,7 @@ XCamReturn RkAiqA3dlutHandleInt::genIspResult(RkAiqFullParams* params,
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResA3dlut* a3dlut_com = (RkAiqAlgoProcResA3dlut*)mProcOutParam;
-    rk_aiq_isp_lut3d_params_v20_t* lut3d_param = params->mLut3dParams->data().ptr();
+    rk_aiq_isp_lut3d_params_t* lut3d_param = params->mLut3dParams->data().ptr();
 
     if (sharedCom->init) {
         lut3d_param->frame_id = 0;
@@ -350,6 +354,20 @@ XCamReturn RkAiqA3dlutHandleInt::genIspResult(RkAiqFullParams* params,
 
     EXIT_ANALYZER_FUNCTION();
 
+    return ret;
+}
+XCamReturn RkAiqA3dlutHandleInt::setAcolorSwInfo(rk_aiq_color_info_t aColor_sw_info) {
+    ENTER_ANALYZER_FUNCTION();
+
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    LOGV_A3DLUT("%s sensor gain = %f, wbgain=[%f,%f] ",__FUNCTION__,aColor_sw_info.sensorGain,
+      aColor_sw_info.awbGain[0],aColor_sw_info.awbGain[1]);
+    colorSwInfo = aColor_sw_info;
+    colorConstFlag=true;
+
+
+    EXIT_ANALYZER_FUNCTION();
     return ret;
 }
 

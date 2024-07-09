@@ -2,9 +2,9 @@
  * SDIO spec header file
  * Protocol and standard (common) device definitions
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -269,6 +269,7 @@ typedef volatile struct {
 #define SDIO_FUNC_0		0
 #define SDIO_FUNC_1		1
 #define SDIO_FUNC_2		2
+#define SDIO_FUNC_3		3
 #define SDIO_FUNC_4		4
 #define SDIO_FUNC_5		5
 #define SDIO_FUNC_6		6

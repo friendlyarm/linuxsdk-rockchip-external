@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <openssl/md5.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -27,7 +26,7 @@
 #include "log.h"
 #include "rktools.h"
 #include "../mtdutils/mtdutils.h"
-
+#include "md5.h"
 
 #define TMP_MD5SUM_NAME "/tmp/.tmp_md5sum"
 

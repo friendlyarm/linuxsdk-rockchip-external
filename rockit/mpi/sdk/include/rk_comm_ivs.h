@@ -1,5 +1,5 @@
 /* GPL-2.0 WITH Linux-syscall-note OR Apache 2.0 */
-/* Copyright (c) 2022 Fuzhou Rockchip Electronics Co., Ltd */
+/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd */
 
 #ifndef INCLUDE_RT_MPI_RK_COMM_IVS_H_
 
@@ -62,7 +62,19 @@ typedef struct rkIVS_CHN_ATTR_S {
     union {
         IVS_DET_ATTR_S stDetAttr;
     };
+    RK_U32 u32MaxWidth;
+    RK_U32 u32MaxHeight;
 } IVS_CHN_ATTR_S;
+
+typedef struct rkIVS_MD_ATTR_S {
+    RK_S32 s32ThreshSad; // [0, 4095]
+    RK_S32 s32ThreshMove; // [0, 4]
+    RK_S32 s32SwitchSad; // [0, 3]
+    RK_BOOL bFlycatkinFlt;
+    RK_S32 s32ThresDustMove;
+    RK_S32 s32ThresDustBlk;
+    RK_S32 s32ThresDustChng;
+} IVS_MD_ATTR_S;
 
 typedef struct rkIVS_MD_INFO_S {
     RK_U32 frameId;          /* 所在帧序号 */
@@ -71,13 +83,25 @@ typedef struct rkIVS_MD_INFO_S {
     RK_CHAR *pData;
     RK_U32 u32Size;
     RK_S32 s32Fd;
+    RK_U32 u32Square;
+    RK_U32 u32DetAreaSquare;
+    RK_U32 u32DetOutputSquare;
 } IVS_MD_INFO_S;
 
 typedef struct rkIVS_OD_INFO_S {
     RK_U32 frameId;          /* 所在帧序号 */
     RK_U32 u32Flag;
     RK_U32 u32PixSum;
+    RK_CHAR *pData;
+    RK_U32 u32Size;
+    RK_S32 s32Fd;
 } IVS_OD_INFO_S;
+
+typedef struct rkIVS_OD_ATTR_S {
+    RK_S32  s32ODPercent; // [5, 8]
+    RK_BOOL bODUserRectEnable;
+    RECT_S  stODUserRect;
+} IVS_OD_ATTR_S;
 
 typedef struct rkIVS_RESULT_S {
     IVS_MD_INFO_S stMdInfo;

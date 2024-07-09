@@ -175,6 +175,7 @@ typedef struct rkVENC_PARAM_H264_S {
     RK_U32 u32FrmMinQp; // RW; Range:[0, 51];the frame min QP value, recommended larger than u32MinQp
     RK_U32 u32FrmMaxIQp; // RW; Range:[0, 51];the I frame max QP value
     RK_U32 u32FrmMinIQp; // RW; Range:[0, 51];the I frame min QP value, recommended larger than u32MinIQp
+    RK_U32 u32MotionStaticSwitchFrmQp; // RW; Range:[0, 51];
 } VENC_PARAM_H264_S;
 
 /* The param of h265e */
@@ -191,6 +192,7 @@ typedef struct rkVENC_PARAM_H265_S {
     RK_U32 u32FrmMinQp; // RW; Range:[0, 51];the frame min QP value, recommended larger than u32MinQp
     RK_U32 u32FrmMaxIQp; // RW; Range:[0, 51];the I frame max QP value
     RK_U32 u32FrmMinIQp; // RW; Range:[0, 51];the I frame min QP value, recommended larger than u32MinIQp
+    RK_U32 u32MotionStaticSwitchFrmQp; // RW; Range:[0, 51];
 } VENC_PARAM_H265_S;
 
 /* The param of mjpege */
@@ -209,6 +211,16 @@ typedef struct rkVENC_RC_PARAM_S {
         VENC_PARAM_MJPEG_S stParamMjpeg;
     };
 } VENC_RC_PARAM_S;
+
+/* The param2 of rc */
+typedef struct rkVENC_RC_PARAM2_S {
+    RK_U32 u32ThrdI[16];
+    RK_U32 u32ThrdP[16];
+    RK_S32 s32AqStepI[17];
+    RK_S32 s32AqStepP[17];
+    RK_U32 u32RowQpDelta; // RW; Range:[0, 10]
+    RK_U32 u32RowIQpDelta; // RW; Range:[0, 10]
+} VENC_RC_PARAM2_S;
 
 #ifdef __cplusplus
 #if __cplusplus

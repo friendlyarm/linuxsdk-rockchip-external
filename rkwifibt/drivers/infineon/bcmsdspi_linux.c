@@ -1,9 +1,9 @@
 /*
  * Broadcom SPI Host Controller Driver - Linux Per-port
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -43,7 +43,11 @@
 #include <pcicfg.h>
 #include <sdio.h>		/* SDIO Device and Protocol Specs */
 #include <linux/sched.h>	/* request_irq(), free_irq() */
+#ifndef GSPIBCM
 #include <bcmsdspi.h>
+#else
+#include <bcmgspi.h>
+#endif /* GSPIBCM */
 #include <bcmdevs.h>
 #include <bcmspi.h>
 #endif /* BCMSPI_ANDROID */
@@ -147,7 +151,6 @@ bcmsdh_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	osl_t *osh = NULL;
 	sdioh_info_t *sdioh = NULL;
-	void *bcmsdh;
 
 	int rc;
 
@@ -231,13 +234,8 @@ bcmsdh_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto err;
 	}
 
-#ifdef GSPIBCM
-	bcmsdh = bcmsdh_probe(osh, &pdev->dev, sdioh, NULL, PCI_BUS, -1, -1);
-	if (bcmsdh == NULL) {
-#else
 	sdioh->bcmsdh = bcmsdh_probe(osh, &pdev->dev, sdioh, NULL, PCI_BUS, -1, -1);
 	if (sdioh->bcmsdh == NULL) {
-#endif /* GSPIBCM */
 		sd_err(("%s: bcmsdh_probe failed\n", __FUNCTION__));
 		goto err;
 	}
@@ -272,6 +270,7 @@ bcmsdh_pci_remove(struct pci_dev *pdev)
 	}
 
 	osh = sdioh->osh;
+
 	bcmsdh_remove(sdioh->bcmsdh);
 	sdioh_detach(osh, sdioh);
 	osl_detach(osh);

@@ -3,9 +3,9 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -145,7 +145,13 @@ dbg_ring_poll_worker(struct work_struct *work)
 		goto exit;
 	}
 
+	/*
+	 * Subsequent calls in dhd_dbg_pull_from_ring will hold ring->lock.
+	 * Release ring->lock before calling.
+	 */
+	DHD_DBG_RING_UNLOCK(ring->lock, flags);
 	rlen = dhd_dbg_pull_from_ring(dhdp, ringid, buf, buflen);
+	DHD_DBG_RING_LOCK(ring->lock, flags);
 
 	if (!ring->sched_pull) {
 		ring->sched_pull = TRUE;

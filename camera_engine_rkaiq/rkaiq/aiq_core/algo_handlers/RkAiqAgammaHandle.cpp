@@ -134,7 +134,9 @@ XCamReturn RkAiqAgammaHandleInt::setAttribV11(const rk_aiq_gamma_v11_attr_t* att
     mCfgMutex.lock();
 
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
     ret = rk_aiq_uapi_agamma_v11_SetAttrib(mAlgoCtx, att, false);
+#endif
 #else
     // check if there is different between att & mCurAttV11(sync)/mNewAttV11(async)
     // if something changed, set att to mNewAttV11, and
@@ -168,10 +170,12 @@ XCamReturn RkAiqAgammaHandleInt::getAttribV11(rk_aiq_gamma_v11_attr_t* att) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
     mCfgMutex.lock();
     rk_aiq_uapi_agamma_v11_GetAttrib(mAlgoCtx, att);
     att->sync.done = true;
     mCfgMutex.unlock();
+#endif
 #else
     if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
         mCfgMutex.lock();
@@ -205,8 +209,6 @@ XCamReturn RkAiqAgammaHandleInt::prepare() {
 
     RkAiqAlgoConfigAgamma* agamma_config_int = (RkAiqAlgoConfigAgamma*)mConfig;
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
 
 #ifdef RKAIQ_ENABLE_PARSER_V1
     agamma_config_int->calib = sharedCom->calib;
@@ -254,6 +256,7 @@ XCamReturn RkAiqAgammaHandleInt::processing() {
     RkAiqAlgoProcResAgamma* agamma_proc_res_int = (RkAiqAlgoProcResAgamma*)mProcOutParam;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
+
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     agamma_proc_res_int->GammaProcRes = &shared->fullParams->mAgammaParams->data()->result;
@@ -316,7 +319,7 @@ XCamReturn RkAiqAgammaHandleInt::genIspResult(RkAiqFullParams* params,
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAgamma* agamma_com = (RkAiqAlgoProcResAgamma*)mProcOutParam;
-    rk_aiq_isp_agamma_params_v20_t* agamma_param = params->mAgammaParams->data().ptr();
+    rk_aiq_isp_agamma_params_t* agamma_param = params->mAgammaParams->data().ptr();
 
     if (!agamma_com) {
         LOGD_ANALYZER("no agamma result");

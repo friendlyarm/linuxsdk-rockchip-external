@@ -32,7 +32,7 @@ struct drmDsp {
   struct sp_bo* nextbo;
 } gDrmDsp;
 
-int initDrmDsp() {
+int initDrmDsp(int crtc_num) {
   int ret = 0, i = 0;
   struct drmDsp* pDrmDsp = &gDrmDsp;
 
@@ -55,7 +55,7 @@ int initDrmDsp() {
     return -1;
   }
 
-  pDrmDsp->test_crtc = &pDrmDsp->dev->crtcs[3];
+  pDrmDsp->test_crtc = &pDrmDsp->dev->crtcs[crtc_num];
   pDrmDsp->num_test_planes = pDrmDsp->test_crtc->num_planes;
   for (i = 0; i < pDrmDsp->test_crtc->num_planes; i++) {
     pDrmDsp->plane[i] = get_sp_plane(pDrmDsp->dev, pDrmDsp->test_crtc);
@@ -66,6 +66,9 @@ int initDrmDsp() {
   }
   if (!pDrmDsp->test_plane)
     return -1;
+
+  printf("use ctrc id: %d, plane id: %d\n", pDrmDsp->test_crtc->crtc->crtc_id,
+         pDrmDsp->test_plane->plane->plane_id);
 
 #if ISPDEMO_ENABLE_RGA
   rkRgaInit();
@@ -111,18 +114,16 @@ static int arm_camera_yuv420_scale_arm(char *srcbuf, char *dstbuf,int src_w, int
 		left_offset=0;
 	}
 
-	// src = psY = (unsigned char*)(srcbuf)+top_offset*src_w+left_offset;
+	psY = (unsigned char*)(srcbuf)+top_offset*src_w+left_offset;
 	//psUV = psY +src_w*src_h+top_offset*src_w/2+left_offset;
 	psUV = (unsigned char*)(srcbuf) +src_w*src_h+top_offset*src_w/2+left_offset;
-
 
 	srcW =src_w;
 	srcH = src_h;
 //	cropW = src_w;
 //	cropH = src_h;
 
-
-	// dst = pdY = (unsigned char*)dstbuf;
+	pdY = (unsigned char*)dstbuf;
 	pdUV = pdY + dst_w*dst_h;
 	dstW = dst_w;
 	dstH = dst_h;
@@ -218,15 +219,19 @@ static int arm_camera_yuv420_scale_arm(char *srcbuf, char *dstbuf,int src_w, int
 }
 
 int drmDspFrame(int srcWidth, int srcHeight, int dispWidth, int dispHeight,
-		int dmaFd, void* srcAddr, int fmt)
+                int dmaFd, void* srcAddr, int fmt)
 {
   int ret;
   // struct drm_mode_create_dumb cd;
   struct sp_bo* bo;
   struct drmDsp* pDrmDsp = &gDrmDsp;
+  (void)(dmaFd);
+
+  if (!pDrmDsp->test_plane)
+    return -1;
 
   int wAlign16 = ((dispWidth+ 15) & (~15));
-  int hAlign16 = (dispHeight + 15) & (~15);
+  int hAlign16 = dispHeight;
   // int frameSize = wAlign16 * hAlign16 * 3 / 2;
   uint32_t handles[4], pitches[4], offsets[4];
 
@@ -246,6 +251,7 @@ int drmDspFrame(int srcWidth, int srcHeight, int dispWidth, int dispHeight,
       printf("%s:create bo failed ! \n", __func__);
       return -1;
     }
+
     pDrmDsp->nextbo = pDrmDsp->bo[0];
   }
 
@@ -272,7 +278,7 @@ int drmDspFrame(int srcWidth, int srcHeight, int dispWidth, int dispHeight,
 #if ISPDEMO_ENABLE_RGA
   struct rkRgaCfg src_cfg, dst_cfg;
 
-  src_cfg.fd = dmaFd;
+  src_cfg.fd = (int)dmaFd;
   src_cfg.addr = 0;
   src_cfg.fmt = RK_FORMAT_YCrCb_420_SP;
   src_cfg.width = srcWidth;
@@ -288,9 +294,9 @@ int drmDspFrame(int srcWidth, int srcHeight, int dispWidth, int dispHeight,
 #else
   //copy src data to bo
   if (srcWidth == dispWidth)
-	  memcpy(bo->map_addr, srcAddr, wAlign16 * hAlign16 * 3 / 2);
+      memcpy(bo->map_addr, srcAddr, wAlign16 * hAlign16 * 3 / 2);
   else
-	  arm_camera_yuv420_scale_arm(srcAddr, bo->map_addr, srcWidth, srcHeight, dispWidth, dispHeight);
+      arm_camera_yuv420_scale_arm(srcAddr, bo->map_addr, srcWidth, srcHeight, dispWidth, dispHeight);
 #endif
 
   ret = drmModeAddFB2(bo->dev->fd, bo->width, bo->height,

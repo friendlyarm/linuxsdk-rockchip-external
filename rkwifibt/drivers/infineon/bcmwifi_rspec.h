@@ -1,9 +1,9 @@
 /*
  * Common OS-independent driver header for rate management.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -52,6 +52,9 @@ typedef uint32	ratespec_t;
 #define WL_RSPEC_BW_MASK	0x00070000	/**< Band width */
 #define WL_RSPEC_BW_SHIFT	16
 #define WL_RSPEC_DCM		0x00080000	/**< Dual Carrier Modulation */
+#define WL_RSPEC_DCM_SHIFT      19
+#define WL_RSPEC_ER_MASK        0x0000C000      /**< Range extension mask */
+#define WL_RSPEC_ER_SHIFT       14
 #define WL_RSPEC_STBC		0x00100000	/**< STBC expansion, Nsts = 2 * Nss */
 #define WL_RSPEC_TXBF		0x00200000
 #define WL_RSPEC_LDPC		0x00400000

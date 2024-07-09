@@ -1,9 +1,9 @@
 /*
  * Linux cfgp2p driver
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -384,7 +384,11 @@ s32
 wl_cfgp2p_set_firm_p2p(struct bcm_cfg80211 *cfg)
 {
 	struct net_device *ndev = bcmcfg_to_prmry_ndev(cfg);
+#ifdef P2P_RAND
+        struct ether_addr *p2p_dev_addr = wl_to_p2p_bss_macaddr(cfg, P2PAPI_BSSCFG_DEVICE);
+#else
 	struct ether_addr null_eth_addr = { { 0, 0, 0, 0, 0, 0 } };
+#endif /* P2P_RAND */
 	s32 ret = BCME_OK;
 	s32 val = 0;
 	/* Do we have to check whether APSTA is enabled or not ? */
@@ -419,8 +423,14 @@ wl_cfgp2p_set_firm_p2p(struct bcm_cfg80211 *cfg)
 	 * After Initializing firmware, we have to set current mac address to
 	 * firmware for P2P device address
 	 */
-	ret = wldev_iovar_setbuf_bsscfg(ndev, "p2p_da_override", &null_eth_addr,
-		sizeof(null_eth_addr), cfg->ioctl_buf, WLC_IOCTL_MAXLEN, 0, &cfg->ioctl_buf_sync);
+#ifdef P2P_RAND
+        //Override default firmware mac setting for p2p dev interface
+	ret = wldev_iovar_setbuf_bsscfg(ndev, "p2p_da_override", p2p_dev_addr,
+		sizeof(*p2p_dev_addr), cfg->ioctl_buf, WLC_IOCTL_MAXLEN, 0, &cfg->ioctl_buf_sync);
+#else
+        ret = wldev_iovar_setbuf_bsscfg(ndev, "p2p_da_override", &null_eth_addr,
+                sizeof(null_eth_addr), cfg->ioctl_buf, WLC_IOCTL_MAXLEN, 0, &cfg->ioctl_buf_sync);
+#endif /* P2P_RAND */
 	if (ret && ret != BCME_UNSUPPORTED) {
 		CFGP2P_ERR(("failed to update device address ret %d\n", ret));
 	}
@@ -1783,8 +1793,10 @@ wl_cfgp2p_generate_bss_mac(struct bcm_cfg80211 *cfg, struct ether_addr *primary_
 	struct ether_addr *mac_addr = wl_to_p2p_bss_macaddr(cfg, P2PAPI_BSSCFG_DEVICE);
 	struct ether_addr *int_addr;
 
+#ifndef STA_RAND
 	memcpy(mac_addr, primary_addr, sizeof(struct ether_addr));
 	mac_addr->octet[0] |= 0x02;
+#endif // endif
 	WL_DBG(("P2P Discovery address:"MACDBG "\n", MAC2STRDBG(mac_addr->octet)));
 
 	int_addr = wl_to_p2p_bss_macaddr(cfg, P2PAPI_BSSCFG_CONNECTION1);
@@ -1853,6 +1865,9 @@ wl_cfgp2p_supported(struct bcm_cfg80211 *cfg, struct net_device *ndev)
 {
 	s32 ret = BCME_OK;
 	s32 p2p_supported = 0;
+#ifdef WL_DHD_XR
+	return 0;
+#endif /* WL_DHD_XR */
 	ret = wldev_iovar_getint(ndev, "p2p",
 	               &p2p_supported);
 	if (ret < 0) {

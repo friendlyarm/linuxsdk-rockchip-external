@@ -1,10 +1,9 @@
 /* GStreamer
  *
  * Copyright (C) 2016 Igalia
+ * Copyright (C) <2024> Rockchip Electronics Co., Ltd
  *
- * Authors:
- *  Víctor Manuel Jáquez Leal <vjaquez@igalia.com>
- *  Javier Martin <javiermartin@by.com.es>
+ * Based on kmssink
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -50,6 +49,9 @@ static const struct
 #ifdef HAVE_NV12_10LE40
   DEF_FMT (NV12_10, NV12_10LE40),
   DEF_FMT (NV15, NV12_10LE40),
+#endif
+#ifdef HAVE_NV16_10LE40
+  DEF_FMT (NV20, NV16_10LE40),
 #endif
 #else
   DEF_FMT (ARGB8888, ARGB),
@@ -113,6 +115,7 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
       break;
     case DRM_FORMAT_NV12_10:
     case DRM_FORMAT_NV15:
+    case DRM_FORMAT_NV20:
       bpp = 10;
       break;
     case DRM_FORMAT_UYVY:
@@ -144,6 +147,7 @@ gst_drm_height_from_drm (guint32 drmfmt, guint32 height)
       ret = height * 3 / 2;
       break;
     case DRM_FORMAT_NV16:
+    case DRM_FORMAT_NV20:
       ret = height * 2;
       break;
     default:

@@ -10,7 +10,9 @@ gbm_check_funcs = [
   'gbm_bo_get_fd_for_plane',
   'gbm_bo_get_modifier',
   'gbm_bo_create_with_modifiers',
+  'gbm_bo_create_with_modifiers2',
   'gbm_surface_create_with_modifiers',
+  'gbm_surface_create_with_modifiers2',
   'gbm_bo_get_bpp',
   'gbm_format_get_name',
 ]
@@ -19,17 +21,18 @@ libhook_cflags = [
   '-DLIBMALI_SO="libmali.so.' + mali_version.split('.')[0] + '"',
 ]
 
-libhook_dep = [mali]
-libhook_dep += dependency('threads')
-libhook_dep += cc.find_library('dl', required : false)
-libhook_dep += dependency('libdrm', version : '>= 2.4.0')
+libhook_dep = [
+  mali,
+  dependency('threads'),
+  cc.find_library('dl', required : false),
+  dependency('libdrm', version : '>= 2.4.0'),
+]
 
 libhook_inc = []
 
-gbm_symbol = map['gbm'][0]
-if cc.has_function(gbm_symbol, dependencies : mali)
+if cc.has_function('gbm_create_device', dependencies : mali)
   # Add hooks to support new GBM APIs
-  libhook_inc += include_directories('../include/GBM')
+  libhook_inc += include_directories('..' / gbm_headers.keys()[0])
   libhook_cflags += '-DHAS_GBM'
   foreach symbol : gbm_check_funcs
     if cc.has_function(symbol, dependencies : mali)
@@ -38,14 +41,12 @@ if cc.has_function(gbm_symbol, dependencies : mali)
   endforeach
 endif
 
-egl_symbol = map['egl'][0]
-if cc.has_function(egl_symbol, dependencies : mali)
+if cc.has_function('eglCreateContext', dependencies : mali)
   # Add hooks to support default winsys
   libhook_inc += include_directories('../include')
   libhook_cflags += '-DHAS_EGL'
 
-  wayland_symbol = map['wayland-egl'][0]
-  if cc.has_function(wayland_symbol, dependencies : mali)
+  if cc.has_function('wl_egl_window_create', dependencies : mali)
     libhook_cflags += '-DHAS_WAYLAND'
   endif
 
@@ -53,26 +54,30 @@ if cc.has_function(egl_symbol, dependencies : mali)
     # Add hooks to init X11 threads
     libhook_dep += dependency('x11')
     libhook_cflags += '-DHAS_X11'
+  else
+    libhook_cflags += '-DEGL_NO_X11'
   endif
 endif
 
 libhook = shared_library(
-  'mali_hook',
+  'mali-hook',
   'hook.c',
   c_args : libhook_cflags,
   include_directories : libhook_inc,
   dependencies : libhook_dep,
   install : true,
+  install_rpath : '$ORIGIN',
   version : mali_version)
 
-libhook_ldflags = ['-L${libdir}', '-lmali_hook']
+libhook_ldflags = ['-L${libdir}', '-lmali-hook']
 
 # A dummy library to ensure that the hook library would not be removed as unused
 libinjector = static_library(
-  'mali_hook_injector',
+  'mali-hook-injector',
   'injector.c',
-  install : true)
+  install : true,
+  install_rpath : '$ORIGIN')
 
 # Ensure that the hook library would not be removed as unused
 libhook_ldflags += \
-  ['-Wl,--whole-archive', '-lmali_hook_injector', '-Wl,--no-whole-archive']
+  ['-Wl,--whole-archive', '-lmali-hook-injector', '-Wl,--no-whole-archive']

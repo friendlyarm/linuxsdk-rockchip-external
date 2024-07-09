@@ -28,7 +28,8 @@ public:
     IRkAiqResourceTranslator ()
         : mCamPhyId(-1)
         , mIsGroupMode(false)
-        , mModuleRotation(0) {};
+        , mModuleRotation(0)
+        , mWorkingMode(0) {};
     virtual ~IRkAiqResourceTranslator () {};
 
     virtual XCamReturn translateIspStats(const SmartPtr<VideoBuffer>& from,
@@ -64,6 +65,10 @@ public:
             SmartPtr<RkAiqAdehazeStatsProxy>& to) {
         return XCAM_RETURN_BYPASS;
     }
+    virtual XCamReturn translateAgainStats(const SmartPtr<VideoBuffer>& from,
+            SmartPtr<RkAiqAgainStatsProxy>& to){
+        return XCAM_RETURN_BYPASS;
+    }
 #if RKAIQ_HAVE_PDAF
     virtual XCamReturn translatePdafStats (const SmartPtr<VideoBuffer> &from,
                                            SmartPtr<RkAiqPdafStatsProxy> &to, bool sns_mirror) {
@@ -71,6 +76,10 @@ public:
     }
 #endif
     virtual XCamReturn getParams(const SmartPtr<VideoBuffer>& from) {
+        return XCAM_RETURN_BYPASS;
+    }
+    virtual XCamReturn translateBay3dStats(const SmartPtr<VideoBuffer>& from,
+                                           std::list<SmartPtr<RkAiqBay3dStat>>& to, Mutex& mutex) {
         return XCAM_RETURN_BYPASS;
     }
     virtual void releaseParams() {}

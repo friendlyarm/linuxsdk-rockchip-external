@@ -1,9 +1,9 @@
 /*
  * BCM43XX Sonics SiliconBackplane PCMCIA core hardware definitions.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -121,7 +121,12 @@
 
 #define CISTPL_NULL		0x00
 #define	CISTPL_END		0xff		/* End of the CIS tuple chain */
+#ifdef WL_DHD_XR
+/* WL Non secure region starts = 12160 bit pos, 12160/8 = 0X5F0 */
+#define CISTPL_OFFSET          0x5F0
+#else
 #define CISTPL_OFFSET           0xC0
+#endif // endif
 
 #define	CISTPL_BRCM_HNBU	0x80
 

@@ -20,13 +20,19 @@
 #include <string>
 #include <vector>
 #include "rk_aiq_types.h"
+#include "algo_types_priv.h"
 #include "rk-camera-module.h"
 #include "MessageBus.h"
 #include "common/rkisp2-config.h"
 #include "common/rkisp21-config.h"
 #include "common/rkisp3-config.h"
 #include "common/rkisp32-config.h"
+#include "common/rk-isp39-config.h"
 #include "buffer_pool.h"
+#if USE_NEWSTRUCT
+#include "isp/rk_aiq_isp_trans10.h"
+#include "algos/rk_aiq_api_types_trans.h"
+#endif
 
 #define RKAIQ_ISP_LDCH_ID           (1 << 0)
 
@@ -34,8 +40,12 @@ template<class T>
 struct rk_aiq_isp_params_t : public XCam::BufferData {
     /* should be the first member */
     union {
-        bool is_update;
-        char aligned[4]; // for aligned to 4
+        struct {
+            bool is_update;
+            bool en;
+            bool bypass;
+        } __attribute__ ((packed));
+        char aligned[4]; // for aligned to 4 
     };
     T   result;
     uint32_t frame_id;
@@ -50,36 +60,236 @@ struct rk_aiq_isp_params_t : public XCam::BufferData {
 typedef rk_aiq_isp_params_t<rk_aiq_isp_stats_t>      rk_aiq_isp_stats_wrapper_t;
 typedef rk_aiq_isp_params_t<rk_aiq_focus_params_t>      rk_aiq_focus_params_wrapper_t;
 
-// v20 params struct
-typedef rk_aiq_isp_params_t<rk_aiq_isp_aec_meas_t>      rk_aiq_isp_aec_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_hist_meas_t>     rk_aiq_isp_hist_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_awb_stat_cfg_v200_t> rk_aiq_isp_awb_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_wb_gain_t>           rk_aiq_isp_awb_gain_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_af_meas_t>       rk_aiq_isp_af_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_dpcc_t>          rk_aiq_isp_dpcc_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_t>         rk_aiq_isp_merge_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_tmo_t>           rk_aiq_isp_tmo_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_ccm_cfg_t>           rk_aiq_isp_ccm_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_lsc_cfg_t>           rk_aiq_isp_lsc_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_t>           rk_aiq_isp_blc_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_rawnr_t>         rk_aiq_isp_rawnr_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_gic_t>           rk_aiq_isp_gic_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_t>       rk_aiq_isp_debayer_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_t>          rk_aiq_isp_ldch_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_lut3d_cfg_t>         rk_aiq_isp_lut3d_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_t>        rk_aiq_isp_dehaze_params_v20_t;
-typedef rk_aiq_isp_params_t<AgammaProcRes_t>            rk_aiq_isp_agamma_params_v20_t;
-typedef rk_aiq_isp_params_t<AdegammaProcRes_t>          rk_aiq_isp_adegamma_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_wdr_t>           rk_aiq_isp_wdr_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_csm_t>           rk_aiq_isp_csm_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_cgc_t>           rk_aiq_isp_cgc_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_conv422_t>       rk_aiq_isp_conv422_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_yuvconv_t>       rk_aiq_isp_yuvconv_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_t>          rk_aiq_isp_gain_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_acp_params_t>        rk_aiq_isp_cp_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_ie_t>            rk_aiq_isp_ie_params_v20_t;
-typedef rk_aiq_isp_params_t<CalibDb_MFNR_Motion_t>      rk_aiq_isp_motion_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_amd_params_t>        rk_aiq_isp_md_params_v20_t;
+// Same part of different versions
+typedef rk_aiq_isp_params_t<rk_aiq_isp_aec_meas_t>      rk_aiq_isp_aec_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_hist_meas_t>     rk_aiq_isp_hist_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dpcc_t>          rk_aiq_isp_dpcc_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_tmo_t>           rk_aiq_isp_tmo_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_lsc_t>           rk_aiq_isp_lsc_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_rawnr_t>         rk_aiq_isp_rawnr_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gic_t>           rk_aiq_isp_gic_params_t;
+#endif
+#if USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<lut3d_param_t>              rk_aiq_isp_lut3d_params_t;
+#else
+typedef rk_aiq_isp_params_t<rk_aiq_isp_lut3d_t>         rk_aiq_isp_lut3d_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_degamma_t>       rk_aiq_isp_adegamma_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_wdr_t>           rk_aiq_isp_wdr_params_t;
+#if USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<csm_param_t>                rk_aiq_isp_csm_params_t;
+#else
+typedef rk_aiq_isp_params_t<rk_aiq_isp_csm_t>           rk_aiq_isp_csm_params_t;
+#endif
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cgc_t>           rk_aiq_isp_cgc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_acp_t>           rk_aiq_isp_cp_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ie_t>            rk_aiq_isp_ie_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_conv422_t>       rk_aiq_isp_conv422_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_yuvconv_t>       rk_aiq_isp_yuvconv_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_motion_t>        rk_aiq_isp_motion_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_amd_t>           rk_aiq_isp_md_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_uvnr_t>          rk_aiq_isp_uvnr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_edgeflt_t>       rk_aiq_isp_edgeflt_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_fec_t>           rk_aiq_isp_fec_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_orb_t>           rk_aiq_isp_orb_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_afd_t>           rk_aiq_isp_afd_params_t;
+
+
+// Different parts of different versions. Some parameters may be duplicated
+#ifdef ISP_HW_V20
+typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_t>  rk_aiq_isp_awb_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_wb_gain_t>       rk_aiq_isp_awb_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_af_meas_t>       rk_aiq_isp_af_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_t>         rk_aiq_isp_merge_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ccm_t>           rk_aiq_isp_ccm_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_t>           rk_aiq_isp_blc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_t>       rk_aiq_isp_debayer_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_t>          rk_aiq_isp_ldch_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_t>        rk_aiq_isp_dehaze_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gamma_t>         rk_aiq_isp_agamma_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_t>          rk_aiq_isp_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_t>           rk_aiq_isp_tnr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_t>           rk_aiq_isp_ynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_sharpen_t>       rk_aiq_isp_sharpen_params_t;
+
+#endif
+
+#ifdef ISP_HW_V21
+typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v21_t>    rk_aiq_isp_awb_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_wb_gain_t>             rk_aiq_isp_awb_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_af_meas_t>             rk_aiq_isp_af_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_t>               rk_aiq_isp_merge_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ccm_t>                 rk_aiq_isp_ccm_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_v21_t>             rk_aiq_isp_blc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_t>             rk_aiq_isp_debayer_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_t>                rk_aiq_isp_ldch_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_t>              rk_aiq_isp_dehaze_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gamma_t>               rk_aiq_isp_agamma_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_t>                rk_aiq_isp_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_t>                 rk_aiq_isp_tnr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v21_t>             rk_aiq_isp_ynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v21_t>           rk_aiq_isp_sharpen_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v21_t>             rk_aiq_isp_drc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v21_t>           rk_aiq_isp_baynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v21_t>           rk_aiq_isp_bay3d_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v21_t>             rk_aiq_isp_cnr_params_t;
+
+#endif
+
+#ifdef ISP_HW_V30
+typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v3x_t>    rk_aiq_isp_awb_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_wb_gain_t>             rk_aiq_isp_awb_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_af_meas_v3x_t>         rk_aiq_isp_af_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_t>               rk_aiq_isp_merge_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ccm_t>                 rk_aiq_isp_ccm_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_v21_t>             rk_aiq_isp_blc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_t>             rk_aiq_isp_debayer_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_t>                rk_aiq_isp_ldch_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_v3x_t>          rk_aiq_isp_dehaze_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_goc_v3x_t>             rk_aiq_isp_agamma_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_v3x_t>            rk_aiq_isp_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_v3x_t>             rk_aiq_isp_tnr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v3x_t>             rk_aiq_isp_ynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v3x_t>           rk_aiq_isp_sharpen_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v3x_t>             rk_aiq_isp_drc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v3x_t>           rk_aiq_isp_baynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v3x_t>           rk_aiq_isp_bay3d_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v3x_t>             rk_aiq_isp_cnr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cac_v3x_t>             rk_aiq_isp_cac_params_t;
+#endif
+
+#ifdef ISP_HW_V32
+typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v32_t>    rk_aiq_isp_awb_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_wb_gain_v32_t>         rk_aiq_isp_awb_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_af_v31_t>              rk_aiq_isp_af_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_t>               rk_aiq_isp_merge_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ccm_v32_t>             rk_aiq_isp_ccm_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_v32_t>             rk_aiq_isp_blc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_v32_t>         rk_aiq_isp_debayer_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_v21_t>            rk_aiq_isp_ldch_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_v32_t>          rk_aiq_isp_dehaze_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_goc_v3x_t>             rk_aiq_isp_agamma_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_v3x_t>            rk_aiq_isp_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_v32_t>             rk_aiq_isp_tnr_params_t;
+#if (USE_NEWSTRUCT == 0)
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v32_t>             rk_aiq_isp_ynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v32_t>             rk_aiq_isp_cnr_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v32_t>           rk_aiq_isp_sharpen_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v3x_t>             rk_aiq_isp_drc_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v32_t>           rk_aiq_isp_baynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v32_t>           rk_aiq_isp_bay3d_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cac_v32_t>             rk_aiq_isp_cac_params_t;
+#endif
+#endif
+
+#ifdef ISP_HW_V32_LITE
+typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v32_t>    rk_aiq_isp_awb_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_wb_gain_v32_t>         rk_aiq_isp_awb_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_af_v32_t>              rk_aiq_isp_af_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_v3x_t>           rk_aiq_isp_merge_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ccm_v32_t>             rk_aiq_isp_ccm_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_v32_t>             rk_aiq_isp_blc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_v32_t>         rk_aiq_isp_debayer_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_v21_t>            rk_aiq_isp_ldch_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_v32_t>          rk_aiq_isp_dehaze_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_goc_v3x_t>             rk_aiq_isp_agamma_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_v3x_t>            rk_aiq_isp_gain_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_v32_t>             rk_aiq_isp_tnr_params_t;
+#if (USE_NEWSTRUCT == 0)
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v32_t>             rk_aiq_isp_ynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v32_t>             rk_aiq_isp_cnr_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v32_t>           rk_aiq_isp_sharpen_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v3x_t>             rk_aiq_isp_drc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v32_t>           rk_aiq_isp_baynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v32_t>           rk_aiq_isp_bay3d_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cac_v32_t>             rk_aiq_isp_cac_params_t;
+#endif
+
+#ifdef ISP_HW_V39
+typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v39_t>    rk_aiq_isp_awb_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_wb_gain_v32_t>         rk_aiq_isp_awb_gain_params_t;
+#if USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<afStats_cfg_t>                    rk_aiq_isp_af_params_t;
+#else
+typedef rk_aiq_isp_params_t<rk_aiq_isp_af_v33_t>              rk_aiq_isp_af_params_t;
+#endif
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_t>               rk_aiq_isp_merge_params_t;
+#endif
+#if USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<ccm_param_t>                      rk_aiq_isp_ccm_params_t;
+typedef rk_aiq_isp_params_t<blc_param_t>                      rk_aiq_isp_blc_params_t;
+#else
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ccm_v32_t>             rk_aiq_isp_ccm_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_v32_t>             rk_aiq_isp_blc_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_v39_t>         rk_aiq_isp_debayer_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_v21_t>            rk_aiq_isp_ldch_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_v32_t>          rk_aiq_isp_dehaze_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_v3x_t>            rk_aiq_isp_gain_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_goc_v3x_t>             rk_aiq_isp_agamma_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_v39_t>             rk_aiq_isp_tnr_params_t;
+#if (USE_NEWSTRUCT == 0)
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v39_t>             rk_aiq_isp_ynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v39_t>             rk_aiq_isp_cnr_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v39_t>           rk_aiq_isp_sharpen_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v39_t>             rk_aiq_isp_drc_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v32_t>           rk_aiq_isp_baynr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v32_t>           rk_aiq_isp_bay3d_params_t;
+#ifndef USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<rk_aiq_isp_cac_v32_t>             rk_aiq_isp_cac_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_rgbir_v39_t>           rk_aiq_isp_rgbir_params_t;
+#endif
+typedef rk_aiq_isp_params_t<rk_aiq_isp_yuvme_v39_t>           rk_aiq_isp_yuvme_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_ldc_t> rk_aiq_isp_ldc_params_t;
+#endif
+
+// new struct
+// dm for v32, TODO: how to distinguish hw version ?
+#if USE_NEWSTRUCT
+typedef rk_aiq_isp_params_t<aeStats_cfg_t>      rk_aiq_isp_ae_stats_cfg_t;
+typedef rk_aiq_isp_params_t<dm_param_t>         rk_aiq_isp_dm_params_t;
+typedef rk_aiq_isp_params_t<btnr_param_t>       rk_aiq_isp_btnr_params_t;
+typedef rk_aiq_isp_params_t<gamma_param_t>      rk_aiq_isp_gamma_params_t;
+typedef rk_aiq_isp_params_t<ynr_param_t>        rk_aiq_isp_ynr_params_t;
+typedef rk_aiq_isp_params_t<sharp_param_t>      rk_aiq_isp_sharp_params_t;
+typedef rk_aiq_isp_params_t<cnr_param_t>        rk_aiq_isp_cnr_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v39_t>      rk_aiq_isp_drc_params_t;
+typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_v39_t>      rk_aiq_isp_dehaze_params_t;
+typedef rk_aiq_isp_params_t<dpc_param_t>          rk_aiq_isp_dpcc_params_t;
+typedef rk_aiq_isp_params_t<gic_param_t>         rk_aiq_isp_gic_params_t;
+typedef rk_aiq_isp_params_t<yme_param_t>         rk_aiq_isp_yme_params_t;
+typedef rk_aiq_isp_params_t<cac_param_t>      rk_aiq_isp_cac_params_t;
+typedef rk_aiq_isp_params_t<ldch_param_t>      rk_aiq_isp_ldch_params_t;
+typedef rk_aiq_isp_params_t<mge_param_t>      rk_aiq_isp_merge_params_t;
+typedef rk_aiq_isp_params_t<lsc_param_t>      rk_aiq_isp_lsc_params_t;
+typedef rk_aiq_isp_params_t<rgbir_param_t>         rk_aiq_isp_rgbir_params_t;
+typedef rk_aiq_isp_params_t<cgc_param_t>      rk_aiq_isp_cgc_params_t;
+typedef rk_aiq_isp_params_t<cp_param_t>      rk_aiq_isp_cp_params_t;
+typedef rk_aiq_isp_params_t<ie_param_t>      rk_aiq_isp_ie_params_t;
+typedef rk_aiq_isp_params_t<gain_param_t>      rk_aiq_isp_gain_params_t;
+#endif
 
 #ifdef ISP_HW_V20
 typedef struct rkisp_effect_params_s {
@@ -100,11 +310,26 @@ typedef struct rkisp_effect_params_s {
 } rkisp_effect_params_v20;
 #elif defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
 typedef struct rkisp_effect_params_s {
-    //struct isp32_isp_params_cfg isp_params_v32;
+#if defined(RKAIQ_HAVE_MULTIISP)
+    struct isp32_isp_params_cfg isp_params_v32[4];
+#endif
     struct isp32_isp_meas_cfg meas;
     struct isp32_bls_cfg bls_cfg;
     struct isp32_awb_gain_cfg awb_gain_cfg;
     rk_aiq_awb_stat_cfg_v32_t awb_cfg_v32;
+} rkisp_effect_params_v20;
+#elif defined(ISP_HW_V39)
+typedef struct rkisp_effect_params_s {
+#if defined(RKAIQ_HAVE_MULTIISP)
+    struct isp39_isp_params_cfg isp_params_v39[2];
+#endif
+    struct isp39_isp_meas_cfg meas;
+    struct isp32_bls_cfg bls_cfg;
+    struct isp32_awb_gain_cfg awb_gain_cfg;
+    awbStats_cfg_priv_t awb_cfg_v39;
+#if defined(USE_NEWSTRUCT)
+    aeStats_cfg_t ae_cfg_v39;
+#endif
 } rkisp_effect_params_v20;
 #else
 typedef struct rkisp_effect_params_s {
@@ -134,66 +359,12 @@ typedef rk_aiq_isp_params_t<rkisp_effect_params_v20>  rkisp_effect_params;
 #define RKAIQ_ISPP_ORB_ID           (1 << 4)
 #define RKAIQ_ISPP_FEC_ST_ID        (1<< 17 | RKAIQ_ISPP_FEC_ID)
 
-typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_t>       rk_aiq_isp_tnr_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_t>       rk_aiq_isp_ynr_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_uvnr_t>      rk_aiq_isp_uvnr_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_sharpen_t>   rk_aiq_isp_sharpen_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_edgeflt_t>   rk_aiq_isp_edgeflt_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_fec_t>       rk_aiq_isp_fec_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_orb_t>       rk_aiq_isp_orb_params_v20_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_afd_t>       rk_aiq_isp_afd_params_t;
-
-// v21 params struct
-typedef rk_aiq_isp_params_t<rk_aiq_awb_stat_cfg_v201_t>       rk_aiq_isp_awb_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v21_t>             rk_aiq_isp_drc_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_v21_t>             rk_aiq_isp_blc_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_t>              rk_aiq_isp_dehaze_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v21_t>           rk_aiq_isp_baynr_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v21_t>           rk_aiq_isp_bay3d_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v21_t>             rk_aiq_isp_ynr_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v21_t>             rk_aiq_isp_cnr_params_v21_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v21_t>           rk_aiq_isp_sharpen_params_v21_t;
-
-// v3x params struct
-typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v3x_t>    rk_aiq_isp_awb_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_af_meas_v3x_t>         rk_aiq_isp_af_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_goc_v3x_t>             rk_aiq_isp_agamma_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v3x_t>             rk_aiq_isp_drc_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_merge_v3x_t>           rk_aiq_isp_merge_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_t>              rk_aiq_isp_dehaze_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v3x_t>           rk_aiq_isp_baynr_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v3x_t>           rk_aiq_isp_bay3d_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v3x_t>             rk_aiq_isp_ynr_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v3x_t>             rk_aiq_isp_cnr_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v3x_t>           rk_aiq_isp_sharpen_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_cac_v3x_t>             rk_aiq_isp_cac_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_gain_v3x_t>            rk_aiq_isp_gain_params_v3x_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_v3x_t>             rk_aiq_isp_tnr_params_v3x_t;
-
-// v32 param struct
-typedef rk_aiq_isp_params_t<rk_aiq_isp_blc_v32_t>             rk_aiq_isp_blc_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_bay3d_v32_t>           rk_aiq_isp_bay3d_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_baynr_v32_t>           rk_aiq_isp_baynr_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_cac_v32_t>             rk_aiq_isp_cac_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_debayer_v32_t>         rk_aiq_isp_debayer_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_ccm_cfg_v2_t>              rk_aiq_isp_ccm_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_ldch_v21_t>            rk_aiq_isp_ldch_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_ynr_v32_t>             rk_aiq_isp_ynr_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_cnr_v32_t>             rk_aiq_isp_cnr_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_sharp_v32_t>           rk_aiq_isp_sharp_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v32_t>    rk_aiq_isp_awb_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_af_v31_t>              rk_aiq_isp_af_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_tnr_v32_t>             rk_aiq_isp_tnr_params_v32_t;
-typedef rk_aiq_isp_params_t<rk_aiq_wb_gain_v32_t>             rk_aiq_isp_awb_gain_params_v32_t;
-
-// v32 lite param struct
-typedef rk_aiq_isp_params_t<rk_aiq_isp_af_v32_t>              rk_aiq_isp_af_params_v32_lite_t;
-
 typedef enum rk_aiq_drv_share_mem_type_e {
     MEM_TYPE_LDCH,
     MEM_TYPE_FEC,
     MEM_TYPE_CAC,
     MEM_TYPE_DBG_INFO,
+    MEM_TYPE_LDCV,
 } rk_aiq_drv_share_mem_type_t;
 
 typedef void (*alloc_mem_t)(uint8_t id, void* ops_ctx, void* cfg, void** mem_ctx);
@@ -206,26 +377,27 @@ typedef struct isp_drv_share_mem_ops_s {
 } isp_drv_share_mem_ops_t;
 
 typedef struct rk_aiq_lut_share_mem_info_s {
-    int size{-1};
-    void *map_addr{nullptr};
-    void *addr{nullptr};
-    int fd{-1};
-    char *state{nullptr};
+    int size{ -1 };
+    void* map_addr{ nullptr };
+    void* addr{ nullptr };
+    int fd{ -1 };
+    char* state{ nullptr };
 } rk_aiq_lut_share_mem_info_t;
 
 typedef rk_aiq_lut_share_mem_info_t rk_aiq_ldch_share_mem_info_t;
+typedef rk_aiq_lut_share_mem_info_t rk_aiq_ldcv_share_mem_info_t;
 typedef rk_aiq_lut_share_mem_info_t rk_aiq_cac_share_mem_info_t;
 typedef rk_aiq_lut_share_mem_info_t rk_aiq_dbg_share_mem_info_t;
 
 typedef struct rk_aiq_fec_share_mem_info_s {
     int size;
     int fd;
-    void *map_addr;
-    unsigned char *meshxf;
-    unsigned char *meshyf;
-    unsigned short *meshxi;
-    unsigned short *meshyi;
-    char *state;
+    void* map_addr;
+    unsigned char* meshxf;
+    unsigned char* meshyf;
+    unsigned short* meshxi;
+    unsigned short* meshyi;
+    char* state;
 } rk_aiq_fec_share_mem_info_t;
 
 typedef struct rk_aiq_share_mem_alloc_param_s {
@@ -247,14 +419,14 @@ struct rk_aiq_vbuf_info {
     uint32_t exp_time_reg;
     uint32_t exp_gain_reg;
     uint32_t data_fd;
-    uint8_t *data_addr;
+    uint8_t* data_addr;
     uint32_t data_length;
     rk_aiq_rawbuf_type_t buf_type;
     bool valid;
 };
 
 struct rk_aiq_vbuf {
-    void *base_addr;
+    void* base_addr;
     uint32_t frame_width;
     uint32_t frame_height;
     struct rk_aiq_vbuf_info buf_info[3];/*index: 0-short,1-medium,2-long*/
@@ -272,8 +444,8 @@ typedef struct rk_aiq_tx_info_s {
     //get from AE
     bool                IsAeConverged;
     bool                envChange;
-    void                *data_addr;
-    RKAiqAecExpInfo_t   *aecExpInfo;
+    void* data_addr;
+    RKAiqAecExpInfo_t* aecExpInfo;
 } rk_aiq_tx_info_t;
 
 enum cam_thread_type_e {
@@ -299,6 +471,7 @@ enum cam_thread_type_e {
     VICAP_RESET_EVT,
     VICAP_WITH_RK1608_RESET_EVT,
     VICAP_POLL_SCL,
+    ISP_POLL_AIISP,
     ISP_POLL_POST_MAX,
 };
 
@@ -325,7 +498,7 @@ enum cam_thread_type_e {
 #define MAX_ISP_LINKED_VICAP_CNT      4
 
 #define ISP_TX_BUF_NUM 4
-#define VIPCAP_TX_BUF_NUM 4
+#define VIPCAP_TX_BUF_NUM      4
 #define VIPCAP_TX_BUF_NUM_1608 6    // For mount 3 sensor, is mount 4 sensor, is 7
 
 typedef struct {
@@ -343,6 +516,7 @@ typedef struct {
     char mpfbc_dev_path[DEV_PATH_LEN];
     char main_path[DEV_PATH_LEN];
     char self_path[DEV_PATH_LEN];
+    char ldc_path[DEV_PATH_LEN];
     char rawwr0_path[DEV_PATH_LEN];
     char rawwr1_path[DEV_PATH_LEN];
     char rawwr2_path[DEV_PATH_LEN];
@@ -356,6 +530,8 @@ typedef struct {
     char mipi_luma_path[DEV_PATH_LEN];
     char mipi_dphy_rx_path[DEV_PATH_LEN];
     char linked_vicap[MAX_ISP_LINKED_VICAP_CNT][DEV_PATH_LEN];
+    char linked_vicap_sd_path[DEV_PATH_LEN];
+    char pdaf_path[DEV_PATH_LEN];
 } rk_aiq_isp_t;
 
 typedef struct {
@@ -433,6 +609,8 @@ typedef struct {
 } rk_aiq_cif_hw_info_t;
 
 typedef struct {
+    char sns_name[32];
+    PdafSensorType_t pdaf_type;
     bool pdaf_support;
     uint32_t pdaf_vc;
     uint32_t pdaf_width;
@@ -467,11 +645,12 @@ typedef struct {
     std::string module_index_str; // parsed from sensor entity name
     char phy_module_orient; // parsed from sensor entity name
     std::vector<rk_frame_fmt_t>  frame_size;
-    rk_aiq_isp_t *isp_info;
-    rk_aiq_cif_info_t *cif_info;
-    rk_aiq_ispp_t *ispp_info;
+    rk_aiq_isp_t* isp_info;
+    rk_aiq_cif_info_t* cif_info;
+    rk_aiq_ispp_t* ispp_info;
     bool linked_to_isp;
     bool linked_to_1608;
+    bool linked_to_serdes;
     bool dvp_itf;
     struct rkmodule_inf mod_info;
 } rk_sensor_full_info_t;
@@ -493,17 +672,21 @@ class RkAiqAecStats : public XCam::BufferData {
 public:
     explicit RkAiqAecStats() {
         xcam_mem_clear(aec_stats);
+        xcam_mem_clear(aec_stats_v25);
         aec_stats_valid = false;
         frame_id = -1;
         af_prior = 0;
     };
     virtual ~RkAiqAecStats() {};
-    rk_aiq_isp_aec_stats_t aec_stats;
+    union {
+        rk_aiq_isp_aec_stats_t aec_stats;
+        RKAiqAecStatsV25_t     aec_stats_v25;
+    };
     bool aec_stats_valid;
     bool af_prior;
     uint32_t frame_id;
 private:
-    XCAM_DEAD_COPY (RkAiqAecStats);
+    XCAM_DEAD_COPY(RkAiqAecStats);
 };
 
 class RkAiqAwbStats : public XCam::BufferData {
@@ -523,13 +706,14 @@ public:
         rk_aiq_awb_stat_res_v201_t awb_stats_v201;
         rk_aiq_isp_awb_stats_v3x_t awb_stats_v3x;
         rk_aiq_isp_awb_stats_v32_t awb_stats_v32;
+        awbStats_stats_priv_t awb_stats_v39;
     };
     bool awb_stats_valid;
     bool awb_cfg_effect_valid;
     uint32_t frame_id;
     rk_aiq_isp_blc_t blc_cfg_effect;
 private:
-    XCAM_DEAD_COPY (RkAiqAwbStats);
+    XCAM_DEAD_COPY(RkAiqAwbStats);
 };
 
 class RkAiqAtmoStats : public XCam::BufferData {
@@ -544,7 +728,7 @@ public:
     bool atmo_stats_valid;
     uint32_t frame_id;
 private:
-    XCAM_DEAD_COPY (RkAiqAtmoStats);
+    XCAM_DEAD_COPY(RkAiqAtmoStats);
 };
 
 class RkAiqAdehazeStats : public XCam::BufferData {
@@ -559,7 +743,22 @@ public:
     bool adehaze_stats_valid;
     uint32_t frame_id;
 private:
-    XCAM_DEAD_COPY (RkAiqAdehazeStats);
+    XCAM_DEAD_COPY(RkAiqAdehazeStats);
+};
+
+class RkAiqAgainStats : public XCam::BufferData {
+public:
+    explicit RkAiqAgainStats() {
+        xcam_mem_clear(again_stats);
+        again_stats_valid = false;
+        frame_id = -1;
+    };
+
+    rk_aiq_again_stat_t again_stats;
+    bool again_stats_valid;
+    uint32_t frame_id;
+private:
+    XCAM_DEAD_COPY(RkAiqAgainStats);
 };
 
 class RkAiqAfStats : public XCam::BufferData {
@@ -567,6 +766,10 @@ public:
     explicit RkAiqAfStats() {
         xcam_mem_clear(af_stats);
         xcam_mem_clear(af_stats_v3x);
+#ifdef USE_NEWSTRUCT
+        xcam_mem_clear(afStats_stats);
+#endif
+        xcam_mem_clear(stat_motor);
         xcam_mem_clear(aecExpInfo);
         af_stats_valid = false;
         frame_id = -1;
@@ -575,12 +778,16 @@ public:
     union {
         rk_aiq_isp_af_stats_t af_stats;
         rk_aiq_isp_af_stats_v3x_t af_stats_v3x;
+#ifdef USE_NEWSTRUCT
+        afStats_stats_t afStats_stats;
+#endif
     };
+    rk_aiq_af_algo_motor_stat_t stat_motor;
     RKAiqAecExpInfo_t aecExpInfo;
     bool af_stats_valid;
     uint32_t frame_id;
 private:
-    XCAM_DEAD_COPY (RkAiqAfStats);
+    XCAM_DEAD_COPY(RkAiqAfStats);
 };
 
 class RkAiqOrbStats : public XCam::BufferData {
@@ -597,7 +804,7 @@ public:
     bool orb_stats_valid;
     uint32_t frame_id;
 private:
-    XCAM_DEAD_COPY (RkAiqOrbStats);
+    XCAM_DEAD_COPY(RkAiqOrbStats);
 };
 
 class RkAiqPdafStats : public XCam::BufferData {
@@ -612,14 +819,14 @@ public:
     bool pdaf_stats_valid;
     uint32_t frame_id;
 private:
-    XCAM_DEAD_COPY (RkAiqPdafStats);
+    XCAM_DEAD_COPY(RkAiqPdafStats);
 };
 
 typedef struct rk_aiq_scale_raw_info_s {
     uint8_t             bpp;
-    XCamVideoBuffer     *raw_s;
-    XCamVideoBuffer     *raw_m;
-    XCamVideoBuffer     *raw_l;
+    XCamVideoBuffer* raw_s;
+    XCamVideoBuffer* raw_m;
+    XCamVideoBuffer* raw_l;
 } rk_aiq_scale_raw_info_t;
 
 typedef struct RkAiqVicapRawBufInfo_s {
@@ -659,8 +866,8 @@ typedef struct RkAiqVicapRawBuf_s : public BufferData {
 
 typedef enum RkAiqVicapRawBufFlag_e {
     RK_AIQ_VICAP_SCALE_HDR_MODE_NORMAL = 0x1,
-    RK_AIQ_VICAP_SCALE_HDR_MODE_2_HDR  = 0x3,
-    RK_AIQ_VICAP_SCALE_HDR_MODE_3_HDR  = 0x7,
+    RK_AIQ_VICAP_SCALE_HDR_MODE_2_HDR = 0x3,
+    RK_AIQ_VICAP_SCALE_HDR_MODE_3_HDR = 0x7,
 } RkAiqVicapRawBufFlag_t;
 
 enum rk_aiq_core_analyze_type_e {
@@ -689,14 +896,14 @@ enum rk_aiq_core_analyze_type_e {
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 static const char* AnalyzerGroupType2Str[32] = {
-    [RK_AIQ_CORE_ANALYZE_MEAS] = "GRP_MEAS",   [RK_AIQ_CORE_ANALYZE_OTHER] = "GRP_OTHER",
-    [RK_AIQ_CORE_ANALYZE_AMD] = "GRP_AMD",     [RK_AIQ_CORE_ANALYZE_THUMBNAILS] = "GRP_THUMBNAILS",
-    [RK_AIQ_CORE_ANALYZE_LSC] = "GRP_LSC",     [RK_AIQ_CORE_ANALYZE_AE] = "GRP_AE",
+    [RK_AIQ_CORE_ANALYZE_MEAS] = "GRP_MEAS", [RK_AIQ_CORE_ANALYZE_OTHER] = "GRP_OTHER",
+    [RK_AIQ_CORE_ANALYZE_AMD] = "GRP_AMD", [RK_AIQ_CORE_ANALYZE_THUMBNAILS] = "GRP_THUMBNAILS",
+    [RK_AIQ_CORE_ANALYZE_LSC] = "GRP_LSC", [RK_AIQ_CORE_ANALYZE_AE] = "GRP_AE",
     [RK_AIQ_CORE_ANALYZE_AMFNR] = "GRP_AMFNR", [RK_AIQ_CORE_ANALYZE_AYNR] = "GRP_AYNR",
-    [RK_AIQ_CORE_ANALYZE_AWB] = "GRP_AWB",     [RK_AIQ_CORE_ANALYZE_DHAZ] = "DHAZ",
-    [RK_AIQ_CORE_ANALYZE_GRP0] = "GRP0",       [RK_AIQ_CORE_ANALYZE_GRP1] = "GRP1",
-    [RK_AIQ_CORE_ANALYZE_AF] = "AF",           [RK_AIQ_CORE_ANALYZE_EIS] = "EIS",
-    [RK_AIQ_CORE_ANALYZE_ORB] = "ORB",         [RK_AIQ_CORE_ANALYZE_AFD] = "AFD",
+    [RK_AIQ_CORE_ANALYZE_AWB] = "GRP_AWB", [RK_AIQ_CORE_ANALYZE_DHAZ] = "DHAZ",
+    [RK_AIQ_CORE_ANALYZE_GRP0] = "GRP0", [RK_AIQ_CORE_ANALYZE_GRP1] = "GRP1",
+    [RK_AIQ_CORE_ANALYZE_AF] = "AF", [RK_AIQ_CORE_ANALYZE_EIS] = "EIS",
+    [RK_AIQ_CORE_ANALYZE_ORB] = "ORB", [RK_AIQ_CORE_ANALYZE_AFD] = "AFD",
 };
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -709,5 +916,32 @@ typedef enum _RkAiqSharedDataType {
     RK_AIQ_SHARED_TYPE_AEC_STATS,
     RK_AIQ_SHARED_TYPE_ORB_STATS,
 } RkAiqSharedDataType;
+
+typedef struct _RkAiqBay3dStat {
+    bool is_valid;
+
+    uint32_t frame_id;
+    struct isp39_bay3d_stat stat;
+} RkAiqBay3dStat;
+
+typedef enum _RkAiqIspUnitedMode {
+    RK_AIQ_ISP_UNITED_MODE_NORMAL = 0,
+    RK_AIQ_ISP_UNITED_MODE_TWO_GRID,
+    RK_AIQ_ISP_UNITED_MODE_FOUR_GRID,
+} RkAiqIspUnitedMode;
+
+#if defined(ISP_HW_V32_LITE)
+#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 4224 * 3136
+#elif defined(ISP_HW_V32)
+#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 3072 * 1728
+#elif defined(ISP_HW_V30)
+#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 3840 * 2160
+#else
+#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 3840 * 2160
+#endif
+
+typedef struct _RkAiqTbInfo_s {
+    bool is_fastboot;
+} RkAiqTbInfo_t;
 
 #endif

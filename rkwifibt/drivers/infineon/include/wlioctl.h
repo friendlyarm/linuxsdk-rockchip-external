@@ -6,9 +6,9 @@
  *
  * Definitions subject to change without notice.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -175,7 +175,6 @@ typedef struct wl_af_params {
 #define WL_EXTAUTH_FAIL       3
 #define WL_EXTAUTH_SUCCESS    4
 
-#ifdef WL_FW_ARCH_MSCH
 /**
  * Used by both dongle and host
  * dongle asks host to start auth(SAE)
@@ -188,16 +187,6 @@ typedef struct wl_auth_req_status {
 	uint8   ssid[DOT11_MAX_SSID_LEN];
 	uint8   pmkid[WPA2_PMKID_LEN];
 } wl_auth_req_status_t;
-#else /* WL_FW_ARCH_MSCH */
-typedef struct wl_wifi_external_auth_event {
-	uint8 akm_suite[4];		        /* AKM Suite */
-	uint32 external_auth_act;	    /* action: start / abort */
-	uint8 bssid[ETHER_ADDR_LEN];	/* bssid */
-	uint32 SSID_len;
-	uint8 SSID[DOT11_MAX_SSID_LEN];
-	uint32 status;
-} wl_wifi_external_auth_event_t;
-#endif /* WL_FW_ARCH_MSCH */
 
 typedef struct wl_mf_params {
 	uint32 version;
@@ -210,6 +199,15 @@ typedef struct wl_mf_params {
 	uint32 packetId;
 	uint8  data[1];
 } wl_mf_params_t;
+
+#define MDNS_MAX_SRV_RR   4
+#define MDNS_MAX_TXT_RR   4
+#define MDNS_MAX_IPV4     4
+#define MDNS_MAX_IPV6	  4
+#define MDNS_MAX_NAME	256
+#define MDNS_MAX_TEXT    40
+#define MDNS_MAX_PORTS    8
+#define MDNS_MAX_SUBTYPE 16
 
 #define MFP_TEST_FLAG_NORMAL	0
 #define MFP_TEST_FLAG_ANY_KEY	1
@@ -6846,6 +6844,9 @@ typedef struct wl_obss_scan_arg {
 
 #define WL_OBSS_SCAN_PARAM_LEN	sizeof(wl_obss_scan_arg_t)
 
+#define WL_RSSI_EVENT_BRCM_VERSION	0
+#define WL_RSSI_EVENT_IFX_VERSION	1
+
 /** RSSI event notification configuration. */
 typedef struct wl_rssi_event {
 	uint32 rate_limit_msec;		/**< # of events posted to application will be limited to
@@ -6856,7 +6857,8 @@ typedef struct wl_rssi_event {
 						 * will be posted each time the RSSI of received
 						 * beacons/packets crosses a level.
 						 */
-	int8 pad[3];
+	uint8 version;
+	int8 pad[2];
 } wl_rssi_event_t;
 
 #define RSSI_MONITOR_VERSION    1
@@ -12958,9 +12960,16 @@ typedef struct wl_bdo {
 #define WL_BDO_SUBCMD_DOWNLOAD		0	/* Download flattened database  */
 #define WL_BDO_SUBCMD_ENABLE		1	/* Start bonjour after download */
 #define WL_BDO_SUBCMD_MAX_DOWNLOAD	2	/* Get the max download size    */
+#define WL_BDO_SUBCMD_PRIMARY_IFACE 	3	/* Set the primary mDNS iface values */
+#define WL_BDO_SUBCMD_SECONDARY_IFACE   4	/* Set the secondary mDNS iface values */
+#define WL_BDO_ADD_SERVICE_RR		5	/* Add service record params */
+#define WL_BDO_ADD_TEXT_RR		6	/* Add text record params */
+#define WL_BDO_SUBCMD_ADD_PORTS 	7	/* Set Wakeupports to mDNS */
 
 /* maximum fragment size */
 #define BDO_MAX_FRAGMENT_SIZE	1024
+#define BDO_MDNS_CFG_VER	1
+#define BDO_MDNS_HEADER		4
 
 /* download flattened database
  *
@@ -12994,6 +13003,115 @@ typedef struct wl_bdo_max_download {
 	uint16 size;	/* Max download size in bytes */
 	uint8 pad[2];	/* 4-byte struct alignment    */
 } wl_bdo_max_download_t;
+
+struct wl_bdo_ipv4_addr  {
+	uint8 b[4];
+};
+
+struct wl_bdo_ipv6_addr  {
+	uint8 b[16];
+};
+
+struct wl_bdo_primary_iface {
+	uint16 ver;
+	uint16 len;
+	uint8  num_ipv4;
+	uint8  num_ipv6;
+	uint8  num_ipv6_mcast;
+	uint8  pad;
+	struct wl_bdo_ipv4_addr ipv4[MDNS_MAX_IPV4];
+	struct wl_bdo_ipv6_addr ipv6[MDNS_MAX_IPV6];
+	struct wl_bdo_ipv6_addr ipv6_mcast[MDNS_MAX_IPV6];
+};
+
+struct wl_bdo_secondary_iface {
+	uint16 ver;
+	uint16 len;
+	uint8  num_ipv4;
+	uint8  num_ipv6;
+	uint8  pad[2];
+	struct wl_bdo_ipv4_addr ipv4[MDNS_MAX_IPV4];
+	struct wl_bdo_ipv6_addr ipv6[MDNS_MAX_IPV6];
+};
+
+struct wl_bdo_wakeupports {
+	uint16 ver;
+	uint16 len;
+	uint8  num_udp_ports;
+	uint8  num_tcp_ports;
+	uint16 udp_ports[MDNS_MAX_PORTS];
+	uint16 tcp_ports[MDNS_MAX_PORTS];
+};
+
+struct wl_bdo_srv_rr {
+	uint16 ver;
+	uint16 len;
+	uint8  name[MDNS_MAX_NAME];        /* Service instance name */
+	uint16 type;            /* Service type */
+	uint16 class;           /* Class */
+	uint32 ttl;             /* TTL */
+	uint16 priority;        /* Priority */
+	uint16 weight;          /* weight */
+	uint16 port;            /* Port */
+	uint16 subtype_num;
+	uint8  target[MDNS_MAX_NAME];      /* Service domain name */
+	uint8  subtype[MDNS_MAX_SUBTYPE];
+};
+
+struct wl_bdo_txt_rr {
+	uint16 ver;
+	uint16 len;
+	uint8  name[MDNS_MAX_NAME];        /* Service instance name */
+	uint16 type;            /* Service type */
+	uint16 class;           /* Class */
+	uint32 ttl;             /* TTL */
+};
+
+/* These are actual FW structures */
+struct wl_bdo_prim_iface {
+	uint8  num_ipv4;
+	uint8  num_ipv6;
+	uint8  num_ipv6_mcast;
+	uint8  pad;
+	struct wl_bdo_ipv4_addr ipv4[MDNS_MAX_IPV4];
+	struct wl_bdo_ipv6_addr ipv6[MDNS_MAX_IPV6];
+	struct wl_bdo_ipv6_addr ipv6_mcast[MDNS_MAX_IPV6];
+};
+
+struct wl_bdo_sec_iface {
+	uint8  num_ipv4;
+	uint8  num_ipv6;
+	uint8  pad[2];
+	struct wl_bdo_ipv4_addr ipv4[MDNS_MAX_IPV4];
+	struct wl_bdo_ipv6_addr ipv6[MDNS_MAX_IPV6];
+};
+
+struct wl_bdo_ports {
+	uint8  num_udp_ports;
+	uint8  num_tcp_ports;
+	uint16 udp_ports[MDNS_MAX_PORTS];
+	uint16 tcp_ports[MDNS_MAX_PORTS];
+};
+
+struct wl_bdo_srv_rec {
+	uint8  name[MDNS_MAX_NAME];        /* Service instance name */
+	uint16 type;            /* Service type */
+	uint16 class;           /* Class */
+	uint32 ttl;             /* TTL */
+	uint16 priority;        /* Priority */
+	uint16 weight;          /* weight */
+	uint16 port;            /* Port */
+	uint16 subtype_num;
+	uint8  target[MDNS_MAX_NAME];      /* Service domain name */
+	uint8 subtype[MDNS_MAX_SUBTYPE];
+};
+
+struct wl_bdo_txt_rec {
+	uint8  name[MDNS_MAX_NAME];        /* Service instance name */
+	uint16 type;            /* Service type */
+	uint16 class;           /* Class */
+	uint32 ttl;             /* TTL */
+};
 
 /*
  * TCP keepalive offload definitions
@@ -13125,6 +13243,7 @@ typedef struct wl_dltro {
 #define WL_DLTRO_SUBCMD_CONNECT     0   /* DLTRO connection info */
 #define WL_DLTRO_SUBCMD_PARAM       1   /* DLTRO parameter info */
 #define WL_DLTRO_SUBCMD_MAX_DLTRO   2   /* Max DLTRO supported */
+#define WL_DLTRO_SUBCMD_AUTORENEW   3   /* Enable/disable autorenew */
 
 /* WL_DLTRO_SUBCMD_CONNECT subcommand data
  * Invoke with unique 'index' for each DLTRO connection
@@ -15789,6 +15908,8 @@ typedef struct ecounters_suspend {
 /* -------------- dynamic BTCOEX --------------- */
 #define DCTL_TROWS	2			/**< currently practical number of rows  */
 #define DCTL_TROWS_MAX	4			/**<  2 extra rows RFU */
+/* Default Agg mode is Firmware Driven */
+#define DCTL_AGG_MODE_DFLT 0
 /* DYNCTL profile flags */
 #define DCTL_FLAGS_DISABLED	0		/**< default value: all features disabled */
 #define DCTL_FLAGS_DYNCTL	(1 << 0)	/**<  1 - enabled, 0 - legacy only */
@@ -15846,6 +15967,7 @@ typedef BWL_PRE_PACKED_STRUCT struct  dctl_prof {
 	btc_thr_data_t msw_data[DCTL_TROWS_MAX];
 	/** dynctl desense switching data table */
 	btc_thr_data_t dsns_data[DCTL_TROWS_MAX];
+	uint16	custom_agg_mode;
 } BWL_POST_PACKED_STRUCT dctl_prof_t;
 #include <packed_section_end.h>
 
@@ -16330,6 +16452,70 @@ typedef enum {
 	CHANSW_ULB = 13,	/* channel switch at ULB */
 	CHANSW_LAST = 14	/* last channel switch reason */
 } chansw_reason_t;
+
+/* Versions of Offload config */
+#define WL_OL_CFG_VER_1    1
+
+typedef enum wl_ol_cfg_id {
+	WL_OL_CFG_ID_PROF = 1,  /* Offload Profile Update */
+	WL_OL_CFG_ID_INET_V4,   /* ADD/DEL IPv4 Address */
+	WL_OL_CFG_ID_INET_V6,   /* ADD/DEL IPv6 Address */
+	WL_OL_CFG_ID_ACTIVATE,  /* Activate/Deactivate Offload */
+	/*  Add new type before this line */
+	WL_OL_CFG_ID_MAX        /* Last Offload Config ID */
+} wl_ol_cfg_id_t;
+
+typedef enum wl_ol_prof_type {
+	WL_OL_PROF_TYPE_LOW_PWR = 1,   /* Low Power Profile */
+	WL_OL_PROF_TYPE_MID_PWR = 2,   /* Mid Power Profile */
+	WL_OL_PROF_TYPE_HIGH_PWR = 3,  /* High Power Profile */
+	/*  Add new type before this line */
+	WL_OL_PROF_MAX = 4             /* Last Offload Profile */
+} wl_ol_prof_type_t;
+
+/* Offload configuration */
+typedef struct wl_ol_cfg_v1 {
+	uint16 ver;                     /* version of this structure */
+	uint16 len;                     /* length of structure in bytes */
+	wl_ol_cfg_id_t id;		/* Offload Config ID */
+
+	union {
+		struct {
+			wl_ol_prof_type_t type; /* offload profile type */
+			bool reset;               /* Remove profile configuration */
+			uint8 pad[3];
+		} ol_profile;
+		struct {
+			struct ipv4_addr host_ipv4;
+			bool del;               /* 1:del 0:add host ipv4 address */
+			uint8 pad[3];
+		} ol_inet_v4;
+		struct {
+			struct ipv6_addr host_ipv6;
+			uint8 type;             /* 0:unicast 1:anycast */
+			bool del;               /* 1:del 0:add host ipv6 address */
+			uint8 pad[2];
+		} ol_inet_v6;
+		struct {
+			bool enable;		/* enable/disable offload feature */
+			uint8 pad[3];
+		} ol_activate;
+	} u;
+
+	uint32 offload_skip;               /* Bitmap of offload to be skipped */
+} wl_ol_cfg_v1_t;
+
+/* Offload Skip Bitmap */
+#define WL_OL_ARP         (1 << 0)
+#define WL_OL_ND          (1 << 1)
+#define WL_OL_BDO         (1 << 2)
+#define WL_OL_ICMP        (1 << 3)
+#define WL_OL_TKO         (1 << 4)
+#define WL_OL_DLTRO       (1 << 5)
+#define WL_OL_PNO         (1 << 6)
+#define WL_OL_KEEPALIVE   (1 << 7)
+#define WL_OL_GTKOE       (1 << 8)
+#define WL_OL_WOWLPF      (1 << 9)
 
 /*
  * WOWL unassociated mode power svae pattern.
@@ -17033,6 +17219,7 @@ enum {
 	WL_HE_CMD_PREPUNCRX_EN = 26,
 	WL_HE_CMD_MIMOCAP_EN = 27,
 #endif // endif
+	WL_HE_CMD_MUEDCA_OPT = 28,
 	WL_HE_CMD_LAST
 };
 
@@ -17406,6 +17593,8 @@ enum wl_mbo_cmd_ids {
 	WL_MBO_CMD_DBG_EVENT_CHECK = 13,
 	WL_MBO_CMD_EVENT_MASK = 14,
 	WL_MBO_CMD_ASSOC_DISALLOWED = 15,
+	WL_MBO_CMD_CELLULAR_DATA_PREF = 16,
+	WL_MBO_CMD_ENABLE = 17,
 	/* Add before this !! */
 	WL_MBO_CMD_LAST
 };
@@ -17423,7 +17612,8 @@ enum wl_mbo_xtlv_id {
 	WL_MBO_XTLV_BTQ_TRIG_RSSI_DELTA = 0xa,
 	WL_MBO_XTLV_ANQP_CELL_SUPP      = 0xb,
 	WL_MBO_XTLV_BIT_MASK		= 0xc,
-	WL_MBO_XTLV_ASSOC_DISALLOWED	= 0xd
+	WL_MBO_XTLV_ASSOC_DISALLOWED	= 0xd,
+	WL_MBO_XTLV_CELLULAR_DATA_PREF = 0xe
 };
 
 /* event bit mask flags for MBO */
@@ -19215,4 +19405,18 @@ enum {
 	MUMIMO_LTF_0 = 0, /* HE single stream pilot HE-LTF mode */
 	MUMIMO_LTF_1 = 1 /* HE masked HE-LTF sequence mode */
 };
+
+/* OWE Max RSNIE length to be delivered from host */
+#define OWE_MAX_RSNIE_LEN 64
+/**
+ *  Used by both dongle and host
+ *  dongle asks host to update owe assoc resp
+ *  host updates owe assoc resp status to dongle
+ */
+typedef struct wl_owe_asresp_status {
+	uint16  flags; /* indicate host 80211 status code */
+	struct  ether_addr peer_mac; /* peer mac address */
+	uint32  rsnie_len;
+	uint8   rsnie[OWE_MAX_RSNIE_LEN];
+} wl_owe_asresp_status_t;
 #endif /* _wlioctl_h_ */

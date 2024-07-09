@@ -3,7 +3,6 @@
 *.o.*
 *.lds
 *.d
-*.ta
 *.dmp
 *.map
 *.patch

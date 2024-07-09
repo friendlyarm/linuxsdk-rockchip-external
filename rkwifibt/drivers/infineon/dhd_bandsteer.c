@@ -4,9 +4,9 @@
  * Feature by which dualband capable PEERs will be
  * forced move on 5GHz interface
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -48,7 +48,9 @@
 #include <dhd_cfg80211.h>
 #include <dhd_bandsteer.h>
 #include <dhd_dbg.h>
-
+#ifdef WL_DHD_XR
+#include <wl_cfg80211_xr.h>
+#endif /* WL_DHD_XR */
 /* defines */
 /* BANDSTEER STATE MACHINE STATES */
 #define DHD_BANDSTEER_START			0x0001
@@ -457,6 +459,79 @@ dhd_bandsteer_trigger_bandsteer(struct net_device *ndev, uint8 *mac_addr)
 	return BCME_OK;
 }
 
+#ifdef WL_DHD_XR
+s32
+dhd_bandsteer_update_slave_ifaces(dhd_pub_t *pub, struct net_device *ndev)
+{
+	/* Initialize */
+	struct channel_info ci;
+	uint8 ifidx;
+	struct wireless_dev *__wdev = (struct wireless_dev *)(ndev)->ieee80211_ptr;
+	struct bcm_cfg80211 *cfg = (struct bcm_cfg80211 *)wiphy_priv(__wdev->wiphy);
+	dhd_bandsteer_context_t *dhd_bandsteer_cntx =
+		(dhd_bandsteer_context_t *) cfg->dhd_bandsteer_cntx;
+	int err;
+
+	DHD_INFO(("%s: entered\n", __FUNCTION__));
+
+	if (cfg == NULL) {
+		DHD_ERROR(("%s: bcmcfg is  null\n", __FUNCTION__));
+		return BCME_ERROR;
+	}
+
+	if (dhd_bandsteer_cntx == NULL) {
+		DHD_ERROR(("%s: Band Steering not enabled\n", __FUNCTION__));
+		return BCME_ERROR;
+	}
+
+	if (dhd_bandsteer_get_ifaces(pub, &dhd_bandsteer_cntx->bsd_ifaces)) {
+		DHD_ERROR(("%s: AP interfaces count != 1", __FUNCTION__));
+		err = BCME_ERROR;
+		return err;
+	}
+
+	for (ifidx = 0; ifidx < DHD_BANDSTEER_MAXIFACES; ifidx++) {
+		if (!dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev)
+			continue;
+
+		pub = dhd_get_pub(dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev);
+
+		if (DHD_GET_XR_ROLE(pub) != XR_ROLE) {
+			DHD_INFO(("%s: device:%s xr role not a match\n",
+				__func__, dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev->name));
+			continue;
+		}
+
+		err = wldev_iovar_getbuf_bsscfg(dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev,
+			 "cur_etheraddr", NULL, 0, cfg->ioctl_buf,
+				WLC_IOCTL_SMLEN, 0, &cfg->ioctl_buf_sync);
+		if (err) {
+			DHD_ERROR(("%s: Failed to get mac address\n", __FUNCTION__));
+			return BCME_ERROR;
+		}
+
+		memcpy(dhd_bandsteer_cntx->bsd_ifaces[ifidx].macaddr.octet,
+				cfg->ioctl_buf, ETHER_ADDR_LEN);
+
+		memset(&ci, 0, sizeof(struct channel_info));
+		err = wldev_ioctl_get(dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev, WLC_GET_CHANNEL,
+				&ci, sizeof(ci));
+		if (err) {
+			DHD_ERROR(("%s: Failed to get channel\n", __FUNCTION__));
+			return BCME_ERROR;
+		}
+		if (CHANNEL_IS_5G(ci.hw_channel))
+			dhd_bandsteer_cntx->ifidx_5g = ifidx;
+
+		dhd_bandsteer_cntx->bsd_ifaces[ifidx].channel = ci.hw_channel;
+	}
+
+	DHD_INFO(("%s: exited\n", __FUNCTION__));
+
+	return BCME_OK;
+}
+#endif /* WL_DHD_XR */
+
 s32
 dhd_bandsteer_module_init(struct net_device *ndev, bool ap, bool p2p)
 {
@@ -467,6 +542,12 @@ dhd_bandsteer_module_init(struct net_device *ndev, bool ap, bool p2p)
 	struct wireless_dev *__wdev = (struct wireless_dev *)(ndev)->ieee80211_ptr;
 	struct bcm_cfg80211 *cfg = (struct bcm_cfg80211 *)wiphy_priv(__wdev->wiphy);
 	int err;
+#ifdef WL_DHD_XR
+	dhd_pub_t *pub = NULL;
+#ifdef WL_DHD_XR_MASTER
+	int ret = BCME_OK;
+#endif /* WL_DHD_XR_MASTER */
+#endif /* WL_DHD_XR */
 
 	DHD_INFO(("%s: entered\n", __FUNCTION__));
 
@@ -494,6 +575,17 @@ dhd_bandsteer_module_init(struct net_device *ndev, bool ap, bool p2p)
 	}
 
 	for (ifidx = 0; ifidx < DHD_BANDSTEER_MAXIFACES; ifidx++) {
+#ifdef WL_DHD_XR
+		if (!dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev)
+			continue;
+
+		pub = dhd_get_pub(dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev);
+		if (DHD_GET_XR_ROLE(pub) != XR_ROLE) {
+			DHD_INFO(("%s: device:%s xr role not a match\n",
+				__func__, dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev->name));
+			continue;
+		}
+#endif /* WL_DHD_XR */
 		err = wldev_iovar_getbuf_bsscfg(dhd_bandsteer_cntx->bsd_ifaces[ifidx].ndev,
 			 "cur_etheraddr", NULL, 0, cfg->ioctl_buf,
 				WLC_IOCTL_SMLEN, 0, &cfg->ioctl_buf_sync);
@@ -523,6 +615,20 @@ dhd_bandsteer_module_init(struct net_device *ndev, bool ap, bool p2p)
 		dhd_bandsteer_cntx->dhd_pub = cfg->pub;
 		cfg->dhd_bandsteer_cntx = (void *) dhd_bandsteer_cntx;
 	}
+#ifdef WL_DHD_XR_MASTER
+	if (cfg->xr_slave_dhd_pub) {
+		DHD_INFO(("%s: XR slave detected for bandsteering\n", __FUNCTION__));
+		ret = dhd_bandsteer_update_ifaces_xr(cfg->pub,
+				cfg->xr_slave_dhd_pub, ndev);
+		if (ret != BCME_OK) {
+			DHD_ERROR(("%s: XR slave not detected bandsteering\n", __FUNCTION__));
+			goto failed;
+		}
+	} else {
+		DHD_ERROR(("%s: Failed to detect XR slave\n", __FUNCTION__));
+		goto failed;
+	}
+#endif /* WL_DHD_XR */
 
 	/*
 	 * Enabling iovar "probresp_sw" suppresses probe request as a result of

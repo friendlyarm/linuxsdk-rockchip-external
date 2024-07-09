@@ -24,10 +24,19 @@
 #include "RkAiqCalibDbV2.h"
 #include "RkLumaCore.h"
 #include "rk_aiq.h"
+#include "RkAiqGlobalParamsManager.h"
 #include <memory>
 #include <list>
 
 namespace RkCam {
+
+typedef enum aiq_state_e {
+    AIQ_STATE_INVALID,
+    AIQ_STATE_INITED,
+    AIQ_STATE_PREPARED,
+    AIQ_STATE_STARTED,
+    AIQ_STATE_STOPED,
+} aiq_state_t;
 
 class RkAiqManager;
 
@@ -145,7 +154,10 @@ public:
         mHwEvtCbCtx = evt_cb_ctx;
         mHwEvtCb = hwevt_cb;
     };
-    void setTbInfo(rk_aiq_tb_info_t& info) {
+    void setAiispCb(rk_aiq_aiispCtx_t aiispCtx) {
+        mAiispCtx = aiispCtx;
+    };
+    void setTbInfo(RkAiqTbInfo_t& info) {
         mTbInfo = info;
     }
     void setCamHw(SmartPtr<ICamHw>& camhw);
@@ -156,7 +168,7 @@ public:
     void setAiqCalibDb(const CamCalibDbContext_t* calibDb);
 #endif
     void setAiqCalibDb(const CamCalibDbV2Context_t* calibDb);
-    void unsetTuningCalibDb();
+    void unsetTuningCalibDb(bool isNeedFreeCalib);
 #if defined(ISP_HW_V20)
     void setLumaAnalyzer(SmartPtr<RkLumaCore> analyzer);
 #endif
@@ -198,7 +210,8 @@ public:
     void setMulCamConc(bool cc);
     CamCalibDbV2Context_t* getCurrentCalibDBV2(void);
     XCamReturn calibTuning(CamCalibDbV2Context_t* aiqCalib,
-                           ModuleNameList& change_list);
+                           TuningCalib* change_list);
+    XCamReturn setVicapStreamMode(int on, bool isSingleMode);
 #ifdef RKAIQ_ENABLE_CAMGROUP
     void setCamGroupManager(RkAiqCamGroupManager* cam_group_manager, bool isMain) {
         mCamGroupCoreManager = cam_group_manager;
@@ -208,19 +221,21 @@ public:
     rk_aiq_working_mode_t getWorkingMode() {
         return mWorkingMode;
     }
+
+    GlobalParamsManager* getGlobalParamsManager() {
+        return mGlobalParamsManager.ptr();
+    }
+    int getAiqState() {
+        return _state;
+    }
     uint32_t sensor_output_width;
     uint32_t sensor_output_height;
+    // post aiisp status
+    bool ainr_status;
 protected:
     XCamReturn applyAnalyzerResult(SmartPtr<RkAiqFullParamsProxy>& results, bool ignoreIsUpdate = false);
     XCamReturn swWorkingModeDyn(rk_aiq_working_mode_t mode);
 private:
-    enum aiq_state_e {
-        AIQ_STATE_INVALID,
-        AIQ_STATE_INITED,
-        AIQ_STATE_PREPARED,
-        AIQ_STATE_STARTED,
-        AIQ_STATE_STOPED,
-    };
     XCAM_DEAD_COPY (RkAiqManager);
 private:
     SmartPtr<ICamHw> mCamHw;
@@ -233,14 +248,17 @@ private:
     rk_aiq_error_cb mErrCb;
     rk_aiq_metas_cb mMetasCb;
     rk_aiq_hwevt_cb mHwEvtCb;
+    rk_aiq_aiispCtx_t mAiispCtx;
+
     void* mHwEvtCbCtx;
     const char* mSnsEntName;
-    rk_aiq_tb_info_t mTbInfo;
+    RkAiqTbInfo_t mTbInfo;
 #ifdef RKAIQ_ENABLE_PARSER_V1
     const CamCalibDbContext_t* mCalibDb;
 #endif
     CamCalibDbV2Context_t* mCalibDbV2;
     CamCalibDbV2Context_t* tuningCalib;
+    bool mNeedFreeCalib;
     rk_aiq_working_mode_t mWorkingMode;
     rk_aiq_working_mode_t mOldWkModeForGray;
     bool mWkSwitching;
@@ -257,6 +275,8 @@ private:
 #endif
     bool mIsMain;
     int mTBStatsCnt {0};
+    uint32_t mLastAweekId{(uint32_t)-1};
+    SmartPtr<GlobalParamsManager> mGlobalParamsManager;
 };
 
 } //namespace RkCam

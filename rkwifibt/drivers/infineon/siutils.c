@@ -2,9 +2,9 @@
  * Misc utility routines for accessing chip-specific features
  * of the SiliconBackplane-based Broadcom chips.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -224,6 +224,7 @@ si_pcie_enum_base(uint devid)
 {
 	switch (devid) {
 		case CYW55560_WLAN_ID:
+		case CYW89570_WLAN_ID:
 			return SI_ENUM_PCIE2_BASE;
 	}
 
@@ -698,9 +699,12 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, volatile void *regs,
 #endif // endif
 	uint32 erombase;
 #ifdef BCMSDIO
-	uint8 cardcap;
 	sdpcmd_regs_t *sdioc;
-#endif // endif
+	uint8 cardcap;
+#ifdef BCMSPI
+	uint32 spidreg;
+#endif /* BCMSPI */
+#endif /* BCMSDIO */
 
 	ASSERT(GOODREGS(regs));
 
@@ -747,20 +751,35 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, volatile void *regs,
 		erombase = R_REG(osh, &cc->eromptr);
 #ifdef BCMSDIO
 	} else if ((bustype == SDIO_BUS) || (bustype == SPI_BUS)) {
+		if (bustype == SDIO_BUS) {
+			cardcap = bcmsdh_cfg_read(sdh, SDIO_FUNC_0, SDIOD_CCCR_BRCM_CARDCAP, NULL);
+			if (cardcap & SDIOD_CCCR_BRCM_CARDCAP_CHIPID_PRESENT)
+				sih->chipidpresent = TRUE;
+			if (cardcap & SDIOD_CCCR_BRCM_CARDCAP_SECURE_MODE)
+				sih->secureboot = TRUE;
+		}
+#ifdef BCMSPI
+		else {
+			spidreg = bcmsdh_cfg_read_word(sdh, SDIO_FUNC_0, SPID_RESET_BP, NULL);
+			if (spidreg & SPID_SECURE_MODE) {
+				printf("Security related features are present\n");
+				sih->secureboot = TRUE;
+			}
+			if (spidreg & SPID_CHIPID_PRESENT) {
+				printf("Chip ID is present in SPI core\n");
+				sih->chipidpresent = true;
+			}
+		}
+#endif /* BCMSPI */
 		cc = (chipcregs_t *)sii->curmap;
-		cardcap = bcmsdh_cfg_read(sdh, SDIO_FUNC_0, SDIOD_CCCR_BRCM_CARDCAP, NULL);
-		if (cardcap & SDIOD_CCCR_BRCM_CARDCAP_CHIPID_PRESENT) {
-			sih->chipidpresent = TRUE;
+		if (sih->chipidpresent) {
 			sdioc = si_get_sdio_addrbase(sdh);
 			w = R_REG(osh, &sdioc->chipid);
 			erombase = R_REG(osh, &sdioc->eromptr);
 		} else {
 			erombase = R_REG(osh, &cc->eromptr);
 		}
-		if (cardcap & SDIOD_CCCR_BRCM_CARDCAP_SECURE_MODE) {
-			sih->secureboot = TRUE;
-		}
-#endif // endif
+#endif /* BCMSDIO */
 	} else {
 		cc = (chipcregs_t *)REG_MAP(SI_ENUM_BASE(sih), SI_CORE_SIZE);
 		erombase = R_REG(osh, &cc->eromptr);
@@ -2025,6 +2044,7 @@ si_chip_hostif(si_t *sih)
 	switch (CHIPID(sih->chip)) {
 	case BCM43018_CHIP_ID:
 	case BCM43430_CHIP_ID:
+	case BCM43439_CHIP_ID:
 		hosti = CHIP_HOSTIF_SDIOMODE;
 		break;
 	case BCM43012_CHIP_ID:
@@ -3095,6 +3115,7 @@ si_socram_srmem_size(si_t *sih)
 	uint memsize = 0;
 
 	if (CHIPID(sih->chip) == BCM43430_CHIP_ID ||
+		CHIPID(sih->chip) == BCM43439_CHIP_ID ||
 		CHIPID(sih->chip) == BCM43018_CHIP_ID) {
 		return (64 * 1024);
 	}
@@ -3346,6 +3367,7 @@ si_is_sprom_available(si_t *sih)
 	switch (CHIPID(sih->chip)) {
 	case BCM43018_CHIP_ID:
 	case BCM43430_CHIP_ID:
+	case BCM43439_CHIP_ID:
 		return FALSE;
 	case BCM4335_CHIP_ID:
 	CASE_BCM4345_CHIP:
@@ -3649,6 +3671,7 @@ si_pll_closeloop(si_t *sih)
 #ifdef SAVERESTORE
 		case BCM43018_CHIP_ID:
 		case BCM43430_CHIP_ID:
+		case BCM43439_CHIP_ID:
 			if (SR_ENAB() && sr_isenab(sih)) {
 				/* read back the pll openloop state */
 				data = si_pmu_pllcontrol(sih, PMU1_PLL0_PLLCTL8, 0, 0);

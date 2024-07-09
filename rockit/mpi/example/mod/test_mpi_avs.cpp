@@ -781,7 +781,7 @@ RK_S32 main(int argc, const char **argv) {
                     "output file path. e.g.(/userdata/res/). default(NULL).", NULL, 0, 0),
         OPT_INTEGER('\0', "test_mode", &(ctx.enTestMode),
                     "test mode. default(0. 0: avs single mod test, 1: multi mods bind test).", NULL, 0, 0),
-        OPT_INTEGER('n', "loop count", &(ctx.s32LoopCount),
+        OPT_INTEGER('n', "loop_count", &(ctx.s32LoopCount),
                     "loop running count. default(1).", NULL, 0, 0),
         OPT_INTEGER('g', "group_count", &(ctx.s32GrpNum),
                     "the count of avs group. default(1).", NULL, 0, 0),

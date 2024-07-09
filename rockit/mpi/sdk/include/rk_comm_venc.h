@@ -381,7 +381,8 @@ typedef struct rkVENC_ATTR_S {
 typedef struct rkVENC_GOP_ATTR_S {
     VENC_GOP_MODE_E enGopMode;   /* RW;  reference gop mode */
     RK_S32 s32VirIdrLen;         /* RW;  virtual IDR frame length for smartp mode*/
-    RK_U32 u32MaxLtrCount;       /* RW;  normalp and smartp mode switch without free Ltr buffer, setting to 1 */
+    RK_U32 u32MaxLtrCount;       /* RW;  normalp and other mode switch dynamic, please setting to 1; only need normalp, setting to 0 to save buffer */
+    RK_U32 u32TsvcPreload;       /* RW;  smartp and tsvc mode switch dynamic, please setting to 1; only need smartp, setting to 0 to save buffer */
 } VENC_GOP_ATTR_S;
 
 /* the attribute of the venc chnl */
@@ -650,14 +651,6 @@ typedef struct rkVENC_STREAM_BUF_INFO_S {
     RK_U64  ATTRIBUTE u64BufSize[MAX_TILE_NUM];    /* R; Stream buffer size */
 } VENC_STREAM_BUF_INFO_S;
 
-/* the param of the h265e slice split */
-typedef struct rkVENC_H265_SLICE_SPLIT_S {
-    /* RW; Range:[0,1]; slice split enable, RK_TRUE:enable, RK_FALSE:diable, default value:RK_FALSE */
-    RK_BOOL bSplitEnable;
-    /* RW; Range:(Picture height + lcu size minus one)/lcu size;this value presents lcu line number */
-    RK_U32  u32LcuLineNum;
-} VENC_H265_SLICE_SPLIT_S;
-
 /* the param of the h265e pu */
 typedef struct rkVENC_H265_PU_S {
     RK_U32    constrained_intra_pred_flag;         /* RW; Range:[0,1]; see the H.265 protocol for the meaning. */
@@ -883,6 +876,8 @@ typedef enum rkVENC_SCENE_MODE_E {
     SCENE_1  = 1,
     /* RW; It has regular continuous motion at medium bit rate and the encoding pressure is relatively large*/
     SCENE_2  = 2,
+    /* RW; A scene in which the camera for IPC_PTZ */
+    SCENE_3  = 3,
     SCENE_BUTT
 } VENC_SCENE_MODE_E;
 
@@ -968,6 +963,51 @@ typedef struct rkVENC_FRAMELOST_S {
     VENC_FRAMELOST_MODE_E enFrmLostMode;
     RK_U32 u32EncFrmGaps;
 } VENC_FRAMELOST_S;
+
+typedef struct rkVENC_H264_QBIAS_S {
+    RK_BOOL bEnable;   /* RW; Range:[0,1] */
+    RK_U32  u32QbiasI; /* RW; Range:[0,1023] */
+    RK_U32  u32QbiasP; /* RW; Range:[0,1023] */
+} VENC_H264_QBIAS_S;
+
+typedef struct rkVENC_H265_QBIAS_S {
+    RK_BOOL bEnable;   /* RW; Range:[0,1] */
+    RK_U32  u32QbiasI; /* RW; Range:[0,511] */
+    RK_U32  u32QbiasP; /* RW; Range:[0,511] */
+} VENC_H265_QBIAS_S;
+
+typedef struct rkVENC_FILTER_S {
+    RK_U32 u32StrengthI; /* RW; Range:[0,3] */
+    RK_U32 u32StrengthP; /* RW; Range:[0,3] */
+} VENC_FILTER_S;
+
+typedef struct rkVENC_H265_CU_DQP_S {
+    RK_U32 u32CuDqp; /* RW; Range:[0, 2] */
+} VENC_H265_CU_DQP_S;
+
+typedef struct rkVENC_ANTI_RING_S {
+    RK_U32 u32AntiRing; /* RW; Range:[0, 3] */
+} VENC_ANTI_RING_S;
+
+typedef struct rkVENC_ANTI_LINE_S {
+    RK_U32 u32AntiLine; /* RW; Range:[0, 3] */
+} VENC_ANTI_LINE_S;
+
+typedef struct rkVENC_LAMBDA_S {
+    RK_U32 u32Lambda; /* RW; Range:[0, 8] */
+} VENC_LAMBDA_S;
+
+typedef struct rkVENC_EXP_INFO_S {
+    RK_U32 u32CamId;
+    RK_U32 u32FrameId;
+    struct {
+        RK_U32 u32AnalogGain;
+        RK_U32 u32DigitalGain;
+        RK_U32 u32IspDGain;
+        RK_U32 u32IntegrationTime;
+        RK_BOOL bConverged;
+    } stExpInfo[2];
+} VENC_EXP_INFO_S;
 
 #ifdef __cplusplus
 #if __cplusplus

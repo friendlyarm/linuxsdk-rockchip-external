@@ -57,18 +57,7 @@ rk_aiq_uapi_sysctl_preInit(const char* sns_ent_name,
  */
 XCamReturn
 rk_aiq_uapi_sysctl_preInit_scene(const char* sns_ent_name, const char *main_scene,
-                             const char *sub_scene);
-/**
- * @brief set thunder boot info to aiq
- *
- * @param sns_ent_name sensor name
- * @param is_pre_aiq is pre-customer aiq
- *
- * @return 0 if no error
- */
-XCamReturn
-rk_aiq_uapi_sysctl_preInit_tb_info(const char* sns_ent_name,
-                           const rk_aiq_tb_info_t* info);
+                                 const char *sub_scene);
 
 /*!
  * \brief initialze aiq control system context
@@ -288,7 +277,7 @@ rk_aiq_uapi_sysctl_get3AStats(const rk_aiq_sys_ctx_t* ctx,
  */
 XCamReturn
 rk_aiq_uapi_sysctl_get3AStatsBlk(const rk_aiq_sys_ctx_t* ctx,
-                              rk_aiq_isp_stats_t **stats, int timeout_ms);
+                                 rk_aiq_isp_stats_t **stats, int timeout_ms);
 
 /*!
  * \brief release 3a stats result ref
@@ -483,6 +472,32 @@ int rk_aiq_uapi_sysctl_switch_scene(const rk_aiq_sys_ctx_t* sys_ctx,
  * @return 0 if no error
  */
 int rk_aiq_uapi_sysctl_tuning_enable(rk_aiq_sys_ctx_t* sys_ctx, bool enable);
+
+/*!
+ * \brief register customized algo lib
+ *
+ * \param[in] ctx context
+ * \param[in,out] algoDes allocate a new unique id value for algo_lib_des->id if success.\n
+ *                             this id could be used in \ref rk_aiq_uapi_sysctl_unRegLib
+ *                             or other lib APIs. The deference object by
+ *                             \ref algo_lib_des should be valid until \ref rk_aiq_uapi_sysctl_unRegLib
+ * \param[in] cbs         custome 3a callback function struct pointer
+ * \return return 0 if success
+ */
+XCamReturn
+rk_aiq_uapi_sysctl_register3Aalgo(const rk_aiq_sys_ctx_t* ctx,
+                                  void* algoDes, void *cbs);
+
+/*!
+ * \brief unregister customized algo lib
+ *
+ * \param[in] ctx             context
+ * \param[in] algo_type       algo type defined by RkAiqAlgoDesComm.type
+ * \return return 0 if success
+ */
+XCamReturn
+rk_aiq_uapi_sysctl_unRegister3Aalgo(const rk_aiq_sys_ctx_t* ctx,
+                                    const int algo_type);
 
 RKAIQ_END_DECLARE
 

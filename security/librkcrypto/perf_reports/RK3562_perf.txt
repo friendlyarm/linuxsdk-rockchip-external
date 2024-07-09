@@ -102,8 +102,7 @@ dma_fd: [AES-256]       GCM     DECRYPT 181MB/s.
 dma_fd: [SM4-128]       GCM     N/A
 dma_fd: test aead throughput SUCCESS.
 
-virt:   [AES-256]       GCM     ENCRYPT 172MB/s.
-virt:   [AES-256]       GCM     DECRYPT 172MB/s.
+virt:   [AES-256]       GCM     N/A
 virt:   [SM4-128]       GCM     N/A
 virt:   test aead throughput SUCCESS.
 

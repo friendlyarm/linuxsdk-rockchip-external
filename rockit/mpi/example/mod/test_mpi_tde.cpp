@@ -42,11 +42,13 @@ const static TDE_OP_MAP_S gstTdeOpMaps[] = {
     { TDE_OP_QUICK_FILL,        "quick_fill" },
     { TDE_OP_ROTATION,          "rotation" },
     { TDE_OP_MIRROR,            "mirror" },
-    { TDE_OP_COLOR_KEY,         "color_key" }
+    { TDE_OP_COLOR_KEY,         "color_key" },
+    { TDE_OP_COLOR_BLEND,       "blend" }
 };
 
 typedef struct _rkMpiTdeCtx {
-    const char     *srcFilePath;
+    const char     *srcLoadFilePath;
+    const char     *dstLoadFilePath;
     const char     *dstFilePath;
     const char     *backgroundFile;
     RK_S32          s32LoopCount;
@@ -60,12 +62,15 @@ typedef struct _rkMpiTdeCtx {
     RECT_S          stDstRect;
     RK_U32          u32SrcVirWidth;
     RK_U32          u32SrcVirHeight;
+    RK_U32          u32DstVirWidth;
+    RK_U32          u32DstVirHeight;
     RK_S32          s32SrcCompressMode;
     RK_S32          s32DstCompressMode;
     RK_S32          s32Color;
     RK_S32          s32ColorKey;
     RK_S32          s32Mirror;
     RK_S32          s32ProcessTime;
+    RK_U32          u32BlendCmd;
     RK_BOOL         bPerformace;
 } TEST_TDE_CTX_S;
 
@@ -119,7 +124,7 @@ RK_S32 test_tde_save_result(TEST_TDE_CTX_S *ctx, TDE_SURFACE_S  *pstDst, RK_S32 
     return RK_SUCCESS;
 }
 
-RK_S32 unit_test_tde_get_size(TEST_TDE_CTX_S *ctx, RK_U32 *u32SrcSize) {
+RK_S32 unit_test_tde_get_src_size(TEST_TDE_CTX_S *ctx, RK_U32 *u32SrcSize) {
     RK_S32 s32Ret = RK_SUCCESS;
     PIC_BUF_ATTR_S stPicBufAttr;
     MB_PIC_CAL_S stMbPicCalResult;
@@ -137,7 +142,25 @@ RK_S32 unit_test_tde_get_size(TEST_TDE_CTX_S *ctx, RK_U32 *u32SrcSize) {
     return s32Ret;
 }
 
-RK_S32 test_tde_read_file(const char *path,  void *pu8SrcData, RK_U32 u32ImgSize) {
+RK_S32 unit_test_tde_get_dst_size(TEST_TDE_CTX_S *ctx, RK_U32 *u32DstSize) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    PIC_BUF_ATTR_S stPicBufAttr;
+    MB_PIC_CAL_S stMbPicCalResult;
+
+    stPicBufAttr.u32Width = ctx->stDstSurface.u32Width;
+    stPicBufAttr.u32Height = ctx->stDstSurface.u32Height;
+    stPicBufAttr.enPixelFormat = (PIXEL_FORMAT_E)ctx->stDstSurface.enColorFmt;
+    stPicBufAttr.enCompMode = (COMPRESS_MODE_E)ctx->s32DstCompressMode;
+    s32Ret = RK_MPI_CAL_TDE_GetPicBufferSize(&stPicBufAttr, &stMbPicCalResult);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("get picture buffer size failed. err 0x%x", s32Ret);
+        return s32Ret;
+    }
+    *u32DstSize = stMbPicCalResult.u32MBSize;
+    return s32Ret;
+}
+
+RK_S32 test_tde_read_file(const char *path,  void *pu8Data, RK_U32 u32ImgSize) {
     FILE *pFile = RK_NULL;
     RK_S32 s32Ret = RK_SUCCESS;
     RK_U32 u32ReadSize = 0;
@@ -148,7 +171,7 @@ RK_S32 test_tde_read_file(const char *path,  void *pu8SrcData, RK_U32 u32ImgSize
         return RK_FAILURE;
     }
     if (pFile) {
-        u32ReadSize = fread(pu8SrcData, 1, u32ImgSize, pFile);
+        u32ReadSize = fread(pu8Data, 1, u32ImgSize, pFile);
         fflush(pFile);
         fclose(pFile);
     }
@@ -202,7 +225,8 @@ RK_S32 test_tde_quick_fill_task(TEST_TDE_CTX_S *ctx,
 RK_S32 test_tde_bit_blit_task(TEST_TDE_CTX_S *ctx,
         TDE_SURFACE_S *pstSrc, TDE_RECT_S *pstSrcRect,
         TDE_SURFACE_S *pstDst, TDE_RECT_S *pstDstRect,
-        TDE_OPT_S *stOpt, RK_S32 s32Operation) {
+        TDE_OPT_S *stOpt, RK_S32 s32Operation,
+        RK_U32 u32BlendCmd) {
     if (s32Operation == TDE_OP_MIRROR) {
         // test case : mirror and clip
         stOpt->enMirror = (MIRROR_E)ctx->s32Mirror;
@@ -219,6 +243,10 @@ RK_S32 test_tde_bit_blit_task(TEST_TDE_CTX_S *ctx,
         test_tde_fill_dst(ctx, pstDst, pstDstRect);
         stOpt->unColorKeyValue = ctx->s32ColorKey;
         stOpt->enColorKeyMode = TDE_COLORKEY_MODE_FOREGROUND;
+    } else if (s32Operation == TDE_OP_COLOR_BLEND) {
+        stOpt->eBlendCmd = (TDE_BLENDCMD_E)u32BlendCmd;
+        test_tde_fill_src(ctx, pstSrc, pstSrcRect);
+        test_tde_fill_dst(ctx, pstDst, pstDstRect);
     }
     return RK_SUCCESS;
 }
@@ -230,9 +258,13 @@ RK_S32 test_tde_add_task(TEST_TDE_CTX_S *ctx, TDE_HANDLE hHandle,
     ROTATION_E enRotateAngle = (ROTATION_E)ctx->s32Rotation;
     RK_U32 u32FillData = ctx->s32Color;
     RK_S32 s32Operation = ctx->s32Operation;
+    RK_U32 u32BlendCmd = ctx->u32BlendCmd;
     RK_S32 s32SrcCompressMode = ctx->s32SrcCompressMode;
     TDE_OPT_S stOpt;
     memset(&stOpt, 0, sizeof(TDE_OPT_S));
+
+    ctx->stSrcSurface.enComprocessMode = (COMPRESS_MODE_E)ctx->s32SrcCompressMode;
+    ctx->stDstSurface.enComprocessMode = (COMPRESS_MODE_E)ctx->s32DstCompressMode;
 
     switch (s32Operation) {
         case TDE_OP_QUICK_COPY: {
@@ -261,10 +293,11 @@ RK_S32 test_tde_add_task(TEST_TDE_CTX_S *ctx, TDE_HANDLE hHandle,
                   enRotateAngle);
         } break;
         case TDE_OP_COLOR_KEY:
-        case TDE_OP_MIRROR: {
+        case TDE_OP_MIRROR:
+        case TDE_OP_COLOR_BLEND: {
           s32Ret = test_tde_bit_blit_task(ctx,
                   pstSrc, pstSrcRect, pstDst, pstDstRect,
-                  &stOpt, s32Operation);
+                  &stOpt, s32Operation, u32BlendCmd);
           s32Ret = RK_TDE_Bitblit(hHandle,
                   pstDst, pstDstRect, pstSrc, pstSrcRect,
                   pstDst, pstDstRect, &stOpt);
@@ -288,7 +321,7 @@ RK_S32 test_tde_load_src_file(TEST_TDE_CTX_S *ctx, MB_BLK *pstSrcBlk) {
     void  *pSrcData        = RK_NULL;
     MB_BLK srcBlk;
 
-    s32Ret = unit_test_tde_get_size(ctx, &u32SrcSize);
+    s32Ret = unit_test_tde_get_src_size(ctx, &u32SrcSize);
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
@@ -301,7 +334,7 @@ RK_S32 test_tde_load_src_file(TEST_TDE_CTX_S *ctx, MB_BLK *pstSrcBlk) {
     srcBlk = *pstSrcBlk;
 
     pSrcData = RK_MPI_MB_Handle2VirAddr(srcBlk);
-    s32Ret = test_tde_read_file(ctx->srcFilePath, pSrcData, u32SrcSize);
+    s32Ret = test_tde_read_file(ctx->srcLoadFilePath, pSrcData, u32SrcSize);
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
@@ -314,6 +347,47 @@ RK_S32 test_tde_load_src_file(TEST_TDE_CTX_S *ctx, MB_BLK *pstSrcBlk) {
     RK_S32 s32SrcCompressMode = ctx->s32SrcCompressMode;
     if (s32SrcCompressMode != COMPRESS_AFBC_16x16) {
         s32Ret = RK_MPI_MB_SetBufferStride(srcBlk, u32HorStride, u32VerStride);
+    }
+    return s32Ret;
+}
+
+RK_S32 test_tde_load_dst_file(TEST_TDE_CTX_S *ctx, MB_BLK *pstDstBlk) {
+    RK_S32 s32Ret          = RK_SUCCESS;
+    RK_U32 u32DstSize      = 0;
+    FILE  *file            = RK_NULL;
+    void  *pDstData        = RK_NULL;
+    MB_BLK dstBlk;
+
+    s32Ret = unit_test_tde_get_dst_size(ctx, &u32DstSize);
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    s32Ret = RK_MPI_SYS_MmzAlloc(pstDstBlk, RK_NULL, RK_NULL, u32DstSize);
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    dstBlk = *pstDstBlk;
+
+    pDstData = RK_MPI_MB_Handle2VirAddr(dstBlk);
+
+    if (ctx->dstLoadFilePath) {
+        s32Ret = test_tde_read_file(ctx->dstLoadFilePath, pDstData, u32DstSize);
+        if (s32Ret != RK_SUCCESS) {
+            return s32Ret;
+        }
+    }
+
+    RK_MPI_SYS_MmzFlushCache(dstBlk, RK_FALSE);
+
+    RK_U32 u32DstVirWidth = ctx->u32DstVirWidth;
+    PIXEL_FORMAT_E dstFmt = ctx->stDstSurface.enColorFmt;
+    RK_U32 u32HorStride = RK_MPI_CAL_COMM_GetHorStride(u32DstVirWidth, dstFmt);
+    RK_U32 u32VerStride = ctx->u32DstVirHeight;
+    RK_S32 s32DstCompressMode = ctx->s32DstCompressMode;
+    if (s32DstCompressMode != COMPRESS_AFBC_16x16) {
+        s32Ret = RK_MPI_MB_SetBufferStride(dstBlk, u32HorStride, u32VerStride);
     }
     return s32Ret;
 }
@@ -358,7 +432,7 @@ RK_S32 test_tde_job(TEST_TDE_CTX_S *ctx) {
         goto __FAILED;
     }
 
-    s32Ret = test_tde_create_dstBlk(ctx, &dstBlk);
+    s32Ret = test_tde_load_dst_file(ctx, &dstBlk);
     if (s32Ret != RK_SUCCESS) {
         goto __FAILED;
     }
@@ -442,6 +516,8 @@ RK_S32 test_tde_set_default_parameter(TEST_TDE_CTX_S *ctx) {
     if (ctx->u32SrcVirHeight == 0) {
         ctx->u32SrcVirHeight = ctx->stSrcSurface.u32Height;
     }
+    ctx->stSrcSurface.enComprocessMode = (COMPRESS_MODE_E)ctx->s32SrcCompressMode;
+    ctx->stDstSurface.enComprocessMode = (COMPRESS_MODE_E)ctx->s32DstCompressMode;
     return RK_SUCCESS;
 }
 
@@ -450,6 +526,7 @@ RK_S32 test_tde_set_proc_parameter(TEST_TDE_CTX_S *ctx, TEST_TDE_PROC_CTX_S *tde
     tdeTestCtx->pstSrc.u32Width = ctx->stSrcSurface.u32Width;
     tdeTestCtx->pstSrc.u32Height = ctx->stSrcSurface.u32Height;
     tdeTestCtx->pstSrc.enColorFmt = ctx->stSrcSurface.enColorFmt;
+    tdeTestCtx->pstSrc.enComprocessMode = (COMPRESS_MODE_E)ctx->s32SrcCompressMode;
     tdeTestCtx->pstSrcRect.s32Xpos = ctx->stSrcRect.s32X;
     tdeTestCtx->pstSrcRect.s32Ypos = ctx->stSrcRect.s32Y;
     tdeTestCtx->pstSrcRect.u32Width = ctx->stSrcRect.u32Width;
@@ -457,6 +534,7 @@ RK_S32 test_tde_set_proc_parameter(TEST_TDE_CTX_S *ctx, TEST_TDE_PROC_CTX_S *tde
     tdeTestCtx->pstDst.u32Width = ctx->stDstSurface.u32Width;
     tdeTestCtx->pstDst.u32Height = ctx->stDstSurface.u32Height;
     tdeTestCtx->pstDst.enColorFmt = ctx->stDstSurface.enColorFmt;
+    tdeTestCtx->pstDst.enComprocessMode = (COMPRESS_MODE_E)ctx->s32DstCompressMode;
     tdeTestCtx->pstDstRect.s32Xpos = ctx->stDstRect.s32X;
     tdeTestCtx->pstDstRect.s32Ypos = ctx->stDstRect.s32Y;
     tdeTestCtx->pstDstRect.u32Width = ctx->stDstRect.u32Width;
@@ -476,7 +554,8 @@ static const char *const usages[] = {
 
 static void mpi_tde_test_show_options(const TEST_TDE_CTX_S *ctx) {
     RK_PRINT("cmd parse result: \n");
-    RK_PRINT("input  file name       : %s\n", ctx->srcFilePath);
+    RK_PRINT("input src file name    : %s\n", ctx->srcLoadFilePath);
+    RK_PRINT("input dst file name    : %s\n", ctx->dstLoadFilePath);
     RK_PRINT("output file name       : %s\n", ctx->dstFilePath);
     RK_PRINT("loop count             : %d\n", ctx->s32LoopCount);
     RK_PRINT("job number             : %d\n", ctx->s32JobNum);
@@ -506,6 +585,7 @@ int main(int argc, const char **argv) {
     ctx.s32JobNum       = 1;
     ctx.s32TaskNum      = 1;
     ctx.s32Operation    = 0;
+    ctx.u32BlendCmd     = 1;
     ctx.stSrcSurface.enColorFmt = RK_FMT_YUV420SP;
     ctx.stSrcSurface.enComprocessMode = COMPRESS_MODE_NONE;
     ctx.stDstSurface.enColorFmt = RK_FMT_YUV420SP;
@@ -516,7 +596,9 @@ int main(int argc, const char **argv) {
     struct argparse_option options[] = {
         OPT_HELP(),
         OPT_GROUP("basic options:"),
-        OPT_STRING('i', "input",  &(ctx.srcFilePath),
+        OPT_STRING('i', "input_src",  &(ctx.srcLoadFilePath),
+                    "input file name. e.g.(/userdata/1080p.nv12). <required>", NULL, 0, 0),
+        OPT_STRING('I', "input_dst",  &(ctx.dstLoadFilePath),
                     "input file name. e.g.(/userdata/1080p.nv12). <required>", NULL, 0, 0),
         OPT_INTEGER('w', "src_width", &(ctx.stSrcSurface.u32Width),
                     "src width. e.g.(1920). <required>", NULL, 0, 0),
@@ -551,7 +633,9 @@ int main(int argc, const char **argv) {
         OPT_INTEGER('p', "operation", &(ctx.s32Operation),
                     "operation type. default(0).\n\t\t\t\t\t0: quick copy.\n\t\t\t\t\t1: quick resize."
                      "\n\t\t\t\t\t2: quick fill.\n\t\t\t\t\t3: rotation.\n\t\t\t\t\t4: mirror and flip."
-                     "\n\t\t\t\t\t5: colorkey.", NULL, 0, 0),
+                     "\n\t\t\t\t\t5: colorkey. \n\t\t\t\t\t6: blend.", NULL, 0, 0),
+        OPT_INTEGER('\0', "blend_cmd", &(ctx.u32BlendCmd),
+                    "blend cmd. default(3). 2: src, 3: src_over, 4: dst_over, 13: dst", NULL, 0, 0),
         OPT_INTEGER('\0', "src_rect_x", &(ctx.stSrcRect.s32X),
                     "src rect x. default(0).", NULL, 0, 0),
         OPT_INTEGER('\0', "src_rect_y", &(ctx.stSrcRect.s32Y),

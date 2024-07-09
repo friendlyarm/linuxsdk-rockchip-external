@@ -710,10 +710,101 @@
  *   poll
  *
  *   Change-Id: I9b366a9f47ce24783651c93512125dca7c49917f
+ * 
+ * v5.0x1.3-rc1
+ * - multi isp: isp32 support 4k
+ * - ldch: support multi isp mode
+ * - output ERROR and KEY logs as default
+ * - fix lots of CppCheck errors
+ * - kernel depandency: isp32 use 4k need this patch:
+ *   https://10.10.10.29/c/rk/kernel/+/184947
+ *   media: rockchip: isp: support unite mode for isp32
+ * 
+ *   Change-Id: Iae10911ee0f199210c7913d3e99dd85ec4642f81
+ * 
+ * v5.0x1.3-rc2
+ * - optimize ae stats usage
+ * - ccm/lsc/dehaze: fix interpolation bugs 
+ * - support 2 cam's online tuning for Android
+ * - add default manual settings for algo's API getAtrrib
+ * - fix tool online tuning bug that params in page sysctl may be overwitten by
+ *   main page.
+ * v5.0x3.0
+ * - update kernel headers to match the ISP version v2.3.0
+ * v5.0x4.0
+ * - update kernel headers to match the ISP version v2.4.0
+ * - support single frame mode 
+ * - optimize TB procedure
+ * - support j2s4b on device
+ * - support AI nr
+ * - fix bugs:
+ *   - fix ae is not running for 3562
+ *   - fix drc longframeMode error
+ * v5.0x4.0-rk3576-rc0
+ * - AE & Adebayer: adapt to bnr20bit
+ * - cac: bring up for 3576
+ * - rkisp_demo: don't check if hdr mode is supported in offline mode
+ * - aiq_core: send bay3d stat to the tnr
+ * - hwi: support raw16 format for fake camera
+ * - Asharp: support rk3576
+ * - Adehaze: support rk3576
+ * - YNR: support rk3576
+ * - Adrc: support expander function
+ * - CamHwIsp20: get isp info from drv
+ * - Adrc: supprot rk3576
+ * - aiq: hwi: Update kernel driver header of isp39
+ * - NR: adapt to isp39
+ * - aiq: hwi: Update kernel driver header of isp39
+ * - iqfiles: update sc4336_OT01_40IRC_F16.json
+ * - Debayer: adapt to isp39
+ * - AF: adapt to isp39
+ * - aiq: hwi: Update kernel driver header of isp39
+ * - aiq: hwi: Update kernel driver header of isp39
+ * - CCM: adapt to isp39
+ * - AE: adapt to isp39
+ * - TEST: add '-DENABLE_PARTIAL_ALOGS' to only enable partial algos
+ * - [TEST ONLY] display in intel fpga
+ * - aiq: hwi: Update kernel driver header of isp39
+ * - scripts: Jenkinsfile: support rk3576
+ * - rkaiq: Initial support for ISP39
+ * - aiq: hwi: Update kernel driver header of isp39
+ * v5.0x4.1
+ * - update kernel headers: rkisp_thunderboot_resmem_head
+ * - awb:
+ *   - support user awb OTP
+ *   - support awb gain mapped from main sensor
+ * - support fastboot aiq started one or two times
+ * - fix bugs:
+ *   - fix some bugs of rk3562 8k
+ *   - fix ae may be not running on all platform introduced in v5.0x3.0
+ *   - fix aiq_core state error when aiq stop
+ * v5.0x5.0
+ * - on isp32 branch
+ * - update kernel headers
+ *   - https://10.10.10.29/c/rk/kernel/+/198712/2
+ * - split to 2 or 4 grids according to resolution on rk3562
+ * - API rk_aiq_uapi2_sysctl_preInit_tb_info is no longer needed for AOV or TB
+ * - add some members for awb in iq json, rtt should be updated along with it
+ * - fix some AIQ crash bugs when tuning
+ * - update IQBIN Version v1.0.0
+ * v6.0x6.1
+ * - isp39 branch update to 29 first version
+ * - support rk3576
+ * - support aiisp
+ * - isp driver version: 2.6.0
+ * - update IQBIN Version v1.0.1
+ * v6.0x6.3
+ * - support rk3576 c version
+ * - support 1103b c version
+ *  - not fully implemented now
+ * v6.0x6.3-rc1
+ * - fix lots of v6.6.3 bugs
  */
 
-#define RK_AIQ_VERSION_REAL_V "v5.0x1.3"
-#define RK_AIQ_RELEASE_DATE "2023-07-06"
+#define RK_AIQ_VERSION_REAL_V "v6.0x6.3-rc1"
+#define RK_AIQ_RELEASE_DATE "2024-06-18"
+
+#define RK_AIQ_IQ_HEAD_VERSION_REAL_V "v1.0.2"
 
 /******* DO NOT EDIT THE FOLLOWINGS ***********/
 
@@ -721,5 +812,10 @@
 #define RK_AIQ_VERSION \
     RK_AIQ_VERSION_HEAD\
     RK_AIQ_VERSION_REAL_V
+
+#define RK_AIQ_IQ_HEAD_VERSION_PREFIX "IQBIN Version: "
+#define RK_AIQ_IQ_HEAD_VERSION \
+    RK_AIQ_IQ_HEAD_VERSION_PREFIX\
+    RK_AIQ_IQ_HEAD_VERSION_REAL_V
 
 #endif

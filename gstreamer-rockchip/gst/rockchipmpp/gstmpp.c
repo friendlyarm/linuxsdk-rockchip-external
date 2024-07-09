@@ -112,15 +112,22 @@ gst_mpp_use_rga ()
 {
   static int mpp_use_rga = -1;
 
-#ifdef HAVE_RGA
   if (mpp_use_rga < 0) {
+#ifndef HAVE_RGA
+    GST_WARNING ("RGA disabled at compile time");
+#else
     const gchar *buf = g_getenv ("GST_MPP_NO_RGA");
-    if (!buf || buf[0] == '0')
+    if (!buf || buf[0] == '0') {
+      GST_WARNING ("RGA enabled");
       mpp_use_rga = 1;
-    else
-      mpp_use_rga = 0;
-  }
+      return 1;
+    }
+
+    GST_WARNING ("RGA disabled by env (GST_MPP_NO_RGA)");
 #endif
+
+    mpp_use_rga = 0;
+  }
 
   return mpp_use_rga > 0;
 }
@@ -196,7 +203,7 @@ gst_mpp_rga_info_from_mpp_frame (rga_info_t * info, MppFrame mframe)
   MppBuffer mbuf = mpp_frame_get_buffer (mframe);
   guint width = mpp_frame_get_width (mframe);
   guint height = mpp_frame_get_height (mframe);
-  guint hstride = mpp_frame_get_hor_stride (mframe);
+  guint hstride = mpp_frame_get_hor_stride_pixel (mframe);
   guint vstride = mpp_frame_get_ver_stride (mframe);
   RgaSURF_FORMAT rga_format = gst_mpp_mpp_format_to_rga_format (mpp_format);
 
@@ -214,7 +221,7 @@ gst_mpp_rga_info_from_video_info (rga_info_t * info, GstVideoInfo * vinfo)
   GstVideoFormat format = GST_VIDEO_INFO_FORMAT (vinfo);
   guint width = GST_VIDEO_INFO_WIDTH (vinfo);
   guint height = GST_VIDEO_INFO_HEIGHT (vinfo);
-  guint hstride = GST_MPP_VIDEO_INFO_HSTRIDE (vinfo);
+  guint hstride = gst_mpp_get_pixel_stride (vinfo);
   guint vstride = GST_MPP_VIDEO_INFO_VSTRIDE (vinfo);
   RgaSURF_FORMAT rga_format = gst_mpp_gst_format_to_rga_format (format);
 
@@ -368,8 +375,19 @@ gst_mpp_video_info_align (GstVideoInfo * info, gint hstride, gint vstride)
   if (!vstride)
     vstride = GST_MPP_ALIGN (GST_MPP_VIDEO_INFO_VSTRIDE (info));
 
+  if (hstride == GST_MPP_VIDEO_INFO_HSTRIDE (info) &&
+      vstride == GST_MPP_VIDEO_INFO_VSTRIDE (info))
+    return TRUE;
+
   GST_DEBUG ("aligning %dx%d to %dx%d", GST_VIDEO_INFO_WIDTH (info),
       GST_VIDEO_INFO_HEIGHT (info), hstride, vstride);
+
+  if (hstride < GST_VIDEO_INFO_WIDTH (info) ||
+      vstride < GST_VIDEO_INFO_HEIGHT (info)) {
+    GST_ERROR ("unable to align %dx%d to %dx%d", GST_VIDEO_INFO_WIDTH (info),
+        GST_VIDEO_INFO_HEIGHT (info), hstride, vstride);
+    return FALSE;
+  }
 
   gst_video_alignment_reset (&align);
 
@@ -403,6 +421,62 @@ gst_mpp_video_info_align (GstVideoInfo * info, gint hstride, gint vstride)
   GST_DEBUG ("aligned size %" G_GSIZE_FORMAT, GST_VIDEO_INFO_SIZE (info));
 
   return TRUE;
+}
+
+gboolean
+gst_mpp_video_info_matched (GstVideoInfo * info, GstVideoInfo * other)
+{
+  guint i;
+
+  if (GST_VIDEO_INFO_FORMAT (info) != GST_VIDEO_INFO_FORMAT (other))
+    return FALSE;
+
+  if (GST_VIDEO_INFO_WIDTH (info) != GST_VIDEO_INFO_WIDTH (other))
+    return FALSE;
+
+  if (GST_VIDEO_INFO_HEIGHT (info) != GST_VIDEO_INFO_HEIGHT (other))
+    return FALSE;
+
+  for (i = 0; i < GST_VIDEO_INFO_N_PLANES (info); i++) {
+    if (GST_VIDEO_INFO_PLANE_STRIDE (info,
+            i) != GST_VIDEO_INFO_PLANE_STRIDE (other, i))
+      return FALSE;
+    if (GST_VIDEO_INFO_PLANE_OFFSET (info,
+            i) != GST_VIDEO_INFO_PLANE_OFFSET (other, i))
+      return FALSE;
+  }
+
+  return TRUE;
+}
+
+gboolean
+gst_mpp_frame_info_changed (MppFrame * frame, MppFrame * other)
+{
+  if (!frame || !other)
+    return TRUE;
+
+  if (mpp_frame_get_fmt (frame) != mpp_frame_get_fmt (other))
+    return TRUE;
+
+  if (mpp_frame_get_width (frame) != mpp_frame_get_width (other))
+    return TRUE;
+
+  if (mpp_frame_get_height (frame) != mpp_frame_get_height (other))
+    return TRUE;
+
+  if (mpp_frame_get_offset_x (frame) != mpp_frame_get_offset_x (other))
+    return TRUE;
+
+  if (mpp_frame_get_offset_y (frame) != mpp_frame_get_offset_y (other))
+    return TRUE;
+
+  if (mpp_frame_get_hor_stride (frame) != mpp_frame_get_hor_stride (other))
+    return TRUE;
+
+  if (mpp_frame_get_ver_stride (frame) != mpp_frame_get_ver_stride (other))
+    return TRUE;
+
+  return FALSE;
 }
 
 guint

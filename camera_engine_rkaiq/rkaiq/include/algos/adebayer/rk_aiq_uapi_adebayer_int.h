@@ -1,9 +1,9 @@
 #ifndef _RK_AIQ_UAPI_ADEBAYER_INT_H_
 #define _RK_AIQ_UAPI_ADEBAYER_INT_H_
 
-#include "base/xcam_common.h"
-#include "rk_aiq_algo_des.h"
-#include "rk_aiq_types_adebayer_algo_int.h"
+#include "xcore/base/xcam_common.h"
+#include "algos/rk_aiq_algo_des.h"
+#include "algos/adebayer/rk_aiq_types_adebayer_algo_int.h"
 //#include "xcam_log.h"
 
 typedef struct rk_aiq_uapi_sync_s rk_aiq_uapi_sync_t;
@@ -50,6 +50,18 @@ typedef struct adebayer_v2lite_attrib_s {
     adebayer_attrib_v2lite_auto_t      stAuto;
 
 } adebayer_v2lite_attrib_t;
+
+typedef AdebayerSeletedParamV3_t adebayer_attrib_v3_manual_t;
+typedef CalibDbV2_Debayer_Tuning_V3_t adebayer_attrib_v3_auto_t;
+
+typedef struct adebayer_v3_attrib_s {
+    rk_aiq_uapi_sync_t          sync;
+    rk_aiq_debayer_op_mode_t    mode;
+
+    adebayer_attrib_v3_manual_t    stManual;
+    adebayer_attrib_v3_auto_t      stAuto;
+
+} adebayer_v3_attrib_t;
 
 // need_sync means the implementation should consider
 // the thread synchronization
@@ -101,6 +113,21 @@ rk_aiq_uapi_adebayer_v2lite_GetAttrib
 (
     RkAiqAlgoContext*  ctx,
     adebayer_v2lite_attrib_t* attr
+);
+
+XCamReturn
+rk_aiq_uapi_adebayer_v3_SetAttrib
+(
+    RkAiqAlgoContext* ctx,
+    adebayer_v3_attrib_t attr,
+    bool need_sync
+);
+
+XCamReturn
+rk_aiq_uapi_adebayer_v3_GetAttrib
+(
+    RkAiqAlgoContext*  ctx,
+    adebayer_v3_attrib_t* attr
 );
 
 #endif//_RK_AIQ_UAPI_ADEBAYER_INT_H_

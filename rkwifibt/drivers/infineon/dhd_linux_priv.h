@@ -1,9 +1,9 @@
 /*
  * DHD Linux header file - contains private structure definition of the Linux specific layer
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -51,6 +51,11 @@
 #include <bcmmsgbuf.h>
 #include <dhd_flowring.h>
 #endif /* PCIE_FULL_DONGLE */
+
+#if defined(DHD_SUPPORT_REQFW_FOR_EVTLOG) || \
+	defined(DHD_SUPPORT_REQFW_FOR_FIRMWARE_DOWNLOADING)
+#include <linux/firmware.h>
+#endif	/* DHD_SUPPORT_REQFW_FOR_EVTLOG || DHD_SUPPORT_REQFW_FOR_FIRMWARE_DOWNLOADING */
 
 /*
  * Do not include this header except for the dhd_linux.c dhd_linux_sysfs.c
@@ -321,6 +326,9 @@ typedef struct dhd_info {
 	uint32 *napi_rx_hist[HIST_BIN_SIZE];
 	uint32 *txc_hist[HIST_BIN_SIZE];
 	uint32 *rxc_hist[HIST_BIN_SIZE];
+
+	/* State returned by kernel function cpuhp_setup_state(). */
+	int cpuhp_setup_state;
 #endif /* DHD_LB */
 #if defined(DNGL_AXI_ERROR_LOGGING) && defined(DHD_USE_WQ_FOR_DNGL_AXI_ERROR)
 	struct work_struct	  axi_error_dispatcher_work;
@@ -368,6 +376,11 @@ typedef struct dhd_info {
 #ifdef DHD_HP2P
 	spinlock_t	hp2p_lock;
 #endif /* DHD_HP2P */
+#ifdef WL_DHD_XR
+	uint8 dhd_ifidx;
+	tsk_ctl_t	thr_xr_cmd_ctl;
+	spinlock_t	xr_cmd_lock;
+#endif /* WL_DHD_XR */
 } dhd_info_t;
 
 extern int dhd_sysfs_init(dhd_info_t *dhd);
@@ -424,4 +437,7 @@ void dhd_rx_compl_dispatcher_fn(struct work_struct * work);
 void dhd_irq_set_affinity(dhd_pub_t *dhdp, const struct cpumask *cpumask);
 #endif /* DHD_LB_IRQSET || DHD_CONTROL_PCIE_CPUCORE_WIFI_TURNON */
 
+#ifdef DHD_SUPPORT_REQFW_FOR_EVTLOG
+int dhd_os_open_reqfw(const struct firmware **fw, char *filename);
+#endif /* DHD_SUPPORT_REQFW_FOR_EVTLOG */
 #endif /* __DHD_LINUX_PRIV_H__ */

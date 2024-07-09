@@ -75,6 +75,8 @@ typedef enum rkAVS_MODE_E {
     * +-----------+-----------+
     * */
     AVS_MODE_NOBLEND_QR   = 3,
+    AVS_MODE_NOBLEND_OVL  = 4,
+    AVS_MODE_BLEND_DYN    = 5,
 
     AVS_MODE_BUTT
 } AVS_MODE_E;
@@ -147,6 +149,11 @@ typedef struct rkAVS_INPUT_ATTR_S {
     SIZE_S              stSize;                /* Source resolution */
 } AVS_INPUT_ATTR_S;
 
+typedef struct rkAVS_OVERLAY_ATTR_S {
+    RK_BOOL   bBgColor;
+    RK_U32    u32BgColor;
+} AVS_OVERLAY_ATTR_S;
+
 typedef struct rkAVS_OUTPUT_ATTR_S {
     AVS_PROJECTION_MODE_E    enPrjMode;                  /* RW; Projection mode. */
     POINT_S                  stCenter;                   /* Center point. */
@@ -155,8 +162,10 @@ typedef struct rkAVS_OUTPUT_ATTR_S {
     AVS_ROTATION_S           stRotation;                 /* Output rotation. */
     AVS_SPLIT_ATTR_S         stSplitAttr[AVS_SPLIT_NUM]; /* Split attribute for 7 or 8 inputs stitching. */
     AVS_CUBE_MAP_ATTR_S      stCubeMapAttr;              /* Cube map attribute. */
-    SIZE_S                   stSize;                     /* Mesh resolution */
+    SIZE_S                   stSize;                     /* Mesh resolution in AVS_MODE_BLEND mode;
+                                                          * Canvas resolution in AVS_MODE_NOBLEND_OVERLAY mode. */
     RK_FLOAT                 fDistance;                  /* Optimum stitch distance. */
+    AVS_OVERLAY_ATTR_S       stOverlayAttr;              /* Overlay attribute. */
 } AVS_OUTPUT_ATTR_S;
 
 typedef struct rkAVS_GRP_ATTR_S {
@@ -180,10 +189,21 @@ typedef struct rkAVS_CHN_ATTR_S {
     RK_U32              u32FrameBufCnt;     /* RW; frame buffer cnt only used by MB_SOURCE_PRIVATE */
 } AVS_CHN_ATTR_S;
 
+typedef struct rkAVS_PIPE_ATTR_S {
+    RECT_S      stSrcRect;
+    RECT_S      stDstRect;
+    RK_U32      u32Priority;        /* RW; Overlay priority*/
+} AVS_PIPE_ATTR_S;
+
 typedef struct rkAVS_MOD_PARAM_S {
     RK_U32 u32WorkingSetSize;               /* RW; AVS work */
     MB_SOURCE_E enMBSource;                 /* RW; AVS MB pool source type */
 } AVS_MOD_PARAM_S;
+
+typedef struct rkAVS_ROI_PARAM_S {
+    RK_BOOL      bEnable;        /* RW; Range: [0, 1]; enable. */
+    RECT_S       stRect;         /* Regin of Interest */
+} AVS_ROI_PARAM_S;
 
 #define RK_AVS_OK                   RK_SUCCESS
 #define RK_ERR_AVS_NULL_PTR         RK_DEF_ERR(RK_ID_AVS, RK_ERR_LEVEL_ERROR, RK_ERR_NULL_PTR)

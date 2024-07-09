@@ -22,6 +22,7 @@
 #include "rga_ioctl.h"
 
 #ifndef ANDROID
+#define ALOGI(...) { printf(__VA_ARGS__); printf("\n"); }
 #define ALOGD(...) { printf(__VA_ARGS__); printf("\n"); }
 #define ALOGE(...) { printf(__VA_ARGS__); printf("\n"); }
 #endif
@@ -34,6 +35,10 @@ typedef enum {
     RGA_DRIVER_IOC_DEFAULT = RGA_DRIVER_IOC_MULTI_RGA,
 } RGA_DRIVER_IOC_TYPE;
 
+typedef enum {
+    RGA_DRIVER_FEATURE_USER_CLOSE_FENCE = 1,
+} RGA_DRIVER_FEATURE;
+
 struct rgaContext {
     int rgaFd;
     int mLogAlways;
@@ -43,5 +48,6 @@ struct rgaContext {
     struct rga_hw_versions_t mHwVersions;
     struct rga_version_t mDriverVersion;
     RGA_DRIVER_IOC_TYPE driver = RGA_DRIVER_IOC_DEFAULT;
+    uint32_t driver_feature;
 };
 #endif

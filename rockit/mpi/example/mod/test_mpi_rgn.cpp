@@ -29,6 +29,8 @@
 #include "rk_mpi_cal.h"
 #include "rk_comm_vpss.h"
 #include "rk_mpi_vpss.h"
+#include "rk_mpi_vo.h"
+#include "rk_mpi_mb.h"
 #include "rk_mpi_mmz.h"
 
 #include "test_comm_bmp.h"
@@ -37,6 +39,7 @@
 #include "test_comm_rgn.h"
 #include "test_comm_venc.h"
 #include "test_comm_vpss.h"
+#include "test_comm_imgproc.h"
 
 /* PixFormat: big-edian:BGRA8888 => A:bit31~bit24 R:bit23~bit16 G:bit15~bit8 B:bit7~bit0 */
 const RK_U32 u32BGRA8888ColorTblUser[RGN_CLUT_NUM] = {
@@ -89,6 +92,7 @@ const RK_U32 u32BGRA8888ColorTblUser[RGN_CLUT_NUM] = {
 typedef struct _rkTestRGNCtx {
     const char *srcFileRawName;
     const char *srcFileBmpName;
+    const char *srcFileOsdName;
     const char *dstSaveFileName;
     RK_S32      s32Operation;
     RK_S32      s32LoopCount;
@@ -104,7 +108,119 @@ typedef struct _rkTestRGNCtx {
     pthread_t   vencGetStreamTid;
     RK_U32      u32AttachMod;
     RK_U32      u32CoverType;
+    RK_U32      u32MosaicBlkType;
+    RK_U32      u32DeviceType;
+    pthread_t   voSendFrameTid;
+    RK_BOOL     vo_quit;
+    RK_U32      vo_rotation;
+    RK_U32      vo_dev;
+    RK_U32      vo_layer;
 } TEST_RGN_CTX_S;
+
+typedef struct stFormatMap {
+    int format;
+    PIXEL_FORMAT_E enPixelFmt;
+} FormatMap;
+
+static FormatMap format_map[] = {
+    {0, RK_FMT_ARGB8888},
+    {1, RK_FMT_ABGR8888},
+    {2, RK_FMT_BGRA8888},
+    {3, RK_FMT_RGBA8888},
+    {4, RK_FMT_ARGB4444},
+    {5, RK_FMT_ABGR4444},
+    {6, RK_FMT_BGRA4444},
+    {7, RK_FMT_RGBA4444},
+    {8, RK_FMT_ARGB1555},
+    {9, RK_FMT_ABGR1555},
+    {10, RK_FMT_RGBA5551},
+    {11, RK_FMT_BGRA5551},
+};
+
+static PIXEL_FORMAT_E format_to_enPixelFmt(int format) {
+    for (int i = 0; i < RK_ARRAY_ELEMS(format_map); i++) {
+        if (format_map[i].format == format) {
+            return format_map[i].enPixelFmt;
+        }
+    }
+
+    return RK_FMT_BUTT;
+}
+
+RK_S32 load_file_osdmem (const RK_CHAR *filename, RK_U8 *pu8Virt, RK_U32 u32Width, RK_U32 u32Height, RK_U32  pixel_size, RK_U32 shift_value) {
+    RK_U32 mem_len = u32Width;
+    RK_U32 read_len = mem_len * pixel_size >> shift_value;
+    RK_U32 read_height;
+    FILE *file = NULL;
+
+    file = fopen(filename, "rb");
+    if (file == NULL) {
+        RK_LOGE("open filename: %s file failed!", filename);
+        return RK_FAILURE;
+    }
+    for (read_height = 0; read_height < u32Height; read_height++) {
+        fread((pu8Virt + (u32Width * read_height * pixel_size >> shift_value)), 1, read_len, file);
+    }
+    fclose(file);
+    return RK_SUCCESS;
+}
+
+RK_S32 TEST_RGN_LOAD_MEM(const RK_CHAR *filename, BITMAP_S *pstBitmap, TEST_RGN_CTX_S *pstRgnCtx) {
+    RK_S32  s32Ret = RK_SUCCESS;
+    RK_U32  pixel_size, shift_value;
+
+    switch (format_to_enPixelFmt(pstRgnCtx->u32BmpFormat)) {
+      case RK_FMT_ARGB8888:
+      case RK_FMT_ABGR8888:
+      case RK_FMT_BGRA8888:
+      case RK_FMT_RGBA8888:
+      {
+        pixel_size = 4;
+		shift_value = 0;
+      }
+      break;
+      case RK_FMT_ARGB1555:
+      case RK_FMT_BGRA5551:
+      case RK_FMT_RGBA5551:
+      case RK_FMT_ABGR1555:
+      case RK_FMT_ARGB4444:
+      case RK_FMT_BGRA4444:
+      case RK_FMT_RGBA4444:
+      case RK_FMT_ABGR4444:
+      {
+        pixel_size = 2;
+		shift_value = 0;
+      }
+      break;
+      case RK_FMT_2BPP:
+      {
+        pixel_size = 1;
+        shift_value = 2;
+      }
+      break;
+      default:
+      RK_LOGE("no support style");
+        return RK_FAILURE;
+    }
+
+    pstBitmap->pData = malloc(pstRgnCtx->stRegion.u32Width * pstRgnCtx->stRegion.u32Height * pixel_size >> shift_value);
+
+    if (filename) {
+        s32Ret = load_file_osdmem(filename, reinterpret_cast<RK_U8 *>(pstBitmap->pData), pstRgnCtx->stRegion.u32Width,
+                        pstRgnCtx->stRegion.u32Height, pixel_size, shift_value);
+        if (RK_SUCCESS != s32Ret) {
+            RK_LOGE("Load file osd memory failed!");
+            return RK_FAILURE;
+        }
+    } else {
+        memset(pstBitmap->pData, 0xff, pstRgnCtx->stRegion.u32Width * pstRgnCtx->stRegion.u32Height * pixel_size >> shift_value);
+    }
+    pstBitmap->u32Width = pstRgnCtx->stRegion.u32Width;
+    pstBitmap->u32Height = pstRgnCtx->stRegion.u32Height;
+    pstBitmap->enPixelFormat = format_to_enPixelFmt(pstRgnCtx->u32BmpFormat);
+
+    return RK_SUCCESS;
+}
 
 RK_S32 test_rgn_overlay_process(TEST_RGN_CTX_S *pstRgnCtx, MPP_CHN_S *pstMppChn) {
     RK_S32          s32Ret       = RK_SUCCESS;
@@ -121,13 +237,16 @@ RK_S32 test_rgn_overlay_process(TEST_RGN_CTX_S *pstRgnCtx, MPP_CHN_S *pstMppChn)
      step 1: create overlay regions
     ****************************************/
     for (RK_S32 i = 0; i < pstRgnCtx->s32RgnCount; i++) {
-        stRgnAttr.enType = OVERLAY_RGN;
-        stRgnAttr.unAttr.stOverlay.enPixelFmt = (PIXEL_FORMAT_E)pstRgnCtx->u32BmpFormat;
+        stRgnAttr.enType = (RGN_TYPE_E)pstRgnCtx->s32Operation;
+        stRgnAttr.unAttr.stOverlay.enPixelFmt = format_to_enPixelFmt(pstRgnCtx->u32BmpFormat);
         stRgnAttr.unAttr.stOverlay.stSize.u32Width  = pstRgnCtx->stRegion.u32Width;
         stRgnAttr.unAttr.stOverlay.stSize.u32Height = pstRgnCtx->stRegion.u32Height;
         stRgnAttr.unAttr.stOverlay.u32ClutNum = pstRgnCtx->u32ClutNum;
         if (pstRgnCtx->u32ClutNum)
             memcpy(stRgnAttr.unAttr.stOverlay.u32Clut, u32BGRA8888ColorTblUser, sizeof(u32BGRA8888ColorTblUser));
+
+        if (stRgnAttr.enType == OVERLAY_EX_RGN)
+            stRgnAttr.unAttr.stOverlay.enVProcDev = (VIDEO_PROC_DEV_TYPE_E)pstRgnCtx->u32DeviceType;
 
         RgnHandle = i;
 
@@ -148,7 +267,7 @@ RK_S32 test_rgn_overlay_process(TEST_RGN_CTX_S *pstRgnCtx, MPP_CHN_S *pstMppChn)
 
         memset(&stRgnChnAttr, 0, sizeof(stRgnChnAttr));
         stRgnChnAttr.bShow = RK_TRUE;
-        stRgnChnAttr.enType = OVERLAY_RGN;
+        stRgnChnAttr.enType = (RGN_TYPE_E)pstRgnCtx->s32Operation;
         stRgnChnAttr.unChnAttr.stOverlayChn.stPoint.s32X = pstRgnCtx->stRegion.s32X + 48 * i;
         stRgnChnAttr.unChnAttr.stOverlayChn.stPoint.s32Y = pstRgnCtx->stRegion.s32Y + 48 * i;
         stRgnChnAttr.unChnAttr.stOverlayChn.u32BgAlpha = 0;
@@ -172,11 +291,19 @@ RK_S32 test_rgn_overlay_process(TEST_RGN_CTX_S *pstRgnCtx, MPP_CHN_S *pstMppChn)
      step 3: show bitmap
     *********************************************/
     RK_S64 s64ShowBmpStart = TEST_COMM_GetNowUs();
-    s32Ret = TEST_RGN_LoadBmp(pstRgnCtx->srcFileBmpName, &stBitmap,
-                             (PIXEL_FORMAT_E)pstRgnCtx->u32BmpFormat);
-    if (RK_SUCCESS != s32Ret) {
-        RK_LOGE("Load bmp failed with %#x!", s32Ret);
-        return RK_FAILURE;
+    if (pstRgnCtx->srcFileBmpName) {
+        s32Ret = TEST_RGN_LoadBmp(pstRgnCtx->srcFileBmpName, &stBitmap,
+                                format_to_enPixelFmt(pstRgnCtx->u32BmpFormat));
+        if (RK_SUCCESS != s32Ret) {
+            RK_LOGE("Load bmp failed with %#x!", s32Ret);
+            return RK_FAILURE;
+        }
+    } else if (pstRgnCtx->srcFileOsdName) {
+        s32Ret = TEST_RGN_LOAD_MEM(pstRgnCtx->srcFileOsdName, &stBitmap, pstRgnCtx);
+        if (RK_SUCCESS != s32Ret) {
+            RK_LOGE("Load osd file failed with %#x!", s32Ret);
+            return RK_FAILURE;
+        }
     }
 
     for (RK_S32 i = 0; i < pstRgnCtx->s32RgnCount; i++) {
@@ -314,7 +441,7 @@ RK_S32 test_rgn_cover_process(TEST_RGN_CTX_S *pstRgnCtx, MPP_CHN_S *pstMppChn) {
 
         stCoverChnAttr.bShow = RK_TRUE;
         stCoverChnAttr.enType = COVER_RGN;
-        stCoverChnAttr.unChnAttr.stCoverChn.enCoverType = (RGN_COVER_TYPE_E)pstRgnCtx->u32CoverType;
+        stCoverChnAttr.unChnAttr.stCoverChn.enCoverType = (RGN_AREA_TYPE_E)pstRgnCtx->u32CoverType;
         if (pstRgnCtx->u32CoverType == AREA_RECT) {
             stCoverChnAttr.unChnAttr.stCoverChn.stRect.s32X = pstRgnCtx->stRegion.s32X;
             stCoverChnAttr.unChnAttr.stCoverChn.stRect.s32Y = pstRgnCtx->stRegion.s32Y;
@@ -442,7 +569,7 @@ RK_S32 test_rgn_mosaic_process(TEST_RGN_CTX_S *pstRgnCtx, MPP_CHN_S *pstMppChn) 
         stChnAttr.unChnAttr.stMosaicChn.stRect.s32Y = pstRgnCtx->stRegion.s32Y;
         stChnAttr.unChnAttr.stMosaicChn.stRect.u32Width = pstRgnCtx->stRegion.u32Width;
         stChnAttr.unChnAttr.stMosaicChn.stRect.u32Height = pstRgnCtx->stRegion.u32Height;
-        stChnAttr.unChnAttr.stMosaicChn.enBlkSize = MOSAIC_BLK_SIZE_8;
+        stChnAttr.unChnAttr.stMosaicChn.enBlkSize = (MOSAIC_BLK_SIZE_E)pstRgnCtx->u32MosaicBlkType;
         stChnAttr.unChnAttr.stMosaicChn.u32Layer = i;
         s32Ret = RK_MPI_RGN_AttachToChn(Handle, pstMppChn, &stChnAttr);
         if (RK_SUCCESS != s32Ret) {
@@ -581,6 +708,199 @@ AttachCover_failed:
     return s32Ret;
 }
 
+static void *TEST_RGN_VoSendFrame(void *arg) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_S32 s32FrameCount = 0;
+    TEST_RGN_CTX_S *pstRgnCtx = (TEST_RGN_CTX_S *)arg;
+    RK_VOID *pMblk;
+    VIDEO_FRAME_INFO_S stVoVFrame;
+    FILE *fp;
+    RK_U32 u32BuffSize;
+
+    u32BuffSize = RK_MPI_VO_CreateGraphicsFrameBuffer(pstRgnCtx->u32RawWidth, pstRgnCtx->u32RawHeight, pstRgnCtx->u32RawFormat, &pMblk);
+    if (u32BuffSize == 0) {
+        RK_LOGE("can not create gfx buffer\n");
+        return NULL;
+    }
+
+    if (pstRgnCtx->srcFileRawName) {
+        fp = fopen(pstRgnCtx->srcFileRawName, "r");
+        if (!fp) {
+            RK_LOGE("open file: %s, failed!", pstRgnCtx->srcFileRawName);
+            return NULL;
+        }
+
+        fread(reinterpret_cast<RK_U8 *>(RK_MPI_MB_Handle2VirAddr(pMblk)), 1, u32BuffSize, fp);
+
+        fclose(fp);
+    }
+
+    stVoVFrame.stVFrame.u32Width = pstRgnCtx->u32RawWidth;
+    stVoVFrame.stVFrame.u32Height = pstRgnCtx->u32RawHeight;
+    stVoVFrame.stVFrame.u32VirWidth = pstRgnCtx->u32RawWidth;
+    stVoVFrame.stVFrame.u32VirHeight = pstRgnCtx->u32RawHeight;
+    stVoVFrame.stVFrame.enPixelFormat = (PIXEL_FORMAT_E)pstRgnCtx->u32RawFormat;
+    stVoVFrame.stVFrame.pMbBlk = pMblk;
+
+    while(!pstRgnCtx->vo_quit) {
+        if (!pstRgnCtx->srcFileRawName) {
+            s32Ret = TEST_COMM_FillImage((RK_U8 *)RK_MPI_MB_Handle2VirAddr(pMblk),
+                            pstRgnCtx->u32RawWidth,
+                            pstRgnCtx->u32RawHeight,
+                            RK_MPI_CAL_COMM_GetHorStride(pstRgnCtx->u32RawWidth,
+                                    (PIXEL_FORMAT_E)pstRgnCtx->u32RawFormat),
+                            pstRgnCtx->u32RawHeight,
+                            (PIXEL_FORMAT_E)pstRgnCtx->u32RawFormat,
+                            s32FrameCount++);
+            if (s32Ret != RK_SUCCESS)
+                break;
+        }
+        RK_MPI_VO_SendFrame(0, 0, &stVoVFrame, 1000);
+    }
+
+    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk);
+
+    return NULL;
+}
+
+static int TEST_RGN_CreateVo(RK_U32 VoLayer, RK_U32 VoDev,
+                             RK_U32 VoChn, TEST_RGN_CTX_S *pstRgnCtx) {
+  int ret = RK_SUCCESS;
+  VO_PUB_ATTR_S            stVoPubAttr;
+  VO_VIDEO_LAYER_ATTR_S    stLayerAttr;
+  VO_CHN_ATTR_S            stChnAttr;
+  COMPRESS_MODE_E enCompressMode = COMPRESS_MODE_NONE;
+
+  ret = RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_BindLayer failed, ret = %x", ret);
+    return ret;
+  }
+
+  memset(&stVoPubAttr, 0, sizeof(VO_PUB_ATTR_S));
+  memset(&stLayerAttr, 0, sizeof(VO_VIDEO_LAYER_ATTR_S));
+  memset(&stChnAttr, 0, sizeof(VO_CHN_ATTR_S));
+
+  stVoPubAttr.enIntfType = VO_INTF_MIPI;
+  stVoPubAttr.enIntfSync = VO_OUTPUT_DEFAULT;
+
+  ret = RK_MPI_VO_SetPubAttr(VoDev, &stVoPubAttr);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_SetPubAttr failed, ret = %x", ret);
+    return ret;
+  }
+
+  ret = RK_MPI_VO_Enable(VoDev);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_Enable failed, ret = %x", ret);
+    return ret;
+  }
+
+  ret = RK_MPI_VO_GetPubAttr(VoDev, &stVoPubAttr);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_GetPubAttr failed, ret = %x", ret);
+    return ret;
+  }
+
+  /* Enable Layer */
+  stLayerAttr.enPixFormat      = RK_FMT_RGB888;
+  stLayerAttr.enCompressMode   = COMPRESS_AFBC_16x16;
+  stLayerAttr.stDispRect.s32X  = 0;
+  stLayerAttr.stDispRect.s32Y  = 0;
+  stLayerAttr.stDispRect.u32Width   = stVoPubAttr.stSyncInfo.u16Hact;
+  stLayerAttr.stDispRect.u32Height  = stVoPubAttr.stSyncInfo.u16Vact;
+  stLayerAttr.stImageSize.u32Width  = stVoPubAttr.stSyncInfo.u16Hact;
+  stLayerAttr.stImageSize.u32Height = stVoPubAttr.stSyncInfo.u16Vact;
+  stLayerAttr.u32DispFrmRt          = 60;
+  stLayerAttr.bBypassFrame          = RK_FALSE;
+
+  ret = RK_MPI_VO_SetLayerAttr(VoLayer, &stLayerAttr);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_SetLayerAttr failed, ret = %x", ret);
+    return ret;
+  }
+
+  if ((VIDEO_PROC_DEV_TYPE_E)pstRgnCtx->u32DeviceType == VIDEO_PROC_DEV_RGA)
+    RK_MPI_VO_SetLayerSpliceMode(VoLayer, VO_SPLICE_MODE_RGA);
+  else
+    RK_MPI_VO_SetLayerSpliceMode(VoLayer, VO_SPLICE_MODE_GPU);
+
+  ret = RK_MPI_VO_EnableLayer(VoLayer);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_EnableLayer failed, ret = %x", ret);
+    return ret;
+  }
+
+  stChnAttr.stRect.s32X = 0;
+  stChnAttr.stRect.s32Y = 0;
+  stChnAttr.stRect.u32Width = stVoPubAttr.stSyncInfo.u16Hact;
+  stChnAttr.stRect.u32Height = stVoPubAttr.stSyncInfo.u16Vact;
+  stChnAttr.u32FgAlpha = 255;
+  stChnAttr.u32BgAlpha = 0;
+  stChnAttr.enMirror = MIRROR_NONE;
+  stChnAttr.enRotation = (ROTATION_E)pstRgnCtx->vo_rotation;
+  stChnAttr.u32Priority = 1;
+
+  ret = RK_MPI_VO_SetChnAttr(VoLayer, VoChn, &stChnAttr);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_SetChnAttr failed, ret = %x", ret);
+    return ret;
+  }
+
+  ret = RK_MPI_VO_EnableChn(VoLayer, VoChn);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_EnableChn failed, ret = %x", ret);
+    return ret;
+  }
+
+  ret = pthread_create(&pstRgnCtx->voSendFrameTid, NULL, TEST_RGN_VoSendFrame, reinterpret_cast<RK_VOID *>(pstRgnCtx));
+  if (ret) {
+    RK_LOGE("Create vo send frame thread failed!");
+    return ret;
+  }
+
+  RK_LOGE("Create vo [dev: %d, layer: %d, chn: %d] success!",
+              VoDev, VoLayer, VoChn);
+  return ret;
+}
+
+static int TEST_RGN_DestroyVo(RK_U32 VoLayer, RK_U32 VoDev,
+                              RK_U32 VoChn, TEST_RGN_CTX_S *pstRgnCtx) {
+  int ret = 0;
+
+  ret = RK_MPI_VO_DisableChn(VoLayer, VoChn);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_DisableChn failed, ret = %x", ret);
+    return ret;
+  }
+
+  ret = RK_MPI_VO_DisableLayer(VoLayer);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_DisableLayer failed, ret = %x", ret);
+    return ret;
+  }
+
+  ret = RK_MPI_VO_Disable(VoDev);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_Disable failed, ret = %x", ret);
+    return ret;
+  }
+
+  ret = RK_MPI_VO_UnBindLayer(VoLayer, VoDev);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("RK_MPI_VO_UnBindLayer failed, ret = %x", ret);
+    return ret;
+  }
+
+  RK_MPI_VO_CloseFd();
+
+  pstRgnCtx->vo_quit = RK_TRUE;
+  pthread_join(pstRgnCtx->voSendFrameTid, 0);
+
+  RK_LOGE("Destroy vo [dev: %d, layer: %d, chn: %d] success!",
+            VoDev, VoLayer, VoChn);
+  return ret;
+}
 
 RK_S32 unit_test_mpi_rgn_venc(TEST_RGN_CTX_S *pstRgnCtx) {
     RK_S32 s32Ret = RK_SUCCESS;
@@ -609,7 +929,8 @@ RK_S32 unit_test_mpi_rgn_venc(TEST_RGN_CTX_S *pstRgnCtx) {
     }
 
     switch (pstRgnCtx->s32Operation) {
-      case OVERLAY_RGN: {
+      case OVERLAY_RGN:
+      case OVERLAY_EX_RGN: {
         s32Ret = test_rgn_overlay_process(pstRgnCtx, &stMppChn);
       } break;
       case COVER_RGN: {
@@ -711,10 +1032,54 @@ RK_S32 unit_test_mpi_rgn_vpss(TEST_RGN_CTX_S *pstRgnCtx) {
     return s32Ret;
 }
 
+RK_S32 unit_test_mpi_rgn_vo(TEST_RGN_CTX_S *pstRgnCtx) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_U32 VoLayer = 0, VoDev = 0, VoChn = 0;
+    MPP_CHN_S stMppChn;
+
+    VoLayer = pstRgnCtx->vo_layer;
+    VoDev = pstRgnCtx->vo_dev;
+
+    stMppChn.enModId = RK_ID_VO;
+    stMppChn.s32DevId =  pstRgnCtx->vo_layer;
+    stMppChn.s32ChnId = VoChn;
+
+    s32Ret = TEST_RGN_CreateVo(VoLayer, VoDev, VoChn, pstRgnCtx);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("Create vo failed! ret: %x", s32Ret);
+        return s32Ret;
+    }
+
+    switch (pstRgnCtx->s32Operation) {
+      case OVERLAY_RGN:
+      case OVERLAY_EX_RGN: {
+        s32Ret = test_rgn_overlay_process(pstRgnCtx, &stMppChn);
+      } break;
+      case COVER_RGN: {
+        s32Ret = test_rgn_cover_process(pstRgnCtx, &stMppChn);
+      } break;
+      default:
+        RK_LOGE("unsupport operation %d.", pstRgnCtx->s32Operation);
+        s32Ret = RK_FAILURE;
+    }
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    s32Ret = TEST_RGN_DestroyVo(VoLayer, VoDev, VoChn, pstRgnCtx);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("Destory vo failed! ret: %x", s32Ret);
+        return s32Ret;
+    }
+
+    return s32Ret;
+}
+
 
 static void mpi_rgn_test_show_options(const TEST_RGN_CTX_S *ctx) {
     RK_PRINT("cmd parse result:\n");
     RK_PRINT("rgn input raw file name   : %s\n", ctx->srcFileRawName);
+    RK_PRINT("rgn input osd file name   : %s\n", ctx->srcFileOsdName);
     RK_PRINT("rgn input bmp file name   : %s\n", ctx->srcFileBmpName);
     RK_PRINT("rgn output file name      : %s\n", ctx->dstSaveFileName);
     RK_PRINT("rgn count                 : %d\n", ctx->s32RgnCount);
@@ -726,6 +1091,7 @@ static void mpi_rgn_test_show_options(const TEST_RGN_CTX_S *ctx) {
     RK_PRINT("rgn raw width             : %d\n", ctx->u32RawWidth);
     RK_PRINT("rgn raw height            : %d\n", ctx->u32RawHeight);
     RK_PRINT("clut num                  : %d\n", ctx->u32ClutNum);
+    RK_PRINT("mosaic blk                : %d\n", ctx->u32MosaicBlkType);
 }
 
 static const char *const usages[] = {
@@ -741,17 +1107,22 @@ int main(int argc, const char **argv) {
     stRgnCtx.s32Operation   = OVERLAY_RGN;
     stRgnCtx.s32LoopCount   = 1;
     stRgnCtx.s32RgnCount    = 1;
-    stRgnCtx.u32BmpFormat   = RK_FMT_BGRA5551;
+    stRgnCtx.u32BmpFormat   = 11; //RK_FMT_BGRA5551
     stRgnCtx.bRgnQp         = RK_FALSE;
     stRgnCtx.u32RawFormat   = RK_FMT_YUV420SP;
     stRgnCtx.u32AttachMod   = RK_ID_VENC;
     stRgnCtx.u32CoverType   = AREA_RECT;
+    stRgnCtx.u32MosaicBlkType   = 0;
+    stRgnCtx.u32DeviceType   = VIDEO_PROC_DEV_RGA;
+    stRgnCtx.vo_rotation    = 1;
 
     struct argparse_option options[] = {
         OPT_HELP(),
         OPT_GROUP("basic options:"),
         OPT_STRING('i', "input_raw_name", &(stRgnCtx.srcFileRawName),
                     "input raw data file name. default(RK_NULL)", NULL, 0, 0),
+        OPT_STRING('\0', "input_osd_name", &(stRgnCtx.srcFileOsdName),
+                    "input osd data file name. default(RK_NULL)", NULL, 0, 0),
         OPT_STRING('\0', "input_bmp_name", &(stRgnCtx.srcFileBmpName),
                     "input bmp data file name. <required>", NULL, 0, 0),
         OPT_STRING('o', "output_name", &(stRgnCtx.dstSaveFileName),
@@ -759,7 +1130,7 @@ int main(int argc, const char **argv) {
         OPT_INTEGER('r', "rgn_count", &(stRgnCtx.s32RgnCount),
                     "the number of rgn handle. default(1).", NULL, 0, 0),
         OPT_INTEGER('p', "operation", &(stRgnCtx.s32Operation),
-                    "RGN operation. default(0). 0: overlay. 1: cover. 2: mosaic. 3: line", NULL, 0, 0),
+                    "RGN operation. default(0). 0: overlay. 1: overlay_ex, 2: cover. 3: mosaic. 4: line", NULL, 0, 0),
         OPT_INTEGER('x', "rect_x", &(stRgnCtx.stRegion.s32X),
                     "RGN region pos x. default(0).", NULL, 0, 0),
         OPT_INTEGER('y', "rect_y", &(stRgnCtx.stRegion.s32Y),
@@ -777,13 +1148,25 @@ int main(int argc, const char **argv) {
         OPT_INTEGER('F', "raw_fmt", &(stRgnCtx.u32RawFormat),
                     "raw pixel format. default(0). 0: NV12", NULL, 0, 0),
         OPT_INTEGER('f', "format", &(stRgnCtx.u32BmpFormat),
-                    "bmp pixel format. default(65557). 65546: ARGB1555, 65557: BGRA5551", NULL, 0, 0),
+                    "bmp pixel format. default(11).0: ARGB8888, 1: ABGR8888,2: BGRA8888,3: RGBA8888" , NULL, 0, 0),
+        OPT_INTEGER('\0', "\0", &(stRgnCtx.u32BmpFormat),
+                    "4: ARGB4444, 5: ABGR4444,6: BGRA4444,7: RGBA4444", NULL, 0, 0),
+        OPT_INTEGER('\0', "\0", &(stRgnCtx.u32BmpFormat),
+                    "8: ARGB1555, 9: ABGR1555, 10: RGBA5551, 11: BGRA5551", NULL, 0, 0),
         OPT_INTEGER('\0', "clut_num", &(stRgnCtx.u32ClutNum),
                     "set color loop up table num. default(0). range[0, 255].", NULL, 0, 0),
         OPT_INTEGER('\0', "mod", &(stRgnCtx.u32AttachMod),
-                    "attach module. default(4), 4: VENC, 6: VPSS"),
+                    "attach module. default(4), 4: VENC, 6: VPSS, 9: VO"),
         OPT_INTEGER('\0', "cover_type", &(stRgnCtx.u32CoverType),
                     "cover type. default(0), 0: rect, 1: quad"),
+        OPT_INTEGER('\0', "mosaic blk type", &(stRgnCtx.u32MosaicBlkType),
+                    "cover type. default(0), 0: 8*8, 1: 16*16, 2: 32*32, 3: 64*64"),
+        OPT_INTEGER('d', "device_type", &(stRgnCtx.u32DeviceType),
+                    "device type. default(1), 0: gpu, 1: rga"),
+        OPT_INTEGER('r', "vo_rotation", &(stRgnCtx.vo_rotation),
+                    "vo rotation. default(1), 0: 0, 1: 90, 2, 180, 3,270"),
+        OPT_INTEGER('0', "vo_dev", &(stRgnCtx.vo_dev), "vo devices. default(0)"),
+        OPT_INTEGER('0', "vo_layer", &(stRgnCtx.vo_layer), "vo layer. default(0)"),
         OPT_END(),
     };
 
@@ -798,8 +1181,7 @@ int main(int argc, const char **argv) {
     if (stRgnCtx.stRegion.u32Width <= 0 ||
           stRgnCtx.stRegion.u32Height <= 0 ||
           stRgnCtx.u32RawWidth <= 0 ||
-          stRgnCtx.u32RawHeight <= 0 ||
-          stRgnCtx.srcFileBmpName == RK_NULL) {
+          stRgnCtx.u32RawHeight <= 0) {
         argparse_usage(&argparse);
         return RK_FAILURE;
     }
@@ -815,6 +1197,9 @@ int main(int argc, const char **argv) {
       } break;
       case RK_ID_VPSS: {
         s32Ret = unit_test_mpi_rgn_vpss(&stRgnCtx);
+      } break;
+      case RK_ID_VO: {
+        s32Ret = unit_test_mpi_rgn_vo(&stRgnCtx);
       } break;
       default:
       break;

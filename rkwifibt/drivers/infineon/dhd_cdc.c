@@ -1,9 +1,9 @@
 /*
  * DHD Protocol Module for CDC and BDC.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -153,21 +153,13 @@ dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len, uin
 
 #ifdef BCMSPI
 	/* 11bit gSPI bus allows 2048bytes of max-data.  We restrict 'len'
-	 * value which is 8Kbytes for various 'get' commands to 2000.  48 bytes are
+	 * value which is 8Kbytes for various 'get' commands to 1990.  58 bytes are
 	 * left for sw headers and misc.
 	 */
-
-	if (len > 2000) {
-		DHD_ERROR(("dhdcdc_query_ioctl: len is truncated to 2000 bytes\n"));
-		len = 2000;
+	if (len > 1990) {
+		DHD_ERROR(("dhdcdc_query_ioctl: len is truncated from %d to 1990 bytes\n", len));
+		len = 1990;
 	}
-#ifdef BCMQT
-	/* WAR: packet length limited for SPI host issue in FIFO mode on Zebu */
-	if (len > 460) {
-		DHD_ERROR(("len is truncated to 460 bytes on Zebu\n"));
-		len = 460;
-	}
-#endif /* BCMQT */
 #endif /* BCMSPI */
 	msg->cmd = htol32(cmd);
 	msg->len = htol32(len);

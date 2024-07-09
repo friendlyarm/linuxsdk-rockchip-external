@@ -60,6 +60,11 @@ int get_int_property(void) {
     return atoi(level);
 }
 
+static void rga_set_driver_feature(struct rgaContext *ctx) {
+    if (rga_version_compare(ctx->mDriverVersion, (struct rga_version_t){ 1, 3, 0, {0} }) >= 0)
+        ctx->driver_feature |= RGA_DRIVER_FEATURE_USER_CLOSE_FENCE;
+}
+
 int NormalRgaOpen(void **context) {
     struct rgaContext *ctx = NULL;
     int fd = -1;
@@ -125,6 +130,8 @@ int NormalRgaOpen(void **context) {
             ctx->driver = RGA_DRIVER_IOC_RGA2;
             ALOGE("librga fail to get driver version! Compatibility mode will be enabled.\n");
         }
+
+        rga_set_driver_feature(ctx);
 
         NormalRgaInitTables();
 
@@ -372,9 +379,9 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     int srcVirW,srcVirH,srcActW,srcActH,srcXPos,srcYPos;
     int dstVirW,dstVirH,dstActW,dstActH,dstXPos,dstYPos;
     int src1VirW,src1VirH,src1ActW,src1ActH,src1XPos,src1YPos;
-    int scaleMode,rotateMode,orientation,ditherEn;
+    int rotateMode,orientation,ditherEn;
     int srcType,dstType,src1Type,srcMmuFlag,dstMmuFlag,src1MmuFlag;
-    int planeAlpha;
+    int fg_global_alpha, bg_global_alpha;
     int dstFd = -1;
     int srcFd = -1;
     int src1Fd = -1;
@@ -382,6 +389,7 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     int stretch = 0;
     float hScale = 1;
     float vScale = 1;
+    struct rga_interp interp;
     int ret = 0;
     rga_rect_t relSrcRect,tmpSrcRect,relDstRect,tmpDstRect;
     rga_rect_t relSrc1Rect,tmpSrc1Rect;
@@ -403,6 +411,8 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
 
     //init
     memset(&rgaReg, 0, sizeof(struct rga_req));
+    if (rgaCtx->driver_feature & RGA_DRIVER_FEATURE_USER_CLOSE_FENCE)
+        rgaReg.feature.user_close_fence = true;
 
     srcType = dstType = srcMmuFlag = dstMmuFlag = 0;
     src1Type = src1MmuFlag = 0;
@@ -433,6 +443,8 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     if (src) {
         rotation = src->rotation;
         blend = src->blend;
+        interp.horiz = src->scale_mode & 0xf;
+        interp.verti = (src->scale_mode >> 4) & 0xf;
         memcpy(&relSrcRect, &src->rect, sizeof(rga_rect_t));
     }
 
@@ -686,73 +698,63 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     }
 #endif
 
-    /* blend bit[16:23] is to set global alpha. */
-    planeAlpha = (blend & 0xFF0000) >> 16;
-
     /* determined by format, need pixel alpha or not. */
     perpixelAlpha = NormalRgaFormatHasAlpha(RkRgaGetRgaFormat(relSrcRect.format));
 
     if(is_out_log())
         ALOGE("blend = %x , perpixelAlpha = %d",blend,perpixelAlpha);
 
-    /* blend bit[0:15] is to set which way to blend,such as whether need glabal alpha,and so on. */
-    switch ((blend & 0xFFFF)) {
-        case 0x0001:/* src */
-            NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 1, 0);
-            break;
+    if (blend & 0xfff) {
+        /* blend bit[16:23] is to set global alpha. */
+        fg_global_alpha = (blend >> 16) & 0xff;
+        bg_global_alpha = (blend >> 24) & 0xff;
 
-        case 0x0002:/* dst */
-            NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 2, 0);
-            break;
+        /*
+         * In the legacy interface, the src-over mode supports globalAlpha
+         * configuration for the src channel, while the other modes do not
+         * support globalAlpha configuration.
+         */
+        switch (blend & 0xfff) {
+            case 0x405:
+                fg_global_alpha = (blend >> 16) & 0xff;
+                bg_global_alpha = 0xff;
 
-        case 0x0105:/* src over , no need to Premultiplied. */
-            if (perpixelAlpha && planeAlpha < 255) {
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha, 1, 9, 0);
-            } else if (perpixelAlpha)
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 1, 0, 1, 3, 0);
-            else
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 0, planeAlpha, 0, 0, 0);
-            break;
+                blend = RGA_ALPHA_BLEND_SRC_OVER;
+                blend |= 0x1 << 12;
+                break;
+            case 0x504:
+                fg_global_alpha = 0xff;
+                bg_global_alpha = 0xff;
 
-        case 0x0405:/* src over , need to Premultiplied. */
-            if (perpixelAlpha && planeAlpha < 255)
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha, 1, 9, 0);
-            else if (perpixelAlpha)
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 1, 0, 1, 3, 0);
-            else
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 0, planeAlpha, 0, 0, 0);
+                blend = RGA_ALPHA_BLEND_DST_OVER;
+                blend |= 0x1 << 12;
+                break;
+            case 0x105:
+                fg_global_alpha = (blend >> 16) & 0xff;
+                bg_global_alpha = 0xff;
 
-            rgaReg.alpha_rop_flag |= (1 << 9);  //real color mode
+                blend = RGA_ALPHA_BLEND_SRC_OVER;
+                break;
+            case 0x501:
+                fg_global_alpha = 0xff;
+                bg_global_alpha = 0xff;
 
-            break;
+                blend = RGA_ALPHA_BLEND_DST_OVER;
+                break;
+            case 0x100:
+                fg_global_alpha = 0xff;
+                bg_global_alpha = 0xff;
 
-        case 0x0501:/* dst over , no need premultiplied. */
-            if (perpixelAlpha && planeAlpha < 255)
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 4, 0);
-            else if (perpixelAlpha)
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 1, planeAlpha , 1, 4, 0);
-            else
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 3, planeAlpha , 1, 4, 0);
-            break;
+                blend = RGA_ALPHA_BLEND_SRC;
+                break;
+        }
 
-        case 0x0504:/* dst over, need premultiplied. */
-            if (perpixelAlpha && planeAlpha < 255)
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 2, planeAlpha , 1, 4, 0);
-            else if (perpixelAlpha)
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 1, planeAlpha , 1, 4, 0);
-            else
-                NormalRgaSetAlphaEnInfo(&rgaReg, 1, 3, planeAlpha , 1, 4, 0);
+        rgaReg.feature.global_alpha_en = true;
+        NormalRgaSetAlphaEnInfo(&rgaReg, 1, 1, fg_global_alpha, bg_global_alpha , 1, blend & 0xfff, 0);
 
-            rgaReg.alpha_rop_flag |= (1 << 9);  //real color mode
-            break;
-
-        case 0x0100:
-        default:
-            /* Tips: BLENDING_NONE is non-zero value, handle zero value as
-             * BLENDING_NONE. */
-            /* C = Cs
-             * A = As */
-            break;
+        /* need to pre-multiply. */
+        if ((blend >> 12) & 0x1)
+            rgaReg.alpha_rop_flag |= (1 << 9);
     }
 
     /* discripe a picture need high stride.If high stride not to be set, need use height as high stride. */
@@ -839,21 +841,53 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
         }
     }
 
-    /* reselect the scale mode. */
-    scaleMode = 0;
     stretch = (hScale != 1.0f) || (vScale != 1.0f);
-    /* scale up use bicubic */
-    if (hScale < 1 || vScale < 1) {
-#ifdef ANDROID
-        if((src->format == HAL_PIXEL_FORMAT_RGBA_8888  ||src->format == HAL_PIXEL_FORMAT_BGRA_8888))
-#elif LINUX
-        if((relSrcRect.format == RK_FORMAT_RGBA_8888  || relSrcRect.format == RK_FORMAT_BGRA_8888))
-#endif
-        scaleMode = 0;     //  force change scale_mode to 0 ,for rga not support
+
+    if (interp.horiz == RGA_INTERP_DEFAULT) {
+        if (hScale > 1.0f)
+            interp.horiz = RGA_INTERP_AVERAGE;
+        else if (hScale < 1.0f)
+            interp.horiz = RGA_INTERP_BICUBIC;
+    }
+
+    if (interp.verti == RGA_INTERP_DEFAULT) {
+        if (vScale > 1.0f) {
+            interp.verti = RGA_INTERP_AVERAGE;
+        } else if (vScale < 1.0f) {
+            if (relSrcRect.width > 1996 ||
+                (relDstRect.width > 1996 && hScale > 1.0f))
+                interp.verti = RGA_INTERP_LINEAR;
+            else
+                interp.verti = RGA_INTERP_BICUBIC;
+        }
+    }
+
+    /* check interpoletion limit */
+    if (interp.verti == RGA_INTERP_BICUBIC && vScale < 1.0f) {
+        if (relSrcRect.width > 1996 ||
+            (relDstRect.width > 1996 && hScale > 1.0f)) {
+            ALOGE("when using bicubic scaling in the vertical direction, it does not support input width larger than %d.",
+                1996);
+            return -EINVAL;
+        }
+    }
+
+    if (((vScale > 1.0f && interp.verti == RGA_INTERP_LINEAR) ||
+         (hScale > 1.0f && interp.horiz == RGA_INTERP_LINEAR)) &&
+        (hScale < 1.0f || vScale < 1.0f)) {
+            ALOGE("when using bilinear scaling for downsizing, it does not support scaling up in other directions.");
+            return -EINVAL;
+    }
+
+    if ((vScale > 1.0f && interp.verti == RGA_INTERP_LINEAR) &&
+        relDstRect.width > 4096) {
+        ALOGE("bi-linear scale-down only supports vertical direction smaller than 4096.");
+        return -EINVAL;
     }
 
     if(is_out_log())
-        ALOGD("scaleMode = %d , stretch = %d;",scaleMode,stretch);
+        ALOGD("interp[horiz,verti] = [0x%x, 0x%x] , stretch = 0x%x",
+              interp.horiz, interp.verti, stretch);
 
     /*
      * according to the rotation to set corresponding parameter.It's diffrient from the opengl.
@@ -1296,7 +1330,14 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
         NormalRgaSetPatActiveInfo(&rgaReg, src1ActW, src1ActH, src1XPos, src1YPos);
 
     if (dst->color_space_mode & full_csc_mask) {
-        NormalRgaFullColorSpaceConvert(&rgaReg, dst->color_space_mode);
+        ret = NormalRgaFullColorSpaceConvert(&rgaReg, dst->color_space_mode);
+        if (ret < 0) {
+            ALOGE("Not support full csc mode [%x]\n", dst->color_space_mode);
+            return -EINVAL;
+        }
+
+        if (dst->color_space_mode == rgb2yuv_709_limit)
+            yuvToRgbMode |= 0x3 << 2;
     } else {
         if (src1) {
             /* special config for yuv + rgb => rgb */
@@ -1338,13 +1379,13 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
     }
 
     /* mode
-     * scaleMode:set different algorithm to scale.
+     * interp:set different algorithm to scale.
      * rotateMode:rotation mode
      * Orientation:rotation orientation
      * ditherEn:enable or not.
      * yuvToRgbMode:yuv to rgb, rgb to yuv , or others
      * */
-    NormalRgaSetBitbltMode(&rgaReg, scaleMode, rotateMode, orientation,
+    NormalRgaSetBitbltMode(&rgaReg, interp, rotateMode, orientation,
                            ditherEn, 0, yuvToRgbMode);
 
     NormalRgaNNQuantizeMode(&rgaReg, dst);
@@ -1400,6 +1441,13 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
         ALOGD("srcMmuFlag = %d , dstMmuFlag = %d , rotateMode = %d \n", srcMmuFlag, dstMmuFlag,rotateMode);
         ALOGD("<<<<-------- rgaReg -------->>>>\n");
         NormalRgaLogOutRgaReq(rgaReg);
+    }
+
+    /* RGBA5551 alpha control */
+    if (src->rgba5551_flags == 1) {
+        rgaReg.rgba5551_alpha.flags = src->rgba5551_flags;
+        rgaReg.rgba5551_alpha.alpha0 = src->rgba5551_alpha0;
+        rgaReg.rgba5551_alpha.alpha1 = src->rgba5551_alpha1;
     }
 
     if(src->sync_mode == RGA_BLIT_ASYNC || dst->sync_mode == RGA_BLIT_ASYNC) {
@@ -1470,6 +1518,11 @@ int RgaBlit(rga_info *src, rga_info *dst, rga_info *src1) {
 
     dst->out_fence_fd = rgaReg.out_fence_fd;
 
+    if (rgaCtx->driver_feature & RGA_DRIVER_FEATURE_USER_CLOSE_FENCE &&
+        dst->in_fence_fd > 0 &&
+        sync_mode == RGA_BLIT_ASYNC)
+        close(dst->in_fence_fd);
+
     return 0;
 }
 
@@ -1512,7 +1565,16 @@ int RgaCollorFill(rga_info *dst) {
         return -ENODEV;
     }
 
+    /* print debug log by setting property vendor.rga.log as 1 */
+    is_debug_log();
+    if(is_out_log()) {
+        ALOGD("<<<<-------- print rgaLog -------->>>>");
+        ALOGD("dst->hnd = 0x%lx\n", (unsigned long)dst->hnd);
+        ALOGD("dst: handle = %d, Fd = %.2d ,phyAddr = %p ,virAddr = %p\n", dst->handle, dst->fd, dst->phyAddr, dst->virAddr);
+    }
+
     memset(&rgaReg, 0, sizeof(struct rga_req));
+    rgaReg.feature.user_close_fence = true;
 
     dstType = dstMmuFlag = 0;
 
@@ -1569,6 +1631,11 @@ int RgaCollorFill(rga_info *dst) {
     if (dstFd == 0 && !dstBuf) {
         ALOGE("dstFd is zero, now driver not support");
         return -EINVAL;
+    }
+
+    if(is_out_log()) {
+        ALOGD("handle_flag: 0x%x\n", rgaReg.handle_flag);
+        ALOGD("dst: Fd/handle = %.2d , buf = %p, mmuFlag = %d, mmuType = %d\n", dstFd, dstBuf, dst->mmuFlag, dstType);
     }
 
     relDstRect.format = RkRgaCompatibleFormat(relDstRect.format);
@@ -1685,11 +1752,11 @@ int RgaCollorFill(rga_info *dst) {
         NormalRgaMmuFlag(&rgaReg, dstMmuFlag, dstMmuFlag);
     }
 
-#ifdef LINUX
-#if __DEBUG
-    NormalRgaLogOutRgaReq(rgaReg);
-#endif
-#endif
+    if(is_out_log()) {
+        ALOGD("dstMmuFlag = %d\n", dstMmuFlag);
+        ALOGD("<<<<-------- rgaReg -------->>>>\n");
+        NormalRgaLogOutRgaReq(rgaReg);
+    }
 
     if(dst->sync_mode == RGA_BLIT_ASYNC) {
         sync_mode = dst->sync_mode;
@@ -1757,6 +1824,11 @@ int RgaCollorFill(rga_info *dst) {
 
     dst->out_fence_fd = rgaReg.out_fence_fd;
 
+    if (rgaCtx->driver_feature & RGA_DRIVER_FEATURE_USER_CLOSE_FENCE &&
+        dst->in_fence_fd > 0 &&
+        sync_mode == RGA_BLIT_ASYNC)
+        close(dst->in_fence_fd);
+
     return 0;
 }
 
@@ -1788,6 +1860,7 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
 
     //init
     memset(&rgaReg, 0, sizeof(struct rga_req));
+    rgaReg.feature.user_close_fence = true;
 
     srcType = dstType = lutType = srcMmuFlag = dstMmuFlag = lutMmuFlag = 0;
 
@@ -2371,8 +2444,6 @@ int RgaCollorPalette(rga_info *src, rga_info *dst, rga_info *lut) {
         ALOGE(" %s(%d) RGA_COLOR_PALETTE fail: %s",__FUNCTION__, __LINE__,strerror(errno));
         return -errno;
     }
-
-    dst->out_fence_fd = rgaReg.out_fence_fd;
 
     return 0;
 }

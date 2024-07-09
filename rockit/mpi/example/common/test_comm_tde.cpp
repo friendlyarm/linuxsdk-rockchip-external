@@ -160,7 +160,7 @@ RK_S32 TEST_TDE_LoadSrcFrame(TEST_TDE_PROC_CTX_S *pstCtx) {
 
     pstVideoFrame = (RK_U8 *)RK_MPI_MB_Handle2VirAddr(stVideoFrame.stVFrame.pMbBlk);
     if (pstCtx->srcFileName != RK_NULL) {
-        s32Ret = TEST_COMM_FileReadOneFrame(pstCtx->srcFileName, &stVideoFrame);
+        s32Ret = TEST_COMM_FileReadOneFrame(pstCtx->srcFileName, &stVideoFrame, 0);
         if (s32Ret != RK_SUCCESS) {
             goto __FAILED;
         }
@@ -251,26 +251,20 @@ RK_S32 TEST_TDE_Single_ProcessJob(TEST_TDE_PROC_CTX_S *pstCtx, VIDEO_FRAME_INFO_
     for (RK_S32 taskIdx = 0; taskIdx < s32TaskNum; taskIdx++) {
         s32Ret = TEST_TDE_AddTask(pstCtx, jobHandle);
         if (s32Ret != RK_SUCCESS) {
-            goto __FAILED;
+            return s32Ret;
         }
     }
 
     s32Ret = TEST_TDE_EndJob(jobHandle);
     if (s32Ret != RK_SUCCESS) {
-        goto __FAILED;
+        return s32Ret;
     }
     if (pstFrames) {
         TEST_TDE_TransSurfaceToVideoFrame(pstCtx, pstFrames);
     }
 
-__FAILED:
-    if (s32Ret != RK_SUCCESS) {
-        RK_MPI_MB_ReleaseMB(pstCtx->pstSrc.pMbBlk);
-        RK_MPI_MB_ReleaseMB(pstCtx->pstDst.pMbBlk);
-    }
     return s32Ret;
 }
-
 
 void* TEST_TDE_SingleProc(void *pArgs) {
     RK_S32 s32Ret = RK_SUCCESS;
@@ -299,9 +293,14 @@ void* TEST_TDE_MultiProc(void *pArgs) {
     TEST_TDE_LoadSrcFrame(pstCtx);
     TEST_TDE_CreateDstFrame(pstCtx);
     for (RK_S32 i = 0; i < pstCtx->s32ProcessTimes; i++) {
-        s32Ret = TEST_TDE_ProcessJob(pstCtx, &pstFrames);
+        s32Ret = TEST_TDE_Single_ProcessJob(pstCtx, &pstFrames);
+        if (s32Ret != RK_SUCCESS) {
+            goto __FAILED;
+        }
         TEST_TDE_Save_DstFrame(pstCtx);
     }
+
+__FAILED:
     RK_MPI_MB_ReleaseMB(pstCtx->pstSrc.pMbBlk);
     RK_MPI_MB_ReleaseMB(pstCtx->pstDst.pMbBlk);
 

@@ -1,9 +1,9 @@
 /*
  * Driver O/S-independent utility routines
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -32,7 +32,6 @@
 #include <bcm_cfg.h>
 #include <typedefs.h>
 #include <bcmdefs.h>
-#include <stdarg.h>
 #ifdef BCMDRIVER
 #include <osl.h>
 #include <bcmutils.h>
@@ -53,7 +52,11 @@
 #endif // endif
 
 #endif /* !BCMDRIVER */
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+#include <linux/stdarg.h>
+#else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) */
+#include <stdarg.h>
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) */
 #ifdef WL_UNITTEST
 #ifdef ASSERT
 #undef ASSERT

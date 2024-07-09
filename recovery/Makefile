@@ -41,7 +41,7 @@ CFLAGS += -I$(PROJECT_DIR) -I/usr/include -I/usr/include/libdrm/ -lc -DUSE_UPDAT
 ifdef RecoveryNoUi
 CFLAGS += -lpthread -lbz2
 else
-CFLAGS += -lz -lpng -ldrm -lpthread -lcurl -lcrypto -lbz2
+CFLAGS += -lz -lpng -ldrm -lpthread -lcurl -lbz2
 endif
 
 UPDATE_ENGINE_OBJ = mtdutils/mounts.o \
@@ -52,6 +52,7 @@ UPDATE_ENGINE_OBJ = mtdutils/mounts.o \
 	update_engine/flash_image.o \
 	update_engine/log.o \
 	update_engine/main.o \
+	update_engine/md5.o \
 	update_engine/md5sum.o \
 	update_engine/rkimage.o \
 	update_engine/rktools.o \
@@ -60,14 +61,25 @@ UPDATE_ENGINE_OBJ = mtdutils/mounts.o \
 	update_engine/update.o \
 	update_engine/do_patch.o
 
-# build in buildroot, it need change work directory
 recovery_version:
-	cd $(PROJECT_DIR)/../../../../../external/recovery && \
-	COMMIT_HASH=$$(git rev-parse --verify --short HEAD) && \
-	GIT_COMMIT_TIME=$$(git log -1 --format=%cd --date=format:%y%m%d) && \
-	GIT_DIRTY=$$(git diff-index --quiet HEAD -- || echo "-dirty") && \
-	commit_info=-g$${COMMIT_HASH}-$${GIT_COMMIT_TIME}$${GIT_DIRTY} && \
-	cd $(PROJECT_DIR) && \
+	@if ! command -v git > /dev/null; then \
+		echo "Git is not installed. Setting default commit info."; \
+		commit_info="-g<unknown>"; \
+	else \
+		COMMIT_HASH=$$(git rev-parse --verify --short HEAD 2> /dev/null); \
+		if [ -z "$$COMMIT_HASH" ]; then \
+			echo "Failed to get commit hash. Setting default commit info."; \
+			commit_info="-g<unknown>"; \
+		else \
+			GIT_COMMIT_TIME=$$(git log -1 --format=%cd --date=format:%y%m%d 2> /dev/null); \
+			if [ -z "$$GIT_COMMIT_TIME" ]; then \
+				echo "Failed to get commit time. Setting default commit info."; \
+				commit_info="-g$${COMMIT_HASH}-000000"; \
+			else \
+				commit_info="-g$${COMMIT_HASH}-$${GIT_COMMIT_TIME}"; \
+			fi; \
+		fi; \
+	fi; \
 	echo "#define GIT_COMMIT_INFO $${commit_info}" > recovery_autogenerate.h
 
 $(PROM): $(OBJ)

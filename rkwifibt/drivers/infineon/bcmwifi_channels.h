@@ -3,9 +3,9 @@
  * This header file housing the define and function prototype use by
  * both the wl driver, tools & Apps.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -52,12 +52,15 @@ typedef uint16 chanspec_subband_t;
 #define CH_MIN_2G_40M_CHANNEL             3u    /* Min 40MHz center channel in 2G band */
 #define CH_MAX_2G_40M_CHANNEL            11u    /* Max 40MHz center channel in 2G band */
 
+#define CH_MIN_6G_CHANNEL                 1u    /* Min channel in 6G band */
+#define CH_MAX_6G_CHANNEL               233u    /* Max channel in 6G band */
+
 /* maximum # channels the s/w supports */
-#define MAXCHANNEL		224	/* max # supported channels. The max channel no is above,
-					 * this is that + 1 rounded up to a multiple of NBBY (8).
+#define MAXCHANNEL		240	/* max # supported channels. The max channel no is 233,
+					 * this is that + 7 rounded up to a multiple of NBBY (8).
 					 * DO NOT MAKE it > 255: channels are uint8's all over
 					 */
-#define MAXCHANNEL_NUM	(MAXCHANNEL - 1)	/* max channel number */
+#define MAXCHANNEL_NUM (MAXCHANNEL - 7)        /* max channel number */
 
 #define INVCHANNEL              255     /* error value for a bad channel */
 
@@ -117,7 +120,7 @@ typedef struct {
 #define WL_CHANSPEC_BAND_SHIFT		14u
 #define WL_CHANSPEC_BAND_2G		0x0000u
 #define WL_CHANSPEC_BAND_3G		0x4000u
-#define WL_CHANSPEC_BAND_4G		0x8000u
+#define WL_CHANSPEC_BAND_6G		0x8000u
 #define WL_CHANSPEC_BAND_5G		0xc000u
 #define INVCHANSPEC			255u
 #define MAX_CHANSPEC			0xFFFFu
@@ -375,6 +378,7 @@ typedef struct {
 #define BW_LE80(bw)		(BW_LE40(bw) || ((bw) == WL_CHANSPEC_BW_80))
 #define BW_LE160(bw)		(BW_LE80(bw) || ((bw) == WL_CHANSPEC_BW_160))
 
+#define CHSPEC_IS6G(chspec)	(((chspec) & WL_CHANSPEC_BAND_MASK) == WL_CHANSPEC_BAND_6G)
 #define CHSPEC_IS5G(chspec)	(((chspec) & WL_CHANSPEC_BAND_MASK) == WL_CHANSPEC_BAND_5G)
 #define CHSPEC_IS2G(chspec)	(((chspec) & WL_CHANSPEC_BAND_MASK) == WL_CHANSPEC_BAND_2G)
 #define CHSPEC_SB_UPPER(chspec)	\
@@ -500,6 +504,12 @@ extern bool wf_chspec_coexist(chanspec_t chspec1, chanspec_t chspec2);
 #define WF_CHAN_FACTOR_4_G		8000	/* 4.9 GHz band for Japan */
 
 #define WLC_2G_25MHZ_OFFSET		5	/* 2.4GHz band channel offset */
+
+/**
+ * Starting frequence of 6 GHz channels.
+ * Wi-Fi 6E operates in the 6 GHz band from 5.925 to 7.125 GHz.
+ */
+#define FREQ_START_6G_CHANNEL		5925	/* 6G band starting frequence */
 
 /**
  *  No of sub-band vlaue of the specified Mhz chanspec
@@ -724,6 +734,9 @@ extern chanspec_t wf_chspec_80(uint8 center_channel, uint8 primary_channel);
  *
  */
 extern uint16 wf_channel2chspec(uint ctl_ch, uint bw);
+#ifdef WL_6E
+extern uint16 wf_channel2chspec6E(uint pri_ch, uint bw);
+#endif /* WL_6E */
 
 extern uint wf_channel2freq(uint channel);
 extern uint wf_freq2channel(uint freq);

@@ -27,6 +27,8 @@ typedef RK_U32 RGN_HANDLE;
 #define RGN_COVER_MIN_Y                0
 #define RGN_COVER_MAX_X                8192
 #define RGN_COVER_MAX_Y                8192
+#define RGN_COVER_MIN_WIDTH            2
+#define RGN_COVER_MIN_HEIGHT           2
 #define RGN_COVER_MAX_WIDTH            8192
 #define RGN_COVER_MAX_HEIGHT           8192
 
@@ -143,7 +145,7 @@ typedef enum rkRGN_AREA_TYPE_E {
     AREA_RECT = 0,
     AREA_QUAD_RANGLE,
     AREA_BUTT
-} RGN_COVER_TYPE_E;
+} RGN_AREA_TYPE_E, RGN_COVER_TYPE_E;
 
 typedef struct rkCOVER_CHN_ATTR_S {
     RGN_COVER_TYPE_E enCoverType;
@@ -165,9 +167,13 @@ typedef enum rkMOSAIC_BLK_SIZE_E {
 } MOSAIC_BLK_SIZE_E;
 
 typedef struct rkMOSAIC_CHN_ATTR_S {
-    RECT_S stRect;                 /*location of MOSAIC*/
+    RGN_AREA_TYPE_E enMosaicType;
+    union {
+        RECT_S stRect;                      /* config of rect */
+        RGN_QUADRANGLE_S stQuadRangle;
+    };
     MOSAIC_BLK_SIZE_E enBlkSize;   /*block size of MOSAIC*/
-    RK_U32 u32Layer;               /*MOSAIC region layer range:[0,3] */
+    RK_U32 u32Layer;               /*MOSAIC region layer range:[0, 7] */
 } MOSAIC_CHN_ATTR_S;
 
 typedef struct rkLINE_CHN_ATTR_S {

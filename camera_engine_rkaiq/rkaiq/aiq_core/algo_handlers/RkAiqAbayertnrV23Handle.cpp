@@ -264,8 +264,6 @@ XCamReturn RkAiqAbayertnrV23HandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "arawnr handle prepare failed");
 
-    RkAiqAlgoConfigAbayertnrV23* abayertnr_config_int = (RkAiqAlgoConfigAbayertnrV23*)mConfig;
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "arawnr algo prepare failed");
@@ -313,7 +311,7 @@ XCamReturn RkAiqAbayertnrV23HandleInt::processing() {
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
-    abayertnr_proc_res_int->stAbayertnrProcResult.st3DFix = &shared->fullParams->mTnrV32Params->data()->result;
+    abayertnr_proc_res_int->stAbayertnrProcResult.st3DFix = &shared->fullParams->mTnrParams->data()->result;
 
     ret = RkAiqHandle::processing();
     if (ret) {
@@ -337,8 +335,11 @@ XCamReturn RkAiqAbayertnrV23HandleInt::processing() {
 #endif
     RKAIQCORE_CHECK_RET(ret, "aynr algo processing failed");
 
-    shared->res_comb.bayernr3d_en = !abayertnr_proc_res_int->stAbayertnrProcResult.st3DFix->bay3d_en ? false : true;
-
+    if (!abayertnr_proc_res_int->res_com.cfg_update) {
+        shared->res_comb.bayernr3d_en = mLatestEn;
+    } else {
+        shared->res_comb.bayernr3d_en = mLatestEn = !abayertnr_proc_res_int->stAbayertnrProcResult.st3DFix->bay3d_en ? false : true;
+    }
     EXIT_ANALYZER_FUNCTION();
     return ret;
 }
@@ -388,7 +389,7 @@ XCamReturn RkAiqAbayertnrV23HandleInt::genIspResult(RkAiqFullParams* params,
 
     if (!this->getAlgoId()) {
         LOGD_ANR("oyyf: %s:%d output isp param start\n", __FUNCTION__, __LINE__);
-        rk_aiq_isp_tnr_params_v32_t* tnr_param = params->mTnrV32Params->data().ptr();
+        rk_aiq_isp_tnr_params_t* tnr_param = params->mTnrParams->data().ptr();
         if (sharedCom->init) {
             tnr_param->frame_id = 0;
         } else {
@@ -400,24 +401,24 @@ XCamReturn RkAiqAbayertnrV23HandleInt::genIspResult(RkAiqFullParams* params,
             tnr_param->sync_flag = mSyncFlag;
             // copy from algo result
             // set as the latest result
-            cur_params->mTnrV32Params = params->mTnrV32Params;
+            cur_params->mTnrParams = params->mTnrParams;
             tnr_param->is_update = true;
-            LOGD_ANR("[%d] params from algo", mSyncFlag);
+            LOGD_ANR("3d [%d] params from algo", mSyncFlag);
         } else if (mSyncFlag != tnr_param->sync_flag) {
             tnr_param->sync_flag = mSyncFlag;
             // copy from latest result
-            if (cur_params->mTnrV32Params.ptr()) {
-                tnr_param->result = cur_params->mTnrV32Params->data()->result;
+            if (cur_params->mTnrParams.ptr()) {
+                tnr_param->result = cur_params->mTnrParams->data()->result;
                 tnr_param->is_update = true;
             } else {
                 LOGE_ANR("no latest params !");
                 tnr_param->is_update = false;
             }
-            LOGD_ANR("[%d] params from latest [%d]", shared->frameId, mSyncFlag);
+            LOGD_ANR("3d [%d] params from latest [%d]", shared->frameId, mSyncFlag);
         } else {
             // do nothing, result in buf needn't update
             tnr_param->is_update = false;
-            LOGD_ANR("[%d] params needn't update", shared->frameId);
+            LOGD_ANR("3d [%d] params needn't update", shared->frameId);
         }
         LOGD_ANR("oyyf: %s:%d output isp param end \n", __FUNCTION__, __LINE__);
     }

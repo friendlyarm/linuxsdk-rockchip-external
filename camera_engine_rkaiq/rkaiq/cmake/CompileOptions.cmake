@@ -1,4 +1,9 @@
 set(CMAKE_C_FLAGS                  "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -fPIC")
+set(CMAKE_C_FLAGS_DEBUG          "-O0 -g -gdwarf -fexceptions -funwind-tables")
+set(CMAKE_C_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
+set(CMAKE_C_FLAGS_RELEASE        "-O4 -DNDEBUG")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g -gdwarf -fexceptions -funwind-tables")
+
 set(CMAKE_CXX_FLAGS                "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -fPIC")
 set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g -gdwarf -fexceptions -funwind-tables")
 set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
@@ -12,6 +17,7 @@ set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "")
 if (ARCH STREQUAL "arm")
     add_compile_options(
         -march=armv7-a
@@ -22,6 +28,7 @@ if (ARCH STREQUAL "aarch64")
     add_compile_options(
         -march=armv8-a
         )
+endif()
 endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -37,7 +44,8 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         message(FATAL_ERROR "${PROJECT_NAME} requires g++ 8.3 or greater.")
     endif ()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables -Wno-undef")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--gc-sections -Wl,-Map,librkaiq.map")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/librkaiq.version")
 
@@ -53,7 +61,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
             set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -D_FORTIFY_SOURCE=2")
             set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -D_FORTIFY_SOURCE=2")
         endif()
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,defs -Wl,-z,noexecstack -Wl,-z,now -Wl,-z,relro")
+        set(CMAKE_LINK_FLAGS "${CMAKE_LINK_FLAGS} -Wl,-z,defs -Wl,-z,noexecstack -Wl,-z,now -Wl,-z,relro")
     #endif (NOT ARCH STREQUAL "arm")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
@@ -64,11 +72,21 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fstack-protector-strong")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -fstack-protector-strong")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--gc-sections -Wl,-Map,librkaiq.map")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/librkaiq.version")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--push-state -Wl,--no-as-needed -lpthread -Wl,--pop-state")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--push-state -Wl,--no-as-needed -Wl,--pop-state")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--push-state -Wl,--as-needed -latomic -Wl,--pop-state")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,defs -Wl,-z,noexecstack -Wl,-z,now -Wl,-z,relro")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -Wl,--icf=all -Wl,--gdb-index")
+    if (NOT (${CMAKE_SYSTEM_NAME} STREQUAL "Android"))
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_LIST_DIR}/librkaiq.version")
+    else()
+        add_compile_options(-DANDROID_OS
+                            -DCMAKE_BUILD_ANDROID=1)
+        add_compile_options(-Wno-unused-but-set-variable
+                            -Wno-unused-variable
+                            -Wno-unused-label
+                            -Wno-implicit-const-int-float-conversion)
+
+    endif()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /stdlib=libc++")
 else ()

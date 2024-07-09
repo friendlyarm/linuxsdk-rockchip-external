@@ -16,263 +16,64 @@
 #ifndef _RK_AIQ_ALGO_TYPES_H_
 #define _RK_AIQ_ALGO_TYPES_H_
 
-#include "a3dlut/rk_aiq_types_a3dlut_algo_int.h"
-#include "abayer2dnr2/rk_aiq_types_abayer2dnr_algo_int_v2.h"
-#include "abayer2dnrV23/rk_aiq_types_abayer2dnr_algo_int_v23.h"
-#include "abayertnr2/rk_aiq_types_abayertnr_algo_int_v2.h"
-#include "abayertnrV23/rk_aiq_types_abayertnr_algo_int_v23.h"
-#include "ablc/rk_aiq_types_ablc_algo_int.h"
-#include "ablcV32/rk_aiq_types_ablc_algo_int_v32.h"
-#include "accm/rk_aiq_types_accm_algo_int.h"
-#include "acnr/rk_aiq_types_acnr_algo_int_v1.h"
-#include "acnr2/rk_aiq_types_acnr_algo_int_v2.h"
-#include "acnrV30/rk_aiq_types_acnr_algo_int_v30.h"
-#include "acp/rk_aiq_types_acp_algo_int.h"
-#include "adebayer/rk_aiq_types_adebayer_algo_int.h"
-#include "adegamma/rk_aiq_types_adegamma_algo_int.h"
-#include "adehaze/rk_aiq_types_adehaze_algo_int.h"
-#include "adpcc/rk_aiq_types_adpcc_algo_int.h"
-#include "adrc/rk_aiq_types_adrc_algo_int.h"
-#include "ae/rk_aiq_types_ae_algo_int.h"
-#include "af/rk_aiq_types_af_algo_int.h"
-#include "afec/rk_aiq_types_afec_algo_int.h"
-#include "again/rk_aiq_types_again_algo_int.h"
-#include "again2/rk_aiq_types_again_algo_int_v2.h"
-#include "agamma/rk_aiq_types_agamma_algo_int.h"
-#include "aie/rk_aiq_types_aie_algo_int.h"
-#include "aldch/rk_aiq_types_aldch_algo_int.h"
-#include "alsc/rk_aiq_types_alsc_algo_int.h"
-#include "amd/rk_aiq_types_algo_amd_int.h"
-#include "amerge/rk_aiq_types_amerge_algo_int.h"
-#include "amfnr/rk_aiq_types_amfnr_algo_int_v1.h"
-#include "anr/rk_aiq_types_anr_algo_int.h"
-#include "aorb/rk_aiq_types_orb_algo.h"
-#include "arawnr/rk_aiq_types_abayernr_algo_int_v1.h"
-#include "arawnr2/rk_aiq_types_abayernr_algo_int_v2.h"
-#include "asharp/rk_aiq_types_asharp_algo_int.h"
-#include "asharp3/rk_aiq_types_asharp_algo_int_v3.h"
-#include "asharp4/rk_aiq_types_asharp_algo_int_v4.h"
-#include "asharpV33/rk_aiq_types_asharp_algo_int_v33.h"
-#include "atmo/rk_aiq_types_atmo_algo_int.h"
-#include "auvnr/rk_aiq_types_auvnr_algo_int_v1.h"
-#include "awb/rk_aiq_types_awb_algo_int.h"
-#include "aynr/rk_aiq_types_aynr_algo_int_v1.h"
-#include "aynr2/rk_aiq_types_aynr_algo_int_v2.h"
-#include "aynr3/rk_aiq_types_aynr_algo_int_v3.h"
-#include "aynrV22/rk_aiq_types_aynr_algo_int_v22.h"
-#include "afd/rk_aiq_types_afd_algo_int.h"
+#include "algos/a3dlut/rk_aiq_types_a3dlut_algo_int.h"
+#include "algos/abayer2dnr2/rk_aiq_types_abayer2dnr_algo_int_v2.h"
+#include "algos/abayer2dnrV23/rk_aiq_types_abayer2dnr_algo_int_v23.h"
+#include "algos/abayertnr2/rk_aiq_types_abayertnr_algo_int_v2.h"
+#include "algos/abayertnrV23/rk_aiq_types_abayertnr_algo_int_v23.h"
+#include "algos/abayertnrV30/rk_aiq_types_abayertnr_algo_int_v30.h"
+#include "algos/ablc/rk_aiq_types_ablc_algo_int.h"
+#include "algos/ablcV32/rk_aiq_types_ablc_algo_int_v32.h"
+#include "algos/accm/rk_aiq_types_accm_algo_int.h"
+#include "algos/acnr/rk_aiq_types_acnr_algo_int_v1.h"
+#include "algos/acnr2/rk_aiq_types_acnr_algo_int_v2.h"
+#include "algos/acnrV30/rk_aiq_types_acnr_algo_int_v30.h"
+#include "algos/acnrV31/rk_aiq_types_acnr_algo_int_v31.h"
+#include "algos/acp/rk_aiq_types_acp_algo_int.h"
+#include "algos/adebayer/rk_aiq_types_adebayer_algo_int.h"
+#include "algos/adegamma/rk_aiq_types_adegamma_algo_int.h"
+#include "algos/adehaze/rk_aiq_types_adehaze_algo_int.h"
+#include "algos/adpcc/rk_aiq_types_adpcc_algo_int.h"
+#include "algos/adrc/rk_aiq_types_adrc_algo_int.h"
+#include "algos/ae/rk_aiq_types_ae_algo_int.h"
+#include "algos/af/rk_aiq_types_af_algo_int.h"
+#include "algos/afd/rk_aiq_types_afd_algo_int.h"
+#include "algos/afec/rk_aiq_types_afec_algo_int.h"
+#include "algos/again/rk_aiq_types_again_algo_int.h"
+#include "algos/again2/rk_aiq_types_again_algo_int_v2.h"
+#include "algos/agamma/rk_aiq_types_agamma_algo_int.h"
+#include "algos/aie/rk_aiq_types_aie_algo_int.h"
+#include "algos/aldc/rk_aiq_types_aldc_algo_int.h"
+#include "algos/aldch/rk_aiq_types_aldch_algo_int.h"
+#include "algos/alsc/rk_aiq_types_alsc_algo_int.h"
+#include "algos/amd/rk_aiq_types_algo_amd_int.h"
+#include "algos/amerge/rk_aiq_types_amerge_algo_int.h"
+#include "algos/amfnr/rk_aiq_types_amfnr_algo_int_v1.h"
+#include "algos/anr/rk_aiq_types_anr_algo_int.h"
+#include "algos/aorb/rk_aiq_types_orb_algo.h"
+#include "algos/arawnr/rk_aiq_types_abayernr_algo_int_v1.h"
+#include "algos/arawnr2/rk_aiq_types_abayernr_algo_int_v2.h"
+#include "algos/argbir/rk_aiq_types_argbir_algo_int.h"
+#include "algos/asharp/rk_aiq_types_asharp_algo_int.h"
+#include "algos/asharp3/rk_aiq_types_asharp_algo_int_v3.h"
+#include "algos/asharp4/rk_aiq_types_asharp_algo_int_v4.h"
+#include "algos/asharpV33/rk_aiq_types_asharp_algo_int_v33.h"
+#include "algos/asharpV34/rk_aiq_types_asharp_algo_int_v34.h"
+#include "algos/atmo/rk_aiq_types_atmo_algo_int.h"
+#include "algos/auvnr/rk_aiq_types_auvnr_algo_int_v1.h"
+#include "algos/awb/rk_aiq_types_awb_algo_int.h"
+#include "algos/aynr/rk_aiq_types_aynr_algo_int_v1.h"
+#include "algos/aynr2/rk_aiq_types_aynr_algo_int_v2.h"
+#include "algos/aynr3/rk_aiq_types_aynr_algo_int_v3.h"
+#include "algos/aynrV22/rk_aiq_types_aynr_algo_int_v22.h"
+#include "algos/aynrV24/rk_aiq_types_aynr_algo_int_v24.h"
+#include "algos/ayuvmeV1/rk_aiq_types_ayuvme_algo_int_v1.h"
 #include "eis_head.h"
 #include "orb_head.h"
-#include "rk_aiq_algo_des.h"
-#include "rk_aiq_types.h"
+#include "algos/rk_aiq_algo_des.h"
+#include "common/rk_aiq_types.h"
 
-// forward declare
-typedef struct isp_drv_share_mem_ops_s isp_drv_share_mem_ops_t;
-
-typedef struct _RkAiqResComb {
-    XCamVideoBuffer* ae_pre_res;
-    XCamVideoBuffer* ae_proc_res;
-    XCamVideoBuffer* awb_proc_res;
-    AblcProc_t*       ablc_proc_res;
-    AblcProc_V32_t*   ablcV32_proc_res;
-    bool             bayernr3d_en;
-    Aynr_ProcResult_V3_t* aynrV3_proc_res;
-    Aynr_ProcResult_V22_t* aynrV22_proc_res;
-} RkAiqResComb;
-
-// Ae
-typedef struct _RkAiqAlgoConfigAe {
-    RkAiqAlgoCom com;
-    /*params related to Hardware setting*/
-    RkAiqAecHwConfig_t HwCtrl;
-    /*params related to driver setting*/
-    int                      RawWidth;
-    int                      RawHeight;
-    rk_aiq_sensor_nr_switch_t nr_switch;
-    float        LinePeriodsPerField;
-    float        PixelClockFreqMHZ;
-    float        PixelPeriodsPerLine;
-} RkAiqAlgoConfigAe;
-
-typedef struct _RkAiqAlgoPreAe {
-    RkAiqAlgoCom com;
-    RKAiqAecStats_t* aecStatsBuf;
-    bool af_prior;
-} RkAiqAlgoPreAe;
-
-typedef struct _RkAiqAlgoPreResAe {
-    RkAiqAlgoResCom res_com;
-    AecPreResult_t  ae_pre_res_rk;
-} RkAiqAlgoPreResAe;
-
-typedef struct _RkAiqAlgoProcAe {
-    RkAiqAlgoCom com;
-    RKAiqAecStats_t* aecStatsBuf;
-} RkAiqAlgoProcAe;
-
-typedef struct _RkAiqAlgoProcResAe {
-    RkAiqAlgoResCom res_com;
-    rk_aiq_exposure_params_t* new_ae_exp;
-    rk_aiq_isp_aec_meas_t* ae_meas;
-    rk_aiq_isp_hist_meas_t* hist_meas;
-    RKAiqExpI2cParam_t* exp_i2c_params;
-    AecProcResult_t*   ae_proc_res_rk;
-} RkAiqAlgoProcResAe;
-
-typedef struct _RkAiqAlgoPostAe {
-    RkAiqAlgoCom com;
-} RkAiqAlgoPostAe;
-
-typedef struct _RkAiqAlgoPostResAe {
-    RkAiqAlgoResCom res_com;
-    AecPostResult_t ae_post_res_rk;
-} RkAiqAlgoPostResAe;
-
-typedef struct RkAiqAlgoProcResAeShared_s {
-    bool IsConverged;
-    bool IsEnvChanged;
-    bool IsAutoAfd;
-    bool LongFrmMode;
-} RkAiqAlgoProcResAeShared_t;
-
-// afd
-typedef struct _RkAiqAlgoConfigAfd {
-    RkAiqAlgoCom com;
-    int          RawWidth;
-    int          RawHeight;
-    /*params related to driver setting*/
-    float        LinePeriodsPerField;
-    float        PixelClockFreqMHZ;
-    float        PixelPeriodsPerLine;
-} RkAiqAlgoConfigAfd;
-
-typedef struct _RkAiqAlgoPreAfd {
-    RkAiqAlgoCom com;
-    int          thumbW;
-    int          thumbH;
-    XCamVideoBuffer* thumbStatsS;
-    XCamVideoBuffer* thumbStatsL;
-    RkAiqAlgoProcResAeShared_t* aeProcRes;
-} RkAiqAlgoPreAfd;
-
-typedef struct _RkAiqAlgoPreResAfd {
-    RkAiqAlgoResCom res_com;
-} RkAiqAlgoPreResAfd;
-
-typedef struct _RkAiqAlgoProcAfd {
-    RkAiqAlgoCom com;
-    int hdr_mode;
-} RkAiqAlgoProcAfd;
-
-typedef struct _RkAiqAlgoProcResAfd {
-    RkAiqAlgoResCom res_com;
-    AfdProcResult_t afdRes;
-} RkAiqAlgoProcResAfd;
-
-//Awb
-typedef struct _RkAiqAlgoConfigAwb {
-    RkAiqAlgoCom com;
-    int rawBit;
-    isp_drv_share_mem_ops_t *mem_ops_ptr;
-} RkAiqAlgoConfigAwb;
-
-typedef struct _RkAiqAlgoProcAwb {
-    RkAiqAlgoCom com;
-    union {
-        rk_aiq_awb_stat_res_v200_t* awb_statsBuf;
-        rk_aiq_awb_stat_res_v201_t* awb_statsBuf_v201;
-        rk_aiq_isp_awb_stats_v3x_t* awb_statsBuf_v3x;
-        rk_aiq_isp_awb_stats_v32_t* awb_statsBuf_v32;
-    };
-    rk_aiq_isp_blc_t* blc_cfg_effect;
-    AblcProc_t* ablcProcRes;
-    AblcProc_V32_t* ablcProcResV32;
-    bool ablcProcResVaid;
-    struct rkmodule_awb_inf *awb_otp;
-    RKAiqAecStats_t* aecStatsBuf;
-} RkAiqAlgoProcAwb;
-
-typedef struct RkAiqAlgoProcResAwbShared_s {
-    rk_aiq_wb_gain_t awb_gain_algo;
-    float awb_smooth_factor;
-    float varianceLuma;
-    bool awbConverged;
-} RkAiqAlgoProcResAwbShared_t;
-
-typedef struct _RkAiqAlgoProcResAwb {
-    RkAiqAlgoResCom res_com;
-    bool awb_cfg_update;
-    union {
-        rk_aiq_awb_stat_cfg_v200_t* awb_hw0_para;
-        rk_aiq_awb_stat_cfg_v201_t* awb_hw1_para;
-        rk_aiq_awb_stat_cfg_v32_t* awb_hw32_para;
-    };
-    bool awb_gain_update;
-#if RKAIQ_HAVE_AWB_V32
-    rk_aiq_wb_gain_v32_t* awb_gain_algo;
-#else
-    rk_aiq_wb_gain_t* awb_gain_algo;
-#endif
-    color_tempture_info_t cctGloabl;
-    color_tempture_info_t cctFirst[4];
-    float awb_smooth_factor;
-    float varianceLuma;
-    bool awbConverged;
-
-    uint32_t id;
-} RkAiqAlgoProcResAwb;
-
-// af
-typedef struct _RkAiqAlgoConfigAf {
-    RkAiqAlgoCom com;
-    unsigned char af_mode;
-    unsigned short win_h_offs;
-    unsigned short win_v_offs;
-    unsigned short win_h_size;
-    unsigned short win_v_size;
-    rk_aiq_lens_descriptor lens_des;
-    struct rkmodule_af_inf *otp_af;
-    struct rkmodule_pdaf_inf *otp_pdaf;
-} RkAiqAlgoConfigAf;
-
-typedef struct _RkAiqAlgoPreAf {
-    RkAiqAlgoCom com;
-    XCamVideoBuffer* xcam_af_stats;
-    RKAiqAecStats_t* xcam_aec_stats;
-} RkAiqAlgoPreAf;
-
-typedef struct _RkAiqAlgoPreResAf {
-    RkAiqAlgoResCom res_com;
-    af_preprocess_result_t af_pre_result;
-} RkAiqAlgoPreResAf;
-
-typedef struct _RkAiqAlgoProcAf {
-    RkAiqAlgoCom com;
-    union {
-        rk_aiq_isp_af_stats_t* xcam_af_stats;
-        rk_aiq_isp_af_stats_v3x_t* xcam_af_stats_v3x;
-    };
-    RKAiqAecExpInfo_t* aecExpInfo;
-    RKAiqAecStats_t* xcam_aec_stats;
-    rk_aiq_isp_pdaf_stats_t* xcam_pdaf_stats;
-    bool ae_stable;
-} RkAiqAlgoProcAf;
-
-typedef struct _RkAiqAlgoProcResAf {
-    RkAiqAlgoResCom res_com;
-    bool af_cfg_update;
-    bool af_focus_update;
-    bool lockae;
-    bool lockae_en;
-    union {
-        rk_aiq_isp_af_meas_t* af_isp_param;
-        rk_aiq_isp_af_meas_v3x_t* af_isp_param_v3x;
-        rk_aiq_isp_af_v31_t* af_isp_param_v31;
-        rk_aiq_isp_af_v32_t* af_isp_param_v32;
-    };
-    rk_aiq_af_focus_pos_meas_t* af_focus_param;
-    uint32_t id;
-} RkAiqAlgoProcResAf;
+#include "algos/algo_types_priv.h"
 
 // anr
 typedef struct _RkAiqAlgoConfigAnr {
@@ -427,6 +228,24 @@ typedef struct _RkAiqAlgoProcResAsharpV33 {
     Asharp_ProcResult_V33_t stAsharpProcResult;
 } RkAiqAlgoProcResAsharpV33;
 
+// sharp V34
+typedef struct _RkAiqAlgoConfigAsharpV34 {
+    RkAiqAlgoCom com;
+    Asharp_Config_V34_t stAsharpConfig;
+} RkAiqAlgoConfigAsharpV34;
+
+typedef struct _RkAiqAlgoProcAsharpV34 {
+    RkAiqAlgoCom com;
+    int iso;
+    int hdr_mode;
+    AblcProc_V32_t* stAblcV32_proc_res;
+} RkAiqAlgoProcAsharpV34;
+
+typedef struct _RkAiqAlgoProcResAsharpV34 {
+    RkAiqAlgoResCom res_com;
+    Asharp_ProcResult_V34_t stAsharpProcResult;
+} RkAiqAlgoProcResAsharpV34;
+
 // asd
 typedef struct _RkAiqAlgoConfigAsd {
     RkAiqAlgoCom com;
@@ -536,6 +355,7 @@ typedef struct _RkAiqAlgoProcAdhaz {
         dehaze_stats_v11_t* dehaze_stats_v11;
         dehaze_stats_v11_duo_t* dehaze_stats_v11_duo;
         dehaze_stats_v12_t* dehaze_stats_v12;
+        dehaze_stats_v14_t* dehaze_stats_v14;
     };
     bool stats_true;
 #ifdef RKAIQ_ENABLE_PARSER_V1
@@ -547,6 +367,10 @@ typedef struct _RkAiqAlgoProcAdhaz {
 #if RKAIQ_HAVE_DEHAZE_V12
     AdehazeOBResV12_t OBResV12;
     float sigma_v22[YNR_V22_ISO_CURVE_POINT_NUM];
+#endif
+#if RKAIQ_HAVE_DEHAZE_V14
+    AdehazeOBResV12_t OBResV12;
+    float sigma_v24[YNR_V24_ISO_CURVE_POINT_NUM];
 #endif
 } RkAiqAlgoProcAdhaz;
 
@@ -573,11 +397,6 @@ typedef struct _RkAiqAlgoProcResA3dlut {
     rk_aiq_lut3d_cfg_t* lut3d_hw_conf;
 } RkAiqAlgoProcResA3dlut;
 
-// ablc
-typedef struct _RkAiqAlgoConfigAblc {
-    RkAiqAlgoCom com;
-} RkAiqAlgoConfigAblc;
-
 typedef struct _RkAiqAlgoPreAblc {
     RkAiqAlgoCom com;
 } RkAiqAlgoPreAblc;
@@ -585,17 +404,6 @@ typedef struct _RkAiqAlgoPreAblc {
 typedef struct _RkAiqAlgoPreResAblc {
     RkAiqAlgoResCom res_com;
 } RkAiqAlgoPreResAblc;
-
-typedef struct _RkAiqAlgoProcAblc {
-    RkAiqAlgoCom com;
-    int iso;
-    int hdr_mode;
-} RkAiqAlgoProcAblc;
-
-typedef struct _RkAiqAlgoProcResAblc {
-    RkAiqAlgoResCom res_com;
-    AblcProc_t* ablc_proc_res;
-} RkAiqAlgoProcResAblc;
 
 typedef struct _RkAiqAlgoPostAblc {
     RkAiqAlgoCom com;
@@ -656,6 +464,7 @@ typedef struct _RkAiqAlgoProcResAcgc {
 // adebayer
 typedef struct _RkAiqAlgoConfigAdebayer {
     RkAiqAlgoCom com;
+    int          compr_bit;
 } RkAiqAlgoConfigAdebayer;
 
 typedef struct _RkAiqAlgoProcAdebayer {
@@ -668,6 +477,7 @@ typedef struct _RkAiqAlgoProcResAdebayer {
     union {
         AdebayerProcResultV1_t debayerResV1;
         AdebayerProcResultV2_t debayerResV2;
+        AdebayerProcResultV3_t debayerResV3;
     };
 } RkAiqAlgoProcResAdebayer;
 
@@ -783,6 +593,8 @@ typedef struct _RkAiqAlgoConfigAldch {
     CalibDb_LDCH_t aldch_calib_cfg;
     const char* resource_path;
     isp_drv_share_mem_ops_t *mem_ops_ptr;
+    bool is_multi_isp;
+    uint8_t multi_isp_extended_pixel;
 } RkAiqAlgoConfigAldch;
 
 typedef struct _RkAiqAlgoProcAldch {
@@ -849,20 +661,6 @@ typedef struct _RkAiqAlgoPostAorb {
 typedef struct _RkAiqAlgoPostResAorb {
     RkAiqAlgoResCom res_com;
 } RkAiqAlgoPostResAorb;
-
-// acsm
-typedef struct _RkAiqAlgoConfigAcsm {
-    RkAiqAlgoCom com;
-} RkAiqAlgoConfigAcsm;
-
-typedef struct _RkAiqAlgoProcAcsm {
-    RkAiqAlgoCom com;
-} RkAiqAlgoProcAcsm;
-
-typedef struct _RkAiqAlgoProcResAcsm {
-    RkAiqAlgoResCom res_com;
-    rk_aiq_acsm_params_t* acsm_res;
-} RkAiqAlgoProcResAcsm;
 
 // awdr
 typedef struct _RkAiqAlgoConfigAwdr {
@@ -1255,13 +1053,14 @@ typedef struct _RkAiqAlgoPostResAcnrV2 {
 typedef struct _RkAiqAlgoConfigAdrc {
     RkAiqAlgoCom com;
     int working_mode;
-    unsigned short  rawWidth;               // raw图宽
+    unsigned short rawWidth;
     unsigned short  rawHeight;
+    unsigned char compr_bit;
 } RkAiqAlgoConfigAdrc;
 
 typedef struct _RkAiqAlgoProcAdrc {
     RkAiqAlgoCom com;
-#if RKAIQ_HAVE_DRC_V12 || RKAIQ_HAVE_DRC_V12_LITE
+#if RKAIQ_HAVE_DRC_V12 || RKAIQ_HAVE_DRC_V12_LITE || RKAIQ_HAVE_DRC_V20
     adrc_blcRes_V32_t ablcV32_proc_res;
 #endif
     bool LongFrmMode;
@@ -1271,6 +1070,23 @@ typedef struct _RkAiqAlgoProcResAdrc {
     RkAiqAlgoResCom res_com;
     RkAiqAdrcProcResult_t* AdrcProcRes;
 } RkAiqAlgoProcResAdrc;
+
+// argbir
+typedef struct _RkAiqAlgoConfigArgbir {
+    RkAiqAlgoCom com;
+    int working_mode;
+    unsigned short rawWidth;
+    unsigned short rawHeight;
+} RkAiqAlgoConfigArgbir;
+
+typedef struct _RkAiqAlgoProcArgbir {
+    RkAiqAlgoCom com;
+} RkAiqAlgoProcArgbir;
+
+typedef struct _RkAiqAlgoProcResArgbir {
+    RkAiqAlgoResCom res_com;
+    RkAiqArgbirProcResult_t* ArgbirProcRes;
+} RkAiqAlgoProcResArgbir;
 
 // aeis
 typedef struct _RkAiqAlgoConfigAeis {
@@ -1362,10 +1178,12 @@ typedef struct _RkAiqAlgoPostResAgain {
 typedef struct _RkAiqAlgoConfigAgainV2 {
     RkAiqAlgoCom com;
     Again_Config_V2_t stAgainConfig;
+    isp_drv_share_mem_ops_t *mem_ops_ptr;
 } RkAiqAlgoConfigAgainV2;
 
 typedef struct _RkAiqAlgoProcAgainV2 {
     RkAiqAlgoCom com;
+    rk_aiq_again_stat_t stats;
     int iso;
     int hdr_mode;
 } RkAiqAlgoProcAgainV2;
@@ -1460,6 +1278,24 @@ typedef struct _RkAiqAlgoProcResAynrV22 {
     Aynr_ProcResult_V22_t stAynrProcResult;
 } RkAiqAlgoProcResAynrV22;
 
+// ynr v24
+typedef struct _RkAiqAlgoConfigAynrV24 {
+    RkAiqAlgoCom com;
+    Aynr_Config_V24_t stAynrConfig;
+} RkAiqAlgoConfigAynrV24;
+
+typedef struct _RkAiqAlgoProcAynrV24 {
+    RkAiqAlgoCom com;
+    int iso;
+    int hdr_mode;
+    AblcProc_V32_t* stAblcV32_proc_res;
+} RkAiqAlgoProcAynrV24;
+
+typedef struct _RkAiqAlgoProcResAynrV24 {
+    RkAiqAlgoResCom res_com;
+    Aynr_ProcResult_V24_t stAynrProcResult;
+} RkAiqAlgoProcResAynrV24;
+
 //cnr v30
 typedef struct _RkAiqAlgoConfigAcnrV30 {
     RkAiqAlgoCom com;
@@ -1477,5 +1313,80 @@ typedef struct _RkAiqAlgoProcResAcnrV30 {
     RkAiqAlgoResCom res_com;
     Acnr_ProcResult_V30_t stAcnrProcResult;
 } RkAiqAlgoProcResAcnrV30;
+
+//bayertnr v30
+typedef struct _RkAiqAlgoConfigAbayertnrV30 {
+    RkAiqAlgoCom com;
+    Abayertnr_Config_V30_t stAbayertnrConfig;
+} RkAiqAlgoConfigAbayertnrV30;
+
+typedef struct _RkAiqAlgoProcAbayertnrV30 {
+    RkAiqAlgoCom com;
+    int iso;
+    int hdr_mode;
+    AblcProc_V32_t* stAblcV32_proc_res;
+    Abayertnr_Stats_V30_t stTnr_stats;
+} RkAiqAlgoProcAbayertnrV30;
+
+typedef struct _RkAiqAlgoProcResAbayertnrV30 {
+    RkAiqAlgoResCom res_com;
+    Abayertnr_ProcResult_V30_t stAbayertnrProcResult;
+} RkAiqAlgoProcResAbayertnrV30;
+
+//bayertnr v30
+typedef struct _RkAiqAlgoConfigAyuvmeV1 {
+    RkAiqAlgoCom com;
+    Ayuvme_Config_V1_t stAyuvmeConfig;
+} RkAiqAlgoConfigAyuvmeV1;
+
+typedef struct _RkAiqAlgoProcAyuvmeV1 {
+    RkAiqAlgoCom com;
+    int iso;
+    int hdr_mode;
+    AblcProc_V32_t* stAblcV32_proc_res;
+    int bayertnr_en;
+} RkAiqAlgoProcAyuvmeV1;
+
+typedef struct _RkAiqAlgoProcResAyuvmeV1 {
+    RkAiqAlgoResCom res_com;
+    Ayuvme_ProcResult_V1_t stAyuvmeProcResult;
+} RkAiqAlgoProcResAyuvmeV1;
+
+//cnr v30
+typedef struct _RkAiqAlgoConfigAcnrV31 {
+    RkAiqAlgoCom com;
+    Acnr_Config_V31_t stAcnrConfig;
+} RkAiqAlgoConfigAcnrV31;
+
+typedef struct _RkAiqAlgoProcAcnrV31 {
+    RkAiqAlgoCom com;
+    int iso;
+    int hdr_mode;
+    AblcProc_V32_t* stAblcV32_proc_res;
+} RkAiqAlgoProcAcnrV31;
+
+typedef struct _RkAiqAlgoProcResAcnrV31 {
+    RkAiqAlgoResCom res_com;
+    Acnr_ProcResult_V31_t stAcnrProcResult;
+} RkAiqAlgoProcResAcnrV31;
+
+// aldc
+typedef struct _RkAiqAlgoConfigAldc {
+    RkAiqAlgoCom com;
+    isp_drv_share_mem_ops_t* mem_ops;
+    bool is_multi_isp;
+    char iqpath[255];
+} RkAiqAlgoConfigAldc;
+
+typedef struct _RkAiqAlgoProcAldc {
+    RkAiqAlgoCom com;
+} RkAiqAlgoProcAldc;
+
+typedef struct _RkAiqAlgoProcResAldc {
+    RkAiqAlgoResCom res_com;
+    bool ldch_en;
+    bool ldcv_en;
+    rkaiq_ldc_hw_param_t* config;
+} RkAiqAlgoProcResAldc;
 
 #endif

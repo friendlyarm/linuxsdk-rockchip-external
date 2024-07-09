@@ -7,6 +7,14 @@
 #include <stdint.h>
 #include "rkcrypto_common.h"
 
-RK_RES test_throughput(void);
+enum {
+	T_DMA_FD = 0,
+	T_VIRT,
+	T_OTP,
+	T_ALL,
+	T_MAX,
+};
+
+RK_RES test_throughput(int throughput_mode);
 
 #endif /*_TEST_THROUGHPUT_H_*/

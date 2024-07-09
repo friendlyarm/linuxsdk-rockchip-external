@@ -2,9 +2,9 @@
  * Linux-specific abstractions to gain some independence from linux kernel versions.
  * Pave over some 2.2 versus 2.4 versus 2.6 kernel differences.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -285,6 +285,47 @@ extern void pci_unregister_driver(struct pci_driver *drv);
 #define list_for_each(pos, head) \
 	for (pos = (head)->next; pos != (head); pos = pos->next)
 #endif // endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#include <linux/dma-mapping.h>
+
+/* This defines the direction arg to the DMA mapping routines. */
+#define PCI_DMA_TODEVICE	    DMA_TO_DEVICE
+#define PCI_DMA_FROMDEVICE	    DMA_FROM_DEVICE
+
+static inline void *
+pci_alloc_consistent(struct pci_dev *hwdev, size_t size,
+		     dma_addr_t *dma_handle)
+{
+	return dma_alloc_coherent(&hwdev->dev, size, dma_handle, GFP_ATOMIC);
+}
+
+static inline void
+pci_free_consistent(struct pci_dev *hwdev, size_t size,
+		    void *vaddr, dma_addr_t dma_handle)
+{
+	dma_free_coherent(&hwdev->dev, size, vaddr, dma_handle);
+}
+
+static inline dma_addr_t
+pci_map_single(struct pci_dev *hwdev, void *ptr, size_t size, int direction)
+{
+	return dma_map_single(&hwdev->dev, ptr, size, (enum dma_data_direction)direction);
+}
+
+static inline void
+pci_unmap_single(struct pci_dev *hwdev, dma_addr_t dma_addr,
+		 size_t size, int direction)
+{
+	dma_unmap_single(&hwdev->dev, dma_addr, size, (enum dma_data_direction)direction);
+}
+         
+static inline int
+pci_dma_mapping_error(struct pci_dev *pdev, dma_addr_t dma_addr)
+{
+	return dma_mapping_error(&pdev->dev, dma_addr);
+}
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)) */
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 3, 13))
 #define pci_resource_start(dev, bar)	((dev)->base_address[(bar)])
@@ -641,7 +682,9 @@ static inline bool binary_sema_up(tsk_ctl_t *tsk)
 	return sem_up;
 }
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)))
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
+#define SMP_RD_BARRIER_DEPENDS(x)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
 #define SMP_RD_BARRIER_DEPENDS(x) smp_read_barrier_depends(x)
 #else
 #define SMP_RD_BARRIER_DEPENDS(x) smp_rmb(x)
@@ -838,6 +881,12 @@ not match our unaligned address for < 2.6.24
 
 #define KMALLOC_FLAG (CAN_SLEEP() ? GFP_KERNEL: GFP_ATOMIC)
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+extern void prandom_seed(u32 entropy);
+extern u32 prandom_u32(void);
+extern void prandom_bytes(void *buf, size_t bytes);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)) */
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
 #define RANDOM32	prandom_u32
 #define RANDOM_BYTES	prandom_bytes
@@ -878,6 +927,53 @@ static inline struct inode *file_inode(const struct file *f)
 }
 #endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0)) */
 
+/* Android GKI kernel does not allow direct file access by driver. */
+#ifdef DHD_DENY_DIRECT_FS_ACCESS
+static inline
+ssize_t __kernel_does_not_allow_write(struct file *file,
+                                      const char __user *buf,
+                                      size_t count, loff_t *pos) {
+	return -EPERM;
+}
+static inline
+ssize_t __kernel_does_not_allow_read(struct file *file,
+                                     char __user *buf,
+                                     size_t count, loff_t *pos) {
+	return -EPERM;
+}
+static inline
+int __kernel_does_not_allow_unlink(struct user_namespace *mnt_userns,
+                                   struct inode *dir,
+                                   struct dentry *dentry,
+                                   struct inode **delegated_inode) {
+	return -EPERM;
+}
+static inline
+int __kernel_does_not_allow_kern_path(const char *name,
+                                      unsigned flag, struct path *path) {
+	return -EPERM;
+}
+static inline
+struct file *__kernel_does_not_allow_filp_open(const char *filename,
+                                               int flags, umode_t mode) {
+	return ERR_PTR(-EPERM);
+}
+
+#define vfs_read(fp, buf, len, pos) __kernel_does_not_allow_read(fp, buf, len, pos)
+#define vfs_write(fp, buf, len, pos) __kernel_does_not_allow_write(fp, buf, len, pos)
+#define kernel_read(fp, buf, len, pos) __kernel_does_not_allow_read(fp, buf, len, pos)
+#define kernel_write(fp, buf, len, pos) __kernel_does_not_allow_read(fp, buf, len, pos)
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0))
+#define vfs_unlink(a, b)  __kernel_does_not_allow_unlink(a, b, 0, NULL)
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0))
+#define vfs_unlink(a, b, c)  __kernel_does_not_allow_unlink(NULL, a, b, c)
+#else
+#define vfs_unlink(a, b, c, d)  __kernel_does_not_allow_unlink(a, b, c, d)
+#endif // endif
+#define kern_path(a, b, c)  __kernel_does_not_allow_kern_path(a, b, c)
+#define filp_open(a, b, c)  __kernel_does_not_allow_filp_open(a, b, c)
+#else
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
 #define vfs_write(fp, buf, len, pos) kernel_write(fp, buf, len, pos)
 #define vfs_read(fp, buf, len, pos) kernel_read(fp, buf, len, pos)
@@ -885,5 +981,16 @@ int kernel_read_compat(struct file *file, loff_t offset, char *addr, unsigned lo
 #else /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) */
 #define kernel_read_compat(file, offset, addr, count) kernel_read(file, offset, addr, count)
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) */
+#endif /* DHD_SUPPORT_ANDROID_GKI_KERNEL */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
+#define timespec64 timespec
+#define ktime_get_real_ts64(timespec) ktime_get_real_ts(timespec)
+#define ktime_to_timespec64(timespec) ktime_to_timespec(timespec)
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0) */
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+#define rtc_time_to_tm(time, tm) rtc_time64_to_tm(time, tm)
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0) */
 
 #endif /* _linuxver_h_ */

@@ -255,6 +255,7 @@ gst_mpp_dec_start (GstVideoDecoder * decoder)
   self->mpp_type = MPP_VIDEO_CodingUnused;
   self->seen_valid_pts = FALSE;
   self->convert = FALSE;
+  self->mpp_frame = NULL;
 
   self->input_state = NULL;
 
@@ -298,14 +299,19 @@ gst_mpp_dec_stop (GstVideoDecoder * decoder)
 
   g_mutex_clear (&self->mutex);
 
-  mpp_destroy (self->mpp_ctx);
-
   if (self->input_state) {
     gst_video_codec_state_unref (self->input_state);
     self->input_state = NULL;
   }
 
   gst_mpp_dec_clear_allocator (decoder);
+
+  if (self->mpp_frame) {
+    mpp_frame_deinit (&self->mpp_frame);
+    self->mpp_frame = NULL;
+  }
+
+  mpp_destroy (self->mpp_ctx);
 
   GST_DEBUG_OBJECT (self, "stopped");
 
@@ -534,15 +540,45 @@ gst_mpp_dec_apply_info_change (GstVideoDecoder * decoder, MppFrame mframe)
   }
 
   if (afbc) {
-    /* HACK: MPP would align width to 64 for AFBC */
+    /* HACK: Fake 64-aligned width for Mali DDK
+     *
+     * When importing AFBC dma-bufs, mali would re-calculate the row stride
+     * from width by itself. But the row stride aligning algorithms are
+     * different between MPP and Mali:
+     *
+     * MPP uses round_up_64(round_up_64(width) * bpp / 8)
+     * Mali uses round_up_64(width * bpp / 8)
+     *
+     * We need Mali to use the same row stride as MPP, so we fake a 64-aligned
+     * width here and crop to the real size later.
+     */
     dst_width = GST_ROUND_UP_64 (dst_width);
 
-    /* HACK: MPP might have extra offsets for AFBC */
-    dst_height += offset_y;
-    vstride = dst_height;
-
-    /* HACK: Fake hstride for Rockchip VOP driver */
+    /* HACK: Fake hstride for Rockchip DRM driver
+     *
+     * When importing AFBC dma-bufs, the Rockchip DRM driver would calculate
+     * the pixel stride from pitch. But the pitch aligning algorithms are
+     * different between MPP and the driver:
+     *
+     * MPP uses round_up_64(round_up_64(width) * bpp / 8)
+     * Rockchip DRM driver expects (pixel_stride * bpp / 8)
+     *
+     * We need the driver to use the same pixel stride as MPP, so we
+     * re-calculate a fake hstride from the pixel stride (i.e. the 64-aligned
+     * fake width) here.
+     *
+     * NOTE: The hstride is not used by others for now.
+     */
     hstride = 0;
+
+    /* HACK: Fixup height and vstride with MPP's extra Y offsets
+     *
+     * The MPP might have extra rows for AFBC dma-bufs, and those rows are not
+     * counted in the height and vstride.
+     */
+    dst_height += offset_y;
+    if (vstride < dst_height)
+      vstride = dst_height;
   }
 
   if (!gst_mpp_dec_update_video_info (decoder, dst_format,
@@ -571,7 +607,18 @@ gst_mpp_dec_get_frame (GstVideoDecoder * decoder, GstClockTime pts)
 
   /* Choose PTS source when getting the first frame */
   if (is_first_frame) {
-    frame = frames->data;
+    /* Find the frame with earliest PTS (including invalid PTS) */
+    for (frame = NULL, l = frames, i = 0; l != NULL; l = l->next, i++) {
+      GstVideoCodecFrame *f = l->data;
+
+      if (!GST_CLOCK_TIME_IS_VALID (f->pts)) {
+        frame = f;
+        break;
+      }
+
+      if (!frame || frame->pts > f->pts)
+        frame = f;
+    }
 
     if (self->use_mpp_pts) {
       if (!GST_CLOCK_TIME_IS_VALID (pts)) {
@@ -627,28 +674,50 @@ gst_mpp_dec_get_frame (GstVideoDecoder * decoder, GstClockTime pts)
 
     if (GST_CLOCK_TIME_IS_VALID (f->pts)) {
       /* Prefer frame with close PTS */
-      if (abs ((gint) f->pts - (gint) pts) < 3 * GST_MSECOND) {
+      if (ABS (GST_CLOCK_DIFF (f->pts, pts)) < 5 * GST_MSECOND) {
         frame = f;
 
         GST_DEBUG_OBJECT (self, "using matched frame (#%d)",
             frame->system_frame_number);
+
+        /* Discard out-dated frames for some broken videos */
+        for (l = frames; l != NULL; l = l->next) {
+          GstVideoCodecFrame *f = l->data;
+
+          if (GST_CLOCK_TIME_IS_VALID (f->pts) && f->pts < frame->pts) {
+            GST_WARNING_OBJECT (self, "discarding out-dated frame (#%d)",
+                f->system_frame_number);
+
+            gst_video_codec_frame_ref (f);
+            gst_video_decoder_release_frame (decoder, f);
+          }
+        }
+
         goto out;
       }
 
       /* Filter out future frames */
       if (GST_CLOCK_TIME_IS_VALID (pts) && f->pts > pts)
         continue;
-    } else if (self->interlace_mode == GST_VIDEO_INTERLACE_MODE_MIXED) {
-      /* Consider frames with invalid PTS are decode-only when deinterlaced */
+    } else {
+      /* Prefer frame with invalid PTS */
+      if (!GST_CLOCK_TIME_IS_VALID (pts)) {
+        frame = f;
+        break;
+      }
 
-      /* Delay discarding frames for some broken videos */
-      if (i >= 16) {
-        GST_WARNING_OBJECT (self, "discarding decode-only frame (#%d)",
-            f->system_frame_number);
+      if (self->interlace_mode == GST_VIDEO_INTERLACE_MODE_MIXED) {
+        /* Consider frames with invalid PTS are decode-only when deinterlaced */
 
-        gst_video_codec_frame_ref (f);
-        gst_video_decoder_release_frame (decoder, f);
-        continue;
+        /* Delay discarding frames for some broken videos */
+        if (i >= 16) {
+          GST_WARNING_OBJECT (self, "discarding decode-only frame (#%d)",
+              f->system_frame_number);
+
+          gst_video_codec_frame_ref (f);
+          gst_video_decoder_release_frame (decoder, f);
+          continue;
+        }
       }
     }
 
@@ -860,43 +929,39 @@ gst_mpp_dec_loop (GstVideoDecoder * decoder)
     goto info_change;
   }
 
-  if (!mpp_frame_get_buffer (mframe))
-    goto out;
-
-  /* Apply info change when video info not unavaliable (no info-change event) */
-  if (!self->info.size)
-    self->task_ret = gst_mpp_dec_apply_info_change (decoder, mframe);
-
-  mode = mpp_frame_get_mode (mframe);
-#ifdef MPP_FRAME_FLAG_IEP_DEI_MASK
-  /* IEP deinterlaced */
-  if (mode & MPP_FRAME_FLAG_IEP_DEI_MASK) {
-#ifdef MPP_FRAME_FLAG_IEP_DEI_I4O2
-    if (mode & MPP_FRAME_FLAG_IEP_DEI_I4O2) {
-      /* 1 input frame generates 2 deinterlaced MPP frames */
-      static int mpp_i4o2_frames = 0;
-      if (mpp_i4o2_frames++ % 2) {
-        GST_DEBUG_OBJECT (self, "ignore extra MPP frame");
-        goto out;
-      }
-    }
-#endif
-    mode = MPP_FRAME_FLAG_DEINTERLACED;
-  }
-#endif
-
   frame = gst_mpp_dec_get_frame (decoder, mpp_frame_get_pts (mframe));
   if (!frame)
     goto no_frame;
 
+  if (self->flushing && !self->draining)
+    goto drop;
+
+  if (!mpp_frame_get_buffer (mframe))
+    goto error;
+
   if (mpp_frame_get_discard (mframe) || mpp_frame_get_errinfo (mframe))
     goto error;
 
+  if (!self->convert && gst_mpp_frame_info_changed (self->mpp_frame, mframe)) {
+    self->task_ret = gst_mpp_dec_apply_info_change (decoder, mframe);
+    if (self->task_ret != GST_FLOW_OK)
+      goto info_change;
+  }
+
+  /* Get gst buffer (might be converted) */
   buffer = gst_mpp_dec_get_gst_buffer (decoder, mframe);
   if (!buffer)
     goto error;
 
+  /* Truncate MPP's extra data */
   gst_buffer_resize (buffer, 0, GST_VIDEO_INFO_SIZE (&self->info));
+
+  mode = mpp_frame_get_mode (mframe);
+#ifdef MPP_FRAME_FLAG_IEP_DEI_MASK
+  /* IEP deinterlaced */
+  if (mode & MPP_FRAME_FLAG_IEP_DEI_MASK)
+    mode = MPP_FRAME_FLAG_DEINTERLACED;
+#endif
 
   gst_mpp_dec_update_interlace_mode (decoder, buffer, mode);
 
@@ -905,21 +970,25 @@ gst_mpp_dec_loop (GstVideoDecoder * decoder)
 
   frame->output_buffer = buffer;
 
-  if (self->flushing && !self->draining)
-    goto drop;
-
   GST_DEBUG_OBJECT (self, "finish frame ts=%" GST_TIME_FORMAT,
       GST_TIME_ARGS (frame->pts));
 
   gst_video_decoder_finish_frame (decoder, frame);
 
 out:
-  if (mpp_frame_get_eos (mframe)) {
-    GST_INFO_OBJECT (self, "got eos");
-    self->task_ret = GST_FLOW_EOS;
-  }
+  if (mframe) {
+    if (mpp_frame_get_eos (mframe)) {
+      GST_INFO_OBJECT (self, "got eos");
+      self->task_ret = GST_FLOW_EOS;
+    }
 
-  mpp_frame_deinit (&mframe);
+    if (self->mpp_frame)
+      mpp_frame_deinit (&self->mpp_frame);
+
+    /* Save the last MPP frame for info change detection */
+    mpp_frame_set_buffer (mframe, NULL);
+    self->mpp_frame = mframe;
+  }
 
   if (self->task_ret != GST_FLOW_OK) {
     GST_DEBUG_OBJECT (self, "leaving output thread: %s",
@@ -952,8 +1021,8 @@ gst_mpp_dec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
   GstMppDec *self = GST_MPP_DEC (decoder);
   GstMapInfo mapinfo = { 0, };
   GstBuffer *tmp;
+  GstClockTime start_time, deadline_time;
   GstFlowReturn ret;
-  gint timeout_ms = MPP_INPUT_TIMEOUT_MS;
   gint interval_ms = 5;
   MppPacket mpkt = NULL;
 
@@ -997,6 +1066,8 @@ gst_mpp_dec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
   if (GST_CLOCK_TIME_IS_VALID (frame->pts))
     self->seen_valid_pts = TRUE;
 
+  start_time = gst_util_get_timestamp ();
+  deadline_time = start_time + MPP_INPUT_TIMEOUT_MS * GST_MSECOND;
   while (1) {
     GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
     if (klass->send_mpp_packet (decoder, mpkt, interval_ms)) {
@@ -1005,8 +1076,7 @@ gst_mpp_dec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
     }
     GST_VIDEO_DECODER_STREAM_LOCK (decoder);
 
-    timeout_ms -= interval_ms;
-    if (timeout_ms <= 0)
+    if (gst_util_get_timestamp () > deadline_time)
       goto send_error;
   }
 

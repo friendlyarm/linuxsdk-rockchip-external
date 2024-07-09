@@ -4,9 +4,9 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -829,8 +829,8 @@ extern void copy_debug_dump_time(char *dest, char *src);
 #define DHD_COMMON_DUMP_PATH	"/data/misc/wifi/"
 #elif defined(OEM_ANDROID) && (defined(BOARD_PANDA) || defined(__ARM_ARCH_7A__))
 #define DHD_COMMON_DUMP_PATH	"/data/vendor/wifi/"
-#elif defined(OEM_ANDROID) /* For Brix Live Image */
-#define DHD_COMMON_DUMP_PATH	"/installmedia/"
+#elif defined(OEM_ANDROID)  	/* For other Android platforms such as Brix Live Image */
+#define DHD_COMMON_DUMP_PATH	"/data/vendor/wifi/wifi_dumps/"
 #else /* Default */
 #define DHD_COMMON_DUMP_PATH	"/root/"
 #endif // endif
@@ -1159,15 +1159,18 @@ typedef struct dhd_pub {
 #if defined(ARP_OFFLOAD_SUPPORT)
 	uint32 arp_version;
 #endif // endif
-#if defined(BCMSUP_4WAY_HANDSHAKE)
+#if defined(BCMSUP_4WAY_HANDSHAKE) || defined(BCMSUP_4WAY_HANDSHAKE_SAE)
 	bool fw_4way_handshake;		/* Whether firmware will to do the 4way handshake. */
-#endif // endif
+#endif /* BCMSUP_4WAY_HANDSHAKE || BCMSUP_4WAY_HANDSHAKE_SAE */
 #ifdef DEBUG_DPC_THREAD_WATCHDOG
 	bool dhd_bug_on;
 #endif /* DEBUG_DPC_THREAD_WATCHDOG */
 #ifdef CUSTOM_SET_CPUCORE
 	struct task_struct * current_dpc;
 	struct task_struct * current_rxf;
+#ifdef WL_DHD_XR
+	struct task_struct *current_xr_cmd;
+#endif /* WL_DHD_XR */
 	int chan_isvht80;
 #endif /* CUSTOM_SET_CPUCORE */
 
@@ -1426,6 +1429,12 @@ typedef struct dhd_pub {
 #ifdef REVERSE_AIFSN
 	bool aifsn_reverse;
 #endif /* REVERSE_AIFSN */
+#ifdef WL11AX
+	void *twt_ctx;
+#endif /* WL11AX */
+#ifdef WL_DHD_XR
+	void *xr_ctx;
+#endif /* WL_DHD_XR */
 } dhd_pub_t;
 
 typedef struct {
@@ -2202,7 +2211,8 @@ typedef struct {
 
 #ifdef KEEP_ALIVE
 extern int dhd_dev_start_mkeep_alive(dhd_pub_t *dhd_pub, uint8 mkeep_alive_id, uint8 *ip_pkt,
-	uint16 ip_pkt_len, uint8* src_mac_addr, uint8* dst_mac_addr, uint32 period_msec);
+	uint16 ip_pkt_len, uint8* src_mac_addr, uint8* dst_mac_addr, uint32 period_msec,
+	uint16 ether_type);
 extern int dhd_dev_stop_mkeep_alive(dhd_pub_t *dhd_pub, uint8 mkeep_alive_id);
 #endif /* KEEP_ALIVE */
 
@@ -2525,6 +2535,11 @@ extern uint dhd_force_tx_queueing;
 #ifndef CUSTOM_RXF_PRIO_SETTING
 #define CUSTOM_RXF_PRIO_SETTING		MAX((CUSTOM_DPC_PRIO_SETTING - 1), 1)
 #endif // endif
+#ifdef WL_DHD_XR
+#ifndef CUSTOM_XR_CMD_PRIO_SETTING
+#define CUSTOM_XR_CMD_PRIO_SETTING		MAX((CUSTOM_DPC_PRIO_SETTING - 1), 1)
+#endif // endif
+#endif /* WL_DHD_XR */
 
 #define DEFAULT_WIFI_TURNOFF_DELAY		0
 #ifndef WIFI_TURNOFF_DELAY
@@ -3185,7 +3200,7 @@ void dhd_wk_lock_stats_dump(dhd_pub_t *dhdp);
 extern bool dhd_query_bus_erros(dhd_pub_t *dhdp);
 void dhd_clear_bus_errors(dhd_pub_t *dhdp);
 
-#if defined(CONFIG_64BIT)
+#if defined(CONFIG_64BIT) && !defined(CONFIG_ARCH_BCM2835)
 #define DHD_SUPPORT_64BIT
 #endif /* (linux || LINUX) && CONFIG_64BIT */
 
@@ -3490,7 +3505,19 @@ extern int dhd_control_he_enab(dhd_pub_t * dhd, uint8 he_enab);
 extern uint8 control_he_enab;
 #endif /* DISABLE_HE_ENAB  || CUSTOM_CONTROL_HE_ENAB */
 
+#ifdef CUSTOM_CONTROL_MBO_DISABLE
+extern int dhd_control_mbo_enab(dhd_pub_t * dhd, uint8 mbo_enab);
+#endif /* CUSTOM_CONTROL_MBO_DISABLE */
+#ifdef CUSTOM_CONTROL_OCE_DISABLE
+extern int dhd_control_oce_enab(dhd_pub_t * dhd, uint8 oce_enab);
+#endif /* CUSTOM_CONTROL_OCE_DISABLE */
+
 #if defined(BCMSDIO)
 void dhd_set_role(dhd_pub_t *dhdp, int role, int bssidx);
 #endif /* BCMSDIO */
+#ifdef WL_DHD_XR
+extern int dhd_send_xr_cmd(dhd_pub_t *dest_dhdp, void *xr_cmd,
+	int len, struct completion *comp, bool sync);
+extern void dhd_wq_xr_cmd_handler(dhd_pub_t *dhdp, void *info);
+#endif /* WL_DHD_XR */
 #endif /* _dhd_h_ */

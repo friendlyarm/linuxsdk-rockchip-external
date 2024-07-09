@@ -216,7 +216,7 @@ bool CRKAndroidDevice::CalcIDBCount()
             }
             return false;
         }
-        uiIdSectorNum = m_usFlashHeadSec + m_usFlashDataSec + m_usFlashBootSec;
+        uiIdSectorNum = m_usFlashHeadSec;/*m_usFlashHeadSec + m_usFlashDataSec + m_usFlashBootSec*/
     }
     else
     {
@@ -295,6 +295,45 @@ bool CRKAndroidDevice::GetLoaderDataSize()
 
 bool CRKAndroidDevice::GetLoaderHeadSize()
 {
+#if 1
+    int i = 0;
+
+    if (!m_pImage)
+    {
+        return false;
+    }
+    char index;
+    bool bRet;
+    tchar loaderName[] = "FlashHead";
+    index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER, loaderName);
+    if (index == -1)
+    {
+        if (m_pLog)
+        {
+            m_pLog->Record(_T("ERROR:GetLoaderHeadSize-->no found flashhead entry"));
+        }
+        return false;
+    }
+    unsigned int dwDelay, dwCount, dwEntrySize;
+    dwCount = m_pImage->m_bootObject->EntryLoaderCount;
+    m_usFlashHeadSec = 0;
+    for (i = 0; i<dwCount; i++)
+    {
+        bRet = m_pImage->m_bootObject->GetEntryProperty(ENTRYLOADER, i, dwEntrySize, dwDelay);
+        if (!bRet)
+        {
+            if (m_pLog)
+            {
+                m_pLog->Record(_T("ERROR:GetLoaderHeadSize-->failed to get NO%d entry"), i + 1);
+            }
+            return false;
+        }
+        m_usFlashHeadSec += (PAGEALIGN(BYTE2SECTOR(dwEntrySize)) * 4);
+    }
+
+    return true;
+
+#else
     if (!m_pImage)
     {
         return false;
@@ -314,6 +353,7 @@ bool CRKAndroidDevice::GetLoaderHeadSize()
         m_usFlashHeadSec = PAGEALIGN(BYTE2SECTOR(m_dwLoaderHeadSize)) * 4;
     }
     return bRet;
+#endif
 }
 
 CRKAndroidDevice::CRKAndroidDevice(STRUCT_RKDEVICE_DESC &device): CRKDevice(device)
@@ -697,7 +737,7 @@ int CRKAndroidDevice::MakeIDBlockData(PBYTE lpIDBlock)
 
 int CRKAndroidDevice::MakeNewIDBlockData(PBYTE lpIDBlock)
 {
-    int i;
+    int i, j, ret = 0;
 
     if (m_pLog)
     {
@@ -712,112 +752,89 @@ int CRKAndroidDevice::MakeNewIDBlockData(PBYTE lpIDBlock)
         }
         return -1;
     }
+
+    bool bRet;
     char index;
-    tchar loaderCodeName[] = _T("FlashBoot");
-    index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER, loaderCodeName);
-    if (index == -1)
-    {
-        if (m_pLog)
-        {
-            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderCode Entry failed"));
-        }
-        return -2;
-    }
-    PBYTE loaderCodeBuffer;
-    loaderCodeBuffer = new BYTE[m_dwLoaderSize];
-    memset(loaderCodeBuffer, 0, m_dwLoaderSize);
-    if (!m_pImage->m_bootObject->GetEntryData(ENTRYLOADER, index, loaderCodeBuffer))
-    {
-        if (m_pLog)
-        {
-            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderCode Data failed"));
-        }
-        delete []loaderCodeBuffer;
-        return -3;
-    }
-
-    tchar loaderDataName[] = _T("FlashData");
-    index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER, loaderDataName);
-    if (index == -1)
-    {
-        if (m_pLog)
-        {
-            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderData Entry failed"));
-        }
-        delete []loaderCodeBuffer;
-        return -4;
-    }
-    PBYTE loaderDataBuffer;
-    loaderDataBuffer = new BYTE[m_dwLoaderDataSize];
-    memset(loaderDataBuffer, 0, m_dwLoaderDataSize);
-    if (!m_pImage->m_bootObject->GetEntryData(ENTRYLOADER, index, loaderDataBuffer))
-    {
-        if (m_pLog)
-        {
-            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderData Data failed"));
-        }
-        delete []loaderDataBuffer;
-        delete []loaderCodeBuffer;
-        return -5;
-    }
-
-    tchar loaderHeadName[] = _T("FlashHead");
+    unsigned char *buffer = NULL;
+    tchar loaderHeadName[] = "FlashHead";
+    unsigned int dwEntrySize, dwDelay, dwOffset;
     index = m_pImage->m_bootObject->GetIndexByName(ENTRYLOADER, loaderHeadName);
     if (index == -1)
     {
         if (m_pLog)
         {
-            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderHead Entry failed"));
+            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get FlashHead Entry failed"));
         }
-        delete []loaderDataBuffer;
-        delete []loaderCodeBuffer;
-        return -6;
+        ret = -2;
+        goto Exit_NewIDBlock;
     }
-    PBYTE loaderHeadBuffer;
-    loaderHeadBuffer = new BYTE[m_dwLoaderHeadSize];
-    memset(loaderHeadBuffer, 0, m_dwLoaderHeadSize);
-    if (!m_pImage->m_bootObject->GetEntryData(ENTRYLOADER, index, loaderHeadBuffer))
+    bRet = m_pImage->m_bootObject->GetEntryProperty(ENTRYLOADER, index, dwEntrySize, dwDelay);
+    dwEntrySize = PAGEALIGN(BYTE2SECTOR(dwEntrySize)) * RK_PAGE_SIZE;
+    buffer = new unsigned char[dwEntrySize];
+    memset(buffer, 0, dwEntrySize);
+    if (!m_pImage->m_bootObject->GetEntryData(ENTRYLOADER, index, buffer))
     {
         if (m_pLog)
         {
-            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get LoaderHead Data failed"));
+            m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get FlashHead Data failed"));
         }
-        delete []loaderDataBuffer;
-        delete []loaderCodeBuffer;
-        delete []loaderHeadBuffer;
-        return -7;
+        ret = -3;
+        goto Exit_NewIDBlock;
     }
-
     if (m_pImage->m_bootObject->Rc4DisableFlag)
-    {
-        //close rc4 encryption
-        for (i = 0; i < m_dwLoaderHeadSize / SECTOR_SIZE; i++)
+    {//close rc4 encryption
+        for (j = 0; j < dwEntrySize/SECTOR_SIZE; j++)
         {
-            P_RC4(loaderHeadBuffer + SECTOR_SIZE * i, SECTOR_SIZE);
-        }
-        for (i = 0; i < m_dwLoaderDataSize / SECTOR_SIZE; i++)
-        {
-            P_RC4(loaderDataBuffer + SECTOR_SIZE * i, SECTOR_SIZE);
-        }
-        for (i = 0; i < m_dwLoaderSize / SECTOR_SIZE; i++)
-        {
-            P_RC4(loaderCodeBuffer + SECTOR_SIZE * i, SECTOR_SIZE);
+            P_RC4(buffer + SECTOR_SIZE * j, SECTOR_SIZE);
         }
     }
-    memcpy(lpIDBlock, loaderHeadBuffer, m_dwLoaderHeadSize);
-    memcpy(lpIDBlock + SECTOR_SIZE * m_usFlashHeadSec, loaderDataBuffer, m_dwLoaderDataSize);
-    memcpy(lpIDBlock + SECTOR_SIZE * (m_usFlashHeadSec + m_usFlashDataSec), loaderCodeBuffer, m_dwLoaderSize);
+    memcpy(lpIDBlock, buffer, dwEntrySize);
+    dwOffset = dwEntrySize;
+    for (i = 0; i < m_pImage->m_bootObject->EntryLoaderCount; i++)
+    {
+        if (i == index)
+        {
+            continue;
+        }
+        if (buffer)
+        {
+            delete []buffer;
+            buffer = NULL;
+        }
+        bRet = m_pImage->m_bootObject->GetEntryProperty(ENTRYLOADER, i, dwEntrySize, dwDelay);
+        dwEntrySize = PAGEALIGN(BYTE2SECTOR(dwEntrySize)) * RK_PAGE_SIZE;
+        buffer = new unsigned char[dwEntrySize];
+        memset(buffer, 0, dwEntrySize);
+        if (!m_pImage->m_bootObject->GetEntryData(ENTRYLOADER, i, buffer))
+        {
+            if (m_pLog)
+            {
+                m_pLog->Record(_T("ERROR:MakeNewIDBlockData-->Get Entry%d Data failed"), i + 1);
+            }
+            ret = -4;
+            goto Exit_NewIDBlock;
+        }
+        if (m_pImage->m_bootObject->Rc4DisableFlag)
+        {//close rc4 encryption
+            for (j = 0; j < dwEntrySize/SECTOR_SIZE; j++)
+            {
+                P_RC4(buffer+SECTOR_SIZE*j,SECTOR_SIZE);
+            }
+        }
+        memcpy(lpIDBlock+dwOffset, buffer, dwEntrySize);
+        dwOffset += dwEntrySize;
+    }
 
-
-    delete []loaderDataBuffer;
-    delete []loaderCodeBuffer;
-    delete []loaderHeadBuffer;
-
+Exit_NewIDBlock:
+    if (buffer)
+    {
+        delete []buffer;
+    }
     if (m_pLog)
     {
         m_pLog->Record(_T("INFO:MakeNewIDBlockData out"));
     }
-    return 0;
+    return ret;
 }
 
 bool CRKAndroidDevice::MakeSpareData(PBYTE lpIDBlock, DWORD dwSectorNum, PBYTE lpSpareBuffer)
@@ -862,7 +879,14 @@ int CRKAndroidDevice::WriteIDBlock(PBYTE lpIDBlock, DWORD dwSectorNum, bool bEra
         //iRet = m_pComm->RKU_EndWriteSector((BYTE*)&end_write_sector_data);
         for (i = 0; i <= 4; i++)
         {
-            iRet = m_pComm->RKU_LoaderWriteLBA(64 + i * 1024, dwSectorNum, lpIDBlock);
+            if(m_pComm->RKU_IsUfs())
+            {
+                iRet = m_pComm->RKU_WriteUfsLoader(64 + i * 1024, dwSectorNum, lpIDBlock);
+            }
+            else
+            {
+                iRet = m_pComm->RKU_LoaderWriteLBA(64 + i * 1024, dwSectorNum, lpIDBlock);
+            }
             if (iRet != ERR_SUCCESS)
             {
                 if (m_pLog)
@@ -1357,6 +1381,14 @@ int CRKAndroidDevice::DownloadImage()
         }
         return -1;
     }
+
+    if ((rkImageHead.manufacturer[56] == 0x55) && (rkImageHead.manufacturer[57] == 0x66))
+    {
+        USHORT *pItemRemain;
+        pItemRemain = (USHORT *)(&rkImageHead.manufacturer[58]);
+        rkImageHead.item_count += *pItemRemain;
+    }
+
     if (rkImageHead.item_count <= 0)
     {
         if (m_pLog)
@@ -1505,7 +1537,14 @@ int CRKAndroidDevice::DownloadImage()
             if (GptFlag)
             {
                 m_pLog->Record(_T("########### RKA_Gpt_Download #########"));
-                bRet = RKA_Gpt_Download(rkImageHead.item[i], uiCurrentByte, uiTotalSize);
+                if(m_pComm->RKU_IsUfs())
+                {
+                    bRet = RKA_Gpt_Download_UFS(rkImageHead.item[i], uiCurrentByte, uiTotalSize);
+                }
+                else
+                {
+                    bRet = RKA_Gpt_Download(rkImageHead.item[i], uiCurrentByte, uiTotalSize);
+                }
                 if (!bRet)
                 {
                     if (m_pLog)
@@ -1655,7 +1694,14 @@ int CRKAndroidDevice::DownloadImage()
             }
             if (GptFlag)
             {
-                bRet = RKA_Gpt_Check(rkImageHead.item[i], uiCurrentByte, uiTotalSize);
+                if(m_pComm->RKU_IsUfs())
+                {
+                    bRet = RKA_Gpt_Check_UFS(rkImageHead.item[i], uiCurrentByte, uiTotalSize);
+                }
+                else
+                {
+                    bRet = RKA_Gpt_Check(rkImageHead.item[i], uiCurrentByte, uiTotalSize);
+                }
                 if (!bRet)
                 {
                     if (m_pLog)
@@ -3067,6 +3113,231 @@ bool CRKAndroidDevice::RKA_Gpt_Check(STRUCT_RKIMAGE_ITEM &entry, long long &curr
     return true;
 }
 
+bool CRKAndroidDevice::RKA_Gpt_Download_UFS(STRUCT_RKIMAGE_ITEM &entry,long long &currentByte,long long totalByte)
+{
+    int  iRet;
+    bool bRet;
+    PARAM_ITEM_VECTOR vecItems;
+    CONFIG_ITEM_VECTOR vecUuids;
+    BYTE *backup_gpt;
+    int nGptSector, nLBsector, nGptEntryLB, nMasterGptSector;
+    (void)entry; (void)totalByte;
+
+    /*UFS 4k align, 8 sector = 4K, uiLogicalBlockSize=8*/
+    if (m_pComm->RKU_IsUfs())
+    {
+        nLBsector = 8;
+        nGptEntryLB = CALC_UNIT(128, (nLBsector * 4));
+        nGptSector = (3 + nGptEntryLB * 2) * nLBsector;
+        nMasterGptSector = (2 + nGptEntryLB) * nLBsector;
+    }
+    else
+    {
+        nLBsector = 1;
+        nGptEntryLB = 32;
+        nGptSector = 67;
+        nMasterGptSector = 34;
+    }
+
+    if (m_pLog)
+    {
+        m_pLog->Record(_T("INFO:RKA_Gpt_Download_UFS-->nLBsector=%d nGptEntryLB=%d nGptSector=%d nMasterGptSector=%d \n"),
+                        nLBsector, nGptEntryLB, nGptSector, nMasterGptSector);
+    }
+
+    if (m_gptBuffer) {
+        delete []m_gptBuffer;
+        m_gptBuffer = NULL;
+    }
+
+
+    if (!m_gptBuffer)
+    {
+        m_gptBuffer = new BYTE[nGptSector * SECTOR_SIZE];
+        if (!m_gptBuffer)
+        {
+            if (m_pLog)
+            {
+                m_pLog->Record(_T("ERROR:RKA_Gpt_Download_UFS-->new memory failed,err=%d)"), errno);
+            }
+            return false;
+        }
+    }
+
+    memset(m_gptBuffer, 0, nGptSector * SECTOR_SIZE);
+    bRet = parse_parameter((char *)(m_paramBuffer + 8), vecItems);
+    if (!bRet)
+    {
+        if (m_pLog)
+        {
+            m_pLog->Record(_T("ERROR:RKA_Gpt_Download_UFS-->parse_parameter failed)"));
+        }
+        return false;
+    }
+    bRet = get_uuid_from_parameter((char *)(m_paramBuffer + 8), vecUuids);
+    backup_gpt = m_gptBuffer + nMasterGptSector * SECTOR_SIZE;
+    create_gpt_buffer_ufs(m_gptBuffer, vecItems, vecUuids, m_flashInfo.uiFlashSize * 2048, nLBsector, NULL);
+    if (m_pLog)
+    {
+        m_pLog->Record(_T("INFO:RKA_Gpt_Download_UFS-->disk_sector=%u \n)"), m_flashInfo.uiFlashSize * 2048);
+    }
+
+    memcpy(backup_gpt, m_gptBuffer + 2 * nLBsector * SECTOR_SIZE, nGptEntryLB * nLBsector * SECTOR_SIZE);
+    memcpy(backup_gpt + nGptEntryLB * nLBsector * SECTOR_SIZE, m_gptBuffer + nLBsector * SECTOR_SIZE, nLBsector * SECTOR_SIZE);
+    prepare_gpt_backup_ufs(m_gptBuffer, backup_gpt, nLBsector);
+
+    iRet = m_pComm->RKU_WriteLBA(0, nMasterGptSector, m_gptBuffer);
+    if (iRet != ERR_SUCCESS)
+    {
+        if (m_pLog)
+        {
+            m_pLog->Record(_T("ERROR:RKA_Gpt_Download_UFS-->write gpt master failed,RetCode(%d)"), iRet);
+        }
+        return false;
+    }
+    if (m_pLog)
+    {
+        m_pLog->Record(_T("ERROR:RKA_Gpt_Download_UFS-->write gpt master successfully!"));
+    }
+
+    iRet = m_pComm->RKU_WriteLBA(m_flashInfo.uiFlashSize * 2048 - (nGptSector - nMasterGptSector), (nGptSector - nMasterGptSector), backup_gpt);
+    if (iRet != ERR_SUCCESS)
+    {
+        if (m_pLog)
+        {
+            m_pLog->Record(_T("ERROR:RKA_Gpt_Download_UFS-->write gpt backup failed,RetCode(%d)"), iRet);
+        }
+        return false;
+    }
+
+    currentByte += (nGptSector * SECTOR_SIZE);
+    if (m_pLog)
+    {
+        m_pLog->Record(_T("ERROR:RKA_Gpt_Download_UFS-->write gpt backup also successfully!"));
+    }
+
+    return true;
+}
+
+bool CRKAndroidDevice::RKA_Gpt_Check_UFS(STRUCT_RKIMAGE_ITEM &entry,long long &currentByte,long long totalByte)
+{
+    int iRet;
+    (void)entry; (void)totalByte;
+    PBYTE pRead=NULL;
+    int nGptSector, nLBsector, nGptEntryLB, nMasterGptSector;
+
+    if (m_pComm->RKU_IsUfs())
+    {
+        nLBsector = 8;
+        nGptEntryLB = CALC_UNIT(128, (nLBsector * 4));
+        nGptSector = (3 + nGptEntryLB * 2) * nLBsector;
+        nMasterGptSector = (2 + nGptEntryLB) * nLBsector;
+    }
+    else
+    {
+        nLBsector = 1;
+        nGptEntryLB = 32;
+        nGptSector = 67;
+        nMasterGptSector = 34;
+    }
+
+    if (m_pLog)
+    {
+        m_pLog->Record(_T("INFO:RKA_Gpt_Check_UFS-->nLBsector=%d nGptEntryLB=%d nGptSector=%d nMasterGptSector=%d \n"),
+                        nLBsector, nGptEntryLB, nGptSector, nMasterGptSector);
+    }
+
+    pRead = new BYTE[nMasterGptSector * SECTOR_SIZE];
+    if (!pRead)
+    {
+        if (m_pLog)
+        {
+            m_pLog->Record(_T("ERROR:RKA_Gpt_Check_UFS-->New ReadBuffer failed,err=%d"), errno);
+        }
+        return false;
+    }
+
+    iRet = m_pComm->RKU_ReadLBA(0,nMasterGptSector,pRead);
+    if (iRet!=ERR_SUCCESS)
+    {
+        if (m_pLog)
+        {
+            m_pLog->Record(_T("ERROR:RKA_Gpt_Check_UFS-->read gpt master failed,RetCode(%d)"), iRet);
+        }
+        delete []pRead;
+        return false;
+    }
+
+    if (memcmp(m_gptBuffer,pRead,nMasterGptSector * SECTOR_SIZE) != 0)
+    {
+        if (m_pLog)
+        {
+            if (m_pLog)
+            {
+                m_pLog->Record(_T("ERROR:RKA_Gpt_Check_UFS-->compare gpt master failed"));
+            }
+            tchar szDateTime[100];
+            tstring strFile;
+            time_t	now;
+            struct tm timeNow;
+            time(&now);
+            localtime_r(&now,&timeNow);
+            _stprintf(szDateTime,_T("%02d-%02d-%02d"), timeNow.tm_hour + 1, timeNow.tm_min + 1, timeNow.tm_sec + 1);
+            strFile = m_pLog->LogSavePath;
+            strFile += szDateTime;
+            strFile += _T("file.bin");
+            m_pLog->SaveBuffer(strFile,m_gptBuffer,nMasterGptSector * SECTOR_SIZE);
+            strFile = m_pLog->LogSavePath;
+            strFile += szDateTime;
+            strFile += _T("flash.bin");
+            m_pLog->SaveBuffer(strFile,pRead,nMasterGptSector * SECTOR_SIZE);
+        }
+        delete []pRead;
+        return false;
+    }
+    iRet = m_pComm->RKU_ReadLBA(m_flashInfo.uiFlashSize * 2048 - (nGptSector - nMasterGptSector), (nGptSector - nMasterGptSector), pRead);
+    if (iRet != ERR_SUCCESS)
+    {
+        if (m_pLog)
+        {
+            m_pLog->Record(_T("ERROR:RKA_Gpt_Check_UFS-->read gpt backup failed,RetCode(%d)"), iRet);
+        }
+        delete []pRead;
+        return false;
+    }
+    if (memcmp(m_gptBuffer + nMasterGptSector * SECTOR_SIZE, pRead, (nGptSector - nMasterGptSector) * SECTOR_SIZE) != 0)
+    {
+        if (m_pLog)
+        {
+            if (m_pLog)
+            {
+                m_pLog->Record(_T("ERROR:RKA_Gpt_Check_UFS-->compare gpt backup failed"));
+            }
+            tchar szDateTime[100];
+            tstring strFile;
+            time_t	now;
+            struct tm timeNow;
+            time(&now);
+            localtime_r(&now,&timeNow);
+            _stprintf(szDateTime,_T("%02d-%02d-%02d"), timeNow.tm_hour + 1, timeNow.tm_min + 1, timeNow.tm_sec + 1);
+            strFile = m_pLog->LogSavePath;
+            strFile += szDateTime;
+            strFile += _T("file.bin");
+            m_pLog->SaveBuffer(strFile, m_gptBuffer + nMasterGptSector * SECTOR_SIZE, (nGptSector - nMasterGptSector) * SECTOR_SIZE);
+            strFile = m_pLog->LogSavePath;
+            strFile += szDateTime;
+            strFile += _T("flash.bin");
+            m_pLog->SaveBuffer(strFile,pRead, (nGptSector - nMasterGptSector) * SECTOR_SIZE);
+        }
+        delete []pRead;
+        return false;
+    }
+    currentByte += (nGptSector * SECTOR_SIZE);
+
+    delete []pRead;
+    return true;
+}
+
 bool CRKAndroidDevice::MakeParamFileBuffer(STRUCT_RKIMAGE_ITEM &entry)
 {
     bool bRet;
@@ -3530,6 +3801,31 @@ void prepare_gpt_backup(u8 *master, u8 *backup)
     calc_crc32 = crc32_le(0, (unsigned char *)gptBackupHead, le32_to_cpu(gptBackupHead->header_size));
     gptBackupHead->header_crc32 = cpu_to_le32(calc_crc32);
 }
+
+void prepare_gpt_backup_ufs(u8 *master, u8 *backup, u32 logicalBlockSectors)
+{
+    gpt_header *gptMasterHead;
+    gpt_header *gptBackupHead;
+    u32 calc_crc32;
+    u64 val;
+    u32 nGptEntryLB;
+
+    nGptEntryLB = CALC_UNIT(128, (logicalBlockSectors * 4));
+
+    gptMasterHead = (gpt_header*)(master + logicalBlockSectors * SECTOR_SIZE);
+    gptBackupHead = (gpt_header*)(backup + nGptEntryLB * logicalBlockSectors * SECTOR_SIZE);
+
+    /* recalculate the values for the Backup GPT Header */
+    val = le64_to_cpu(gptMasterHead->my_lba);
+    gptBackupHead->my_lba = gptMasterHead->alternate_lba;
+    gptBackupHead->alternate_lba = cpu_to_le64(val);
+    gptBackupHead->partition_entry_lba = cpu_to_le64(le64_to_cpu(gptMasterHead->alternate_lba) - nGptEntryLB);
+    gptBackupHead->header_crc32 = 0;
+
+    calc_crc32 = crc32_le(0, (unsigned char *)gptBackupHead, le32_to_cpu(gptBackupHead->header_size));
+    gptBackupHead->header_crc32 = cpu_to_le32(calc_crc32);
+}
+
 void gen_rand_uuid(unsigned char *uuid_bin)
 {
     efi_guid_t id;
@@ -3618,6 +3914,104 @@ void create_gpt_buffer(u8 *gpt, PARAM_ITEM_VECTOR &vecParts, CONFIG_ITEM_VECTOR 
     gptHead->header_crc32 = cpu_to_le32(crc32_le(0, gpt + SECTOR_SIZE, sizeof(gpt_header)));
 
 }
+
+void create_gpt_buffer_ufs(u8 *gpt, PARAM_ITEM_VECTOR &vecParts, CONFIG_ITEM_VECTOR &vecUuid, u64 diskSectors, u32 logicalBlockSectors, bool *align_flag)
+{
+    legacy_mbr *mbr = (legacy_mbr *)gpt;
+    gpt_header *gptHead = (gpt_header *)(gpt + logicalBlockSectors * SECTOR_SIZE);
+    gpt_entry *gptEntry = (gpt_entry *)(gpt + 2 * logicalBlockSectors * SECTOR_SIZE);
+    u32 i,j;
+    int pos,backup_gpt_secs;
+    u32 nGptEntryLB,nDiskLB,nMasterGptLB;
+    tstring strPartName;
+    string::size_type iPos;
+
+    nDiskLB = CALC_UNIT(diskSectors, logicalBlockSectors);
+    nGptEntryLB = CALC_UNIT(128, (logicalBlockSectors * 4));
+    nMasterGptLB = 2 + nGptEntryLB;
+
+    backup_gpt_secs = 1 + nGptEntryLB;
+    if (align_flag)
+    {
+        if (*align_flag)
+        {
+            backup_gpt_secs = CALC_UNIT(64, logicalBlockSectors);
+        }
+    }
+    else
+    {
+        bool b_exist_cache = false;
+        for (i = 0; i < vecParts.size(); i++) {
+            if (strcasecmp(vecParts[i].szItemName, "cache") == 0)
+            {
+                b_exist_cache = true;
+                break;
+            }
+        }
+        if (b_exist_cache)
+        {
+            backup_gpt_secs = CALC_UNIT(64, logicalBlockSectors);
+        }
+    }
+
+    /*1.protective mbr*/
+    memset(gpt, 0, logicalBlockSectors * SECTOR_SIZE);
+    mbr->signature = MSDOS_MBR_SIGNATURE;
+    mbr->partition_record[0].sys_ind = EFI_PMBR_OSTYPE_EFI_GPT;
+    mbr->partition_record[0].start_sect = 1;
+    mbr->partition_record[0].nr_sects = (u32)-1;
+    /*2.gpt header*/
+    memset(gpt + logicalBlockSectors * SECTOR_SIZE, 0, logicalBlockSectors * SECTOR_SIZE);
+    gptHead->signature = cpu_to_le64(GPT_HEADER_SIGNATURE);
+    gptHead->revision = cpu_to_le32(GPT_HEADER_REVISION_V1);
+    gptHead->header_size = cpu_to_le32(sizeof(gpt_header));
+    gptHead->my_lba = cpu_to_le64(1);
+    gptHead->alternate_lba = cpu_to_le64(nDiskLB - 1);
+    gptHead->first_usable_lba = cpu_to_le64(nMasterGptLB);
+    gptHead->last_usable_lba = cpu_to_le64(nDiskLB - nMasterGptLB);
+    gptHead->partition_entry_lba = cpu_to_le64(2);
+    gptHead->num_partition_entries = cpu_to_le32(GPT_ENTRY_NUMBERS);
+    gptHead->sizeof_partition_entry = cpu_to_le32(GPT_ENTRY_SIZE);
+    gptHead->header_crc32 = 0;
+    gptHead->partition_entry_array_crc32 = 0;
+    gen_rand_uuid(gptHead->disk_guid.raw);
+
+    /*3.gpt partition entry*/
+    memset(gpt + 2 * logicalBlockSectors * SECTOR_SIZE, 0, nGptEntryLB * logicalBlockSectors * SECTOR_SIZE);
+    for (i = 0; i < vecParts.size(); i++)
+    {
+        gen_rand_uuid(gptEntry->partition_type_guid.raw);
+        gen_rand_uuid(gptEntry->unique_partition_guid.raw);
+        gptEntry->starting_lba = cpu_to_le64(CALC_UNIT(vecParts[i].uiItemOffset, logicalBlockSectors));
+        gptEntry->ending_lba = cpu_to_le64(gptEntry->starting_lba + CALC_UNIT(vecParts[i].uiItemSize, logicalBlockSectors) - 1);
+        gptEntry->attributes.raw = 0;
+        strPartName = vecParts[i].szItemName;
+        iPos = strPartName.find(':');
+        if (iPos != string::npos)
+        {
+            transform(strPartName.begin(),strPartName.end(),strPartName.begin(),(int(*)(int))tolower);
+            if (strPartName.find("bootable") != string::npos)
+                gptEntry->attributes.raw = PART_PROPERTY_BOOTABLE;
+            if (strPartName.find("efi") != string::npos)
+            {
+                gptEntry->attributes.raw = PART_PROPERTY_BOOTABLE;
+            }
+            if (strPartName.find("grow") != string::npos)
+                gptEntry->ending_lba = cpu_to_le64(nDiskLB - backup_gpt_secs - 1);
+            strPartName = strPartName.substr(0, iPos);
+            vecParts[i].szItemName[strPartName.size()] = 0;
+        }
+        for (j = 0; j < strlen(vecParts[i].szItemName); j++)
+            gptEntry->partition_name[j] = vecParts[i].szItemName[j];
+        if ((pos = find_uuid_item(vecUuid, vecParts[i].szItemName)) != -1)
+            memcpy(gptEntry->unique_partition_guid.raw, vecUuid[pos].szItemValue, 16);
+        gptEntry++;
+    }
+
+    gptHead->partition_entry_array_crc32 = cpu_to_le32(crc32_le(0, gpt + 2 * logicalBlockSectors * SECTOR_SIZE, GPT_ENTRY_SIZE * GPT_ENTRY_NUMBERS));
+    gptHead->header_crc32 = cpu_to_le32(crc32_le(0, gpt + logicalBlockSectors * SECTOR_SIZE, sizeof(gpt_header)));
+}
+
 bool ParseUuidInfo(string &strUuidInfo, string &strName, string &strUUid)
 {
     string::size_type pos(0);

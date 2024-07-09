@@ -66,14 +66,14 @@ CamHwIsp3x::updateEffParams(void* params, void* ori_params) {
 
     if (getParamsForEffMap(effFrmId)) {
         if (mAwbParams) {
-            RkAiqIspAwbParamsProxyV3x* awbParams =
-                dynamic_cast<RkAiqIspAwbParamsProxyV3x*>(mAwbParams);
+            RkAiqIspAwbParamsProxy* awbParams =
+                dynamic_cast<RkAiqIspAwbParamsProxy*>(mAwbParams);
             _effecting_ispparam_map[effFrmId]->data()->result.awb_cfg_v3x = awbParams->data()->result;
         }
 
         if (mBlcResult) {
-            RkAiqIspBlcParamsProxyV21* blcParams =
-                dynamic_cast<RkAiqIspBlcParamsProxyV21*>(mBlcResult);
+            RkAiqIspBlcParamsProxy* blcParams =
+                dynamic_cast<RkAiqIspBlcParamsProxy*>(mBlcResult);
             _effecting_ispparam_map[effFrmId]->data()->result.blc_cfg = blcParams->data()->result;
         }
 
@@ -117,10 +117,6 @@ CamHwIsp3x::updateEffParams(void* params, void* ori_params) {
                                  lates_isp_params_ptr->others.bls_cfg, dst_isp_params->others.bls_cfg); \
 
         if (mIsMultiIspMode) {
-            _effecting_ispparam_map[effFrmId]->data()->result.isp_params_v3x[0] = *((struct isp3x_isp_params_cfg*)ori_params);
-            _effecting_ispparam_map[effFrmId]->data()->result.isp_params_v3x[1] = isp_params[0];
-            _effecting_ispparam_map[effFrmId]->data()->result.isp_params_v3x[2] = isp_params[1];
-
             dst_isp_params = &_effecting_ispparam_map[effFrmId]->data()->result.isp_params_v3x[0];
             if (is_got_latest_params)
                 lates_isp_params_ptr = &latestIspParams.isp_params_v3x[0];

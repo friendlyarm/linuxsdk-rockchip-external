@@ -45,23 +45,29 @@ GCCVERSIONGTEQ9 := $(shell expr `$(CROSS_COMPILE)gcc -dumpversion | cut -f1 -d.`
 ifeq "$(GCCVERSIONGTEQ9)" "1"
     DHDCFLAGS += -Wno-error=date-time
 endif
+GCCVERSIONGTEQ7 := $(shell expr `$(CROSS_COMPILE)gcc -dumpversion | cut -f1 -d.` \>= 7)
+ifeq "$(GCCVERSIONGTEQ7)" "1"
+    DHDCFLAGS += -Wimplicit-fallthrough=3
+endif
 DHDCFLAGS += $(call cc-disable-warning, date-time)
 DHDCFLAGS += $(call cc-disable-warning, stringop-overflow)
 
 ##########################
 # Platform Configuration
 ##########################
-DHD_MODULE_NAME := CYW5557X_PCIE
+DHD_MODULE_NAME := cyw5557x_pcie
 
 CONFIG_DHD_CHIP := cyw5557x
 CONFIG_DHD_PLATFORM := Rockchip
-CONFIG_BCMDHD = m
-CONFIG_BCMDHD_PCIE = y
+CONFIG_BCMDHD := m
+CONFIG_BCMDHD_PCIE := y
 CONFIG_BCMDHD_SDIO :=
 CONFIG_BCMDHD_OOB :=
 CONFIG_BCMDHD_SDMMC :=
 CONFIG_BCMDHD_WPA3 := y
 CONFIG_DHD_ANDROID_VTS :=y
+
+DHDCFLAGS += -DWL_SELF_MANAGED_REGDOM
 
 #################
 # Common feature
@@ -135,6 +141,9 @@ endif
 # keepalive
 DHDCFLAGS += -DCUSTOM_KEEP_ALIVE_SETTING=28000
 
+#OWE enable in dhd
+DHDCFLAGS += -DWL_OWE
+
 DHDCFLAGS += -DVSDB
 
 # For p2p connection issue
@@ -164,6 +173,12 @@ DHDCFLAGS += -DWLFBT -DGTK_OFFLOAD_SUPPORT
 DHDCFLAGS += -DBCMCCX
 DHDCFLAGS += -DWBTEXT
 DHDCFLAGS += -DDHD_LOSSLESS_ROAMING
+
+# Hog flags
+ifeq ($(CONFIG_ENABLE_HOGSQS), y)
+DHDCFLAGS += -DENABLE_HOGSQS
+DHDCFLAGS += -DM_HOGSQS_CFG=0x1910
+endif
 
 # For special PNO Event keep wake lock for 10sec
 DHDCFLAGS += -DCUSTOM_PNO_EVENT_LOCK_xTIME=10
@@ -229,6 +244,39 @@ DHDCFLAGS += -DCUSTOM_FORCE_NODFS_FLAG
 ifeq ($(CONFIG_ANDROID),y)
   DHDCFLAGS += -DKEEP_WIFION_OPTION
   DHDCFLAGS += -Wno-date-time
+
+#Android features
+ifeq ($(shell expr $(CONFIG_ANDROID_VERSION) \>= 12), 1)
+# For android toolchain.
+ DHDCFLAGS += -Wno-unused-const-variable
+ DHDCFLAGS += -Wno-unneeded-internal-declaration
+ifeq ($(shell expr $(CONFIG_ANDROID_VERSION) \>= 13), 1)
+ DHDCFLAGS += -Wno-unused-but-set-variable
+ DHDCFLAGS += -DDHD_ANDROID_KERNEL5_15_SUPPORT
+endif
+
+ DHDCFLAGS += -DCONFIG_ANDROID_VERSION=$(CONFIG_ANDROID_VERSION)
+ DHDCFLAGS += -DP2P_RAND
+ DHDCFLAGS += -DSOFTAP_RAND
+ DHDCFLAGS += -DSTA_RAND
+#To support Android12 CDD [C-1-7] [C-1-8] [C-1-9] [C-1-10]
+ DHDCFLAGS += -DSUPPORT_RANDOM_MAC_SCAN
+
+#To support recovery
+ DHDCFLAGS += -DWL_CFGVENDOR_SEND_HANG_EVENT
+
+ DHDCFLAGS += -DWL_SELF_MANAGED_REGDOM
+ DHDCFLAGS += -DDHD_DIRECT_SET_MAC
+ DHDCFLAGS += -DWL_SUPPORT_BSS_BOOTTIME
+
+# To support Android Common kernel
+ifneq ($(CONFIG_HAVE_IMX8_SOC),y)
+DHDCFLAGS += -DDHD_SUPPORT_REQFW_FOR_FIRMWARE_DOWNLOADING -DDHD_DENY_DIRECT_FS_ACCESS
+endif
+
+# To support ACS on hostapd
+# DHDCFLAGS += -DWL_SUPPORT_ACS_OFFLOAD
+endif
 endif
 
 # SoftAP
@@ -259,6 +307,33 @@ ifneq ($(CONFIG_BCMDHD_PCIE),)
   DHDCFLAGS += -DDHD_4WAYM4_FAIL_DISCONNECT
 endif
 
+#802.11ax and 6Ghz Support
+ifeq ($(CONFIG_BCMDHD_WIFI6_6E),y)
+ DHDCFLAGS += -DWL11AX
+ DHDCFLAGS += -DWL_6E
+endif
+
+#XR Support
+ifeq ($(CONFIG_BCMDHD_XR_SUPPORT),y)
+ DHDCFLAGS += -DWL_DHD_XR -DWL_DHD_XR_LOG
+ifneq ($(CONFIG_BCMDHD),)
+ DHDCFLAGS += -DWL_DHD_XR_MASTER
+endif
+ifneq ($(CONFIG_BCMDHDX),)
+ DRIVER_TYPE ?= $(CONFIG_BCMDHDX)
+ DHDCFLAGS += -DBCMDHDX -DWL_DHD_XR_CLIENT
+endif
+ # Bandsteer support
+ DHDCFLAGS += -DDHD_BANDSTEER
+ DHDOFILES += wl_cfg80211_xr.o dhd_linux_xr.o
+endif
+
+#IFX cfg80211 support
+ifeq ($(CONFIG_BCMDHD_IFX_CFG80211),y)
+ #For 5.4.21 kernel
+ DHDCFLAGS += -DIFX_CFG80211_5_4_21
+endif
+
 # Uncomment the below line for AP to receive disconnect management frame.
 # DHDCFLAGS += -DWL_CFG80211_AP_RX_MGMT_DISCONNECT
 
@@ -280,7 +355,9 @@ endif
 # m: module type driver
 # y: built-in type driver
 ##########################
+ifneq ($(CONFIG_BCMDHD),)
 DRIVER_TYPE ?= $(CONFIG_BCMDHD)
+endif
 
 #############################
 # Bring up WARs for CYW89570.
@@ -352,6 +429,11 @@ ifeq ($(CONFIG_BCMDHD_OOB),y)
 else
     DHDCFLAGS += -DSDIO_ISR_THREAD
 endif
+
+# btsharedsdio
+ifneq  ($(CONFIG_BT_OVER_SDIO),)
+  DHDCFLAGS += -DBT_OVER_SDIO
+endif
 endif
 
 ifneq ($(CONFIG_BCMDHD_PCIE),)
@@ -364,6 +446,10 @@ ifneq ($(CONFIG_BCMDHD_PCIE),)
 # HEAP ASLR
   DHDCFLAGS += -DBCM_ASLR_HEAP
   DHDCFLAGS += -DMAX_CNTL_TX_TIMEOUT=1
+
+ifeq ($(CONFIG_BCMDHD_COHERENT_MEM_RING),y)
+DHDCFLAGS += -DDHD_USE_COHERENT_MEM_FOR_RING
+endif
 
 # Enable health check event handling
   DHDCFLAGS += -DDNGL_EVENT_SUPPORT
@@ -390,10 +476,6 @@ ifneq ($(CONFIG_BCMDHD_PCIE),)
 # Enable MSI interrupt Support
   DHDCFLAGS += -DDHD_MSI_SUPPORT
   DHDCFLAGS += -DDHD_RECOVER_TIMEOUT
-endif
-
-ifeq ($(CONFIG_DHD_CHIP), cyw43455)
-  DHDCFLAGS += -DCONFIG_DHD_CYW43455
 endif
 
 ifeq ($(CONFIG_DHD_CHIP), cyw4354)
@@ -435,11 +517,16 @@ DHDOFILES += dhd_pno.o dhd_common.o dhd_ip.o dhd_custom_gpio.o \
     dhd_linux.o dhd_linux_sched.o dhd_cfg80211.o dhd_linux_wq.o aiutils.o \
     bcmevent.o bcmutils.o bcmwifi_channels.o hndpmu.o linux_osl.o linux_pkt.o \
     sbutils.o siutils.o wl_android.o wl_roam.o wl_cfg80211.o wl_cfgscan.o wl_cfgp2p.o \
-    wl_cfg_btcoex.o wldev_common.o wl_linux_mon.o dhd_linux_platdev.o \
+    wl_cfg_btcoex.o wldev_common.o dhd_linux_platdev.o \
     dhd_pno.o dhd_linux_pktdump.o wl_cfg_btcoex.o hnd_pktq.o \
     hnd_pktpool.o wl_cfgvendor.o bcmxtlv.o bcm_app_utils.o dhd_debug.o \
     dhd_debug_linux.o dhd_mschdbg.o bcmbloom.o dhd_dbg_ring.o bcmstdlib_s.o \
     dhd_linux_exportfs.o
+
+ifneq ($(CONFIG_DHD_MONITOR_INTERFACE),)
+    DHDCFLAGS += -DDHD_MONITOR_INTERFACE
+    DHDOFILES += wl_linux_mon.o
+endif
 
 ifeq ($(CONFIG_DHD_PLATFORM), Rockchip)
     DHDCFLAGS += -DCONFIG_DHD_PLAT_ROCKCHIP
@@ -494,20 +581,28 @@ ifneq ($(CONFIG_QT),y)
   DHDCFLAGS += -DRTT_SUPPORT -DRTT_DEBUG
   DHDOFILES += dhd_rtt.o
 endif
+
 EXTRA_CFLAGS += $(DHDCFLAGS) -DDHD_DEBUG
 EXTRA_CFLAGS += -DSRCBASE=\"$(src)\"
 EXTRA_CFLAGS += -I$(src)/include/ -I$(src)/
 KBUILD_CFLAGS += -I$(KDIR)/include -I$(CURDIR)
 
+ifneq ($(CONFIG_BCMDHD),)
 $(DHD_MODULE_NAME)-objs := $(DHDOFILES)
 obj-$(DRIVER_TYPE)   += $(DHD_MODULE_NAME).o
+endif
+
+ifneq ($(CONFIG_BCMDHDX),)
+bcmdhdx-objs := $(DHDOFILES)
+obj-$(DRIVER_TYPE) += bcmdhd.o bcmdhdx.o
+endif
 
 all:
 	@echo "$(MAKE) --no-print-directory -C $(KDIR) M=$(CURDIR) modules"
 	@$(MAKE) --no-print-directory -C $(KDIR) M=$(CURDIR) modules
 
 clean:
-	rm -rf *.o *.ko *.mod.c *~ .*.cmd *.o.cmd .*.o.cmd \
+	rm -rf *.o *.ko *.mod.c *~ .*.cmd *.o.cmd .*.o.cmd .*.o.d *.mod \
 	Module.symvers modules.order .tmp_versions modules.builtin
 
 install:

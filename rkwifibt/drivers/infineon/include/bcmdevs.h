@@ -1,9 +1,9 @@
 /*
  * Broadcom device-specific manifest constants.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -73,6 +73,8 @@
 #define BCM_DNGL_BL_PID_4354	0xbd26
 #define BCM_DNGL_BL_PID_43569   0xbd27
 #define BCM_DNGL_BL_PID_4373	0xbd29
+#define BCM_DNGL_BL_PID_43439   0xbd3d
+#define BCM_DNGL_BL_PID_89570   0xbd31
 
 #define BCM_DNGL_BDC_PID	0x0bdc
 #define BCM_DNGL_JTAG_PID	0x4a44
@@ -358,6 +360,7 @@
 #define BCM4373_D11AC5G_ID	0x441a          /* 4373 802.11ac 5G device */
 
 #define CYW55560_WLAN_ID	0xBD31     /* CYW55560 802.11ax WLAN device ID */
+#define CYW89570_WLAN_ID	0xBD3f     /* CYW89570 802.11ax WLAN device ID */
 #define CYW55560_BT_ID		0xBD37     /* CYW55560 802.11ax BT device ID */
 
 #define	BCMGPRS_UART_ID		0x4333		/* Uart id used by 4306/gprs card */
@@ -535,6 +538,7 @@
 				case BCM43458_CHIP_ID
 
 #define BCM43430_CHIP_ID	43430		/* 43430 chipcommon chipid */
+#define BCM43439_CHIP_ID	43439		/* 43439 chipcommon chipid */
 #define BCM43018_CHIP_ID	43018		/* 43018 chipcommon chipid */
 #define BCM4349_CHIP_ID		0x4349		/* 4349 chipcommon chipid */
 #define BCM4355_CHIP_ID		0x4355		/* 4355 chipcommon chipid */

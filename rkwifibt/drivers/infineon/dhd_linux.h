@@ -1,9 +1,9 @@
 /*
  * DHD Linux header file (dhd_linux exports for cfg80211 and other components)
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -40,10 +40,6 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/fs.h>
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 1))
-#include <linux/time64.h>
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 1)) */
 
 #include <dngl_stats.h>
 #include <dhd.h>
@@ -423,4 +419,8 @@ extern void dhd_reset_tcpsync_info_by_dev(struct net_device *dev);
 
 int compat_kernel_read(struct file *file, loff_t offset, char *addr, unsigned long count);
 
+#ifdef WL_DHD_XR
+dhd_pub_t* dhd_get_pub(struct net_device *dev);
+int dhd_get_dhd_ifidx(struct net_device *dev);
+#endif /* WL_DHD_XR */
 #endif /* __DHD_LINUX_H__ */

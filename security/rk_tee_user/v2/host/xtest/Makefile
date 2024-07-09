@@ -66,6 +66,8 @@ endif
 endif #OPTEE_OPENSSL_EXPORT
 endif #require OpenSSL
 
+CFG_PKCS11_TA := y
+
 srcs := regression_1000.c
 
 ifeq ($(CFG_GP_SOCKETS),y)

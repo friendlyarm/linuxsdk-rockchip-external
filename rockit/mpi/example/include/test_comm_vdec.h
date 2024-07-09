@@ -18,7 +18,7 @@
 #define SRC_TESTS_RT_MPI_COMMON_TEST_COMM_VDEC_H_
 
 #include "rk_common.h"
-#include "test_comm_ffm.h"
+#include "test_comm_tmd.h"
 #include "rk_comm_vdec.h"
 #include "rk_mpi_vdec.h"
 
@@ -34,7 +34,9 @@ RK_S32 TEST_VDEC_Start(VDEC_CHN VdecChn,
                         VIDEO_DISPLAY_MODE_E enDispMode);
 RK_S32 TEST_VDEC_Stop(VDEC_CHN VdecChn);
 RK_S32 TEST_VDEC_StartSendStream(VDEC_CHN VdecChn, STREAM_INFO_S *pstStreamInfo);
-RK_S32 TEST_VENC_StopSendFrame(VDEC_CHN VdecChn);
+RK_S32 TEST_VDEC_StopSendStream(VDEC_CHN VdecChn);
+RK_S32 TEST_VDEC_SetReadLoopCount(VDEC_CHN VdecChn, RK_S32 s32ReadLoopCnt);
+RK_S32 TEST_VDEC_WaitUntilEos(VDEC_CHN VdecChn);
 
 #ifdef __cplusplus
 #if __cplusplus

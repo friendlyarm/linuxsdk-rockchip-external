@@ -1,0 +1,40 @@
+Obtain the driver ko from the corresponding directory
+
+6.1 kernel base on:
+
+
+commit b2335985e1dcd14b76526861e88c07618c918c43 (rk/develop-6.1, m/master)
+Author: Sugar Zhang <sugar.zhang@rock-chips.com>
+Date:   Tue Jun 18 19:24:30 2024 +0800
+
+    ASoC: rockchip: sai: Add support for more SoCs
+
+    VERSION >= SAI_VER_2311
+
+    Support Frame Sync xN (FSXN)
+    Support Frame Sync Error Detect (FSE)
+    Support Frame Sync Lost Detect (FSLOST)
+    Support Force Clear (FCR)
+    Support SAIn-Chained (e.g. SAI0-CLK-DATA + SAI3-DATA +...)
+    Support Transmit Auto Gate Mode
+    Support Timing Shift Left for TX
+
+    Optimize SCLK/FSYNC Timing Alignment
+
+    VERSION >= SAI_VER_2403
+
+    Support Loopback LR Select (e.g. L:MIC R:LP)
+
+    Signed-off-by: Sugar Zhang <sugar.zhang@rock-chips.com>
+    Change-Id: I9c957b5115686df2573a06b9276f26a15e709d4e
+
+5.10 kernel base on:
+
+commit 6507406562ee53a0860a04e9eb01316f8fa7143a
+Author: Zefa Chen <zefa.chen@rock-chips.com>
+Date:   Fri Mar 29 16:31:26 2024 +0800
+
+    media: rockchip: vicap disable dma adapter when use hdmi input
+
+    Signed-off-by: Zefa Chen <zefa.chen@rock-chips.com>
+    Change-Id: I20a47ca718242eb253797c851b85189b5fcf1829

@@ -9,7 +9,11 @@ if (NOT DEFINED ARCH64)
     endif()
 endif()
 
-option(USE_ROCKIT_TGI  "enable rockit tgi" ON)
+if(RK3308)
+set (CHIP_RK3308 ON)
+endif()
+
+option(USE_ROCKIT_TGI  "enable rockit tgi" OFF)
 if (${USE_ROCKIT_TGI})
     message("Build rockit tgi")
     add_subdirectory(tgi)

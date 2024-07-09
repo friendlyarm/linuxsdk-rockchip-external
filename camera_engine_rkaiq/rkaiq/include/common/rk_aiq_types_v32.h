@@ -20,15 +20,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "abayer2dnrV23/rk_aiq_types_abayer2dnr_algo_v23.h"
-#include "abayertnrV23/rk_aiq_types_abayertnr_algo_v23.h"
-#include "ablcV32/rk_aiq_types_ablc_algo_int_v32.h"
-#include "acnrV30/rk_aiq_types_acnr_algo_v30.h"
-#include "adebayer/rk_aiq_types_adebayer_algo.h"
+#include "algos/abayer2dnrV23/rk_aiq_types_abayer2dnr_algo_v23.h"
+#include "algos/abayertnrV23/rk_aiq_types_abayertnr_algo_v23.h"
+#include "algos/ablcV32/rk_aiq_types_ablc_algo_int_v32.h"
+#include "algos/acnrV30/rk_aiq_types_acnr_algo_v30.h"
+#include "algos/adebayer/rk_aiq_types_adebayer_algo.h"
 #include "algos/acac/rk_aiq_types_acac_algo.h"
-#include "asharpV33/rk_aiq_types_asharp_algo_v33.h"
-#include "aynrV22/rk_aiq_types_aynr_algo_v22.h"
-#include "rk_aiq_comm.h"
+#include "algos/asharpV33/rk_aiq_types_asharp_algo_v33.h"
+#include "algos/aynrV22/rk_aiq_types_aynr_algo_v22.h"
+#include "algos/awb/rk_aiq_types_awb_algo.h"
+#include "algos/accm/rk_aiq_types_accm_algo.h"
+#include "common/rk_aiq_comm.h"
 #include "rk_aiq_mems_sensor.h"
 
 #ifndef ISP32_LDCH_BIC_NUM
@@ -47,14 +49,11 @@ typedef struct rk_aiq_isp_bay3d_v32_s {
 
 typedef struct rk_aiq_isp_cac_v32_s {
     bool enable;
-    rkaiq_cac_v11_hw_param_t cfg;
+    rkaiq_cac_v11_hw_param_t cfg[2];
 } rk_aiq_isp_cac_v32_t;
 
 
 typedef AdebayerHwConfigV2_t rk_aiq_isp_debayer_v32_t;
-
-typedef struct rk_aiq_isp_ccm_v32_s {
-} rk_aiq_isp_ccm_v32_t;
 
 typedef RkAiqAdehazeProcResult_t rk_aiq_isp_dehaze_v32_t;
 
@@ -78,5 +77,8 @@ typedef RK_Bayertnr_Fix_V23_t rk_aiq_isp_tnr_v32_t ;
 
 typedef rk_aiq_af_algo_meas_v31_t rk_aiq_isp_af_v31_t;
 typedef rk_aiq_af_algo_meas_v32_t rk_aiq_isp_af_v32_t;
+
+typedef rk_aiq_wb_gain_v32_t rk_aiq_isp_wb_gain_v32_t;
+typedef rk_aiq_ccm_cfg_v2_t rk_aiq_isp_ccm_v32_t;
 
 #endif

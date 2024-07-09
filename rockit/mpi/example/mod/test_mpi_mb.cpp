@@ -13,8 +13,10 @@
  * limitations under the License.
  */
 
+#ifdef DBG_MOD_ID
 #undef DBG_MOD_ID
-#define DBG_MOD_ID       RK_ID_MB
+#endif
+#define DBG_MOD_ID DBG_MOD_COMB1(RK_ID_MB)
 
 #include <stdio.h>
 #include <unistd.h>
@@ -40,6 +42,7 @@ typedef struct _rkTestMbCtx {
     RK_BOOL     bPreAlloc;
     RK_S32      s32RemapMode;
     RK_S32      s32AllocType;
+    RK_S32      ss2DmaType;
 } TEST_MB_CTX_S;
 
 RK_S32 unit_test_mpi_mb(const TEST_MB_CTX_S *pstCtx) {
@@ -55,8 +58,10 @@ RK_S32 unit_test_mpi_mb(const TEST_MB_CTX_S *pstCtx) {
     pstMbPoolCfg.u64MBSize   = pstCtx->s32MbSize;
     pstMbPoolCfg.u32MBCnt    = pstCtx->s32MbCount;
     pstMbPoolCfg.bPreAlloc   = pstCtx->bPreAlloc;
+    pstMbPoolCfg.bNotDelete  = RK_TRUE;
     pstMbPoolCfg.enRemapMode = (MB_REMAP_MODE_E)pstCtx->s32RemapMode;
     pstMbPoolCfg.enAllocType = (MB_ALLOC_TYPE_E)pstCtx->s32AllocType;
+    pstMbPoolCfg.enDmaType = (MB_DMA_TYPE_E)(pstCtx->ss2DmaType << 12);
 
     do {
         for (RK_S32 i = 0; i < pstCtx->s32PoolCount; i++) {
@@ -74,25 +79,31 @@ RK_S32 unit_test_mpi_mb(const TEST_MB_CTX_S *pstCtx) {
                 MB_BLK mb = RK_MPI_MB_GetMB(i, pstMbPoolCfg.u64MBSize, RK_FALSE);
                 if (mb == MB_INVALID_HANDLE) {
                     s32Ret = RK_ERR_MB_NOBUF;
+                    RK_LOGE("get mb fail");
                     goto __FAILED;
                 }
-                RK_U64 phyAddr = RK_MPI_MB_Handle2PhysAddr(mb);
+                RK_U64 phyAddr = 0;
                 if (pstMbPoolCfg.enDmaType == MB_DMA_TYPE_CMA
-                      && pstMbPoolCfg.enAllocType == MB_ALLOC_TYPE_DMA
-                      && phyAddr == 0) {
-                    s32Ret = RK_ERR_MB_BUSY;
-                    RK_MPI_MB_ReleaseMB(mb);
-                    goto __FAILED;
+                      && pstMbPoolCfg.enAllocType == MB_ALLOC_TYPE_DMA) {
+                    phyAddr = RK_MPI_MB_Handle2PhysAddr(mb);
+                    if (phyAddr == 0) {
+                        s32Ret = RK_ERR_MB_BUSY;
+                        RK_MPI_MB_ReleaseMB(mb);
+                        RK_LOGE("get phy addr fail");
+                        goto __FAILED;
+                    }
                 }
                 MB_POOL poolId = RK_MPI_MB_Handle2PoolId(mb);
                 if (poolId != i) {
                     s32Ret = RK_ERR_MB_BUSY;
                     RK_MPI_MB_ReleaseMB(mb);
+                    RK_LOGE("get pool id fail");
                     goto __FAILED;
                 }
                 RK_S32 refsCount = RK_MPI_MB_InquireUserCnt(mb);
                 if (refsCount != 1) {
                     s32Ret = RK_ERR_MB_BUSY;
+                    RK_LOGE("get buf usercnt fail");
                     RK_MPI_MB_ReleaseMB(mb);
                     goto __FAILED;
                 }
@@ -100,6 +111,7 @@ RK_S32 unit_test_mpi_mb(const TEST_MB_CTX_S *pstCtx) {
                 if (virAddr == RK_NULL) {
                     s32Ret = RK_ERR_MB_BUSY;
                     RK_MPI_MB_ReleaseMB(mb);
+                    RK_LOGE("get vaddr fail");
                     goto __FAILED;
                 }
                 RK_S32 fd = RK_MPI_MB_Handle2Fd(mb);
@@ -107,24 +119,27 @@ RK_S32 unit_test_mpi_mb(const TEST_MB_CTX_S *pstCtx) {
                       && fd < 0) {
                     s32Ret = RK_ERR_MB_BUSY;
                     RK_MPI_MB_ReleaseMB(mb);
+                     RK_LOGE("get fd fail");
                     goto __FAILED;
                 }
                 if (pstMbPoolCfg.enAllocType == MB_ALLOC_TYPE_DMA) {
                     if (RK_MPI_MB_VirAddr2Handle(virAddr) != mb) {
                         s32Ret = RK_ERR_MB_BUSY;
                         RK_MPI_MB_ReleaseMB(mb);
+                        RK_LOGE("get handle from vaddr fail");
                         goto __FAILED;
                     }
                     s32UniqueId = RK_MPI_MB_Handle2UniqueId(mb);
                     if (s32UniqueId < 0) {
                         s32Ret = RK_ERR_MB_BUSY;
                         RK_MPI_MB_ReleaseMB(mb);
+                        RK_LOGE("get id from handle fail");
                         goto __FAILED;
                     }
                     s32DupFd = RK_MPI_MB_UniqueId2Fd(s32UniqueId);
                 }
 
-                RK_LOGI("get poolId(%d) from mb(%p) refsCount(%d) phyAddr(%p) virAddr(%p) "
+                RK_LOGI("get poolId(%d) from mb(%p) refsCount(%d) phyAddr(0x%llx) virAddr(%p) "
                          "fd(%d) uniqueId(%d) dupFd(%d)",
                          poolId, mb, refsCount, phyAddr, virAddr, fd, s32UniqueId, s32DupFd);
                 if (s32DupFd >= 0) {
@@ -181,6 +196,7 @@ RK_S32 main(RK_S32 argc, const char **argv) {
     stMbCtx.bPreAlloc    = RK_FALSE;
     stMbCtx.s32RemapMode = MB_REMAP_MODE_CACHED;
     stMbCtx.s32AllocType = MB_ALLOC_TYPE_DMA;
+    stMbCtx.ss2DmaType = MB_DMA_TYPE_NONE;
 
     struct argparse_option options[] = {
         OPT_HELP(),
@@ -194,6 +210,8 @@ RK_S32 main(RK_S32 argc, const char **argv) {
                     "remapping mode. default(2). 0: none, 256: no cache, 512: cached", NULL, 0, 0),
         OPT_INTEGER('t', "alloc_type", &(stMbCtx.s32AllocType),
                     "alloc type. default(0). 0: DMA, 1: malloc", NULL, 0, 0),
+        OPT_INTEGER('d', "dma_type", &(stMbCtx.ss2DmaType),
+                    "dma type. default(0). 0: IOMMU, 1: CMA", NULL, 0, 0),
         OPT_END(),
     };
 
@@ -204,10 +222,17 @@ RK_S32 main(RK_S32 argc, const char **argv) {
 
     argc = argparse_parse(&argparse, argc, argv);
 
+    if (RK_MPI_SYS_Init() != RK_SUCCESS) {
+        RK_LOGE("rk mpi sys init fail!");
+        goto __FAILED;
+    }
+
     s32Ret = unit_test_mpi_mb(&stMbCtx);
     if (s32Ret != RK_SUCCESS) {
         goto __FAILED;
     }
+
+    RK_MPI_SYS_Exit();
 
     RK_LOGI("test running ok.");
     return RK_SUCCESS;

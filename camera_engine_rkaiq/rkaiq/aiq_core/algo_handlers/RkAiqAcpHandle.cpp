@@ -124,10 +124,6 @@ XCamReturn RkAiqAcpHandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "acp handle prepare failed");
 
-    RkAiqAlgoConfigAcp* acp_config_int = (RkAiqAlgoConfigAcp*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "acp algo prepare failed");
@@ -227,7 +223,7 @@ XCamReturn RkAiqAcpHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPar
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAcp* acp_com = (RkAiqAlgoProcResAcp*)mProcOutParam;
-    rk_aiq_isp_cp_params_v20_t* cp_param = params->mCpParams->data().ptr();
+    rk_aiq_isp_cp_params_t* cp_param = params->mCpParams->data().ptr();
 
     if (sharedCom->init) {
         cp_param->frame_id = 0;

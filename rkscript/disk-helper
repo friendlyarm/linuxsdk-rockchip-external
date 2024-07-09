@@ -6,130 +6,25 @@
 BUSYBOX_MOUNT_OPTS="loop (a|)sync (no|)atime (no|)diratime (no|)relatime (no|)dev (no|)exec (no|)suid (r|)shared (r|)slave (r|)private (un|)bindable (r|)bind move remount ro"
 NTFS_3G_MOUNT_OPTS="ro uid=[0-9]* gid=[0-9]* umask=[0-9]* fmask=[0-9]* dmask=[0-9]*"
 
+message()
+{
+	echo "${ID:+"[$ID]: "}$@"
+}
+
 check_tool()
 {
-	TOOL=$(echo $1 | grep -o "^[^ ]*")
+	TOOL=${1%% *}
 	BR2_CONFIG=$2
 
 	type $TOOL >/dev/null && return 0
 
 	if grep -wq "ID=buildroot" /etc/os-release 2>/dev/null; then
 		[ -n "$BR2_CONFIG" ] && \
-			echo "You may need to enable $BR2_CONFIG"
+			message "You may need to enable $BR2_CONFIG"
 	else
-		echo "Missing tool: $TOOL"
+		message "Missing tool: $TOOL"
 	fi
 	return 1
-}
-
-device_from_attr()
-{
-	# It's a block device
-	if [ -b "$1" ]; then
-		echo $1
-		return
-	fi
-
-	# Parse from blkid
-	blkid 2>/dev/null | grep -w "$1" | head -n 1 | \
-		grep -o "^[^:]*" && return
-
-	# Check mtdblock name
-	for d in $(ls /dev/ | grep mtdblock); do
-		if grep -q "^$1$" /sys/block/$d/device/name; then
-			echo $d
-			return
-		fi
-	done
-
-	# Fallback to /dev/block/by-name
-	if [ -b /dev/block/by-name/$1 ]; then
-		echo /dev/block/by-name/$1
-		return
-	fi
-
-	echo $1
-}
-
-prepare_ubi()
-{
-	# Only support ubi for mtd device
-	if echo $DEV | grep -vq /dev/mtd; then
-		echo "$DEV is not a mtd device!"
-		return 1
-	fi
-
-	[ "$PART_NO" ] || { echo "No valid part number!" && return 1; }
-
-	if [ "$FSGROUP" = ubifs ]; then
-		DEV=/dev/ubi${PART_NO}_0
-	else
-		DEV=/dev/ubiblock${PART_NO}_0
-	fi
-
-	MTDDEV=/dev/mtd${PART_NO}
-
-	echo "Preparing $DEV from $MTDDEV"
-
-	echo "Remove ubi block device"
-	if echo $DEV | grep -q ubiblock; then
-		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
-		ubiblock -r /dev/ubi${PART_NO}_0 &>/dev/null
-	fi
-
-	echo "Detach ubi device"
-	check_tool ubidetach BR2_PACKAGE_MTD_UBIDETACH || return 1
-	ubidetach -p $MTDDEV &>/dev/null
-
-	echo "Attach ubi device"
-	check_tool ubiattach BR2_PACKAGE_MTD_UBIATTACH || return 1
-	ubiattach /dev/ubi_ctrl -m $PART_NO -d $PART_NO || return 1
-
-	echo "Check for valid volume"
-	if [ ! -e /dev/ubi${PART_NO}_0 ]; then
-		echo "No valid ubi volume"
-		return 1
-	fi
-
-	echo "Create ubi block device"
-	if echo $DEV | grep -q ubiblock; then
-		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
-		ubiblock -c /dev/ubi${PART_NO}_0 || return 1
-	fi
-
-	return 0
-}
-
-format_ubifs()
-{
-	echo "Formatting $MTDDEV for $DEV"
-
-	echo "Remove ubi block device"
-	if echo $DEV | grep -q ubiblock; then
-		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
-		ubiblock -r /dev/ubi${PART_NO}_0 &>/dev/null
-	fi
-
-	echo "Detach ubi device"
-	check_tool ubidetach BR2_PACKAGE_MTD_UBIDETACH || return 1
-	ubidetach -p $MTDDEV &>/dev/null
-
-	echo "Format device"
-	check_tool ubiformat BR2_PACKAGE_MTD_UBIFORMAT || return 1
-	ubiformat -yq $MTDDEV || return 1
-
-	echo "Attach ubi device"
-	ubiattach /dev/ubi_ctrl -m $PART_NO -d $PART_NO || return 1
-
-	echo "Create ubi volume"
-	check_tool ubimkvol BR2_PACKAGE_MTD_UBIMKVOL || return 1
-	ubimkvol /dev/ubi$PART_NO -N $PART_NAME -m || return 1
-
-	echo "Create ubi block device"
-	if echo $DEV | grep -q ubiblock; then
-		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
-		ubiblock -c /dev/ubi${PART_NO}_0 || return 1
-	fi
 }
 
 is_rootfs()
@@ -137,20 +32,172 @@ is_rootfs()
 	[ $MOUNT_POINT = "/" ]
 }
 
+is_ro()
+{
+	mountpoint -q $MOUNT_POINT || return 1
+	touch $MOUNT_POINT 2>/dev/null || return 0
+	return 1
+}
+
+normalize_device()
+{
+	if is_rootfs; then
+		DEV_NO="$(mountpoint -d /)"
+		ROOT_DEV="$(find /sys/dev/ -name "$DEV_NO")"
+		echo "/dev/$(basename "$(realpath "$ROOT_DEV")")"
+		return
+	fi
+
+	case "$DEV" in
+		""|tmpfs|proc|devtmpfs|devpts|sysfs|configfs|debugfs|pstore)
+			return
+			;;
+		/dev/*)
+			echo $DEV
+			return
+			;;
+	esac
+
+	# Try udev rules symlink
+	if find /dev/block/by-name/$DEV 2>/dev/null; then
+		return
+	fi
+	if find /dev/disk/*/$DEV 2>/dev/null; then
+		return
+	fi
+
+	# Check partition name
+	UEVENT=$(grep -l -m 1 "^PARTNAME=$DEV$" \
+		/sys/class/block/*/uevent 2>/dev/null || true)
+	if [ "$UEVENT" ]; then
+		echo "/dev/$(basename $(dirname $UEVENT))"
+		return
+	fi
+
+	# Check mtdblock name
+	for d in $(ls /dev/ | grep mtdblock || true); do
+		if grep -q "^$DEV$" /sys/block/$d/device/name; then
+			echo "/dev/$d"
+			return
+		fi
+	done
+
+	# Check mtd
+	if grep -q "\"$DEV\"$" /proc/mtd 2>/dev/null; then
+		echo "/dev/$(grep "\"$DEV\"$" /proc/mtd | cut -d':' -f1)"
+		return
+	fi
+
+	# Parse from blkid
+	if blkid 2>/dev/null | grep -w "$DEV" | tail -n 1 | \
+		grep -o "^[^:]*"; then
+		return
+	fi
+
+	# Give up
+	echo $DEV
+}
+
+prepare_ubi()
+{
+	# Only support ubi for mtd device
+	if echo $DEV | grep -vq /dev/mtd; then
+		message "$DEV is not a mtd device!"
+		return 1
+	fi
+
+	[ "$PART_NO" ] || { message "No valid part number!" && return 1; }
+
+	MTD_DEV=/dev/mtd${PART_NO}
+	UBI_DEV=/dev/ubi${PART_NO}
+	UBIVOL_DEV=/dev/ubi${PART_NO}_0
+	UBIBLOCK_DEV=/dev/ubiblock${PART_NO}_0
+
+	if [ "$FSGROUP" = ubifs ]; then
+		DEV=$UBIVOL_DEV
+	else
+		DEV=$UBIBLOCK_DEV
+	fi
+
+	message "Preparing $DEV from $MTD_DEV"
+
+	message "Remove ubi block device"
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -r $UBIVOL_DEV >/dev/null 2>/dev/null
+	fi
+
+	message "Detach ubi device"
+	check_tool ubidetach BR2_PACKAGE_MTD_UBIDETACH || return 1
+	ubidetach -p $MTD_DEV >/dev/null 2>/dev/null
+
+	message "Attach ubi device"
+	check_tool ubiattach BR2_PACKAGE_MTD_UBIATTACH || return 1
+	ubiattach /dev/ubi_ctrl -m $PART_NO -d $PART_NO || return 1
+
+	message "Check for valid volume"
+	if [ ! -e $UBIVOL_DEV ]; then
+		message "No valid ubi volume"
+		return 1
+	fi
+
+	message "Create ubi block device"
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -c $UBIVOL_DEV || return 1
+	fi
+
+	return 0
+}
+
+format_ubifs()
+{
+	message "Formatting $MTD_DEV for $DEV"
+
+	message "Remove ubi block device"
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -r $UBIVOL_DEV >/dev/null 2>/dev/null
+	fi
+
+	message "Detach ubi device"
+	check_tool ubidetach BR2_PACKAGE_MTD_UBIDETACH || return 1
+	ubidetach -p $MTD_DEV >/dev/null 2>/dev/null
+
+	message "Format device"
+	check_tool ubiformat BR2_PACKAGE_MTD_UBIFORMAT || return 1
+	ubiformat -yq $MTD_DEV || return 1
+
+	message "Attach ubi device"
+	ubiattach /dev/ubi_ctrl -m $PART_NO -d $PART_NO || return 1
+
+	message "Create ubi volume"
+	check_tool ubimkvol BR2_PACKAGE_MTD_UBIMKVOL || return 1
+	ubimkvol $UBI_DEV -N $PART_NAME -m || return 1
+
+	message "Create ubi block device"
+	if echo $DEV | grep -q ubiblock; then
+		check_tool ubiblock BR2_PACKAGE_MTD_UBIBLOCK || return 1
+		ubiblock -c $UBIVOL_DEV || return 1
+	fi
+}
+
 remount_part()
 {
 	mountpoint -q $MOUNT_POINT || return
 
-	if touch $MOUNT_POINT &>/dev/null; then
-		[ "$1" = ro ] && mount -o remount,ro $MOUNT_POINT
+	if is_ro; then
+		[ "$1" != ro ] || return
 	else
-		[ "$1" = rw ] && mount -o remount,rw $MOUNT_POINT
+		[ "$1" != rw ] || return
 	fi
+
+	mount -o remount,$1 $MOUNT_POINT
 }
 
 format_part()
 {
-	echo "Formatting $DEV($FSTYPE)"
+	message "Formatting $DEV($FSTYPE)"
 
 	case $FSGROUP in
 		ext2)
@@ -164,10 +211,22 @@ format_part()
 			check_tool mkfs.vfat BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT && \
 			mkfs.vfat -I -F 32 -n $PART_NAME $DEV
 			;;
+		exfat)
+			check_tool mkexfatfs BR2_PACKAGE_EXFAT_UTILS && \
+			mkexfatfs -n $PART_NAME $DEV
+			;;
 		ntfs)
 			# Enable compression
 			check_tool mkntfs BR2_PACKAGE_NTFS_3G_NTFSPROGS && \
 			mkntfs -FCQ -L $PART_NAME $DEV
+			;;
+		btrfs)
+			check_tool mkfs.btrfs BR2_PACKAGE_BTRFS_PROGS && \
+			mkfs.btrfs -f -L $PART_NAME $DEV
+			;;
+		f2fs)
+			check_tool mkfs.f2fs BR2_PACKAGE_F2FS_TOOLS && \
+			mkfs.f2fs -f -l $PART_NAME $DEV
 			;;
 		ubifs)
 			format_ubifs
@@ -176,18 +235,16 @@ format_part()
 			check_tool mkfs.jffs2 BR2_PACKAGE_MTD_MKFSJFFS2 && \
 			mkfs.jffs2 -o $DEV 0x10000 --pad=0x400000 -s 0x1000 -n
 			;;
-		squashfs)
-			# check_tool mksquashfs BR2_PACKAGE_SQUASHFS && \
-			# mksquashfs $DEV
-			echo "It's pointness to format a squashfs partition..."
+		erofs|squashfs)
+			message "It's pointness to format a read-only partition..."
 			false
 			;;
 		auto)
-			echo "Unable to format a auto partition..."
+			message "Unable to format a auto partition..."
 			false
 			;;
 		*)
-			echo Unsupported file system $FSTYPE for $DEV
+			message "Unsupported file system $FSTYPE for $DEV"
 			false
 			;;
 	esac
@@ -198,18 +255,18 @@ format_resize()
 	BACKUP=$1
 	SRC=$(realpath $MOUNT_POINT)
 
-	echo "Format-resizing $DEV($FSTYPE)"
+	message "Format-resizing $DEV($FSTYPE)"
 
-	echo "Backup original data"
+	message "Backup original data"
 	cp -a "$SRC" "$BACKUP/" || return 1
 	umount "$SRC" || return 1
 
-	echo "Format and mount rw"
+	message "Format and mount rw"
 	format_part || return 1
 	mount_part || return 1
 	remount_part rw
 
-	echo "Restore backup data"
+	message "Restore backup data"
 	cp -a "$BACKUP/$SRC" $(dirname "$SRC") || return 1
 }
 
@@ -249,38 +306,59 @@ resize_ntfs()
 	echo y | ntfsresize -f $DEV
 }
 
+resize_btrfs()
+{
+	check_tool btrfs BR2_PACKAGE_BTRFS_PROGS || return 1
+
+	btrfs filesystem resize max $DEV
+}
+
+resize_f2fs()
+{
+	check_tool resize.f2fs BR2_PACKAGE_F2FS_TOOLS || return 1
+
+	resize.f2fs $DEV
+}
+
 resize_part()
 {
-	# Fixed size or already resized
-	[ -f $MOUNT_POINT/.fixed -o -f $MOUNT_POINT/.resized ] && return
-
-	if [ -z "$FSRESIZE" ]; then
-		echo "No resize for $FSTYPE"
+	# Already resized
+	if [ -f $MOUNT_POINT/.resized ]; then
+		message "Already resized $DEV($FSTYPE)"
 		return
 	fi
 
-	echo "Resizing $DEV($FSTYPE)"
+	if [ -z "$FSRESIZE" ]; then
+		message "No resize for $FSTYPE"
+		return
+	fi
+
+	message "Resizing $DEV($FSTYPE)"
 
 	# Online resize needs read-write
 	remount_part rw
 	if eval $FSRESIZE; then
 		touch $MOUNT_POINT/.resized
+		sync
 		return
 	fi
 
-	echo "Done with rootfs"
+	message "Done with rootfs"
 	is_rootfs && return
 
-	echo "Fallback to format resize"
+	message "Fallback to format resize"
 	TEMP_BACKUP=$(mktemp -d)
-	format_resize $TEMP_BACKUP && touch $MOUNT_POINT/.resized
+	if format_resize $TEMP_BACKUP; then
+		touch $MOUNT_POINT/.resized
+		sync
+	fi
 	rm -rf $TEMP_BACKUP
 }
 
 convert_mount_opts()
 {
 	# Accept all opts by default for standard mount tool
-	if [ -z "$@" ] && [ "$(readlink $(which mount))" != busybox ]; then
+	if [ -z "$@" ] && ! mount --help 2>&1 | grep -q BusyBox; then
 		echo $OPTS
 		return
 	fi
@@ -298,19 +376,13 @@ prepare_part()
 		/mnt/* | /media/*) return 1 ;;
 	esac
 
-	# Find real dev for root dev
-	if is_rootfs; then
-		DEV_NO=$(mountpoint -d /)
-		DEV_NAME=$(grep -l "^$DEV_NO$" /sys/class/block/*/dev | \
-			cut -d'/' -f5)
-		DEV=/dev/$DEV_NAME
-	fi
+	DEV="$(realpath "$(normalize_device | head -n 1)" 2>/dev/null)"
+	[ "$DEV" ] || return 1
 
-	DEV=$(realpath $DEV 2>/dev/null)
-	PART_NO=$(echo $DEV | grep -oE "[0-9]*$")
+	# Only accept block or char device
+	[ -b "$DEV" -o -c "$DEV" ] || return 1
 
-	# Only accept block device
-	[ -b "$DEV" ] || return 1
+	message "Handling $DEV $MOUNT_POINT $FSTYPE $OPTS $PASS"
 
 	SYS_PATH=$(echo /sys/class/*/${DEV##*/})
 	if [ -f "$SYS_PATH/name" ]; then
@@ -319,6 +391,7 @@ prepare_part()
 		PART_NAME=$(grep PARTNAME ${SYS_PATH}/uevent | cut -d '=' -f 2)
 	fi
 	PART_NAME=${PART_NAME:-${DEV##*/}}
+	PART_NO=$(echo $DEV | grep -oE "[0-9]*$")
 
 	case $FSTYPE in
 		ext[234])
@@ -333,11 +406,29 @@ prepare_part()
 			FSCK_CONFIG=BR2_PACKAGE_DOSFSTOOLS_FSCK_FAT
 			FSRESIZE=resize_vfat
 			;;
+		exfat)
+			FSGROUP=exfat
+			FSCK="exfatfsck -y"
+			FSCK_CONFIG=BR2_PACKAGE_EXFAT_UTILS
+			unset FSRESIZE
+			;;
 		ntfs)
 			FSGROUP=ntfs
 			FSCK=ntfsfix
 			FSCK_CONFIG=BR2_PACKAGE_NTFS_3G_NTFSPROGS
 			FSRESIZE=resize_ntfs
+			;;
+		btrfs)
+			FSGROUP=btrfs
+			FSCK="btrfs check --repair"
+			FSCK_CONFIG=BR2_PACKAGE_BTRFS_PROGS
+			FSRESIZE=resize_btrfs
+			;;
+		f2fs)
+			FSGROUP=f2fs
+			FSCK="fsck.f2fs -y"
+			FSCK_CONFIG=BR2_PACKAGE_F2FS_TOOLS
+			FSRESIZE=resize_f2fs
 			;;
 		ubi|ubifs)
 			FSTYPE=ubifs
@@ -350,6 +441,11 @@ prepare_part()
 			unset FSCK
 			unset FSRESIZE
 			;;
+		erofs)
+			FSGROUP=erofs
+			unset FSCK
+			unset FSRESIZE
+			;;
 		jffs2)
 			FSGROUP=jffs2
 			unset FSCK
@@ -357,12 +453,12 @@ prepare_part()
 			;;
 		auto)
 			FSGROUP=auto
-			echo "Running fsck on a random fs is dangerous"
+			message "Running fsck on a random fs is dangerous"
 			unset FSCK
 			unset FSRESIZE
 			;;
 		*)
-			echo "Unsupported file system $FSTYPE for $DEV"
+			message "Unsupported file system $FSTYPE for $DEV"
 			return
 	esac
 
@@ -384,13 +480,23 @@ prepare_part()
 	esac
 	MOUNT_OPTS=${OPTS:+" -o ${OPTS%,}"}
 
-	# Prepare for UBI
-	if [ "$FSGROUP" = ubifs ]; then
+	# Detect ro/rw
+	MOUNT_RO_RW=$(echo "$OPTS" | grep -wo "[^-]\<r[ow]\>" || true)
+	if [ -z "$MOUNT_RO_RW" ]; then
+		if is_rootfs && is_ro; then
+			MOUNT_RO_RW=ro
+		else
+			MOUNT_RO_RW=rw
+		fi
+	fi
+
+	# Prepare for ubi (consider /dev/mtdX as ubiblock)
+	if [ "$FSGROUP" = ubifs ] || echo $DEV | grep -q "/dev/mtd[0-9]";then
 		if ! prepare_ubi; then
-			echo "Failed to prepare ubi for $DEV"
+			message "Failed to prepare ubi for $DEV"
 			[ "$AUTO_MKFS" ] || return
 
-			echo "Auto formatting"
+			message "Auto formatting"
 			format_ubifs || return
 		fi
 	fi
@@ -401,26 +507,33 @@ check_part()
 	[ "$SKIP_FSCK" -o "$PASS" -eq 0 ] && return
 
 	if [ -z "$FSCK" ]; then
-		echo "No fsck for $FSTYPE"
+		message "No fsck for $FSTYPE"
 		return
 	fi
 
-	echo "Checking $DEV($FSTYPE)"
+	message "Checking $DEV($FSTYPE)"
+
+	if is_rootfs; then
+		# Remount ro for checking
+		remount_part ro
+	elif mountpoint -q "$MOUNT_POINT"; then
+		# Unmount for checking
+		umount "$MOUNT_POINT" || remount_part ro
+	fi
 
 	check_tool "$FSCK" $FSCK_CONFIG || return
-
-	# Fsck needs read-only
-	remount_part ro
 
 	$FSCK $DEV
 }
 
 mount_part()
 {
-	echo "Mounting $DEV($FSTYPE) on $MOUNT_POINT ${MOUNT_OPTS:+with$MOUNT_OPTS}"
+	mountpoint -q "$MOUNT_POINT" && return
+
+	message "Mounting $DEV($FSTYPE) on $MOUNT_POINT ${MOUNT_OPTS:+with$MOUNT_OPTS}"
 	$MOUNT $DEV $MOUNT_POINT $MOUNT_OPTS && return
 	[ "$AUTO_MKFS" ] || return
 
-	echo "Failed to mount $DEV, try to format it"
+	message "Failed to mount $DEV, try to format it"
 	format_part && $MOUNT $DEV $MOUNT_POINT $MOUNT_OPTS
 }

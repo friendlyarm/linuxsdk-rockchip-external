@@ -3,9 +3,9 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -2073,7 +2073,7 @@ dhd_pktid_map_init(dhd_pub_t *dhd, uint32 num_items)
 
 	dhd_pktid_map_sz = DHD_PKTID_MAP_SZ(num_items);
 
-	map = (dhd_pktid_map_t *)VMALLOC(osh, dhd_pktid_map_sz);
+	map = (dhd_pktid_map_t *)VMALLOCZ(osh, dhd_pktid_map_sz);
 	if (map == NULL) {
 		DHD_ERROR(("%s:%d: MALLOC failed for size %d\n",
 			__FUNCTION__, __LINE__, dhd_pktid_map_sz));
@@ -7696,16 +7696,22 @@ dhd_msgbuf_wait_ioctl_cmplt(dhd_pub_t *dhd, uint32 len, void *buf)
 
 	timeleft = dhd_os_ioctl_resp_wait(dhd, (uint *)&prot->ioctl_received);
 
-#ifdef DHD_RECOVER_TIMEOUT
 	if (prot->ioctl_received == 0) {
 		uint32 intstatus = si_corereg(dhd->bus->sih,
 			dhd->bus->sih->buscoreidx, dhd->bus->pcie_mailbox_int, 0, 0);
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 		int host_irq_disbled = dhdpcie_irq_disabled(dhd->bus);
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 		if ((intstatus) && (intstatus != (uint32)-1) &&
 			(timeleft == 0) && (!dhd_query_bus_erros(dhd))) {
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 			DHD_ERROR(("%s: iovar timeout trying again intstatus=%x"
 				" host_irq_disabled=%d\n",
 				__FUNCTION__, intstatus, host_irq_disbled));
+#else /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
+			DHD_ERROR(("%s: iovar timeout trying again intstatus=%x\n",
+				__FUNCTION__, intstatus));
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 			dhd_pcie_intr_count_dump(dhd);
 			dhd_print_tasklet_status(dhd);
 			dhd_prot_process_ctrlbuf(dhd);
@@ -7714,7 +7720,6 @@ dhd_msgbuf_wait_ioctl_cmplt(dhd_pub_t *dhd, uint32 len, void *buf)
 			dhdpcie_bus_clear_intstatus(dhd->bus);
 		}
 	}
-#endif /* DHD_RECOVER_TIMEOUT */
 
 	if (timeleft == 0 && (!dhd_query_bus_erros(dhd))) {
 		/* check if resumed on time out related to scheduling issue */

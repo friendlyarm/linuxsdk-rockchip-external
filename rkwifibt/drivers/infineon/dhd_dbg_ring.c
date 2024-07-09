@@ -3,9 +3,9 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -358,6 +358,10 @@ exit:
 	return rlen;
 }
 
+/*
+ * This function holds ring->lock, so callers of this function
+ * should not hold ring->lock.
+ */
 int
 dhd_dbg_ring_pull(dhd_dbg_ring_t *ring, void *data, uint32 buf_len, bool strip_hdr)
 {
@@ -386,6 +390,10 @@ dhd_dbg_ring_pull(dhd_dbg_ring_t *ring, void *data, uint32 buf_len, bool strip_h
 	return total_r_len;
 }
 
+/*
+ * This function holds ring->lock, so callers of this function
+ * should not hold ring->lock.
+ */
 int
 dhd_dbg_ring_config(dhd_dbg_ring_t *ring, int log_level, uint32 threshold)
 {

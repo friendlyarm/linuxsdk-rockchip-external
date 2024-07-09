@@ -159,10 +159,6 @@ XCamReturn RkAiqAblcHandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "ablc handle prepare failed");
 
-    RkAiqAlgoConfigAblc* ablc_config_int = (RkAiqAlgoConfigAblc*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "ablc algo prepare failed");
@@ -215,7 +211,7 @@ XCamReturn RkAiqAblcHandleInt::processing() {
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
-    mProcResShared->result.ablc_proc_res = &shared->fullParams->mBlcV21Params->data()->result.v0;
+    mProcResShared->result.ablc_proc_res = &shared->fullParams->mBlcParams->data()->result.v0;
 
     ret = RkAiqHandle::processing();
     if (ret < 0) {
@@ -323,7 +319,7 @@ XCamReturn RkAiqAblcHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
         return XCAM_RETURN_NO_ERROR;
     RkAiqAlgoProcResAblc* ablc_com             = (RkAiqAlgoProcResAblc*)&mProcResShared->result;
 
-    rk_aiq_isp_blc_params_v21_t* blc_param = params->mBlcV21Params->data().ptr();
+    rk_aiq_isp_blc_params_t* blc_param = params->mBlcParams->data().ptr();
 
     if (!ablc_com) {
         LOGD_ANALYZER("no ablc result");
@@ -344,15 +340,15 @@ XCamReturn RkAiqAblcHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
             mSyncFlag = shared->frameId;
             blc_param->sync_flag = mSyncFlag;
             // copy from algo result
-            cur_params->mBlcV21Params = params->mBlcV21Params;
-            mLatestparam = &cur_params->mBlcV21Params->data()->result.v0;
+            cur_params->mBlcParams = params->mBlcParams;
+            mLatestparam = &cur_params->mBlcParams->data()->result.v0;
             blc_param->is_update = true;
             LOGD_ABLC("[%d] params from algo", mSyncFlag);
         } else if (mSyncFlag != blc_param->sync_flag) {
             blc_param->sync_flag = mSyncFlag;
             // copy from latest result
-            if (cur_params->mBlcV21Params.ptr()) {
-                blc_param->result = cur_params->mBlcV21Params->data()->result;
+            if (cur_params->mBlcParams.ptr()) {
+                blc_param->result = cur_params->mBlcParams->data()->result;
                 blc_param->is_update = true;
             } else {
                 LOGD_ABLC("no latest params !");

@@ -20,8 +20,8 @@
 #ifndef _RK_AIQ_ALGO_DES_H_
 #define _RK_AIQ_ALGO_DES_H_
 
-#include "base/xcam_common.h"
-#include "rk_aiq_comm.h"
+#include "xcore/base/xcam_common.h"
+#include "common/rk_aiq_comm.h"
 
 /*
  * This file is used to define all the algos interfaces, eg. including ae, awb
@@ -102,6 +102,12 @@ typedef enum RkAiqAlgoType_e {
     RK_AIQ_ALGO_TYPE_AGAIN,
     RK_AIQ_ALGO_TYPE_ACAC,
     RK_AIQ_ALGO_TYPE_AFD,
+    RK_AIQ_ALGO_TYPE_ARGBIR,
+    RK_AIQ_ALGO_TYPE_ATRANS,
+    RK_AIQ_ALGO_TYPE_AHISTEQ,
+    RK_AIQ_ALGO_TYPE_AENH,
+    RK_AIQ_ALGO_TYPE_ALDC,
+    RK_AIQ_ALGO_TYPE_AHSV,
     RK_AIQ_ALGO_TYPE_MAX
 } RkAiqAlgoType_t;
 
@@ -111,6 +117,8 @@ typedef struct _AlgoCtxInstanceCfg {
     CamCalibDbContext_t* calib;
     CamCalibDbV2Context_t* calibv2;
     bool isGroupMode;
+    void* cbs;
+    uint32_t cid;
 } AlgoCtxInstanceCfg;
 
 typedef struct _RkAiqAlgoDesComm {
@@ -127,40 +135,46 @@ typedef struct _RkAiqAlgoDesComm {
 // for all algos
 
 typedef enum RkAiqAlgoConfType_e {
-    RK_AIQ_ALGO_CONFTYPE_INIT = 0,
-    RK_AIQ_ALGO_CONFTYPE_UPDATECALIB = 0x01,
-    RK_AIQ_ALGO_CONFTYPE_CHANGEMODE  = 0x02,
-    RK_AIQ_ALGO_CONFTYPE_NEEDRESET   = 0x04,
-    RK_AIQ_ALGO_CONFTYPE_CHANGERES   = 0x08,
-    RK_AIQ_ALGO_CONFTYPE_KEEPSTATUS  = 0x10,
-    RK_AIQ_ALGO_CONFTYPE_CHANGECAMS  = 0x20,
+    RK_AIQ_ALGO_CONFTYPE_INIT = 0,           // just used for the firt time, no much meaning now, equal to UPDATECALIB | NEEDRESET
+    RK_AIQ_ALGO_CONFTYPE_UPDATECALIB = 0x01, // update iq parameters
+    RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR = 0x02, // only update callib pointer, contents related to algo not changed
+    RK_AIQ_ALGO_CONFTYPE_NEEDRESET   = 0x04, // not used now, reset to the initial status
+    RK_AIQ_ALGO_CONFTYPE_CHANGERES   = 0x08, // for resolution changed, should map exposure, etc.
+    RK_AIQ_ALGO_CONFTYPE_KEEPSTATUS  = 0x10, // algo shoud keep the last iteration status
+    RK_AIQ_ALGO_CONFTYPE_CHANGECAMS  = 0x20, // not used now
     RK_AIQ_ALGO_CONFTYPE_MAX
 } RkAiqAlgoConfType_t;
+
+typedef struct prepare_s {
+    int working_mode; // real type is rk_aiq_working_mode_t or rk_aiq_isp_hdr_mode_t
+    int sns_op_width;
+    int sns_op_height;
+    int conf_type;
+    unsigned char compr_bit;
+    CamCalibDbContext_t* calib;
+    CamCalibDbV2Context_t* calibv2;
+} RkAiqAlgoCom_prepare_t; //for prepare function
+
+typedef struct proc_s {
+    bool init;
+    int iso;
+    bool fill_light_on;
+    bool gray_mode;
+    bool is_bw_sensor;
+    bool is_attrib_update;
+    RKAiqAecExpInfo_t *preExp;
+    RKAiqAecExpInfo_t *curExp;
+    RKAiqAecExpInfo_t *nxtExp;
+    RkAiqResComb* res_comb;
+} RkAiqAlgoCom_proc_t; //for pre/processing/post function
 
 typedef struct _RkAiqAlgoCom {
     RkAiqAlgoContext *ctx;
     uint32_t frame_id;
-    union {
-        struct {
-            int working_mode; // real type is rk_aiq_working_mode_t or rk_aiq_isp_hdr_mode_t
-            int sns_op_width;
-            int sns_op_height;
-            int conf_type;
-            CamCalibDbContext_t* calib;
-            CamCalibDbV2Context_t* calibv2;
-        } prepare; //for prepare function
-
-        struct {
-            bool init;
-            int iso;
-            bool fill_light_on;
-            bool gray_mode;
-            bool is_bw_sensor;
-            RKAiqAecExpInfo_t *preExp;
-            RKAiqAecExpInfo_t *curExp;
-            RKAiqAecExpInfo_t *nxtExp;
-            RkAiqResComb* res_comb;
-        } proc; //for pre/processing/post function
+    uint32_t cid;
+    union u_s {
+        RkAiqAlgoCom_prepare_t prepare; //for prepare function
+        RkAiqAlgoCom_proc_t proc;
     } u;
     void* reserverd; //transfer whatever used by prepare/pre/processing/post
 } RkAiqAlgoCom;
@@ -168,6 +182,11 @@ typedef struct _RkAiqAlgoCom {
 // generic result type
 typedef struct _RkAiqAlgoResCom {
     bool cfg_update;
+    bool en;
+    bool bypass;
+#if USE_NEWSTRUCT
+    void *algoRes;
+#endif
 } RkAiqAlgoResCom;
 
 typedef struct _RkAiqAlgoDescription {

@@ -90,6 +90,8 @@ AcnrV30_result_t Acnr_Init_V30(Acnr_Context_V30_t **ppAcnrCtx, void *pCalibDb)
     pAcnrCtx->stExpInfo.snr_mode = 1;
     pAcnrCtx->eParamMode = ACNRV30_PARAM_MODE_NORMAL;
     Acnr_ConfigSettingParam_V30(pAcnrCtx, pAcnrCtx->eParamMode, pAcnrCtx->stExpInfo.snr_mode);
+    // init manual params
+    pAcnrCtx->stManual.stSelect = pAcnrCtx->stAuto.stParams.CnrParamsISO[0];
 #endif
 
     LOGD_ANR("%s(%d):", __FUNCTION__, __LINE__);
@@ -320,12 +322,13 @@ AcnrV30_result_t Acnr_ConfigSettingParam_V30(Acnr_Context_V30_t *pAcnrCtx, AcnrV
 
 AcnrV30_result_t Acnr_ParamModeProcess_V30(Acnr_Context_V30_t *pAcnrCtx, AcnrV30_ExpInfo_t *pExpInfo, AcnrV30_ParamMode_t *mode) {
     AcnrV30_result_t res  = ACNRV30_RET_SUCCESS;
-    *mode = pAcnrCtx->eParamMode;
 
     if(pAcnrCtx == NULL) {
         LOGE_ANR("%s(%d): null pointer\n", __FUNCTION__, __LINE__);
         return ACNRV30_RET_INVALID_PARM;
     }
+
+    *mode = pAcnrCtx->eParamMode;
 
     if(pAcnrCtx->isGrayMode) {
         *mode = ACNRV30_PARAM_MODE_GRAY;

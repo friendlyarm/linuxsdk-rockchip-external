@@ -28,6 +28,7 @@ RkAiqHandleFactory::map_type* RkAiqHandleFactory::map;
 RkAiqHandle::RkAiqHandle(RkAiqAlgoDesComm* des, RkAiqCore* aiqCore)
     : mDes(des), mAiqCore(aiqCore), mEnable(true), mReConfig(false) {
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
+    sharedCom->ctxCfigs[des->type].cid = aiqCore->mAlogsComSharedParams.mCamPhyId;
     mDes->create_context(&mAlgoCtx, (const _AlgoCtxInstanceCfg*)(&sharedCom->ctxCfigs[des->type]));
     mConfig       = NULL;
     mPreInParam   = NULL;
@@ -41,7 +42,10 @@ RkAiqHandle::RkAiqHandle(RkAiqAlgoDesComm* des, RkAiqCore* aiqCore)
     mParentHdl = NULL;
     mIsMulRun = false;
     mPostShared = true;
+    mGroupId      = 0;
+    mAlogsGroupSharedParams = NULL;
     mSyncFlag = (uint32_t)(-1);
+    mIsUpdateGrpAttr = false;
 }
 
 RkAiqHandle::~RkAiqHandle() {
@@ -56,6 +60,7 @@ XCamReturn RkAiqHandle::configInparamsCom(RkAiqAlgoCom* com, int type) {
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     xcam_mem_clear(*com);
 
+    com->cid = mAiqCore->mAlogsComSharedParams.mCamPhyId;
     if (type == RKAIQ_CONFIG_COM_PREPARE) {
         com->ctx                     = mAlgoCtx;
         com->frame_id                = shared->frameId;
@@ -67,11 +72,12 @@ XCamReturn RkAiqHandle::configInparamsCom(RkAiqAlgoCom* com, int type) {
         com->u.prepare.calib = (CamCalibDbContext_t*)(sharedCom->calib);
 #endif
         com->u.prepare.calibv2 = (CamCalibDbV2Context_t*)(sharedCom->calibv2);
+        com->u.prepare.compr_bit = sharedCom->snsDes.compr_bit;
     } else {
         com->ctx         = mAlgoCtx;
         com->frame_id    = shared->frameId;
         com->u.proc.init = sharedCom->init;
-        com->u.proc.iso = sharedCom->iso;
+        com->u.proc.iso = shared->iso;
         com->u.proc.fill_light_on = sharedCom->fill_light_on;
         com->u.proc.gray_mode = sharedCom->gray_mode;
         com->u.proc.is_bw_sensor = sharedCom->is_bw_sensor;
@@ -120,6 +126,9 @@ XCamReturn RkAiqHandle::processing() {
     RkAiqAlgoCom* procParam = mProcInParam;
 
     configInparamsCom(procParam, RKAIQ_CONFIG_COM_PROC);
+
+    if (mProcOutParam)
+        mProcOutParam->cfg_update = false;
 
     EXIT_ANALYZER_FUNCTION();
 
@@ -182,6 +191,40 @@ RkAiqHandle::sendSignal(rk_aiq_uapi_mode_sync_e sync_mode)
         mUpdateCond.signal();
 }
 
+#if USE_NEWSTRUCT
+XCamReturn RkAiqHandle::do_processing_common(void)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    GlobalParamsManager* globalParamsManager = mAiqCore->getGlobalParamsManager();
+    RkAiqAlgoResCom* proc_res = mProcOutParam;
 
+    if (globalParamsManager && !globalParamsManager->isFullManualMode() &&
+        globalParamsManager->isManual(mResultType)) {
+        rk_aiq_global_params_wrap_t wrap_param;
+        wrap_param.type = mResultType;
+        wrap_param.man_param_size = mResultSize;
+        wrap_param.man_param_ptr = proc_res->algoRes;
+        XCamReturn ret1 = globalParamsManager->getAndClearPending(&wrap_param);
+        if (ret1 == XCAM_RETURN_NO_ERROR) {
+            LOGK("%s: get new manual params success!", Cam3aResultType2Str[mResultType]);
+            proc_res->en = wrap_param.en;
+            proc_res->bypass = wrap_param.bypass;
+            proc_res->cfg_update = true;
+        } else {
+            proc_res->cfg_update = false;
+        }
+    } else {
+        globalParamsManager->lockAlgoParam(mResultType);
+        mProcInParam->u.proc.is_attrib_update = globalParamsManager->getAndClearAlgoParamUpdateFlagLocked(mResultType);
+
+        RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
+        ret                       = des->processing(mProcInParam, mProcOutParam);
+        globalParamsManager->unlockAlgoParam(mResultType);
+    }
+
+    return ret;
+}
+
+#endif
 
 }  // namespace RkCam

@@ -575,6 +575,46 @@ RK_S32 TEST_COMM_FillImage(RK_U8 *buf, RK_U32 width, RK_U32 height,
             }
         }
     } break;
+    case RK_FMT_YUV444P : {
+        RK_U8 *p = buf_y;
+
+        for (y = 0; y < height; y++, p += hor_stride) {
+            for (x = 0; x < width; x++) {
+                p[x] = x + y + frame_count * 3;
+            }
+        }
+
+        p = buf_c;
+        for (y = 0; y < height; y++, p += hor_stride) {
+            for (x = 0; x < width; x++) {
+                p[x] = 128 + y / 2 + frame_count * 2;
+            }
+        }
+
+        p = buf_c + hor_stride * ver_stride;
+        for (y = 0; y < height; y++, p += hor_stride) {
+            for (x = 0; x < width / 2; x++) {
+                p[x] = 64 + x + frame_count * 5;
+            }
+        }
+    } break;
+    case RK_FMT_YUV444SP : {
+        RK_U8 *p = buf_y;
+
+        for (y = 0; y < height; y++, p += hor_stride) {
+            for (x = 0; x < width; x++) {
+                p[x] = x + y + frame_count * 3;
+            }
+        }
+
+        p = buf + hor_stride * ver_stride;
+        for (y = 0; y < height; y++, p += hor_stride * 2) {
+            for (x = 0; x < width; x++) {
+                p[x * 2 + 0] = 128 + y / 2 + frame_count * 2;
+                p[x * 2 + 1] = 64  + x + frame_count * 5;
+            }
+        }
+    } break;
     case RK_FMT_YUV422SP_VU : {
         RK_U8 *p = buf_y;
 

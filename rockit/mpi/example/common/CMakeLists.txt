@@ -19,6 +19,8 @@ set(RK_TEST_COMMON_SRC
     test_comm_ao.cpp
     test_comm_tde.cpp
     test_comm_vgs.cpp
+    test_comm_app_vdec.cpp
+    test_comm_app_vo.cpp
     tmedia/test_comm_tmd.cpp
 )
 

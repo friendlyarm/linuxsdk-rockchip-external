@@ -5,9 +5,9 @@
 #define INCLUDE_RT_MPI_RK_MPI_VPSS_H_
 
 #include "rk_common.h"
-#include "rk_comm_video.h"
 #include "rk_comm_mb.h"
 #include "rk_comm_vpss.h"
+#include "rk_comm_aiisp.h"
 
 #ifdef __cplusplus
 #if __cplusplus
@@ -32,6 +32,12 @@ RK_S32 RK_MPI_VPSS_GetGrpCrop(VPSS_GRP VpssGrp, VPSS_CROP_INFO_S *pstCropInfo);
 
 RK_S32 RK_MPI_VPSS_SetGrpRotation(VPSS_GRP VpssGrp, ROTATION_E enRotation);
 RK_S32 RK_MPI_VPSS_GetGrpRotation(VPSS_GRP VpssGrp, ROTATION_E *penRotation);
+
+RK_S32 RK_MPI_VPSS_SetGrpMirror(VPSS_GRP VpssGrp, RK_BOOL bMirror, RK_BOOL bFlip);
+RK_S32 RK_MPI_VPSS_GetGrpMirror(VPSS_GRP VpssGrp, RK_BOOL *bMirror, RK_BOOL *bFlip);
+
+RK_S32 RK_MPI_VPSS_SetGrpAIISPAttr(VPSS_GRP VpssGrp, const AIISP_ATTR_S *pstAiIspAttr);
+RK_S32 RK_MPI_VPSS_GetGrpAIISPAttr(VPSS_GRP VpssGrp, AIISP_ATTR_S *pstAiIspAttr);
 
 RK_S32 RK_MPI_VPSS_SendFrame(VPSS_GRP VpssGrp, VPSS_GRP_PIPE VpssGrpPipe,
                                       const VIDEO_FRAME_INFO_S *pstVideoFrame, RK_S32 s32MilliSec);

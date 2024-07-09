@@ -24,6 +24,9 @@
 #if RKAIQ_HAVE_DEBAYER_V2 || RKAIQ_HAVE_DEBAYER_V2_LITE
 #include "adebayer/rk_aiq_adebayer_algo_v2.h"
 #endif
+#if RKAIQ_HAVE_DEBAYER_V3
+#include "adebayer/rk_aiq_adebayer_algo_v3.h"
+#endif
 #include "rk_aiq_algo_types.h"
 
 RKAIQ_BEGIN_DECLARE
@@ -59,6 +62,11 @@ create_context
 
 #if RKAIQ_HAVE_DEBAYER_V2_LITE
     if(cfg->module_hw_version != ADEBAYER_HARDWARE_V2_LITE)
+        LOGE_ADEBAYER("%s: wrong HW version(%d)", __FUNCTION__, cfg->module_hw_version);
+#endif
+
+#if RKAIQ_HAVE_DEBAYER_V3
+    if(cfg->module_hw_version != ADEBAYER_HARDWARE_V3)
         LOGE_ADEBAYER("%s: wrong HW version(%d)", __FUNCTION__, cfg->module_hw_version);
 #endif
 
@@ -102,13 +110,21 @@ prepare
 
     //reconfig
     if(!!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB )) {
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
 
 #if RKAIQ_HAVE_DEBAYER_V1
         result = AdebayerFullParamsInit(pAdebayerCtx, pCfgParam->com.u.prepare.calib, pCfgParam->com.u.prepare.calibv2);
 #endif
 
-#if RKAIQ_HAVE_DEBAYER_V2 || RKAIQ_HAVE_DEBAYER_V2_LITE
+#if RKAIQ_HAVE_DEBAYER_V2 || RKAIQ_HAVE_DEBAYER_V2_LITE || RKAIQ_HAVE_DEBAYER_V3
         result = AdebayerCalibConfig(pAdebayerCtx, pCfgParam->com.u.prepare.calibv2);
+
+#if RKAIQ_HAVE_DEBAYER_V3
+        pAdebayerCtx->compr_bit = pCfgParam->compr_bit;
+#endif
+
 #endif
 
         pAdebayerCtx->config.updatecfg = true;
@@ -150,7 +166,8 @@ processing
 
     if (pAdebayerProcParams->com.u.proc.is_bw_sensor) {
         pAdebayerCtx->config.enable = 0;
-        pAdebayerCtx->config.updatecfg = true;
+        if (pAdebayerProcParams->com.u.proc.init)
+            pAdebayerCtx->config.updatecfg = true;
     } else {
         //get ISO from curExp
         RKAiqAecExpInfo_t *curExp = pAdebayerProcParams->com.u.proc.curExp;
@@ -159,19 +176,19 @@ processing
                 iso = curExp->LinearExp.exp_real_params.analog_gain *
                       curExp->LinearExp.exp_real_params.digital_gain *
                       curExp->LinearExp.exp_real_params.isp_dgain * 50;
-                LOGD_ADEBAYER("%s:NORMAL:iso=%d,again=%f\n", __FUNCTION__, iso,
+                LOGD_ADEBAYER("%s:Frmid:%d,NORMAL:iso=%d,again=%f\n", __FUNCTION__, inparams->frame_id, iso,
                               curExp->LinearExp.exp_real_params.analog_gain);
             } else if(RK_AIQ_HDR_GET_WORKING_MODE(pAdebayerProcParams->hdr_mode) == RK_AIQ_WORKING_MODE_ISP_HDR2) {
                 iso = curExp->HdrExp[1].exp_real_params.analog_gain *
                       curExp->HdrExp[1].exp_real_params.digital_gain *
                       curExp->HdrExp[1].exp_real_params.isp_dgain * 50;
-                LOGD_ADEBAYER("%s:HDR2:iso=%d,again=%f\n", __FUNCTION__, iso,
+                LOGD_ADEBAYER("%s:Frmid:%d,HDR2:iso=%d,again=%f\n", __FUNCTION__, inparams->frame_id,  iso,
                               curExp->HdrExp[1].exp_real_params.analog_gain);
             } else if(RK_AIQ_HDR_GET_WORKING_MODE(pAdebayerProcParams->hdr_mode) == RK_AIQ_WORKING_MODE_ISP_HDR3) {
                 iso = curExp->HdrExp[2].exp_real_params.analog_gain *
                       curExp->HdrExp[2].exp_real_params.digital_gain *
                       curExp->HdrExp[2].exp_real_params.isp_dgain * 50;
-                LOGD_ADEBAYER("%s:HDR3:iso=%d,again=%f\n", __FUNCTION__, iso,
+                LOGD_ADEBAYER("%s:Frmid:%d,HDR3:iso=%d,again=%f\n", __FUNCTION__, inparams->frame_id,  iso,
                               curExp->HdrExp[2].exp_real_params.analog_gain);
             }
         } else {
@@ -191,17 +208,24 @@ processing
 
         if (pAdebayerCtx->config.updatecfg) {
             AdebayerProcess(pAdebayerCtx, iso);
+        }
+    }
+
+    if (pAdebayerCtx->config.updatecfg) {
 #if RKAIQ_HAVE_DEBAYER_V1
-            AdebayerGetProcResult(pAdebayerCtx, &pAdebayerProcResParams->debayerResV1);
+        AdebayerGetProcResult(pAdebayerCtx, &pAdebayerProcResParams->debayerResV1);
 #endif
 
 #if RKAIQ_HAVE_DEBAYER_V2 || RKAIQ_HAVE_DEBAYER_V2_LITE
-            AdebayerGetProcResult(pAdebayerCtx, &pAdebayerProcResParams->debayerResV2);
+        AdebayerGetProcResult(pAdebayerCtx, &pAdebayerProcResParams->debayerResV2);
 #endif
-            outparams->cfg_update = true;
-        } else {
-            outparams->cfg_update = false;
-        }
+
+#if RKAIQ_HAVE_DEBAYER_V3
+        AdebayerGetProcResult(pAdebayerCtx, &pAdebayerProcResParams->debayerResV3);
+#endif
+        outparams->cfg_update = true;
+    } else {
+        outparams->cfg_update = false;
     }
 
     LOGV_ADEBAYER("%s: (exit)\n", __FUNCTION__ );

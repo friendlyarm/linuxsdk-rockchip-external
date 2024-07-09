@@ -372,7 +372,6 @@ void StableIlluEstimation(struct list_head * head, int listSize, int illuNum, fl
         illuSet[pL->value]++;
         pNextNode = pNextNode->next;
     }
-    int count2 = 0;
     int max_count = 0;
     for (int i = 0; i < illuNum; i++) {
         LOGV_ALSC("illu(%d), count(%d)\n", i, illuSet[i]);
@@ -425,7 +424,7 @@ XCamReturn AlscAutoConfig
     float fVignetting;
     pDomIlluProfile = &hAlsc->calibLsc->aLscCof.illAll[caseIndex][dominateIlluProfileIdx];
 
-    interpolation(pDomIlluProfile->vignettingCurve.pSensorGain,
+    interpolation1(pDomIlluProfile->vignettingCurve.pSensorGain,
                   pDomIlluProfile->vignettingCurve.pVignetting,
                   pDomIlluProfile->vignettingCurve.arraySize,
                   sensorGain, &fVignetting);

@@ -1,9 +1,9 @@
 /*
  * Fundamental types and constants relating to WPA
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -74,6 +74,7 @@ typedef BWL_PRE_PACKED_STRUCT struct
 #define WPA_IE_TAG_FIXED_LEN	6
 
 #define BIP_OUI_TYPE WPA2_OUI "\x06"
+#define BIP_GMAC_256_OUI_TYPE WPA2_OUI "\x0c"
 
 typedef BWL_PRE_PACKED_STRUCT struct {
 	uint8 tag;	/* TAG */
@@ -189,6 +190,13 @@ typedef BWL_PRE_PACKED_STRUCT struct
 					(cipher) == WPA_CIPHER_BIP_GMAC_128 || \
 					(cipher) == WPA_CIPHER_BIP_GMAC_256 || \
 					(cipher) == WPA_CIPHER_BIP_CMAC_256)
+
+/* Unicast deprecated/invalid ciphers */
+#define IS_UNICAST_DEPRECATED_CIPHER(cipher) \
+					((cipher) == WPA_CIPHER_WEP_40 || \
+					(cipher) == WPA_CIPHER_WEP_104 || \
+					(cipher) == WPA_CIPHER_TKIP)
+
 /* WPA TKIP countermeasures parameters */
 #define WPA_TKIP_CM_DETECT	60	/* multiple MIC failure window (seconds) */
 #define WPA_TKIP_CM_BLOCK	60	/* countermeasures active window (seconds) */

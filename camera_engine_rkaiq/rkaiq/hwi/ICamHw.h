@@ -27,6 +27,7 @@
 #include "rk_aiq_offline_raw.h"
 namespace RkCam {
 
+class RkAiqManager;
 using namespace XCam;
 
 typedef struct ispHwEvt_s {
@@ -127,6 +128,7 @@ public:
     virtual XCamReturn FocusCorrection() = 0;
     virtual XCamReturn ZoomCorrection() = 0;
     virtual XCamReturn setAngleZ(float angleZ) = 0;
+    virtual XCamReturn getFocusPosition(int& position) = 0;
     virtual void getShareMemOps(isp_drv_share_mem_ops_t** mem_ops) = 0;
     virtual XCamReturn getEffectiveIspParams(rkisp_effect_params_v20& ispParams, uint32_t frame_id) = 0;
     virtual uint64_t getIspModuleEnState() = 0;
@@ -136,13 +138,20 @@ public:
     virtual void setGroupMode(bool bGroup, bool bMain) = 0;
 #if RKAIQ_HAVE_PDAF
     virtual bool get_pdaf_support() = 0;
+    virtual PdafSensorType_t get_pdaf_type() = 0;
 #endif
-    virtual void setTbInfo(rk_aiq_tb_info_t& info) = 0;
+    virtual void setTbInfo(RkAiqTbInfo_t& info) = 0;
     virtual void setDevBufCnt(const std::map<std::string, int>& dev_buf_cnt_map) = 0;
     virtual XCamReturn reset_hardware() = 0;
     virtual XCamReturn rawReproc_genIspParams (uint32_t sequence, rk_aiq_frame_info_t *offline_finfo, int mode) = 0;
     virtual XCamReturn rawReProc_prepare (uint32_t sequence, rk_aiq_frame_info_t *offline_finfo) = 0;
-    virtual void setUserSensorFormat(uint16_t width, uint16_t height, uint16_t code) = 0;
+    virtual void setRawStreamInfo(rk_aiq_rkrawstream_info_t *info) = 0;
+    virtual XCamReturn setAiispMode(rk_aiq_aiisp_cfg_t *aiisp_cfg) = 0;
+    virtual XCamReturn read_aiisp_result() = 0;
+    virtual XCamReturn get_aiisp_bay3dbuf() = 0;
+    virtual XCamReturn aiisp_processing(rk_aiq_aiisp_t* aiisp_evt) = 0;
+    virtual void setRkAiqManager(RkAiqManager* rkAiqManager) = 0;
+    virtual XCamReturn setUserOtpInfo(rk_aiq_user_otp_info_t otp_info) = 0;
 private:
     XCAM_DEAD_COPY (ICamHw);
 };

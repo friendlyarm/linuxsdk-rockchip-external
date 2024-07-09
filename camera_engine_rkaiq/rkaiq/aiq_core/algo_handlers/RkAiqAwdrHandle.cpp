@@ -29,10 +29,6 @@ XCamReturn RkAiqAwdrHandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "awdr handle prepare failed");
 
-    RkAiqAlgoConfigAwdr* awdr_config_int = (RkAiqAlgoConfigAwdr*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "awdr algo prepare failed");
@@ -82,12 +78,6 @@ XCamReturn RkAiqAwdrHandleInt::processing() {
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
-    RkAiqAlgoProcAwdr* awdr_proc_int        = (RkAiqAlgoProcAwdr*)mProcInParam;
-    RkAiqAlgoProcResAwdr* awdr_proc_res_int = (RkAiqAlgoProcResAwdr*)mProcOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
-
     ret = RkAiqHandle::processing();
     if (ret) {
         RKAIQCORE_CHECK_RET(ret, "awdr handle processing failed");
@@ -135,7 +125,7 @@ XCamReturn RkAiqAwdrHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAwdr* awdr_com = (RkAiqAlgoProcResAwdr*)mProcOutParam;
-    rk_aiq_isp_wdr_params_v20_t* wdr_param = params->mWdrParams->data().ptr();
+    rk_aiq_isp_wdr_params_t* wdr_param = params->mWdrParams->data().ptr();
 
     if (sharedCom->init) {
         wdr_param->frame_id = 0;
@@ -146,10 +136,6 @@ XCamReturn RkAiqAwdrHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
     if (!awdr_com) {
         LOGD_ANALYZER("no awdr result");
         return XCAM_RETURN_NO_ERROR;
-    }
-
-    if (!this->getAlgoId()) {
-        RkAiqAlgoProcResAwdr* awdr_rk = (RkAiqAlgoProcResAwdr*)awdr_com;
     }
 
     cur_params->mWdrParams = params->mWdrParams;

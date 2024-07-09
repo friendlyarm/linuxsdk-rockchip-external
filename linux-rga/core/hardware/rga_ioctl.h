@@ -66,7 +66,7 @@ extern "C"
 #define RGA_REG_CMD_LEN     0x1c   /* 28 */
 #define RGA_CMD_BUF_SIZE    0x700  /* 16*28*4 */
 
-#define RGA_TASK_NUM_MAX		50
+#define RGA_TASK_NUM_MAX		256
 
 #define RGA_SCHED_PRIORITY_DEFAULT 0
 #define RGA_SCHED_PRIORITY_MAX 6
@@ -117,12 +117,35 @@ enum {
     bicubic  = 0x2,     /* x_mirror  */
 };
 
+enum rga_scale_interp {
+    RGA_INTERP_DEFAULT   = 0x0,
+    RGA_INTERP_LINEAR    = 0x1,
+    RGA_INTERP_BICUBIC   = 0x2,
+    RGA_INTERP_AVERAGE   = 0x3,
+};
+
 /* RGA rotate mode */
 enum {
     rotate_mode0             = 0x0,     /* no rotate */
     rotate_mode1             = 0x1,     /* rotate    */
     rotate_mode2             = 0x2,     /* x_mirror  */
     rotate_mode3             = 0x3,     /* y_mirror  */
+};
+
+enum rga_alpha_blend_mode {
+	RGA_ALPHA_NONE			= 0,
+	RGA_ALPHA_BLEND_SRC,
+	RGA_ALPHA_BLEND_DST,
+	RGA_ALPHA_BLEND_SRC_OVER,
+	RGA_ALPHA_BLEND_DST_OVER,
+	RGA_ALPHA_BLEND_SRC_IN,
+	RGA_ALPHA_BLEND_DST_IN,
+	RGA_ALPHA_BLEND_SRC_OUT,
+	RGA_ALPHA_BLEND_DST_OUT,
+	RGA_ALPHA_BLEND_SRC_ATOP,
+	RGA_ALPHA_BLEND_DST_ATOP,
+	RGA_ALPHA_BLEND_XOR,
+	RGA_ALPHA_BLEND_CLEAR,
 };
 
 typedef struct rga_img_info_t {
@@ -211,6 +234,16 @@ typedef struct full_csc_t {
     csc_coe_t coe_u;
     csc_coe_t coe_v;
 } full_csc_t;
+
+struct rga_csc_range {
+	uint16_t max;
+	uint16_t min;
+};
+
+struct rga_csc_clip {
+	struct rga_csc_range y;
+	struct rga_csc_range uv;
+};
 
 typedef struct rga_mosaic_info_ioctl {
     uint8_t enable;
@@ -359,6 +392,23 @@ struct rga_buffer_pool {
     uint32_t size;
 };
 
+struct rga_feature {
+    uint32_t global_alpha_en:1;
+    uint32_t full_csc_clip_en:1;
+    uint32_t user_close_fence:1;
+};
+
+struct rga_interp {
+    uint8_t horiz:4;
+    uint8_t verti:4;
+};
+
+struct rga_rgba5551_alpha {
+    uint16_t flags;
+    uint8_t alpha0;
+    uint8_t alpha1;
+};
+
 struct rga_req {
     uint8_t render_mode;                  /* (enum) process mode sel */
 
@@ -387,7 +437,10 @@ struct rga_req {
                                           /* ([8] = 1 nn_quantize)            */
                                           /* ([9] = 1 Real color mode)        */
 
-    uint8_t  scale_mode;                  /* 0 nearst / 1 bilnear / 2 bicubic */
+    union {
+        struct rga_interp interp;
+        uint8_t scale_mode;               /* 0 nearst / 1 bilnear / 2 bicubic */
+    };
 
     uint32_t color_key_max;               /* color key max */
     uint32_t color_key_min;               /* color key min */
@@ -453,7 +506,17 @@ struct rga_req {
 
     rga_pre_intr_info_t pre_intr_info;
 
-    uint8_t reservr[59];
+    /* global alpha */
+    uint8_t fg_global_alpha;
+    uint8_t bg_global_alpha;
+
+    struct rga_feature feature;
+
+    struct rga_csc_clip full_csc_clip;
+
+    struct rga_rgba5551_alpha rgba5551_alpha;
+
+    uint8_t reservr[39];
 };
 
 struct rga_user_request {

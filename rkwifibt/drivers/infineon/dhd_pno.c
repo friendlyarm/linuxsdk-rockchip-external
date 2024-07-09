@@ -2,9 +2,9 @@
  * Broadcom Dongle Host Driver (DHD)
  * Prefered Network Offload and Wi-Fi Location Service(WLS) code.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -3449,10 +3449,10 @@ exit:
 	mutex_unlock(&_pno_state->pno_mutex);
 exit_no_unlock:
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0))
-    if (swait_active(&_pno_state->get_batch_done.wait))
-#else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)) */
+	if (swait_active(&_pno_state->get_batch_done.wait))
+#else
 	if (waitqueue_active(&_pno_state->get_batch_done.wait))
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)) */
+#endif/* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0) */
 		complete(&_pno_state->get_batch_done);
 	return err;
 }
@@ -4149,9 +4149,9 @@ dhd_handle_hotlist_scan_evt(dhd_pub_t *dhd, const void *event_data,
 	gscan_results_cache_t *gscan_hotlist_cache;
 	u32 malloc_size = 0, i, total = 0;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0))
-        struct timespec64 tm_spec;
+	struct timespec64 tm_spec;
 #else
-        struct timespec tm_spec;
+	struct timespec tm_spec;
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0)) */
 	uint16 fwstatus;
 	uint16 fwcount;
@@ -4338,11 +4338,11 @@ dhd_pno_event_handler(dhd_pub_t *dhd, wl_event_msg_t *event, void *event_data)
 	{
 		struct dhd_pno_batch_params *params_batch;
 		params_batch = &_pno_state->pno_params_arr[INDEX_OF_BATCH_PARAMS].params_batch;
-    #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0))
-		if (!swait_active(&_pno_state->get_batch_done.wait)) {
-    #else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)) */
-        if (!waitqueue_active(&_pno_state->get_batch_done.wait)) {
-    #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)) */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0))
+		if (!swait_active(&_pno_state->get_batch_done.wait))
+#else
+		if (!waitqueue_active(&_pno_state->get_batch_done.wait)) {
+#endif/* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0) */
 			DHD_PNO(("%s : WLC_E_PFN_BEST_BATCHING\n", __FUNCTION__));
 			params_batch->get_batch.buf = NULL;
 			params_batch->get_batch.bufsize = 0;

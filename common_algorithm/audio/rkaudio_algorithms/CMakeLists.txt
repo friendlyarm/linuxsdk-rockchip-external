@@ -29,17 +29,30 @@ if (USE_UCLIBC)
 				${CMAKE_CURRENT_SOURCE_DIR}/uclibc/librkaudio_common.a
 			DESTINATION "lib"
 		)
+		install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/conf/
+			DESTINATION "vqefiles"
+			FILES_MATCHING PATTERN "*.rknn"
+		)
 	endif()
 
 	if(RKAPPLUS_ENABLE)
 		if (RKAPPLUS_WAKEUP_ENABLE)
 			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/libaec_bf_process_wakeup.so
 				DESTINATION "lib"
-				RENAME libaec_bf_process.so
+				RENAME librkaudio_vqe.so
 			)
 			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/libaec_bf_process_wakeup.a
 				DESTINATION "lib"
-				RENAME libaec_bf_process.a
+				RENAME librkaudio_vqe.a
+			)
+	elseif (RKAPPLUS_AINR_ENABLE)
+			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/librkaudio_vqe_ainr.so
+				DESTINATION "lib"
+				RENAME librkaudio_vqe.so
+			)
+			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/librkaudio_vqe_ainr.a
+				DESTINATION "lib"
+				RENAME librkaudio_vqe.a
 			)
         elseif (RKAPPLUS_WAKEUP_MODE1_NN_ENABLE)
             install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../../../iva/iva/librockiva/rockiva-rv1106-Linux/lib/librknnmrt.so
@@ -68,8 +81,8 @@ if (USE_UCLIBC)
 				RENAME libaec_bf_process.a
             )
 		else()
-			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/libaec_bf_process.so
-				${CMAKE_CURRENT_SOURCE_DIR}/uclibc/libaec_bf_process.a
+			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/librkaudio_vqe.so
+				${CMAKE_CURRENT_SOURCE_DIR}/uclibc/librkaudio_vqe.a
 				DESTINATION "lib"
 			)
 		endif()
@@ -82,6 +95,16 @@ if (USE_UCLIBC)
 		)
 	endif()
 
+	if (RKAPPLUS_EFFECT_EQDRC_ENABLE)
+		install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/librkaudio_effect_eqdrc.so
+			      ${CMAKE_CURRENT_SOURCE_DIR}/uclibc/librkaudio_effect_eqdrc.a
+			DESTINATION "lib"
+		)
+		install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/conf/
+			DESTINATION "vqefiles"
+			FILES_MATCHING PATTERN "*.bin"
+		)
+	endif()
 endif()
 
 if (USE_32BIT)
@@ -96,15 +119,15 @@ if (USE_32BIT)
 	    if (RKAPPLUS_WAKEUP_ENABLE)
 			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib32/libaec_bf_process_wakeup.so
 				DESTINATION "lib"
-				RENAME libaec_bf_process.so
+				RENAME librkaudio_vqe.so
 			)
 			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib32/libaec_bf_process_wakeup.a
 				DESTINATION "lib"
-				RENAME libaec_bf_process.a
+				RENAME librkaudio_vqe.a
 			)
 		else()
-			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib32/libaec_bf_process.so
-				${CMAKE_CURRENT_SOURCE_DIR}/lib32/libaec_bf_process.a
+			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib32/librkaudio_vqe.so
+				${CMAKE_CURRENT_SOURCE_DIR}/lib32/librkaudio_vqe.a
 				DESTINATION "lib"
 			)
 		endif()
@@ -115,6 +138,17 @@ if (USE_32BIT)
 				${CMAKE_CURRENT_SOURCE_DIR}/lib32/librkaudio_detect.a
 			DESTINATION "lib"
 	)
+	endif()
+
+	if (RKAPPLUS_EFFECT_EQDRC_ENABLE)
+		install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib32/librkaudio_effect_eqdrc.so
+			      ${CMAKE_CURRENT_SOURCE_DIR}/lib32/librkaudio_effect_eqdrc.a
+			DESTINATION "lib"
+		)
+		install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/conf/
+			DESTINATION "vqefiles"
+			FILES_MATCHING PATTERN "*.bin"
+		)
 	endif()
 
 endif()
@@ -131,15 +165,15 @@ if (USE_64BIT)
 		if (RKAPPLUS_WAKEUP_ENABLE)
 			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib32/libaec_bf_process_wakeup.so
 				DESTINATION "lib"
-				RENAME libaec_bf_process.so
+				RENAME librkaudio_vqe.so
 			)
 			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib64/libaec_bf_process_wakeup.a
 				DESTINATION "lib"
-				RENAME libaec_bf_process.a
+				RENAME librkaudio_vqe.a
 			)
 		else()
-			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib64/libaec_bf_process.so
-				${CMAKE_CURRENT_SOURCE_DIR}/lib64/libaec_bf_process.a
+			install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib64/librkaudio_vqe.so
+				${CMAKE_CURRENT_SOURCE_DIR}/lib64/librkaudio_vqe.a
 				DESTINATION "lib"
 			)
 		endif()
@@ -150,5 +184,16 @@ if (USE_64BIT)
 				${CMAKE_CURRENT_SOURCE_DIR}/lib64/librkaudio_detect.a
 			DESTINATION "lib"
 	)
+	endif()
+
+	if (RKAPPLUS_EFFECT_EQDRC_ENABLE)
+		install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/lib64/librkaudio_effect_eqdrc.so
+			      ${CMAKE_CURRENT_SOURCE_DIR}/lib64/librkaudio_effect_eqdrc.a
+			DESTINATION "lib"
+		)
+		install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/conf/
+			DESTINATION "vqefiles"
+			FILES_MATCHING PATTERN "*.bin"
+		)
 	endif()
 endif()

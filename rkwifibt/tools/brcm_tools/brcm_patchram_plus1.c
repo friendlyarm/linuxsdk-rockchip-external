@@ -165,13 +165,13 @@ typedef struct {
 
 #define FW_TABLE_VERSION "v1.1 20161117"
 static const fw_auto_detection_entry_t fw_auto_detection_table[] = {
-	{"4343A0","bcm43438a0"},    //AP6212
-	{"BCM43430A1","BCM43430A1"}, //AP6212A
+	//{"4343A0","BCM43430"},    //AP6212
+	{"BCM43430A1","BCM4343A1"}, //AP6212A
 	{"BCM20702A","BCM20710A1"}, //AP6210B
-	{"BCM4335C0","bcm4339a0"}, //AP6335
+	{"BCM4335C0","BCM4335C0"}, //AP6335
 	{"BCM4330B1","BCM40183B2"}, //AP6330
 	{"BCM4324B3","BCM43241B4"}, //AP62X2
-	{"BCM4350C0","bcm4354a1"}, //AP6354
+	{"BCM4350C0","BCM4350C0"}, //AP6354
 	{"BCM4345C5","BCM4345C5"}, //AP6256
 	{"BCM4354A2","BCM4356A2"}, //AP6356
 	{"BCM4345C0","BCM4345C0"}, //AP6255
@@ -181,6 +181,11 @@ static const fw_auto_detection_entry_t fw_auto_detection_table[] = {
 	{"BCM4359C0","BCM4359C0"},  //AP6359
 	{"BCM4349B1","BCM4359B1"},  //AP6359
 	{"BCM4359C0","BCM4359C0"},	//AP6398s
+	//add
+	{"BCM4362A2","BCM4362A2"},  //AP6275S/PCIE
+	{"BCM4381A1","BCM4381A1"},  //AP6281S
+	{"BCM43013A0","BCM43013A0"},  //AP6203BM
+	{"SYN43756B0","SYN43756B0"},  //AP6276S
 	{(char *) NULL, NULL}
 };
 int uart_fd = -1;
@@ -225,6 +230,9 @@ uchar hci_write_pcm_data_format[] =
 
 uchar hci_write_i2spcm_interface_param[] =
 	{ 0x01, 0x6d, 0xFC, 0x04, 0x00, 0x00, 0x00, 0x00 };
+
+uchar hci_enable_wbs[] =
+	{ 0x01,0x7e,0xfc,0x03,0x01,0x02,0x00 };
 
 int
 parse_patchram(char *optarg)
@@ -907,6 +915,11 @@ proc_scopcm()
 void
 proc_i2s()
 {
+	hci_send_cmd(hci_enable_wbs,
+		sizeof(hci_enable_wbs));
+
+	read_event(uart_fd, buffer);
+
 	hci_send_cmd(hci_write_i2spcm_interface_param,
 		sizeof(hci_write_i2spcm_interface_param));
 

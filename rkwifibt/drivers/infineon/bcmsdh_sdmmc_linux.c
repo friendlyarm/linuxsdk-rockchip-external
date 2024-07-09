@@ -1,9 +1,9 @@
 /*
  * BCMSDH Function Driver for the native SDIO/MMC driver in the Linux Kernel
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -52,9 +52,6 @@
 #endif /* !defined(SDIO_VENDOR_ID_BROADCOM) */
 
 #define SDIO_DEVICE_ID_BROADCOM_DEFAULT	0x0000
-
-#define SDIO_VENDOR_ID_CYPRESS		    0x04b4
-#define SDIO_DEVICE_ID_CYPRESS_DEFAULT	0x0000
 
 extern void wl_cfg80211_set_parent_dev(void *dev);
 extern void sdioh_sdmmc_devintr_off(sdioh_info_t *sd);
@@ -194,7 +191,12 @@ static const struct sdio_device_id bcmsdh_sdmmc_ids[] = {
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM43014_D11N2G_ID) },
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM43014_D11N5G_ID) },
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM4373_CHIP_ID) },
-	{ SDIO_DEVICE(SDIO_VENDOR_ID_CYPRESS,  SDIO_DEVICE_ID_CYPRESS_DEFAULT) },
+	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM43430_CHIP_ID) },
+	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM43439_CHIP_ID) },
+	{ SDIO_DEVICE(CY_DNGL_VID, BCM43439_CHIP_ID) },
+	{ SDIO_DEVICE(CY_DNGL_VID, BCM_DNGL_BL_PID_43439) },
+	{ SDIO_DEVICE(CY_DNGL_VID, BCM_DNGL_BL_PID_89570) },
+	{ SDIO_DEVICE(CY_DNGL_VID, SDIO_DEVICE_ID_BROADCOM_DEFAULT) },
 	{ SDIO_DEVICE_CLASS(SDIO_CLASS_NONE)    },
 	{ /* end: all zeroes */ },
 };
@@ -270,17 +272,15 @@ static int dummy_probe(struct sdio_func *func,
                               const struct sdio_device_id *id)
 {
 	sd_err(("%s: enter\n", __FUNCTION__));
-#if (0)
 	if (func)
 		sd_err(("%s: func->num=0x%x; \n", __FUNCTION__, func->num));
 	if (id) {
 		sd_err(("%s: class=0x%x; vendor=0x%x; device=0x%x\n", __FUNCTION__,
 			id->class, id->vendor, id->device));
-		if (id->vendor != SDIO_VENDOR_ID_BROADCOM)
+		if ((id->vendor != SDIO_VENDOR_ID_BROADCOM) &&
+			(id->vendor != CY_DNGL_VID))
 				return -ENODEV;
 	}
-#endif
-
 	if (func && (func->num != 2)) {
 		return 0;
 	}

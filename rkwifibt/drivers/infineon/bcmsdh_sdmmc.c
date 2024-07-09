@@ -1,9 +1,9 @@
 /*
  * BCMSDH Function Driver for the native SDIO/MMC driver in the Linux Kernel
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -163,6 +163,10 @@ void  sdmmc_set_clock_rate(sdioh_info_t *sd, uint hz);
 uint  sdmmc_get_clock_rate(sdioh_info_t *sd);
 void  sdmmc_set_clock_divisor(sdioh_info_t *sd, uint sd_div);
 
+#ifdef PLATFORM_IMX
+#define SD_CLOCK_UHS_IMX8 104000000
+#endif /* PLATFORM_IMX */
+
 static int
 sdioh_sdmmc_card_enablefuncs(sdioh_info_t *sd)
 {
@@ -280,6 +284,10 @@ sdioh_attach(osl_t *osh, struct sdio_func *func)
 	DHD_ERROR(("%s: sd clock rate = %u\n", __FUNCTION__, sd->sd_clk_rate));
 
 	sdioh_sdmmc_card_enablefuncs(sd);
+
+#ifdef	PLATFORM_IMX
+	sdmmc_set_clock_rate(sd, SD_CLOCK_UHS_IMX8);
+#endif /* PLATFORM_IMX */
 
 	sd_trace(("%s: Done\n", __FUNCTION__));
 	return sd;
@@ -1595,6 +1603,11 @@ sdmmc_set_clock_rate(sdioh_info_t *sd, uint hz)
 		DHD_ERROR(("%s: Intended rate exceeds max rate, setting to max\n", __FUNCTION__));
 		hz = host->f_max;
 	}
+#ifdef PLATFORM_IMX
+	if (hz >= SD_CLOCK_UHS_IMX8) {
+		ios->timing = MMC_TIMING_UHS_SDR104;
+	}
+#endif /* PLATFORM_IMX */
 	ios->clock = hz;
 	host->ops->set_ios(host, ios);
 	DHD_ERROR(("%s: After change: sd clock rate is %u\n", __FUNCTION__, ios->clock));

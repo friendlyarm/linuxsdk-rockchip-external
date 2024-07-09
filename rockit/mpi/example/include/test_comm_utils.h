@@ -84,9 +84,10 @@ void TEST_COMM_CloseFileUris(char **pFileUris, RK_U32 u32UriCount);
 void TEST_COMM_MkDirs(const char *muldir, RK_S32 mode);
 RK_S32 TEST_COMM_CheckFileSizeInRange(const char *pFilePath, RK_S32 minSize, RK_S32 maxSize);
 
-RK_S32 TEST_COMM_FileReadOneFrame(const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame);
-RK_S32 TEST_COMM_FileWriteOneFrame(const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame);
 RKSocType TEST_COMM_GetSocType();
+RK_S32 TEST_COMM_FileReadOneFrame(const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame, RK_U32 index);
+RK_S32 TEST_COMM_FileWriteOneFrame(const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame);
+RK_S32 TEST_COMM_DumpFrame2File(VIDEO_FRAME_INFO_S *pstFrame, FILE *fp);
 
 #ifdef __cplusplus
 #if __cplusplus

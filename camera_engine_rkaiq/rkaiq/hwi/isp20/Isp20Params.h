@@ -21,6 +21,8 @@
 #include "rk_aiq_pool.h"
 #include "rkisp2-config.h"
 #include "rkispp-config.h"
+#include "rk_aiq_isp32_modules.h"
+//#include "rk_aiq_isp39_modules.h"
 
 namespace RkCam {
 
@@ -99,6 +101,8 @@ public:
         AntiTmoFlicker.FirstChangeDone = false;
         AntiTmoFlicker.FirstChangeDoneNum = 0;
         _working_mode = RK_AIQ_WORKING_MODE_ISP_HDR3;
+        _CamPhyId = -1;
+        _lsc_en = false;
     };
     virtual ~Isp20Params() {};
     virtual void setCamPhyId(int phyId) {
@@ -127,7 +131,12 @@ public:
     XCamReturn get_tnr_cfg_params(cam3aResultList &results, struct rkispp_params_tnrcfg &tnr_cfg);
     //XCamReturn get_nr_cfg_params(cam3aResultList &results, struct rkispp_params_nrcfg &nr_cfg);
     XCamReturn get_fec_cfg_params(cam3aResultList &results, struct rkispp_params_feccfg &fec_cfg);
-    virtual XCamReturn merge_isp_results(cam3aResultList &results, void* isp_cfg, bool is_multi_isp = false);
+    virtual XCamReturn merge_isp_results(cam3aResultList &results, void* isp_cfg, bool is_multi_isp = false, bool use_aiisp = false);
+
+#if defined(ISP_HW_V39) && (USE_NEWSTRUCT)
+    btnr_cvt_info_t mBtnrInfo;
+#endif
+
 protected:
     XCAM_DEAD_COPY(Isp20Params);
 
@@ -143,10 +152,12 @@ protected:
                                     const rk_aiq_awb_stat_cfg_v200_t& awb_meas,
                                     bool awb_cfg_udpate);
 #endif
+#if RKAIQ_HAVE_AWB_V20
     template<class T>
     void convertAiqAwbGainToIsp20Params(T& isp_cfg,
                                         const rk_aiq_wb_gain_t& awb_gain, const rk_aiq_isp_blc_t &blc,
                                         bool awb_gain_update);
+#endif
 #if RKAIQ_HAVE_MERGE_V10
     template<class T>
     void convertAiqMergeToIsp20Params(T& isp_cfg,
@@ -168,15 +179,17 @@ protected:
     template<class T>
     void convertAiqAdegammaToIsp20Params(T& isp_cfg,
                                          const AdegammaProcRes_t& degamma_cfg);
+#if RKAIQ_HAVE_DEBAYER_V1
     template<class T>
-    void convertAiqAdemosaicToIsp20Params(T& isp_cfg, rk_aiq_isp_debayer_t &demosaic);
-
+    void convertAiqAdemosaicToIsp20Params(T& isp_cfg, rk_aiq_isp_debayer_t& demosaic);
+#endif
     template<class T>
     void convertAiqLscToIsp20Params(T& isp_cfg,
                                     const rk_aiq_lsc_cfg_t& lsc);
+#if ISP_HW_V20
     template<class T>
-    void convertAiqBlcToIsp20Params(T& isp_cfg, rk_aiq_isp_blc_t &blc);
-
+    void convertAiqBlcToIsp20Params(T& isp_cfg, rk_aiq_isp_blc_t& blc);
+#endif
     template<class T>
     void convertAiqDpccToIsp20Params(T& isp_cfg, rk_aiq_isp_dpcc_t &dpcc);
 #if RKAIQ_HAVE_CCM_V1
@@ -190,14 +203,24 @@ protected:
                                        const rk_aiq_lut3d_cfg_t& lut3d_cfg);
 #endif
 #if RKAIQ_HAVE_ACP_V10
+#ifdef USE_NEWSTRUCT
+    void convertAiqCpToIsp20Params(void *isp_cfg,
+                                     rk_aiq_isp_cp_params_t *cp_attr);
+#else
     template<class T>
     void convertAiqCpToIsp20Params(T& isp_cfg,
-                                   const rk_aiq_acp_params_t& lut3d_cfg);
+                                   const rk_aiq_acp_params_t& cp_cfg);
+#endif
 #endif
 #if RKAIQ_HAVE_AIE_V10
+#ifdef USE_NEWSTRUCT
+    void convertAiqIeToIsp20Params(void *isp_cfg,
+                                     rk_aiq_isp_ie_params_t *ie_attr);
+#else
     template<class T>
     void convertAiqIeToIsp20Params(T& isp_cfg,
                                    const rk_aiq_isp_ie_t& ie_cfg);
+#endif
 #endif
 
 #if RKAIQ_HAVE_ANR_V1
@@ -215,19 +238,23 @@ protected:
                                     rk_aiq_isp_ynr_t& ynr);
     template<typename T>
     void convertAiqSharpenToIsp20Params(T& pp_cfg,
-                                    rk_aiq_isp_sharpen_t& sharp, rk_aiq_isp_edgeflt_t& edgeflt);
+                                        rk_aiq_isp_sharpen_t& sharp, rk_aiq_isp_edgeflt_t& edgeflt);
 #endif
 #if RKAIQ_HAVE_AF_V20 || RKAIQ_ONLY_AF_STATS_V20
     template<class T>
     void convertAiqAfToIsp20Params(T& isp_cfg,
                                    const rk_aiq_isp_af_meas_t& af_data, bool af_cfg_udpate);
 #endif
+#if RKAIQ_HAVE_GAIN_V1
     template<class T>
     void convertAiqGainToIsp20Params(T& isp_cfg,
                                      rk_aiq_isp_gain_t& gain);
+#endif
+#if RKAIQ_HAVE_LDCH_V10
     template<class T>
     void convertAiqAldchToIsp20Params(T& isp_cfg,
                                       const rk_aiq_isp_ldch_t& ldch_cfg);
+#endif
     template<typename T>
     void convertAiqFecToIsp20Params(T& pp_cfg,
                                     rk_aiq_isp_fec_t& fec);
@@ -259,10 +286,23 @@ protected:
     cam3aResult* mAfParams{NULL};
     bool _lsc_en{false};
 #if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-	struct isp32_isp_meas_cfg mLatestMeasCfg;
-	struct isp32_bls_cfg mLatestBlsCfg;
-	struct isp32_awb_gain_cfg mLatestWbGainCfg;
+    struct isp32_isp_meas_cfg mLatestMeasCfg;
+    struct isp32_bls_cfg mLatestBlsCfg;
+    struct isp32_awb_gain_cfg mLatestWbGainCfg;
+#elif defined(ISP_HW_V39)
+    struct isp39_isp_meas_cfg mLatestMeasCfg;
+    struct isp32_bls_cfg mLatestBlsCfg;
+    struct isp32_awb_gain_cfg mLatestWbGainCfg;
+#if defined(USE_NEWSTRUCT)
+    cam3aResult* mAeParams {NULL};
 #endif
+#endif
+#if defined(ISP_HW_V30) || defined(ISP_HW_V21)
+    struct isp21_awb_gain_cfg mLatestWbGainCfg;
+#endif
+    float mLatestIspDgain;
+    void getCommonCvtInfo(cam3aResultList &results, bool use_aiisp);
+    common_cvt_info_t mCommonCvtInfo;
 };
 }
 #endif

@@ -91,6 +91,10 @@ prepare(RkAiqAlgoCom* params)
         CalibDbV2_Bayer2dnrV23_t *bayernr_v23 = (CalibDbV2_Bayer2dnrV23_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCalibDbV2, bayer2dnr_v23));
         pAbayernrCtx->bayernr_v23 = *bayernr_v23;
 #endif
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
+
         pAbayernrCtx->isIQParaUpdate = true;
         pAbayernrCtx->isReCalculate |= 1;
     }
@@ -168,6 +172,11 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
     if(ret != ABAYER2DNR_V23_RET_SUCCESS) {
         result = XCAM_RETURN_ERROR_FAILED;
         LOGE_ANR("%s: ANRPreProcess failed (%d)\n", __FUNCTION__, ret);
+    }
+
+    if (pAbayernrProcParams == NULL) {
+            LOGE_ANR("%s: ANRProcessing pAbayernrProcParams is NULL\n", __FUNCTION__);
+        return XCAM_RETURN_BYPASS;
     }
 
     LOGD_ANR("%s:%d init:%d hdr mode:%d  \n",

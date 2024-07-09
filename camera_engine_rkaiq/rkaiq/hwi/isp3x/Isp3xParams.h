@@ -31,8 +31,15 @@ public:
     void fixedAwbOveflowToIsp3xParams(void* isp_cfg_p, bool is_dual_isp);
 protected:
     virtual bool convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result, void* isp_cfg_p, bool is_multi_isp) override;
+#if RKAIQ_HAVE_GAIN_V2
+#ifdef USE_NEWSTRUCT
+    void convertAiqGainToIsp3xParams(void *isp_cfg_p,
+                                     rk_aiq_isp_gain_params_t *gain_attr);
+#else
     template <class T>
     void convertAiqGainToIsp3xParams(T& isp_cfg, rk_aiq_isp_gain_v3x_t& gain);
+#endif
+#endif
 #if RKAIQ_HAVE_GAMMA_V11
     template <class T>
     void convertAiqAgammaToIsp3xParams(T& isp_cfg, const rk_aiq_isp_goc_v3x_t& gamma_out_cfg);
@@ -84,6 +91,11 @@ private:
 #if RKAIQ_HAVE_DEHAZE_V11_DUO
     void convertAiqAdehazeToIsp3xParams(struct isp3x_isp_params_cfg& isp_cfg,
                                         const rk_aiq_isp_dehaze_v3x_t& dhaze);
+#endif
+#if defined(ISP_HW_V30)
+void convertAiqLdchToIsp3xParams(struct isp3x_isp_params_cfg& isp_cfg,
+        struct isp3x_isp_params_cfg& isp_cfg_right,
+        const rk_aiq_isp_ldch_t& ldch_cfg, bool is_multi_isp);
 #endif
 };
 

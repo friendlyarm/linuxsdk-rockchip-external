@@ -29,7 +29,6 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/mman.h>
-#include <math.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -101,7 +100,11 @@ int main() {
      */
 
     src_img.rd_mode = IM_RASTER_MODE;
-    fbc_img.rd_mode = IM_FBC_MODE;
+
+    /* Select the required FBC mode. */
+    fbc_img.rd_mode = IM_AFBC16x16_MODE;
+    // fbc_img.rd_mode = IM_AFBC32x8_MODE;
+    // fbc_img.rd_mode = IM_RKFBC64x4_MODE;
 
     ret = imcopy(src_img, fbc_img);
     if (ret == IM_STATUS_SUCCESS) {
@@ -123,7 +126,11 @@ int main() {
         --------------        --------------
      */
 
-    fbc_img.rd_mode = IM_FBC_MODE;
+    /* Select the required FBC mode. */
+    fbc_img.rd_mode = IM_AFBC16x16_MODE;
+    // fbc_img.rd_mode = IM_AFBC32x8_MODE;
+    // fbc_img.rd_mode = IM_RKFBC64x4_MODE;
+
     dst_img.rd_mode = IM_RASTER_MODE;
 
     ret = imcopy(fbc_img, dst_img);

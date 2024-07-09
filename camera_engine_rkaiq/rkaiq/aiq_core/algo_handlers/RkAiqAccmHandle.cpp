@@ -54,6 +54,36 @@ XCamReturn RkAiqAccmHandleInt::updateConfig(bool needSync) {
         updateAtt = false;
         sendSignal(mCurAttV2.sync.sync_mode);
 #endif
+#if RKAIQ_HAVE_CCM_V3
+        mCurAttV3   = mNewAttV3;
+        // TODO
+        rk_aiq_uapi_accm_v3_SetAttrib(mAlgoCtx, &mCurAttV3, false);
+        updateAtt = false;
+        sendSignal(mCurAttV3.sync.sync_mode);
+#endif
+    }
+    if (updateCalibAttr) {
+#if RKAIQ_HAVE_CCM_V1
+        mCurCalibAtt   = mNewCalibAtt;
+        // TODO
+        rk_aiq_uapi_accm_SetIqParam(mAlgoCtx, &mCurCalibAtt, false);
+        updateCalibAttr = false;
+        sendSignal(mCurCalibAtt.sync.sync_mode);
+#endif
+#if RKAIQ_HAVE_CCM_V2
+        mCurCalibAttV2   = mNewCalibAttV2;
+        // TODO
+        rk_aiq_uapi_accm_SetIqParam(mAlgoCtx, &mCurCalibAttV2, false);
+        updateCalibAttr = false;
+        sendSignal(mCurCalibAttV2.sync.sync_mode);
+#endif
+#if RKAIQ_HAVE_CCM_V3
+        mCurCalibAttV3   = mNewCalibAttV3;
+        // TODO
+        rk_aiq_uapi_accm_SetIqParam(mAlgoCtx, &mCurCalibAttV3, false);
+        updateCalibAttr = false;
+        sendSignal(mCurCalibAttV3.sync.sync_mode);
+#endif
     }
 
     if (needSync) mCfgMutex.unlock();
@@ -124,6 +154,75 @@ XCamReturn RkAiqAccmHandleInt::getAttrib(rk_aiq_ccm_attrib_t* att) {
         } else {
             rk_aiq_uapi_accm_GetAttrib(mAlgoCtx, att);
             att->sync.sync_mode = mNewAtt.sync.sync_mode;
+            att->sync.done = true;
+        }
+    }
+#endif
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAccmHandleInt::setIqParam(const rk_aiq_ccm_calib_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapi_accm_SetIqParam(mAlgoCtx, att, false);
+#else
+
+    // check if there is different between att & mCurAtt(sync)/mNewAtt(async)
+    // if something changed, set att to mNewAtt, and
+    // the new params will be effective later when updateConfig
+    // called by RkAiqCore
+    bool isChanged = false;
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
+        memcmp(&mNewCalibAtt, att, sizeof(*att)))
+        isChanged = true;
+    else if (att->sync.sync_mode != RK_AIQ_UAPI_MODE_ASYNC && \
+             memcmp(&mCurCalibAtt, att, sizeof(*att)))
+        isChanged = true;
+
+    // if something changed
+    if (isChanged) {
+        mNewCalibAtt   = *att;
+        updateCalibAttr = true;
+        waitSignal(att->sync.sync_mode);
+    }
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAccmHandleInt::getIqParam(rk_aiq_ccm_calib_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+    rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+    mCfgMutex.unlock();
+#else
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
+        mCfgMutex.lock();
+        rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+        att->sync.done = true;
+        mCfgMutex.unlock();
+    } else {
+        if (updateCalibAttr) {
+            memcpy(att, &mNewCalibAtt, sizeof(mNewCalibAtt));
+            att->sync.done = false;
+        } else {
+            rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+            att->sync.sync_mode = mNewCalibAtt.sync.sync_mode;
             att->sync.done = true;
         }
     }
@@ -204,6 +303,217 @@ XCamReturn RkAiqAccmHandleInt::getAttribV2(rk_aiq_ccm_v2_attrib_t* att) {
     EXIT_ANALYZER_FUNCTION();
     return ret;
 }
+
+XCamReturn RkAiqAccmHandleInt::setIqParamV2(const rk_aiq_ccm_v2_calib_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapi_accm_SetIqParam(mAlgoCtx, att, false);
+#else
+
+    // check if there is different between att & mCurAtt(sync)/mNewAtt(async)
+    // if something changed, set att to mNewAtt, and
+    // the new params will be effective later when updateConfig
+    // called by RkAiqCore
+    bool isChanged = false;
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
+        memcmp(&mNewCalibAttV2, att, sizeof(*att)))
+        isChanged = true;
+    else if (att->sync.sync_mode != RK_AIQ_UAPI_MODE_ASYNC && \
+             memcmp(&mCurCalibAttV2, att, sizeof(*att)))
+        isChanged = true;
+
+    // if something changed
+    if (isChanged) {
+        mNewCalibAttV2   = *att;
+        updateCalibAttr = true;
+        waitSignal(att->sync.sync_mode);
+    }
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAccmHandleInt::getIqParamV2(rk_aiq_ccm_v2_calib_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+    rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+    mCfgMutex.unlock();
+#else
+
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
+        mCfgMutex.lock();
+        rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+        att->sync.done = true;
+        mCfgMutex.unlock();
+    } else {
+        if (mNewCalibAttV2) {
+            memcpy(att, &mNewCalibAttV2, sizeof(mNewCalibAttV2));
+            att->sync.done = false;
+        } else {
+            rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+            att->sync.sync_mode = mNewCalibAttV2.sync.sync_mode;
+            att->sync.done = true;
+        }
+    }
+#endif
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+#endif
+#if RKAIQ_HAVE_CCM_V3
+XCamReturn RkAiqAccmHandleInt::setAttribV3(const rk_aiq_ccm_v3_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+
+    // check if there is different between att & mCurAtt(sync)/mNewAtt(async)
+    // if something changed, set att to mNewAtt, and
+    // the new params will be effective later when updateConfig
+    // called by RkAiqCore
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapi_accm_v3_SetAttrib(mAlgoCtx, att, false);
+#else
+    bool isChanged = false;
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
+        memcmp(&mNewAttV3, att, sizeof(*att)))
+        isChanged = true;
+    else if (att->sync.sync_mode != RK_AIQ_UAPI_MODE_ASYNC && \
+             memcmp(&mCurAttV3, att, sizeof(*att)))
+        isChanged = true;
+
+    // if something changed
+    if (isChanged) {
+        mNewAttV3   = *att;
+        updateAtt = true;
+        waitSignal(att->sync.sync_mode);
+    }
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAccmHandleInt::getAttribV3(rk_aiq_ccm_v3_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+    rk_aiq_uapi_accm_v3_GetAttrib(mAlgoCtx, att);
+    mCfgMutex.unlock();
+#else
+
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
+        mCfgMutex.lock();
+        rk_aiq_uapi_accm_v3_GetAttrib(mAlgoCtx, att);
+        att->sync.done = true;
+        mCfgMutex.unlock();
+    } else {
+        if (updateAtt) {
+            memcpy(att, &mNewAttV3, sizeof(mNewAttV3));
+            att->sync.done = false;
+        } else {
+            rk_aiq_uapi_accm_v3_GetAttrib(mAlgoCtx, att);
+            att->sync.sync_mode = mNewAttV3.sync.sync_mode;
+            att->sync.done = true;
+        }
+    }
+#endif
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAccmHandleInt::setIqParamV3(const rk_aiq_ccm_v3_calib_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+#ifdef DISABLE_HANDLE_ATTRIB
+    ret = rk_aiq_uapi_accm_SetIqParam(mAlgoCtx, att, false);
+#else
+
+    // check if there is different between att & mCurAtt(sync)/mNewAtt(async)
+    // if something changed, set att to mNewAtt, and
+    // the new params will be effective later when updateConfig
+    // called by RkAiqCore
+    bool isChanged = false;
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
+        memcmp(&mNewCalibAttV3, att, sizeof(*att)))
+        isChanged = true;
+    else if (att->sync.sync_mode != RK_AIQ_UAPI_MODE_ASYNC && \
+             memcmp(&mCurCalibAttV3, att, sizeof(*att)))
+        isChanged = true;
+
+    // if something changed
+    if (isChanged) {
+        mNewCalibAttV3   = *att;
+        updateCalibAttr = true;
+        waitSignal(att->sync.sync_mode);
+    }
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAccmHandleInt::getIqParamV3(rk_aiq_ccm_v3_calib_attrib_t* att) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCAM_ASSERT(att != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+    rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+    mCfgMutex.unlock();
+#else
+
+    if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
+        mCfgMutex.lock();
+        rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+        att->sync.done = true;
+        mCfgMutex.unlock();
+    } else {
+        if (mNewCalibAttV3) {
+            memcpy(att, &mNewCalibAttV3, sizeof(mNewCalibAttV3));
+            att->sync.done = false;
+        } else {
+            rk_aiq_uapi_accm_GetIqParam(mAlgoCtx, att);
+            att->sync.sync_mode = mNewCalibAttV3.sync.sync_mode;
+            att->sync.done = true;
+        }
+    }
+#endif
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
 #endif
 
 XCamReturn RkAiqAccmHandleInt::queryCcmInfo(rk_aiq_ccm_querry_info_t* ccm_querry_info) {
@@ -218,6 +528,33 @@ XCamReturn RkAiqAccmHandleInt::queryCcmInfo(rk_aiq_ccm_querry_info_t* ccm_querry
     EXIT_ANALYZER_FUNCTION();
     return ret;
 }
+XCamReturn RkAiqAccmHandleInt::getAcolorSwInfo(rk_aiq_color_info_t* aColor_sw_info) {
+    ENTER_ANALYZER_FUNCTION();
+    LOGV_ACCM("%s enter",__FUNCTION__);
+    XCAM_ASSERT(aColor_sw_info != nullptr);
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    RkAiqAlgoProcAccm* accm_proc_int        = (RkAiqAlgoProcAccm*)mProcInParam;
+    memcpy(aColor_sw_info->awbGain,accm_proc_int->accm_sw_info.awbGain,sizeof(aColor_sw_info->awbGain));
+    aColor_sw_info->sensorGain = accm_proc_int->accm_sw_info.sensorGain;
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAccmHandleInt::setAcolorSwInfo(rk_aiq_color_info_t aColor_sw_info) {
+    ENTER_ANALYZER_FUNCTION();
+
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    LOGV_ACCM("%s sensor gain = %f, wbgain=[%f,%f] ",__FUNCTION__,aColor_sw_info.sensorGain,
+      aColor_sw_info.awbGain[0],aColor_sw_info.awbGain[1]);
+    colorSwInfo = aColor_sw_info;
+    colorConstFlag=true;
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
 
 XCamReturn RkAiqAccmHandleInt::prepare() {
     ENTER_ANALYZER_FUNCTION();
@@ -226,10 +563,6 @@ XCamReturn RkAiqAccmHandleInt::prepare() {
 
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "accm handle prepare failed");
-
-    RkAiqAlgoConfigAccm* accm_config_int = (RkAiqAlgoConfigAccm*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
 
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
@@ -275,17 +608,13 @@ XCamReturn RkAiqAccmHandleInt::processing() {
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-    if (!shared->fullParams || !shared->fullParams->mCcmV32Params.ptr()) {
-#else
     if (!shared->fullParams || !shared->fullParams->mCcmParams.ptr()) {
-#endif
-        LOGE_ALSC("[%d]: no gic buf !", shared->frameId);
+        LOGE_ACCM("[%d]: no ccm buf !", shared->frameId);
         return XCAM_RETURN_BYPASS;
     }
 
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-    accm_proc_res_int->accm_hw_conf_v2 = &shared->fullParams->mCcmV32Params->data()->result;
+#if defined(ISP_HW_V39) || defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
+    accm_proc_res_int->accm_hw_conf_v2 = &shared->fullParams->mCcmParams->data()->result;
 #else
     accm_proc_res_int->accm_hw_conf = &shared->fullParams->mCcmParams->data()->result;
 #endif
@@ -350,13 +679,17 @@ XCamReturn RkAiqAccmHandleInt::processing() {
         LOGE("fail to get sensor gain form AE module,use default value ");
     }
 
-#if RKAIQ_HAVE_BLC_V32
+#if RKAIQ_HAVE_BLC_V32 && !USE_NEWSTRUCT
     if (shared->res_comb.ablcV32_proc_res->blc_ob_enable) {
         if (shared->res_comb.ablcV32_proc_res->isp_ob_predgain >= 1.0f) {
             accm_proc_int->accm_sw_info.sensorGain *=  shared->res_comb.ablcV32_proc_res->isp_ob_predgain;
         }
     }
 #endif
+    if(colorConstFlag==true){
+        memcpy(accm_proc_int->accm_sw_info.awbGain,colorSwInfo.awbGain,sizeof(colorSwInfo.awbGain));
+        accm_proc_int->accm_sw_info.sensorGain = colorSwInfo.sensorGain;
+    }
 
 #ifdef DISABLE_HANDLE_ATTRIB
     mCfgMutex.lock();
@@ -407,11 +740,7 @@ XCamReturn RkAiqAccmHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAccm* accm_com = (RkAiqAlgoProcResAccm*)mProcOutParam;
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-    rk_aiq_isp_ccm_params_v32_t* ccm_param = params->mCcmV32Params->data().ptr();
-#else
-    rk_aiq_isp_ccm_params_v20_t* ccm_param = params->mCcmParams->data().ptr();
-#endif
+    rk_aiq_isp_ccm_params_t* ccm_param = params->mCcmParams->data().ptr();
 
     if (!accm_com) {
         LOGD_ANALYZER("no accm result");
@@ -427,7 +756,7 @@ XCamReturn RkAiqAccmHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
     }
 
 #if 0//moved to processing out params
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
+#if defined(ISP_HW_V39) || defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
     ccm_param->result = accm_rk->accm_hw_conf_v2;
 #else
     ccm_param->result = accm_rk->accm_hw_conf;
@@ -439,25 +768,12 @@ XCamReturn RkAiqAccmHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
         ccm_param->sync_flag = mSyncFlag;
         // copy from algo result
         // set as the latest result
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-        cur_params->mCcmV32Params = params->mCcmV32Params;
-#else
         cur_params->mCcmParams = params->mCcmParams;
-#endif
         ccm_param->is_update = true;
         LOGD_ACCM("[%d] params from algo", mSyncFlag);
     } else if (mSyncFlag != ccm_param->sync_flag) {
         ccm_param->sync_flag = mSyncFlag;
         // copy from latest result
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-        if (cur_params->mCcmV32Params.ptr()) {
-            ccm_param->result = cur_params->mCcmV32Params->data()->result;
-            ccm_param->is_update = true;
-        } else {
-            LOGE_ACCM("no latest params !");
-            ccm_param->is_update = false;
-        }
-#else
         if (cur_params->mCcmParams.ptr()) {
             ccm_param->result = cur_params->mCcmParams->data()->result;
             ccm_param->is_update = true;
@@ -465,7 +781,6 @@ XCamReturn RkAiqAccmHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
             LOGE_ACCM("no latest params !");
             ccm_param->is_update = false;
         }
-#endif
         LOGD_ACCM("[%d] params from latest [%d]", shared->frameId, mSyncFlag);
     } else {
         // do nothing, result in buf needn't update

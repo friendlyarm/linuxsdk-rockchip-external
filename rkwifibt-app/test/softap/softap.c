@@ -4,6 +4,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/prctl.h>
+#include <pthread.h>
 
 #include <Rk_softap.h>
 #include <Rk_wifi.h>
@@ -16,6 +23,34 @@
 #define DEBUG_INFO(M, ...) do {} while (0)
 #endif
 #define DEBUG_ERR(M, ...) printf("Hostapd %d: " M, __LINE__, ##__VA_ARGS__)
+
+typedef struct {
+	RK_SOFTAP_STATE_CALLBACK callback;
+	RK_SOFTAP_SERVER_TYPE server_type;
+} RkSoftAp;
+
+#define REQUEST_WIFI_LIST					"/provision/wifiListInfo"
+#define REQUEST_WIFI_SET_UP					"/provision/wifiSetup"
+#define REQUEST_IS_WIFI_CONNECTED			"/provision/wifiState"
+#define REQUEST_POST_CONNECT_RESULT			"/provision/connectResult"
+
+#define MSG_BUFF_LEN 8888
+static char HTTP_RESPOSE_MESSAGE[] = "HTTP/1.1 200 OK\r\nContent-Type:text/html\r\nContent-Length:%d\r\n\r\n%s";
+
+RkSoftAp m_softap;
+
+#define SOCKET_PORT 8443
+
+pthread_t m_thread;
+bool m_isConnecting = false;
+static int fd_server = -1;
+static int m_port;
+
+static RK_SOFTAP_STATE_CALLBACK m_cb = NULL;
+static RK_SOFTAP_STATE m_state = RK_SOFTAP_STATE_IDLE;
+
+#define DNSMASQ_CONF_DIR "/tmp/dnsmasq.conf"
+#define HOSTAPD_CONF_DIR "/tmp/hostapd.conf"
 
 static void exec_command(char cmdline[], char recv_buff[], int len)
 {
@@ -60,7 +95,6 @@ static int create_hostapd_file(char *ap, char *ssid, char *psk)
 {
 	FILE* fp;
 	char cmdline[256] = {0};
-	static char HOSTAPD_CONF_DIR[] = "/userdata/bin/hostapd.conf";
 
 	fp = fopen(HOSTAPD_CONF_DIR, "wt+");
 	if (NULL == fp)
@@ -96,7 +130,6 @@ static int create_hostapd_file(char *ap, char *ssid, char *psk)
 static int creat_dnsmasq_file()
 {
 	FILE* fp;
-	static char DNSMASQ_CONF_DIR[] = "/userdata/bin/dnsmasq.conf";
 	static char SOFTAP_INTERFACE_STATIC_IP[] = "10.201.126.1";
 
 	system("rm /userdata/bin/dnsmasq.conf -rf");
@@ -110,7 +143,8 @@ static int creat_dnsmasq_file()
 	fputs(SOFTAP_INTERFACE_STATIC_IP, fp);
 	fputs("\n", fp);
 	fputs("dhcp-range=10.201.126.50,10.201.126.150\n", fp);
-	fputs("server=/google/8.8.8.8\n", fp);
+	//fputs("server=/google/8.8.8.8\n", fp);
+	fputs("no-hosts\n", fp);
 	fclose(fp);
 	return 1;
 }
@@ -118,8 +152,6 @@ static int creat_dnsmasq_file()
 static int start_hostapd(char *ap, char *ssid, char *psk, char *ip)
 {
 	char cmdline[256] = {0};
-	static char DNSMASQ_CONF_DIR[] = "/userdata/bin/dnsmasq.conf";
-	static char HOSTAPD_CONF_DIR[] = "/userdata/bin/hostapd.conf";
 	create_hostapd_file(ap, ssid, psk);
 
 	sprintf(cmdline, "ifconfig %s up", ap);
@@ -197,40 +229,6 @@ int wifi_stop_hostapd(void)
 	return 0;
 }
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/prctl.h>
-#include <unistd.h>
-#include <pthread.h>
-
-typedef struct {
-	RK_SOFTAP_STATE_CALLBACK callback;
-	RK_SOFTAP_SERVER_TYPE server_type;
-} RkSoftAp;
-
-#define REQUEST_WIFI_LIST					"/provision/wifiListInfo"
-#define REQUEST_WIFI_SET_UP					"/provision/wifiSetup"
-#define REQUEST_IS_WIFI_CONNECTED			"/provision/wifiState"
-#define REQUEST_POST_CONNECT_RESULT			"/provision/connectResult"
-
-#define MSG_BUFF_LEN 8888
-static char HTTP_RESPOSE_MESSAGE[] = "HTTP/1.1 200 OK\r\nContent-Type:text/html\r\nContent-Length:%d\r\n\r\n%s";
-
-RkSoftAp m_softap;
-
-#define SOCKET_PORT 8443
-
-pthread_t m_thread;
-bool m_isConnecting = false;
-static int fd_server = -1;
-static int m_port;
-
-static RK_SOFTAP_STATE_CALLBACK m_cb = NULL;
-static RK_SOFTAP_STATE m_state = RK_SOFTAP_STATE_IDLE;
-
 static void sendState(RK_SOFTAP_STATE state, const char* data) {
 	if(m_cb != NULL)
 		m_cb(state, data);
@@ -288,7 +286,6 @@ static int sendWifiList(const int fd, const char* buf)
 {
 	char msg[MSG_BUFF_LEN] = {0};
 	char send_msg[MSG_BUFF_LEN] = {0};
-	size_t i, size = 0;
 	char *wifilist;
 
 scan_retry:
@@ -354,7 +351,6 @@ static bool wifiSetup(const int fd, const char* buf)
 {
 	char msg[MSG_BUFF_LEN] = {0};
 	char *str1, *str2;
-	char tmp[128];
 	int ret;
 
 	printf("enter %s\n", __func__);
@@ -373,11 +369,11 @@ static bool wifiSetup(const int fd, const char* buf)
 
 	//{"ssid":"YHX","pwd":"rk123456789"}
 	str1 = strstr(buf, "\"ssid\"");
-	str2 = strstr(buf, "\"\,\"pwd\"");
+	str2 = strstr(buf, "\",\"pwd\"");
 	strncpy(softap_ssid, str1 + 8, str2 - str1 - 8);
 
 	str1 = strstr(buf, "\"pwd\"");
-	str2 = strstr(str1, "\"\}");
+	str2 = strstr(str1, "\"}");
 	strncpy(softap_psk, str1 + 7, str2 - str1 - 7);
 
 	printf("do connect ssid:\"%s\", psk:\"%s\", isConnecting:%d\n", softap_ssid, softap_psk, m_isConnecting);
@@ -387,7 +383,7 @@ static bool wifiSetup(const int fd, const char* buf)
 
 	system("wpa_cli -i wlan0 remove_network all");
 
-	ret = RK_wifi_connect(softap_ssid, softap_psk);
+	ret = RK_wifi_connect(softap_ssid, softap_psk, WPA, NULL);
 	if (ret < 0) {
 		sendState(RK_SOFTAP_STATE_FAIL, NULL);
 		m_state = RK_SOFTAP_STATE_FAIL;
@@ -533,7 +529,7 @@ static int stopTcpServer()
 
 int RK_softap_start(char *name, RK_SOFTAP_SERVER_TYPE server_type)
 {
-	RK_wifi_enable(1);
+	RK_wifi_enable(1, "/data/cfg/wpa_supplicant.conf");
 	wifi_start_hostapd(name, NULL, NULL);
 	startTcpServer();
 

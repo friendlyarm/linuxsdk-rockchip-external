@@ -3,9 +3,9 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -196,6 +196,10 @@ dhd_dbg_get_ring_from_ring_id(dhd_pub_t *dhdp, int ring_id)
 	return &dhdp->dbg->dbg_rings[ring_id];
 }
 
+/*
+ * Subsequent calls in this function will hold ring->lock, so callers of this function
+ * should not hold ring->lock.
+ */
 int
 dhd_dbg_pull_single_from_ring(dhd_pub_t *dhdp, int ring_id, void *data, uint32 buf_len,
 	bool strip_header)
@@ -216,6 +220,10 @@ dhd_dbg_pull_single_from_ring(dhd_pub_t *dhdp, int ring_id, void *data, uint32 b
 	return dhd_dbg_ring_pull_single(ring, data, buf_len, strip_header);
 }
 
+/*
+ * Subsequent calls in this function will hold ring->lock, so callers of this function
+ * should not hold ring->lock.
+ */
 int
 dhd_dbg_pull_from_ring(dhd_pub_t *dhdp, int ring_id, void *data, uint32 buf_len)
 {
@@ -1380,13 +1388,9 @@ __dhd_dbg_pkt_hash(uintptr_t pkt, uint32 pktid)
 uint32
 __dhd_dbg_driver_ts_usec(void)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0))
 	struct timespec64 ts;
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39))
-	struct timespec ts;
-#endif /* LINUX_VER >= 2.6.39 */
 
-	get_monotonic_boottime(&ts);
+	ts = ktime_to_timespec64(ktime_get_boottime());
 	return ((uint32)(__TIMESPEC_TO_US(ts)));
 }
 
@@ -1605,8 +1609,12 @@ fail:
 		alloc_len = sizeof(*tx_report);
 		MFREE(dhdp->osh, tx_report, alloc_len);
 	}
-	dhdp->dbg->pkt_mon.tx_report = NULL;
-	dhdp->dbg->pkt_mon.tx_report->tx_pkts = NULL;
+	if (dhdp->dbg->pkt_mon.tx_report) {
+		if (dhdp->dbg->pkt_mon.tx_report->tx_pkts) {
+			dhdp->dbg->pkt_mon.tx_report->tx_pkts = NULL;
+		}
+		dhdp->dbg->pkt_mon.tx_report = NULL;
+	}
 	dhdp->dbg->pkt_mon.tx_pkt_mon = NULL;
 	dhdp->dbg->pkt_mon.tx_status_mon = NULL;
 	dhdp->dbg->pkt_mon.tx_pkt_state = PKT_MON_DETACHED;
@@ -1621,8 +1629,12 @@ fail:
 		alloc_len = sizeof(*rx_report);
 		MFREE(dhdp->osh, rx_report, alloc_len);
 	}
-	dhdp->dbg->pkt_mon.rx_report = NULL;
-	dhdp->dbg->pkt_mon.rx_report->rx_pkts = NULL;
+	if (dhdp->dbg->pkt_mon.rx_report) {
+		if (dhdp->dbg->pkt_mon.rx_report->rx_pkts) {
+			dhdp->dbg->pkt_mon.rx_report->rx_pkts = NULL;
+		}
+		dhdp->dbg->pkt_mon.rx_report = NULL;
+	}
 	dhdp->dbg->pkt_mon.rx_pkt_mon = NULL;
 	dhdp->dbg->pkt_mon.rx_pkt_state = PKT_MON_DETACHED;
 
@@ -1952,7 +1964,10 @@ dhd_dbg_monitor_get_tx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 			"tx_pkt_state=%d, tx_status_state=%d\n", __FUNCTION__,
 			tx_pkt_state, tx_status_state));
 		DHD_PKT_MON_UNLOCK(dhdp->dbg->pkt_mon_lock, flags);
-		return -EINVAL;
+		/* PKT_MON not operational is not an error condition for VTS tests
+		 * since PKT_MON is operational only during connection process.
+		 */
+		return BCME_OK;
 	}
 
 	count = 0;
@@ -2016,7 +2031,10 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 		DHD_PKT_MON(("%s(): packet fetch is not allowed , "
 			"rx_pkt_state=%d\n", __FUNCTION__, rx_pkt_state));
 		DHD_PKT_MON_UNLOCK(dhdp->dbg->pkt_mon_lock, flags);
-		return -EINVAL;
+		/* PKT_MON not operational is not an error condition for VTS tests
+		 * since PKT_MON is operational only during connection process.
+		 */
+		return BCME_OK;
 	}
 
 	count = 0;

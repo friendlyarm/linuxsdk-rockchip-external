@@ -2,9 +2,9 @@
  * Broadcom SiliconBackplane SDIO/PCMCIA hardware-specific
  * device core support
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -140,7 +140,7 @@ typedef volatile struct {
 		sdiodma64_t sdiod64;
 	} dma;
 
-	uint32 PAD[12];			/* 0x300-0x32c */
+	uint32 PAD[4];			/* 0x320-0x32c */
 	uint32 chipid;			/* SDIO ChipID Register, 0x330, rev31 */
 	uint32 eromptr;			/* SDIO EromPtrOffset Register, 0x334, rev31 */
 	uint32 PAD[50];

@@ -172,10 +172,11 @@ int         NormalRgaSetRopMaskInfo(struct rga_req *msg,
 
 /* use dst alpha  */
 
-int         NormalRgaSetAlphaEnInfo(struct rga_req *msg,
-                                    unsigned int alpha_cal_mode, unsigned int alpha_mode,
-                                    unsigned int global_a_value, unsigned int PD_en,
-                                    unsigned int PD_mode,        unsigned int dst_alpha_en );
+int NormalRgaSetAlphaEnInfo(struct rga_req *msg,
+                            unsigned int alpha_cal_mode, unsigned int alpha_mode,
+                            unsigned int fg_global_alpha, unsigned int bg_global_alpha,
+                            unsigned int PD_en, unsigned int PD_mode,
+                            unsigned int dst_alpha_en);
 
 
 
@@ -207,7 +208,7 @@ bool        NormalRgaFormatHasAlpha(int format);
 // dither en flag
 // AA flag
 int         NormalRgaSetBitbltMode(struct rga_req *msg,
-                                   unsigned char scale_mode,  unsigned char rotate_mode,
+                                   struct rga_interp interp,  unsigned char rotate_mode,
                                    unsigned int  angle,       unsigned int  dither_en,
                                    unsigned int  AA_en,       unsigned int  yuv2rgb_mode);
 

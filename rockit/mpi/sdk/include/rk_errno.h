@@ -100,6 +100,30 @@ typedef enum rkEN_ERR_CODE_E {
     // buffer size is smaller than the actual size required
     RK_ERR_SIZE_NOT_ENOUGH = 19,
     /*
+     * dev resource exists
+     */
+    RK_ERR_DEV_EXIST       = 20,
+    /*
+     * dev resource unexists
+     */
+    RK_ERR_DEV_UNEXIST     = 21,
+    /*
+     * pipe resource exists
+     */
+    RK_ERR_PIPE_EXIST      = 22,
+    /*
+     * pipe resource unexists
+     */
+    RK_ERR_PIPE_UNEXIST    = 23,
+    /*
+     * group resource exists
+     */
+    RK_ERR_GROUP_EXIST      = 24,
+    /*
+     * group resource unexists
+     */
+    RK_ERR_GROUP_UNEXIST    = 25,
+    /*
      * maxium code, private error code of all modules
      * must be greater than it
      */

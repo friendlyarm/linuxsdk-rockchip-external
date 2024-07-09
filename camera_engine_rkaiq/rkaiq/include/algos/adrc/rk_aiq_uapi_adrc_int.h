@@ -1,10 +1,10 @@
 #ifndef _RK_AIQ_UAPI_ADRC_INT_H_
 #define _RK_AIQ_UAPI_ADRC_INT_H_
 
-#include "base/xcam_common.h"
-#include "rk_aiq_algo_des.h"
-#include "rk_aiq_types_adrc_algo_int.h"
-#include "adrc_uapi_head.h"
+#include "xcore/base/xcam_common.h"
+#include "algos/rk_aiq_algo_des.h"
+#include "algos/adrc/rk_aiq_types_adrc_algo_int.h"
+#include "iq_parser_v2/adrc_uapi_head.h"
 
 
 // need_sync means the implementation should consider
@@ -26,5 +26,8 @@ XCamReturn rk_aiq_uapi_adrc_v12_GetAttrib(RkAiqAlgoContext* ctx, drcAttrV12_t* a
 XCamReturn rk_aiq_uapi_adrc_v12_lite_SetAttrib(RkAiqAlgoContext* ctx, const drcAttrV12Lite_t* attr,
                                                bool need_sync);
 XCamReturn rk_aiq_uapi_adrc_v12_lite_GetAttrib(RkAiqAlgoContext* ctx, drcAttrV12Lite_t* attr);
+XCamReturn rk_aiq_uapi_adrc_v20_SetAttrib(RkAiqAlgoContext* ctx, const drcAttrV20_t* attr,
+                                          bool need_sync);
+XCamReturn rk_aiq_uapi_adrc_v20_GetAttrib(RkAiqAlgoContext* ctx, drcAttrV20_t* attr);
 
 #endif

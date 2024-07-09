@@ -91,10 +91,14 @@ prepare(RkAiqAlgoCom* params)
             (CalibDbV2_CNRV2_t*)(CALIBDBV2_GET_MODULE_PTR((void*)pCalibDbV2, cnr_v2));
         pAcnrCtx->cnr_v2 = *cnr_v2;
 #endif
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
         pAcnrCtx->isIQParaUpdate = true;
         pAcnrCtx->isReCalculate |= 1;
 
     }
+
     AcnrV2_result_t ret = Acnr_Prepare_V2(pAcnrCtx, &pCfgParam->stAcnrConfig);
     if(ret != ACNRV2_RET_SUCCESS) {
         result = XCAM_RETURN_ERROR_FAILED;

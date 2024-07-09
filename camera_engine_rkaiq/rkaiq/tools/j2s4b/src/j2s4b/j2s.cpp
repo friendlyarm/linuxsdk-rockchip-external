@@ -13,8 +13,7 @@
  */
 
 #include "j2s.h"
-
-using namespace RkCam;
+#include "RkAiqVersion.h"
 
 static bool j2s_template_dumping = false;
 
@@ -256,15 +255,15 @@ static cJSON *_j2s_enum_to_json(j2s_ctx *ctx, int enum_index) {
 
   enum_obj = &ctx->enums[enum_index];
 
-  root = RkCam::cJSON_CreateObject();
+  root = RkCam_cJSON_CreateObject();
   DASSERT(root, return NULL);
 
   for (int i = 0; i < enum_obj->num_value; i++) {
     j2s_enum_value *enum_value = &ctx->enum_values[enum_obj->value_index + i];
 
-    item = RkCam::cJSON_CreateNumber(enum_value->value);
+    item = RkCam_cJSON_CreateNumber(enum_value->value);
     if (item)
-      RkCam::cJSON_AddItemToObject(root, enum_value->name, item);
+      RkCam_cJSON_AddItemToObject(root, enum_value->name, item);
   }
 
   return root;
@@ -276,7 +275,7 @@ cJSON *j2s_enums_to_json(j2s_ctx *ctx) {
   if (!ctx->num_enum)
     return NULL;
 
-  root = cJSON_CreateObject();
+  root = RkCam_cJSON_CreateObject();
   DASSERT(root, return NULL);
 
   for (int i = 0; i < ctx->num_enum; i++) {
@@ -284,7 +283,7 @@ cJSON *j2s_enums_to_json(j2s_ctx *ctx) {
 
     item = _j2s_enum_to_json(ctx, i);
     if (item)
-      cJSON_AddItemToObject(root, enum_obj->name, item);
+      RkCam_cJSON_AddItemToObject(root, enum_obj->name, item);
   }
 
   return root;
@@ -517,7 +516,7 @@ static cJSON *j2s_get_index_json(j2s_ctx *ctx, cJSON *parent, int obj_index) {
 
   /* Handle array with index obj @<name>_index */
   snprintf(index_name, sizeof(index_name), "@%s_index", obj->name);
-  return cJSON_GetObjectItemCaseSensitive(parent, index_name);
+  return RkCam_cJSON_GetObjectItemCaseSensitive(parent, index_name);
 }
 
 static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
@@ -531,17 +530,17 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
 
   obj = &ctx->objs[obj_index];
 
-  DBG("handling obj: %s from %p[%d]\n", obj->name, ptr, obj->offset);
+  DBG("handling obj: %s from %p[%u]\n", obj->name, ptr, obj->offset);
 
   /* Handle simple string */
   if (J2S_IS_SIMPLE_STRING(obj)) {
     if (j2s_template_dumping)
-      return cJSON_CreateString("");
+      return RkCam_cJSON_CreateString("");
 
     ptr += obj->offset;
     if (obj->flags & J2S_FLAG_POINTER)
       ptr = *(char **)ptr;
-    return cJSON_CreateString(ptr ? ptr : "");
+    return RkCam_cJSON_CreateString(ptr ? ptr : "");
   }
 
   /* Handle array member */
@@ -549,7 +548,7 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
     j2s_obj tmp_obj;
     cJSON *item;
 
-    root = cJSON_CreateArray();
+    root = RkCam_cJSON_CreateArray();
     DASSERT(root, return NULL);
 
     tmp_obj = *obj;
@@ -562,7 +561,7 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
 
       item = _j2s_obj_to_json(ctx, obj_index, ptr);
       if (item)
-        cJSON_AddItemToArray(root, item);
+        RkCam_cJSON_AddItemToArray(root, item);
 
       obj->offset += tmp_obj.elem_size;
     }
@@ -586,7 +585,7 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
     }
 
     if (!len)
-      return cJSON_CreateArray();
+      return RkCam_cJSON_CreateArray();
 
     tmp_obj = *obj;
 
@@ -595,7 +594,7 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
     DASSERT_MSG(j2s_template_dumping || ptr, return NULL,
                 "found null pointer at %s\n", obj->name);
 
-    DBG("handling dynamic array: %s %d*%d from %p\n", obj->name, obj->elem_size,
+    DBG("handling dynamic array: %s %u*%d from %p\n", obj->name, obj->elem_size,
         obj->num_elem, ptr);
 
     root = _j2s_obj_to_json(ctx, obj_index, ptr);
@@ -612,7 +611,7 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
   if (j2s_template_dumping) {
     for (int i = 0; i < ctx->num_obj; i++) {
       if (ctx->objs[i].len_index == obj_index)
-        return cJSON_CreateNumber(1);
+        return RkCam_cJSON_CreateNumber(1);
     }
 
     if (obj->enum_index >= 0) {
@@ -620,10 +619,10 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
       j2s_enum *enum_obj = &ctx->enums[obj->enum_index];
       j2s_enum_value *enum_value = &ctx->enum_values[enum_obj->value_index];
 
-      return cJSON_CreateString(enum_value->name);
+      return RkCam_cJSON_CreateString(enum_value->name);
     }
 
-    return cJSON_CreateNumber(0);
+    return RkCam_cJSON_CreateNumber(0);
   }
 
   value = j2s_obj_get_value(ctx, obj_index, ptr);
@@ -631,10 +630,10 @@ static cJSON *_j2s_obj_to_json(j2s_ctx *ctx, int obj_index, void *ptr_) {
   if (obj->enum_index >= 0) {
     /* Convert enum value to name */
     const char *name = j2s_enum_get_name(ctx, obj->enum_index, (int)value);
-    return cJSON_CreateString(name);
+    return RkCam_cJSON_CreateString(name);
   }
 
-  return cJSON_CreateNumber(value);
+  return RkCam_cJSON_CreateNumber(value);
 }
 
 static cJSON *_j2s_struct_to_json(j2s_ctx *ctx, int struct_index, void *ptr) {
@@ -650,7 +649,7 @@ static cJSON *_j2s_struct_to_json(j2s_ctx *ctx, int struct_index, void *ptr) {
   if (struct_obj->child_index < 0)
     return NULL;
 
-  root = cJSON_CreateObject();
+  root = RkCam_cJSON_CreateObject();
   DASSERT(root, return NULL);
 
   DBG("start struct: %s from %p\n", struct_obj->name, ptr);
@@ -674,15 +673,15 @@ static cJSON *_j2s_struct_to_json(j2s_ctx *ctx, int struct_index, void *ptr) {
 
         const char *desc = ctx->descs[child_index];
         if (desc) {
-          cJSON *json = cJSON_CreateString(desc);
+          cJSON *json = RkCam_cJSON_CreateString(desc);
           DASSERT(json, goto out);
 
           strcat(buf, child->name);
-          cJSON_AddItemToObject(root, buf, json);
+          RkCam_cJSON_AddItemToObject(root, buf, json);
         }
       }
 
-      cJSON_AddItemToObject(root, child->name, item);
+      RkCam_cJSON_AddItemToObject(root, child->name, item);
     }
   }
 
@@ -691,7 +690,7 @@ out:
   DBG("finish struct: %s\n", struct_obj->name);
 
   if (ret < 0) {
-    cJSON_Delete(root);
+    RkCam_cJSON_Delete(root);
     return NULL;
   }
   return root;
@@ -744,7 +743,7 @@ static int _j2s_obj_free(j2s_ctx *ctx, int obj_index, void *ptr_) {
   /* Handle dynamic array */
   if (J2S_IS_POINTER(obj)) {
     j2s_obj tmp_obj;
-    void *root_ptr = *(void **)ptr;
+    // void *root_ptr = *(void **)ptr;
     int len;
 
     if (obj->len_index < 0) {
@@ -857,7 +856,7 @@ static int _j2s_obj_to_bin(j2s_ctx *ctx, int obj_index, void *ptr_,
   /* Handle dynamic array */
   if (J2S_IS_POINTER(obj)) {
     j2s_obj tmp_obj;
-    void *root_ptr = *(void **)ptr;
+    // void *root_ptr = *(void **)ptr;
     int len;
 
     if (obj->len_index < 0) {
@@ -880,7 +879,7 @@ static int _j2s_obj_to_bin(j2s_ctx *ctx, int obj_index, void *ptr_,
     _j2s_obj_to_bin(ctx, obj_index, ptr, struct_map);
 
     if (ptr) {
-      DBG("%s-----dynamic size:[%d]x[%d]\n", obj->name, obj->base_elem_size,
+      DBG("%s-----dynamic size:[%d]x[%u]\n", obj->name, obj->base_elem_size,
           len);
       struct_map_record(struct_map, (const uint8_t *)ptr, (uint64_t)ptr,
                         obj->base_elem_size * len);
@@ -937,7 +936,7 @@ static int j2s_json_to_array_with_index(j2s_ctx *ctx, cJSON *json,
   cJSON *index_item, *item;
   int size, index, ret = -1;
 
-  size = cJSON_GetArraySize(index_json);
+  size = RkCam_cJSON_GetArraySize(index_json);
   if (!size)
     return 0;
 
@@ -950,12 +949,12 @@ static int j2s_json_to_array_with_index(j2s_ctx *ctx, cJSON *json,
     cJSON *root;
 
     /* Clear the original array */
-    root = cJSON_CreateArray();
-    cJSON_ReplaceItemInObjectCaseSensitive(parent, obj->name, root);
+    root = RkCam_cJSON_CreateArray();
+    RkCam_cJSON_ReplaceItemInObjectCaseSensitive(parent, obj->name, root);
 
     for (int i = 0; i < size; i++) {
-      index_item = cJSON_GetArrayItem(index_json, i);
-      index = cJSON_GetNumberValue(index_item);
+      index_item = RkCam_cJSON_GetArrayItem(index_json, i);
+      index = RkCam_cJSON_GetNumberValue(index_item);
       obj->offset = tmp_obj.offset + index * tmp_obj.elem_size;
       item = NULL;
 
@@ -967,19 +966,19 @@ static int j2s_json_to_array_with_index(j2s_ctx *ctx, cJSON *json,
         item = _j2s_obj_to_json(ctx, obj - ctx->objs, ptr);
 
       if (!item) {
-        item = cJSON_CreateObject();
+        item = RkCam_cJSON_CreateObject();
         if (!item) {
           ret = -1;
           break;
         }
       }
 
-      cJSON_AddItemToArray(root, item);
+      RkCam_cJSON_AddItemToArray(root, item);
     }
   } else {
     for (int i = 0; i < size; i++) {
-      index_item = cJSON_GetArrayItem(index_json, i);
-      index = cJSON_GetNumberValue(index_item);
+      index_item = RkCam_cJSON_GetArrayItem(index_json, i);
+      index = RkCam_cJSON_GetNumberValue(index_item);
       obj->offset = tmp_obj.offset + index * tmp_obj.elem_size;
 
       DBG("handling index array: %s %d/%d\n", obj->name, index,
@@ -989,7 +988,7 @@ static int j2s_json_to_array_with_index(j2s_ctx *ctx, cJSON *json,
         continue;
 
       /* Apply item */
-      item = cJSON_GetArrayItem(json, i);
+      item = RkCam_cJSON_GetArrayItem(json, i);
       if (!item)
         break;
 
@@ -1015,7 +1014,7 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
 
   obj = &ctx->objs[obj_index];
 
-  DBG("handling obj: %s from %p[%d]\n", obj->name, ptr, obj->offset);
+  DBG("handling obj: %s from %p[%u]\n", obj->name, ptr, obj->offset);
 
   /* Handle simple string */
   if (J2S_IS_SIMPLE_STRING(obj)) {
@@ -1025,9 +1024,9 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
       if (obj->flags == J2S_FLAG_POINTER)
         ptr = *(char **)ptr;
 
-      cJSON_SetValuestring(root, ptr ? ptr : "");
+      RkCam_cJSON_SetValuestring(root, ptr ? ptr : "");
     } else {
-      char *str = cJSON_GetStringValue(root);
+      char *str = RkCam_cJSON_GetStringValue(root);
 
       if (obj->flags == J2S_FLAG_ARRAY) {
         strncpy(ptr, str ? str : "", obj->num_elem);
@@ -1060,7 +1059,7 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
     index_json = j2s_get_index_json(ctx, parent, obj_index);
     if (index_json && obj->type != J2S_TYPE_STRING &&
         obj->flags != J2S_FLAG_ARRAY) {
-      cJSON_DetachItemViaPointer(parent, index_json);
+      RkCam_cJSON_DetachItemViaPointer(parent, index_json);
       index_json = NULL;
       ERR("ignoring index for dep types %s\n", obj->name);
     }
@@ -1077,7 +1076,7 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
     for (int i = 0; i < tmp_obj.num_elem; i++) {
       DBG("handling array: %s %d/%d\n", obj->name, i, tmp_obj.num_elem);
 
-      item = cJSON_GetArrayItem(root, i);
+      item = RkCam_cJSON_GetArrayItem(root, i);
       if (!item)
         continue;
 
@@ -1104,7 +1103,7 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
 
     len_name = ctx->objs[obj->len_index].name;
 
-    len_json = cJSON_GetObjectItemCaseSensitive(parent, len_name);
+    len_json = RkCam_cJSON_GetObjectItemCaseSensitive(parent, len_name);
     if (!len_json && !query)
       ERR("missing len in json for dynamic array '%s'\n", obj->name);
 
@@ -1113,35 +1112,35 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
     if (query && !index_json) {
       /* Query dynamic array len */
       if (len_json)
-        cJSON_DetachItemViaPointer(parent, len_json);
+        RkCam_cJSON_DetachItemViaPointer(parent, len_json);
 
       len_json = _j2s_obj_to_json(ctx, obj->len_index, ptr);
       DASSERT_MSG(len_json, return -1, "failed to query %s\n", len_name);
 
-      cJSON_AddItemToObject(parent, len_name, len_json);
+      RkCam_cJSON_AddItemToObject(parent, len_name, len_json);
 
       /* Force query the whole dynamic array */
-      cJSON_DetachItemViaPointer(parent, json);
-      cJSON_Delete(json);
+      RkCam_cJSON_DetachItemViaPointer(parent, json);
+      RkCam_cJSON_Delete(json);
 
       json = _j2s_obj_to_json(ctx, obj_index, ptr);
       DASSERT_MSG(json, return -1, "failed to query %s\n", obj->name);
 
-      cJSON_AddItemToObject(parent, obj->name, json);
+      RkCam_cJSON_AddItemToObject(parent, obj->name, json);
       return 0;
     }
 
     old_len = j2s_obj_get_value(ctx, obj->len_index, ptr);
 
     if (len_json) {
-      len = cJSON_GetArraySize(json);
+      len = RkCam_cJSON_GetArraySize(json);
       /* Fallback to array size */
-      cJSON_SetNumberValue(len_json, len);
+      RkCam_cJSON_SetNumberValue(len_json, len);
     } else if (index_json) {
       len = old_len;
     } else {
       /* Fallback to array size */
-      len = cJSON_GetArraySize(json);
+      len = RkCam_cJSON_GetArraySize(json);
     }
 
     if (len != old_len) {
@@ -1160,7 +1159,7 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
 
       j2s_obj_set_value(ctx, obj->len_index, len, ptr);
 
-      DBG("re-alloc %s from %d*%d to %d*%d = %p\n", obj->name, old_len,
+      DBG("re-alloc %s from %d*%u to %d*%u = %p\n", obj->name, old_len,
           obj->elem_size, len, obj->elem_size, *buf);
     }
 
@@ -1173,7 +1172,7 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
     ptr = (char *)j2s_extract_dynamic_array(obj, len, ptr);
     DASSERT_MSG(ptr, return -1, "found null pointer at %s\n", obj->name);
 
-    DBG("handling dynamic array: %s %d*%d from %p\n", obj->name, obj->elem_size,
+    DBG("handling dynamic array: %s %u*%d from %p\n", obj->name, obj->elem_size,
         obj->num_elem, ptr);
 
     ret = _j2s_json_to_obj(ctx, root, parent, obj_index, ptr, query);
@@ -1194,22 +1193,22 @@ static int _j2s_json_to_obj(j2s_ctx *ctx, cJSON *json, cJSON *parent,
     if (obj->enum_index >= 0) {
       /* Convert enum value to name */
       const char *name = j2s_enum_get_name(ctx, obj->enum_index, (int)value);
-      cJSON_SetValuestring(root, name);
+      RkCam_cJSON_SetValuestring(root, name);
       return 0;
     }
 
-    cJSON_SetNumberValue(root, value);
+    RkCam_cJSON_SetNumberValue(root, value);
     return 0;
   } else {
     double value;
 
     if (obj->enum_index >= 0) {
       /* Convert enum name to value */
-      char *name = cJSON_GetStringValue(root);
+      char *name = RkCam_cJSON_GetStringValue(root);
 
       value = (double)j2s_enum_get_value(ctx, obj->enum_index, name);
     } else {
-      value = cJSON_GetNumberValue(root);
+      value = RkCam_cJSON_GetNumberValue(root);
     }
 
     j2s_obj_set_value(ctx, obj_index, value, ptr);
@@ -1236,7 +1235,7 @@ static int _j2s_json_to_struct(j2s_ctx *ctx, cJSON *json, int struct_index,
        child_index = child->next_index) {
     child = &ctx->objs[child_index];
 
-    item = cJSON_GetObjectItemCaseSensitive(root, child->name);
+    item = RkCam_cJSON_GetObjectItemCaseSensitive(root, child->name);
     if (!item)
       continue;
 
@@ -1319,37 +1318,114 @@ static void j2s_store_obj(j2s_obj *obj, int fd, void *ptr_) {
 
 int j2s_json_to_bin(j2s_ctx *ctx, cJSON *json, const char *name, void **ptr,
                     size_t struct_size, const char *ofname) {
+
   size_t real_size = 0;
   size_t bin_size = 0;
   j2s_pool_t *j2s_pool = NULL;
-  *ptr = j2s_alloc_data(ctx, struct_size, &real_size);
-  j2s_json_to_struct(ctx, json, name, *ptr);
+  char iq_v[64] = {};
+  FILE *ofp = NULL;
+  size_t map_len = 0;
 
+  j2s_pool = (j2s_pool_t *)malloc(sizeof(j2s_pool_t));
+  memset(j2s_pool, 0, sizeof(j2s_pool_t));
   void* bin_buffer = malloc(MAX_IQBIN_SIZE);
   if (!bin_buffer) {
     printf("%s %d [J2S4B] oom!\n", __func__, __LINE__);
     return -1;
   }
+  memset(bin_buffer, 0, MAX_IQBIN_SIZE);
+  j2s_pool->data = (uint8_t*)bin_buffer;
+  ctx->priv = j2s_pool;
+
+  *ptr = j2s_alloc_data(ctx, struct_size, &real_size);
+  j2s_json_to_struct(ctx, json, name, *ptr);
+  ctx->priv = NULL;
 
   uint8_t *current_index = (uint8_t*) bin_buffer;
 
-  j2s_pool = (j2s_pool_t *)ctx->priv;
-
   size_t map_start = j2s_pool->used;
-  memcpy(current_index, j2s_pool->data, j2s_pool->used);
+  bin_size = j2s_pool->used;
   current_index += j2s_pool->used;
+  bin_size += sizeof(map_index_t) * j2s_pool->map_len;
+  if (bin_size > MAX_IQBIN_SIZE) {
+    printf("[BIN] %s %d:iq binary too large!\n", __func__, __LINE__);
+    goto error;
+  }
   memcpy(current_index, j2s_pool->maps_list, sizeof(map_index_t) * j2s_pool->map_len);
   current_index += sizeof(map_index_t) * j2s_pool->map_len;
+  bin_size += sizeof(size_t);
+  if (bin_size > MAX_IQBIN_SIZE) {
+    printf("[BIN] %s %d:iq binary too large!\n", __func__, __LINE__);
+    goto error;
+  }
   memcpy(current_index, &map_start, sizeof(size_t));
   current_index += sizeof(size_t);
+  bin_size += sizeof(size_t);
+  if (bin_size > MAX_IQBIN_SIZE) {
+    printf("[BIN] %s %d:iq binary too large!\n", __func__, __LINE__);
+    goto error;
+  }
   memcpy(current_index, &j2s_pool->map_len, sizeof(size_t));
   current_index += sizeof(size_t);
 
   bin_size = j2s_pool->used + sizeof(map_index_t) * j2s_pool->map_len + sizeof(size_t) * 2;
 
-  BinMapLoader::suqeezBinMap(ofname, (uint8_t*)bin_buffer, bin_size);
+  BinMapLoader::suqeezBinMap((uint8_t*)bin_buffer, &bin_size);
+
+  current_index = ((uint8_t*)bin_buffer) + bin_size - sizeof(size_t) * 2;
+  map_start = *(size_t*)current_index;
+  map_len = *(size_t*)(current_index + sizeof(size_t));
+
+  bin_size = map_start + sizeof(map_index_t) * map_len;
+
+  if (strlen(RK_AIQ_IQ_HEAD_VERSION) > 63) {
+    printf("RK_AIQ_IQ_HEAD_VERSION: %s %z is too long\n", RK_AIQ_IQ_HEAD_VERSION, strlen(RK_AIQ_IQ_HEAD_VERSION));
+    goto error;
+  }
+  snprintf(iq_v, 64, "%s", RK_AIQ_IQ_HEAD_VERSION);
+  memcpy(current_index, iq_v, sizeof(iq_v));
+  current_index += sizeof(iq_v);
+  bin_size += sizeof(iq_v);
+  if (bin_size > MAX_IQBIN_SIZE) {
+    printf("[BIN] %s %d:iq binary too large!\n", __func__, __LINE__);
+    goto error;
+  }
+  memcpy(current_index, &map_start, sizeof(size_t));
+  current_index += sizeof(size_t);
+  bin_size += sizeof(size_t);
+  if (bin_size > MAX_IQBIN_SIZE) {
+    printf("[BIN] %s %d:iq binary too large!\n", __func__, __LINE__);
+    goto error;
+  }
+  memcpy(current_index, &map_len, sizeof(size_t));
+  current_index += sizeof(size_t);
+  bin_size += sizeof(size_t);
+  if (bin_size > MAX_IQBIN_SIZE) {
+    printf("[BIN] %s %d:iq binary too large!\n", __func__, __LINE__);
+    goto error;
+  }
+
+  ofp = fopen(ofname, "wb+");
+  if (!ofp) {
+    printf("failed to open: '%s'\n", ofname);
+    return -1;
+  }
+
+  fwrite(bin_buffer, 1, bin_size, ofp);
+  fclose(ofp);
+  ofp = NULL;
 
   free(bin_buffer);
+
+error:
+  if (j2s_pool) {
+    if (j2s_pool->maps_list) {
+      free(j2s_pool->maps_list);
+      j2s_pool->maps_list = NULL;
+    }
+    free(j2s_pool);
+    j2s_pool = NULL;
+  }
 
   DBG("maps [%zu][%zu][%zu]\n", sizeof(map_index_t), j2s_pool->map_len, map_start);
 

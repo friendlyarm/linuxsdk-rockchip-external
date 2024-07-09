@@ -1,9 +1,11 @@
 PLUGIN_UUID = f07bfc66-958c-4a15-99c0-260e4e7375dd
 
+OPTEE_CLIENT_EXPORT ?= ../../client_export/
+
 PLUGIN			= $(PLUGIN_UUID).plugin
 PLUGIN_SRS		= $(wildcard ./*.c)
 PLUGIN_OBJ		= $(patsubst %.c, $(O)/supp_plugin/%.o, $(PLUGIN_SRS))
-PLUGIN_INCLUDES_DIR	= $(CURDIR)/include $(OPTEE_CLIENT_EXPORT)/include
+PLUGIN_INCLUDES_DIR	= $(CURDIR)/include $(OPTEE_CLIENT_EXPORT)/public
 
 PLUGIN_INCLUDES		= $(addprefix -I, $(PLUGIN_INCLUDES_DIR))
 PLUGIN_CCFLAGS		= $(CFLAGS) -Wall -fPIC

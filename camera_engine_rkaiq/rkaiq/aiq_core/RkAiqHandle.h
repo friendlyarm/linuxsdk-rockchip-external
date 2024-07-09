@@ -26,6 +26,7 @@
 #include "rk_aiq_types.h"
 #include "xcam_mutex.h"
 #include "rk_aiq_pool.h"
+#include "RkAiqGlobalParamsManager.h"
 
 namespace RkCam {
 
@@ -107,6 +108,12 @@ class RkAiqHandle {
     virtual RkAiqAlgoResCom* getProcProcRes() {
         return mProcOutParam;
     }
+    bool isUpdateGrpAttr(void) {
+       return mIsUpdateGrpAttr;
+    }
+    void clearUpdateGrpAttr(void) {
+       mIsUpdateGrpAttr = false;
+    }
  protected:
     virtual void init() = 0;
     virtual void deInit();
@@ -122,6 +129,7 @@ class RkAiqHandle {
     inline uint64_t grpId2GrpMask(uint32_t grpId) {
         return grpId == RK_AIQ_CORE_ANALYZE_ALL ? (uint64_t)grpId : (1ULL << grpId);
     }
+
     RkAiqAlgoCom* mConfig;
     RkAiqAlgoCom* mPreInParam;
     RkAiqAlgoResCom* mPreOutParam;
@@ -144,6 +152,14 @@ class RkAiqHandle {
     bool mIsMulRun;
     bool mPostShared;
     uint32_t mSyncFlag{(uint32_t)(-1)};
+    bool mIsUpdateGrpAttr;
+
+#if USE_NEWSTRUCT
+    int mResultType;
+    int mResultSize;
+    XCamReturn do_processing_common(void);
+#endif
+
 };
 
 template <typename T>

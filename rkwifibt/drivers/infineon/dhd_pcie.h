@@ -1,9 +1,9 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -651,7 +651,9 @@ int bcmpcie_set_get_wake(struct dhd_bus *bus, int flag);
 extern bool dhdpcie_bus_get_pcie_hostready_supported(dhd_bus_t *bus);
 extern void dhd_bus_hostready(struct  dhd_bus *bus);
 extern void dhdpcie_bus_enab_pcie_dw(dhd_bus_t *bus, uint8 dw_option);
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 extern int dhdpcie_irq_disabled(struct dhd_bus *bus);
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 
 static INLINE bool dhdpcie_is_arm_halted(struct dhd_bus *bus) {return TRUE;}
 static INLINE int dhd_os_wifi_platform_set_power(uint32 value) {return BCME_OK; }

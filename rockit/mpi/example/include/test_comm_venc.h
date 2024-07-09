@@ -19,6 +19,7 @@
 
 #include "rk_common.h"
 #include "rk_comm_venc.h"
+#include "test_common.h"
 
 #ifdef __cplusplus
 #if __cplusplus
@@ -35,8 +36,10 @@ typedef struct _COMMON_TEST_VENC_CTX_S {
     RK_CODEC_ID_E enType;
     RK_U32 u32ReadPicNum;  // for performance test, read one picture to test.
     PIXEL_FORMAT_E enPixFmt;
+    VENC_RC_ATTR_S stRcAttr;
     const char *pSrcFramePath;
     const char *pSaveStreamPath;
+    TEST_MPI_SOURCE_E enVencSource;
 } COMMON_TEST_VENC_CTX_S;
 
 RK_S32 TEST_VENC_Create(COMMON_TEST_VENC_CTX_S *vencCtx);

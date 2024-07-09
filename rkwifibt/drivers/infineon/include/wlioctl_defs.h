@@ -4,9 +4,9 @@
  *
  * Definitions subject to change without notice.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -482,7 +482,7 @@
 
 #define WSEC_WEP_ENABLED(wsec)	((wsec) & WEP_ENABLED)
 #define WSEC_TKIP_ENABLED(wsec)	((wsec) & TKIP_ENABLED)
-#define WSEC_AES_ENABLED(wsec)	((wsec) & AES_ENABLED)
+#define WSEC_AES_ENABLED(wsec)	((wsec) & (AES_ENABLED | AES_GCMP256))
 
 /* Macros to check if algorithm is enabled */
 #define	WSEC_INFO_ALGO_ENABLED(_wi, _algo) \
@@ -555,12 +555,22 @@
 #define WPA3_AUTH_PSK_SHA384		0x800000 /* PSK with SHA384 key derivation */
 #define WPA3_AUTH_1X_SHA384             0x2000000 /* 1x with SHA384 key derivation */
 
+/* WFA_AUTH_DPP */
+#define WPA2_WFA_AUTH_DPP		0x200000
+#define WFA_AUTH_DPP			0x100
+
 /* WPA2_AUTH_SHA256 not used anymore. Just kept here to avoid build issue in DINGO */
 #define WPA2_AUTH_SHA256		0x8000
 #define WPA_AUTH_PFN_ANY		0xffffffff	/* for PFN, match only ssid */
 
 #define WPA3_AUTH_SAE                  0x10000 /* SAE authentication with SHA-256 */
 
+#define WPA3_AUTH_MASK			(WPA3_AUTH_SAE_PSK | WPA3_AUTH_SAE_FBT |\
+					 WPA3_AUTH_OWE | WPA3_AUTH_1X_SUITE_B_SHA256 |\
+					 WPA3_AUTH_1X_SUITE_B_SHA384 | WPA3_AUTH_PSK_SHA384 |\
+					 WPA3_AUTH_1X_SHA384 | WPA3_AUTH_SAE)
+#define WPA3_AUTH_ENABLED(wpa_auth)	((wpa_auth) & WPA3_AUTH_MASK)
+#define NON_WPA3_AUTH_ENABLED(wpa_auth)	((wpa_auth) & ~WPA3_AUTH_MASK)
 /* pmkid */
 #define	MAXPMKID		16
 
@@ -1043,6 +1053,7 @@
 #define WL_CHAN_FREQ_RANGE_6G_BAND1     6
 #define WL_CHAN_FREQ_RANGE_6G_BAND2     7
 #define WL_CHAN_FREQ_RANGE_6G_BAND3     8
+#define WL_CHAN_FREQ_RANGE_6G_4BAND     18
 
 /* SROM12 */
 #define WL_CHAN_FREQ_RANGE_5G_BAND4 5
@@ -2122,6 +2133,8 @@
 #define ARP_OL_HOST_AUTO_REPLY		0x00000004
 #define ARP_OL_PEER_AUTO_REPLY		0x00000008
 #define ARP_OL_UPDATE_HOST_CACHE        0x00000010
+#define ARP_OL_AGGRESSIVE_GRAT_ARP	0x00000010
+#define ARP_OL_AGGRESSIVE_ARP_REQ	0x00000020
 
 /* ARP Offload error injection */
 #define ARP_ERRTEST_REPLY_PEER	0x1
@@ -2355,5 +2368,10 @@
 
 /* The macro for data field in empty vendor specific action frame */
 #define VS_EMPTY_ACTION 0xac
+
+#define H2_OCL_RSSI_DELTA	10	/* hysteresis rssi delta */
+#define	H2_OCL_RSSI_THRESHOLD	-70	/**< Low value, e.g. for forcing roam */
+#define	H2_OCL_RSSI_INVALID	0	/* invalid RSSI value */
+#define H2_OCL_DISABLED_RSSI	0x02   /* Disabled because of ocl_rssi_threshold */
 
 #endif /* wlioctl_defs_h */

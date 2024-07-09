@@ -1,9 +1,9 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -87,6 +87,15 @@
 #ifdef FORCE_TPOWERON
 extern uint32 tpoweron_scale;
 #endif /* FORCE_TPOWERON */
+
+#if defined(CONFIG_ARCH_MSM)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+#ifndef MSM_PCIE_CONFIG_NO_CFG_RESTORE
+#define MSM_PCIE_CONFIG_NO_CFG_RESTORE	0
+#endif /* MSM_PCIE_CONFIG_NO_CFG_RESTORE */
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0) */
+#endif /* CONFIG_ARCH_MSM */
+
 /* user defined data structures  */
 
 typedef bool (*dhdpcie_cb_fn_t)(void *);
@@ -258,6 +267,7 @@ static struct pci_driver dhdpcie_driver = {
 #endif /* DHD_PCIE_RUNTIMEPM || DHD_PCIE_NATIVE_RUNTIMEPM */
 };
 
+extern char pcie_dev_bus_name[MOD_PARAM_INFOLEN];
 int dhdpcie_init_succeeded = FALSE;
 
 #ifdef USE_SMMU_ARCH_MSM
@@ -1033,10 +1043,23 @@ static int dhdpcie_resume_dev(struct pci_dev *dev)
 {
 	int err = 0;
 	dhdpcie_info_t *pch = pci_get_drvdata(dev);
+
+	DHD_ERROR(("%s: Enter\n", __FUNCTION__));
+
+	err = pci_set_power_state(dev, PCI_D0);
+	if (err) {
+		printf("%s:pci_set_power_state error %d \n", __FUNCTION__, err);
+		goto out;
+	}
+	err = pci_enable_device(dev);
+	if (err) {
+		printf("%s:pci_enable_device error %d \n", __FUNCTION__, err);
+		goto out;
+	}
+	pci_set_master(dev);
 #if defined(OEM_ANDROID) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	pci_load_and_free_saved_state(dev, &pch->state);
 #endif /* OEM_ANDROID && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0) */
-	DHD_ERROR(("%s: Enter\n", __FUNCTION__));
 #ifdef OEM_ANDROID
 	dev->state_saved = TRUE;
 #endif /* OEM_ANDROID */
@@ -1046,17 +1069,6 @@ static int dhdpcie_resume_dev(struct pci_dev *dev)
 		dhd_bus_set_tpoweron(pch->bus, tpoweron_scale);
 	}
 #endif /* FORCE_TPOWERON */
-	err = pci_enable_device(dev);
-	if (err) {
-		printf("%s:pci_enable_device error %d \n", __FUNCTION__, err);
-		goto out;
-	}
-	pci_set_master(dev);
-	err = pci_set_power_state(dev, PCI_D0);
-	if (err) {
-		printf("%s:pci_set_power_state error %d \n", __FUNCTION__, err);
-		goto out;
-	}
 	BCM_REFERENCE(pch);
 	dhdpcie_suspend_dump_cfgregs(pch->bus, "AFTER_EP_RESUME");
 out:
@@ -1501,9 +1513,21 @@ dhdpcie_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			return -ENODEV;
 	}
 
-	printf("PCI_PROBE:  bus %X, slot %X,vendor %X, device %X"
-		"(good PCI location)\n", pdev->bus->number,
-		PCI_SLOT(pdev->devfn), pdev->vendor, pdev->device);
+	DHD_ERROR(("%s: PCI_PROBE: bus %X, slot %X,vendor %X, device %X"
+			"(good PCI location), name %s\n", dhdpcie_driver.name, pdev->bus->number,
+			PCI_SLOT(pdev->devfn), pdev->vendor, pdev->device, pdev->bus->name));
+
+	if (strlen(pcie_dev_bus_name)) {
+		if (!strncmp(pdev->bus->name,
+			pcie_dev_bus_name, strlen(pcie_dev_bus_name))) {
+			DHD_ERROR(("%s: PCI_PROBE: bus name (%s) matched (%s)\n",
+					dhdpcie_driver.name, pcie_dev_bus_name, pdev->bus->name));
+		} else {
+			DHD_ERROR(("%s: PCI_PROBE: bus name (%s) did not match (%s)\n",
+					dhdpcie_driver.name, pcie_dev_bus_name, pdev->bus->name));
+			return -ENODEV;
+		}
+	}
 
 	if (dhdpcie_init_succeeded == TRUE) {
 		DHD_ERROR(("%s(): === Driver Already attached to a BRCM device === \r\n",
@@ -1653,7 +1677,9 @@ dhdpcie_request_irq(dhdpcie_info_t *dhdpcie_info)
 {
 	dhd_bus_t *bus = dhdpcie_info->bus;
 	struct pci_dev *pdev = dhdpcie_info->bus->dev;
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 	int host_irq_disabled;
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 
 	if (!bus->irq_registered) {
 		snprintf(dhdpcie_info->pciname, sizeof(dhdpcie_info->pciname),
@@ -1682,12 +1708,14 @@ dhdpcie_request_irq(dhdpcie_info_t *dhdpcie_info)
 		DHD_ERROR(("%s: PCI IRQ is already registered\n", __FUNCTION__));
 	}
 
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 	host_irq_disabled = dhdpcie_irq_disabled(bus);
 	if (host_irq_disabled) {
 		DHD_ERROR(("%s: PCIe IRQ was disabled(%d), so, enabled it again\n",
 			__FUNCTION__, host_irq_disabled));
 		dhdpcie_enable_irq(bus);
 	}
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 
 	DHD_TRACE(("%s %s\n", __FUNCTION__, dhdpcie_info->pciname));
 
@@ -1720,7 +1748,13 @@ dhdpcie_get_pcieirq(struct dhd_bus *bus, unsigned int *irq)
 
 #ifdef EXYNOS_PCIE_MODULE_PATCH
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
+#if defined(BCMDHDX) && defined(WL_DHD_XR_CLIENT)
+/* declare and export bcm_pcie_default_state2 in drivers/pci/pci.c */
+extern struct pci_saved_state *bcm_pcie_default_state2;
+#else
+/* declare and export bcm_pcie_default_state in drivers/pci/pci.c */
 extern struct pci_saved_state *bcm_pcie_default_state;
+#endif // endif
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0) */
 #endif /* EXYNOS_MODULE_PATCH */
 
@@ -1746,6 +1780,9 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 	phys_addr_t  bar0_addr, bar1_addr;
 	ulong bar1_size;
 	struct pci_dev *pdev = dhdpcie_info->dev;
+#ifdef EXYNOS_PCIE_MODULE_PATCH
+	struct pci_saved_state *pcie_default_state = NULL;
+#endif // endif
 #if defined(CONFIG_ARCH_MSM) && !defined(ENABLE_INSMOD_NO_FW_LOAD)
 	int ret;
 	/* enable PCIe link */
@@ -1756,13 +1793,20 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 		goto err;
 	}
 	DHD_ERROR(("PCIe:%s:enabled link\n", __FUNCTION__));
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	/* recover the config space of both RC and Endpoint */
 	msm_pcie_recover_config(pdev);
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0) */
 #endif /* CONFIG_ARCH_MSM && !ENABLE_INSMOD_NO_FW_LOAD */
 #ifdef EXYNOS_PCIE_MODULE_PATCH
+#if defined(BCMDHDX) && defined(WL_DHD_XR_CLIENT)
+	pcie_default_state = bcm_pcie_default_state2;
+#else
+	pcie_default_state = bcm_pcie_default_state;
+#endif // endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
-	if (bcm_pcie_default_state) {
-		pci_load_saved_state(pdev, bcm_pcie_default_state);
+	if (pcie_default_state) {
+		pci_load_saved_state(pdev, pcie_default_state);
 		pci_restore_state(pdev);
 	}
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0) */
@@ -1786,10 +1830,11 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 			goto err;
 		}
 
-		dhdpcie_info->regs = (volatile char *) REG_MAP(bar0_addr, DONGLE_REG_MAP_SIZE);
+		dhdpcie_info->regs = (volatile char *) REG_MAP_XBIT(bar0_addr, DONGLE_REG_MAP_SIZE);
 		dhdpcie_info->bar1_size =
 			(bar1_size > DONGLE_TCM_MAP_SIZE) ? bar1_size : DONGLE_TCM_MAP_SIZE;
-		dhdpcie_info->tcm = (volatile char *) REG_MAP(bar1_addr, dhdpcie_info->bar1_size);
+		dhdpcie_info->tcm = (volatile char *) REG_MAP_XBIT(bar1_addr,
+			dhdpcie_info->bar1_size);
 
 		if (!dhdpcie_info->regs || !dhdpcie_info->tcm) {
 			DHD_ERROR(("%s:ioremap() failed\n", __FUNCTION__));
@@ -1797,9 +1842,9 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 		}
 #ifdef EXYNOS_PCIE_MODULE_PATCH
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
-		if (bcm_pcie_default_state == NULL) {
+		if (pcie_default_state == NULL) {
 			pci_save_state(pdev);
-			bcm_pcie_default_state = pci_store_saved_state(pdev);
+			pcie_default_state = pci_store_saved_state(pdev);
 		}
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0) */
 #endif /* EXYNOS_MODULE_PATCH */
@@ -2294,6 +2339,7 @@ dhdpcie_enable_irq(dhd_bus_t *bus)
 	return BCME_OK;
 }
 
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 int
 dhdpcie_irq_disabled(dhd_bus_t *bus)
 {
@@ -2301,6 +2347,7 @@ dhdpcie_irq_disabled(dhd_bus_t *bus)
 	/* depth will be zero, if enabled */
 	return desc->depth;
 }
+#endif /* (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))) */
 
 int
 dhdpcie_start_host_pcieclock(dhd_bus_t *bus)
@@ -2329,7 +2376,9 @@ dhdpcie_start_host_pcieclock(dhd_bus_t *bus)
 	ret = msm_pcie_pm_control(MSM_PCIE_RESUME, bus->dev->bus->number,
 		bus->dev, NULL, options);
 	if (bus->no_cfg_restore && !ret) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 		msm_pcie_recover_config(bus->dev);
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0) */
 		bus->no_cfg_restore = 0;
 	}
 #else
@@ -2515,7 +2564,7 @@ dhdpcie_alloc_resource(dhd_bus_t *bus)
 			break;
 		}
 
-		dhdpcie_info->regs = (volatile char *) REG_MAP(bar0_addr, DONGLE_REG_MAP_SIZE);
+		dhdpcie_info->regs = (volatile char *) REG_MAP_XBIT(bar0_addr, DONGLE_REG_MAP_SIZE);
 		if (!dhdpcie_info->regs) {
 			DHD_ERROR(("%s: ioremap() for regs is failed\n", __FUNCTION__));
 			break;
@@ -2524,7 +2573,8 @@ dhdpcie_alloc_resource(dhd_bus_t *bus)
 		bus->regs = dhdpcie_info->regs;
 		dhdpcie_info->bar1_size =
 			(bar1_size > DONGLE_TCM_MAP_SIZE) ? bar1_size : DONGLE_TCM_MAP_SIZE;
-		dhdpcie_info->tcm = (volatile char *) REG_MAP(bar1_addr, dhdpcie_info->bar1_size);
+		dhdpcie_info->tcm = (volatile char *) REG_MAP_XBIT(bar1_addr,
+			dhdpcie_info->bar1_size);
 		if (!dhdpcie_info->tcm) {
 			DHD_ERROR(("%s: ioremap() for regs is failed\n", __FUNCTION__));
 			REG_UNMAP(dhdpcie_info->regs);
@@ -3026,6 +3076,7 @@ struct device * dhd_bus_to_dev(dhd_bus_t *bus)
 
 #define KIRQ_PRINT_BUF_LEN 256
 
+#if (!defined(CONFIG_SPARSE_IRQ) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)))
 void
 dhd_print_kirqstats(dhd_pub_t *dhd, unsigned int irq_num)
 {
@@ -3096,6 +3147,7 @@ dhd_show_kirqstats(dhd_pub_t *dhd)
 	}
 #endif /* BCMPCIE_OOB_HOST_WAKE */
 }
+#endif
 
 #ifdef DHD_FW_COREDUMP
 #ifdef BCMDHDX

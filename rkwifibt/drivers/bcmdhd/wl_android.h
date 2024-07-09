@@ -1,7 +1,7 @@
 /*
  * Linux cfg80211 driver - Android related functions
  *
- * Copyright (C) 2020, Broadcom.
+ * Copyright (C) 2022, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -33,6 +33,9 @@
 #ifdef WL_EXT_IAPSTA
 #include <wl_iapsta.h>
 #endif /* WL_IAPSTA */
+#ifdef WL_ESCAN
+#include <wl_escan.h>
+#endif /* WL_ESCAN */
 #if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN) || \
 	(defined(WL_EXT_GENL) && defined(SENDPROB))
 #ifndef WL_EVENT
@@ -45,12 +48,17 @@
 /* If any feature uses the Generic Netlink Interface, put it here to enable WL_GENL
  * automatically
  */
-#if defined(WL_SDO) || defined(BT_WIFI_HANDOVER)
+#if defined(WL_SDO)
 #define WL_GENL
 #endif
 
 #ifdef WL_GENL
 #include <net/genetlink.h>
+#endif
+
+#if !defined(WL_MBO_IOV_VERSION)
+/* MBO IOV API version */
+#define WL_MBO_IOV_VERSION WL_MBO_IOV_VERSION_1_1
 #endif
 
 typedef struct _android_wifi_priv_cmd {
@@ -171,16 +179,15 @@ enum {
 	BCM_E_SVC_FOUND,
 	BCM_E_DEV_FOUND,
 	BCM_E_DEV_LOST,
-#ifdef BT_WIFI_HANDOVER
-	BCM_E_DEV_BT_WIFI_HO_REQ,
-#endif
 	BCM_E_MAX
 };
 
 s32 wl_genl_send_msg(struct net_device *ndev, u32 event_type,
 	const u8 *string, u16 len, u8 *hdr, u16 hdrlen);
 #endif /* WL_GENL */
+#ifdef WL_NETLINK
 s32 wl_netlink_send_msg(int pid, int type, int seq, const void *data, size_t size);
+#endif /* WL_NETLINK */
 
 /* hostap mac mode */
 #define MACLIST_MODE_DISABLED   0
@@ -257,4 +264,9 @@ extern int wl_android_bcnrecv_event(struct net_device *ndev,
 				return BCME_ERROR; \
 		} \
 	}
+
+#if defined(CUSTOM_CONTROL_HE_6G_FEATURES)
+extern int wl_android_set_he_6g_band(struct net_device *dev, bool enable);
+#endif /* CUSTOM_CONTROL_HE_6G_FEATURES */
+extern int wl_android_rcroam_turn_on(struct net_device *dev, int rcroam_enab);
 #endif /* _wl_android_ */

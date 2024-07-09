@@ -26,6 +26,8 @@ extern "C" {
 #define MAX_VI_ENTITY_NAME_LEN 32
 #define MAX_VI_BIND_PIPE_NUM   16
 
+typedef RK_S32 (*PREAIISP_CALLBACK)(RK_VOID *pUserData, RK_VOID *pPrivateData);
+
 /* interface mode of video input */
 typedef enum rkVI_INTF_MODE_E {
     VI_MODE_BT656 = 0,              /* ITU-R BT.656 YUV4:2:2 */
@@ -97,6 +99,27 @@ typedef enum rkVI_DATA_TYPE_E {
     VI_DATA_TYPE_BUTT
 } VI_DATA_TYPE_E;
 
+/* RAW MEM ALIGN MODE*/
+typedef enum VI_RAW_MEMORY_TYPE_E {
+    VI_RAW_MEM_COMPACT = 0,
+    VI_RAW_MEM_WORD_LOW_ALIGN = 1,
+    VI_RAW_MEM_WORD_HIGH_ALIGN = 2,
+} VI_RAW_MEMORY_TYPE_E;
+
+/* DEV HDR Mode */
+typedef enum rkVI_HDR_MODE_E {
+    VI_MODE_NORMAL      = 0,
+    VI_MODE_ISP_HDR2    = 0x10,
+    VI_MODE_ISP_HDR3    = 0x20,
+} VI_HDR_MODE_E;
+
+typedef enum rkVI_V4L2_MEMORY_TYPE {
+    VI_V4L2_MEMORY_TYPE_MMAP             = 1,
+    VI_V4L2_MEMORY_TYPE_USERPTR          = 2,
+    VI_V4L2_MEMORY_TYPE_OVERLAY          = 3,
+    VI_V4L2_MEMORY_TYPE_DMABUF           = 4,
+} VI_V4L2_MEMORY_TYPE;
+
 /* The attributes of a VI device */
 typedef struct rkVI_DEV_ATTR_S {
     /* RW;Interface mode */
@@ -112,6 +135,18 @@ typedef struct rkVI_DEV_ATTR_S {
     SIZE_S              stMaxSize;
     /* RW;Data rate of Device */
     DATA_RATE_E         enDataRate;
+    /* RW;Pixel format */
+    PIXEL_FORMAT_E      enPixFmt;
+    /* RW;Dev mem type */
+    VI_RAW_MEMORY_TYPE_E enMemMode;
+    /* RW;Dev buff type */
+    VI_V4L2_MEMORY_TYPE  enBufType;
+    /* RW;Dev buff cnt */
+    RK_U32               u32BufCount;
+    /* RW;Dev Hdr Mode */
+    VI_HDR_MODE_E        enHdrMode;
+    /* RW;Dev Set Crop size*/
+    RECT_S              stCropRect;
 } VI_DEV_ATTR_S;
 
 /* The status of chn */
@@ -124,7 +159,43 @@ typedef struct rkVI_DEV_STATUS_S {
 typedef struct rkVI_DEV_BIND_PIPE_S {
     RK_U32  u32Num;                                     /* RW;Range [1,VI_MAX_PHY_PIPE_NUM] */
     VI_PIPE PipeId[MAX_VI_BIND_PIPE_NUM];               /* RW;Array of pipe ID */
+    RK_BOOL bDataOffline;                               /* RW;RK_FALSE: dev work online, RK_TRUE: dev work offline */
+    RK_BOOL bUserStartPipe[MAX_VI_BIND_PIPE_NUM];        /* RW;RK_FALSE: vi start pipe, RK_TRUE: user start pipe */
 } VI_DEV_BIND_PIPE_S;
+
+typedef enum rkVI_ALLOC_BUF_TYPE_E {
+    VI_ALLOC_BUF_TYPE_INTERNAL,
+    VI_ALLOC_BUF_TYPE_EXTERNAL,
+    VI_ALLOC_BUF_TYPE_CHN_SHARE
+} VI_ALLOC_BUF_TYPE_E;
+
+typedef enum rkVI_V4L2_CAPTURE_TYPE {
+    VI_V4L2_CAPTURE_TYPE_VIDEO_CAPTURE        = 1,
+    VI_V4L2_CAPTURE_TYPE_VBI_CAPTURE          = 4,
+    VI_V4L2_CAPTURE_TYPE_SLICED_VBI_CAPTURE   = 6,
+    VI_V4L2_CAPTURE_TYPE_VIDEO_CAPTURE_MPLANE = 9,
+    VI_V4L2_CAPTURE_TYPE_SDR_CAPTURE          = 11,
+    VI_V4L2_CAPTURE_TYPE_META_CAPTURE         = 13,
+    /* Deprecated, do not use */
+    VI_V4L2_CAPTURE_TYPE_PRIVATE              = 0x80,
+} VI_V4L2_CAPTURE_TYPE;
+
+/* use for aiisp to get exposure param */
+typedef struct rkVIAIISP_EXP_PARAM {
+    RK_FLOAT    fAnalogGain;       /* sensor analog gain */
+    RK_FLOAT    fDigitalGain;      /* sensor digital gain */
+    RK_FLOAT    fIspDgain;         /* isp digital gain */
+} VI_AIISP_EXP_PARAM_S;
+
+typedef struct rkVIAIISP_CALLBACK_S {
+    PREAIISP_CALLBACK          pfUpdateCallback;
+    RK_VOID                    *pPrivateData;   /* Not yet used */
+} VIAIISP_CALLBACK_S;
+
+typedef struct rkVI_AIISP_INFO_S {
+    RK_BOOL                 bEnable;            /* Whether AIISP is enable */
+    VIAIISP_CALLBACK_S      callBack;           /* Aiisp get sensor iso and private by userCallBack */
+}VI_AIISP_INFO_S;
 
 /* The attributes of pipe */
 typedef struct rkVI_PIPE_ATTR_S {
@@ -142,30 +213,11 @@ typedef struct rkVI_PIPE_ATTR_S {
     DATA_BITWIDTH_E       enBitWidth;
     /* RW;Frame rate */
     FRAME_RATE_CTRL_S     stFrameRate;
+    /* RW; Pipe Mem mode */
+    VI_RAW_MEMORY_TYPE_E  enMemMode;
+    /* RW;Pipe Hdr Mode */
+    VI_HDR_MODE_E         enHdrMode;
 } VI_PIPE_ATTR_S;
-
-typedef enum rkVI_ALLOC_BUF_TYPE_E {
-    VI_ALLOC_BUF_TYPE_INTERNAL,
-    VI_ALLOC_BUF_TYPE_EXTERNAL
-} VI_ALLOC_BUF_TYPE_E;
-
-typedef enum rkVI_V4L2_CAPTURE_TYPE {
-    VI_V4L2_CAPTURE_TYPE_VIDEO_CAPTURE        = 1,
-    VI_V4L2_CAPTURE_TYPE_VBI_CAPTURE          = 4,
-    VI_V4L2_CAPTURE_TYPE_SLICED_VBI_CAPTURE   = 6,
-    VI_V4L2_CAPTURE_TYPE_VIDEO_CAPTURE_MPLANE = 9,
-    VI_V4L2_CAPTURE_TYPE_SDR_CAPTURE          = 11,
-    VI_V4L2_CAPTURE_TYPE_META_CAPTURE         = 13,
-    /* Deprecated, do not use */
-    VI_V4L2_CAPTURE_TYPE_PRIVATE              = 0x80,
-} VI_V4L2_CAPTURE_TYPE;
-
-typedef enum rkVI_V4L2_MEMORY_TYPE {
-    VI_V4L2_MEMORY_TYPE_MMAP             = 1,
-    VI_V4L2_MEMORY_TYPE_USERPTR          = 2,
-    VI_V4L2_MEMORY_TYPE_OVERLAY          = 3,
-    VI_V4L2_MEMORY_TYPE_DMABUF           = 4,
-} VI_V4L2_MEMORY_TYPE;
 
 /* The attributes of channel for isp opt */
 typedef struct rkVI_ISP_OPT_S {
@@ -175,7 +227,8 @@ typedef struct rkVI_ISP_OPT_S {
     VI_V4L2_MEMORY_TYPE   enMemoryType;       /* RW;isp buf memory type */
     RK_CHAR               aEntityName[MAX_VI_ENTITY_NAME_LEN];       /* RW;isp capture entity name*/
     RK_BOOL               bNoUseLibV4L2;      /* RW;is no use libv4l2 */
-    SIZE_S                stMaxSize;          /* RW;isp bypass resolution */
+    SIZE_S                stMaxSize;          /* RW;isp output max resolution */
+    RECT_S                stWindow;           /* RW;isp output window*/
 } VI_ISP_OPT_S;
 
 /* The attributes of channel */
@@ -191,6 +244,7 @@ typedef struct rkVI_CHN_ATTR_S {
     FRAME_RATE_CTRL_S   stFrameRate;        /* RW;Frame rate */
     VI_ALLOC_BUF_TYPE_E enAllocBufType;     /* RW;channel alloc buf opt */
     VI_ISP_OPT_S        stIspOpt;           /* RW;isp opt */
+    MPP_CHN_S           stShareBufChn;       /* RW; enAllocBufType = VI_ALLOC_BUF_TYPE_CHN_SHARE, share buffer*/
 } VI_CHN_ATTR_S;
 
 /* The status of chn */
@@ -307,6 +361,34 @@ typedef struct rkVI_EVENT_CALL_BACK_S {
     RK_VOID            *pPrivateData;
 } VI_EVENT_CALL_BACK_S;
 
+typedef enum _rkVI_LIGHT_TYPE{
+    LIGHT_TYPE_PWM,
+    LIGHT_TYPE_GPIO,
+} VI_LIGHT_TYPE_E;
+
+typedef struct rkVI_LIGHT_PARAM{
+    RK_U8  u8lLightType;
+    RK_U8  u8LightEnable;
+    RK_U64 u64DutyCycle;
+    RK_U64 u64Period;
+    RK_U32 u32Polarity;
+} VI_LIGHT_CTL_PARAM_S;
+
+typedef enum rkVI_SENSOR_MODE {
+    SENSOR_NO_HDR = 0,
+    SENSOR_HDR_X2 = 5,
+    SENSOR_HDR_X3 = 6,
+    SENSOR_HDR_COMPR,
+} VI_SENSOR_MODE_E;
+
+typedef struct rkVI_SENSOR_SETTING {
+    RK_U32 u32SensorWidth;                // width of resolution
+    RK_U32 u32SensorHeight;               // height of resolution
+    RK_U32 u32SensorFps;                  // 120 / 60 / 30
+    PIXEL_FORMAT_E enSensorFmt;           // RK_FMT_*
+    VI_SENSOR_MODE_E enSensorMode;        // linear / hdr2x / hdr3x
+} VI_SENSOR_SETTING_S;
+
 #define RK_ERR_VI_INVALID_PARA        RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_ILLEGAL_PARAM)
 #define RK_ERR_VI_INVALID_DEVID       RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_INVALID_DEVID)
 #define RK_ERR_VI_INVALID_PIPEID      RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_INVALID_PIPEID)
@@ -326,6 +408,14 @@ typedef struct rkVI_EVENT_CALL_BACK_S {
 #define RK_ERR_VI_EXIST               RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_EXIST)
 /* the channel is not existed  */
 #define RK_ERR_VI_UNEXIST             RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_UNEXIST)
+/* the dev exists */
+#define RK_ERR_VI_DEV_EXIST           RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_DEV_EXIST)
+/* the dev is not existed */
+#define RK_ERR_VI_DEV_UNEXIST         RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_DEV_UNEXIST)
+/* the pipe exists */
+#define RK_ERR_VI_PIPE_EXIST          RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_PIPE_EXIST)
+/* the pipe is not existed */
+#define RK_ERR_VI_PIPE_UNEXIST        RK_DEF_ERR(RK_ID_VI, RK_ERR_LEVEL_ERROR, RK_ERR_PIPE_UNEXIST)
 
 #ifdef __cplusplus
 #if __cplusplus

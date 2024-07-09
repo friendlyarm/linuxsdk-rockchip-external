@@ -38,7 +38,8 @@ FakeCamHwIsp20::FakeCamHwIsp20() : isp_index(0)
 FakeCamHwIsp20::~FakeCamHwIsp20()
 {
     ENTER_CAMHW_FUNCTION();
-    setupOffLineLink(isp_index, false);
+    if (!use_rkrawstream)
+        setupOffLineLink(isp_index, false);
     EXIT_CAMHW_FUNCTION();
 }
 
@@ -59,6 +60,26 @@ FakeCamHwIsp20::init(const char* sns_ent_name)
     mSensorDev->open();
     mIspStatsStream->set_event_handle_dev(sensorHw);
 
+    std::unordered_map<std::string, SmartPtr<rk_sensor_full_info_t>>::iterator it;
+    if ((it = mSensorHwInfos.find(sns_name)) == mSensorHwInfos.end()) {
+        LOGE_CAMHW_SUBM(ISP20HW_SUBM, "can't find sensor %s", sns_name);
+        return XCAM_RETURN_ERROR_SENSOR;
+    }
+
+    rk_sensor_full_info_t *s_info = it->second.ptr();
+
+    SmartPtr<FakeSensorHw> fakeSensorHw = mSensorDev.dynamic_cast_ptr<FakeSensorHw>();
+    fakeSensorHw->use_rkrawstream = use_rkrawstream;
+
+    if (!use_rkrawstream) {
+        init_mipi_devices(s_info);
+        fakeSensorHw->set_mipi_tx_devs(_mipi_tx_devs);
+
+        mRawCapUnit->set_tx_devices(_mipi_tx_devs);
+        mRawProcUnit->set_rx_devices(_mipi_rx_devs);
+        mRawProcUnit->setPollCallback(this);
+    }
+
     return XCAM_RETURN_NO_ERROR;
 }
 
@@ -70,8 +91,6 @@ FakeCamHwIsp20::prepare(uint32_t width, uint32_t height, int mode, int t_delay, 
 
     ENTER_CAMHW_FUNCTION();
 
-    SmartPtr<FakeSensorHw> fakeSensorHw = mSensorDev.dynamic_cast_ptr<FakeSensorHw>();
-
     std::unordered_map<std::string, SmartPtr<rk_sensor_full_info_t>>::iterator it;
     if ((it = mSensorHwInfos.find(sns_name)) == mSensorHwInfos.end()) {
         LOGE_CAMHW_SUBM(ISP20HW_SUBM, "can't find sensor %s", sns_name);
@@ -80,17 +99,12 @@ FakeCamHwIsp20::prepare(uint32_t width, uint32_t height, int mode, int t_delay, 
 
     rk_sensor_full_info_t *s_info = it->second.ptr();
     isp_index = s_info->isp_info->logic_id;
-#ifndef USE_RAWSTREAM_LIB
-    setupOffLineLink(isp_index, true);
-#endif
-    init_mipi_devices(s_info);
-    fakeSensorHw->set_mipi_tx_devs(_mipi_tx_devs);
 
-#ifndef USE_RAWSTREAM_LIB
-    mRawCapUnit->set_tx_devices(_mipi_tx_devs);
-    mRawProcUnit->set_rx_devices(_mipi_rx_devs);
-    mRawProcUnit->setPollCallback(this);
-#endif
+    if (!use_rkrawstream) {
+        setupOffLineLink(isp_index, true);
+        prepare_mipi_devices(s_info);
+    }
+
     ret = CamHwIsp20::prepare(width, height, mode, t_delay, g_delay);
     if (ret)
         return ret;
@@ -127,38 +141,40 @@ FakeCamHwIsp20::init_mipi_devices(rk_sensor_full_info_t *s_info)
     //short frame
     _mipi_tx_devs[0] = new FakeV4l2Device ();
     _mipi_tx_devs[0]->open();
-    _mipi_tx_devs[0]->set_mem_type(_tx_memory_type);
     _mipi_tx_devs[0]->set_buf_type(V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
 
     _mipi_rx_devs[0] = new V4l2Device (s_info->isp_info->rawrd2_s_path);//rkisp_rawrd2_s
     _mipi_rx_devs[0]->open();
-    _mipi_rx_devs[0]->set_mem_type(_rx_memory_type);
     //mid frame
     _mipi_tx_devs[1] = new FakeV4l2Device ();
     _mipi_tx_devs[1]->open();
-    _mipi_tx_devs[1]->set_mem_type(_tx_memory_type);
     _mipi_tx_devs[1]->set_buf_type(V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
 
     _mipi_rx_devs[1] = new V4l2Device (s_info->isp_info->rawrd0_m_path);//rkisp_rawrd0_m
     _mipi_rx_devs[1]->open();
-    _mipi_rx_devs[1]->set_mem_type(_rx_memory_type);
     //long frame
     _mipi_tx_devs[2] = new FakeV4l2Device ();
     _mipi_tx_devs[2]->open();
-    _mipi_tx_devs[2]->set_mem_type(_tx_memory_type);
     _mipi_tx_devs[2]->set_buf_type(V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
 
     _mipi_rx_devs[2] = new V4l2Device (s_info->isp_info->rawrd1_l_path);//rkisp_rawrd1_l
     _mipi_rx_devs[2]->open();
-    _mipi_rx_devs[2]->set_mem_type(_rx_memory_type);
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn
+FakeCamHwIsp20::prepare_mipi_devices(rk_sensor_full_info_t *s_info) {
+
     for (int i = 0; i < 3; i++) {
+        _mipi_tx_devs[i]->set_mem_type(_tx_memory_type);
+        _mipi_rx_devs[i]->set_mem_type(_rx_memory_type);
         if (_linked_to_isp) {
             if (_rawbuf_type == RK_AIQ_RAW_FILE) {
-                _mipi_tx_devs[0]->set_use_type(2);
+                _mipi_tx_devs[i]->set_use_type(2);
                 _mipi_tx_devs[i]->set_buffer_count(1);
                 _mipi_rx_devs[i]->set_buffer_count(1);
             } else if (_rawbuf_type == RK_AIQ_RAW_ADDR) {
-                 _mipi_tx_devs[0]->set_use_type(1);
+                _mipi_tx_devs[i]->set_use_type(1);
                 _mipi_tx_devs[i]->set_buffer_count(ISP_TX_BUF_NUM);
                 _mipi_rx_devs[i]->set_buffer_count(ISP_TX_BUF_NUM);
             } else {
@@ -750,10 +766,10 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
                                       vbuf->buf_info[0].exp_time_reg);
     }else if (_rawfmt.hdr_mode == 2) {
          vbuf->buf_info[0].frame_id = _rawfmt.frame_id;
-         vbuf->buf_info[0].exp_gain = (float)_finfo.normal_gain;
-         vbuf->buf_info[0].exp_time = (float)_finfo.normal_exp;
-         vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.normal_gain_reg;
-         vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.normal_exp_reg;
+         vbuf->buf_info[0].exp_gain = (float)_finfo.hdr_gain_s;
+         vbuf->buf_info[0].exp_time = (float)_finfo.hdr_exp_s;
+         vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.hdr_gain_s_reg;
+         vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.hdr_exp_s_reg;
          vbuf->buf_info[0].valid = true;
          LOGD_CAMHW_SUBM(FAKECAM_SUBM,"buf_info[0]: data_addr=%p,fd=%d,,length=%d\n",
                                       vbuf->buf_info[0].data_addr,
@@ -782,10 +798,10 @@ FakeCamHwIsp20::parse_rk_rawfile(FILE *fp, struct rk_aiq_vbuf *vbuf)
                                       vbuf->buf_info[1].exp_time_reg);
     }else if (_rawfmt.hdr_mode == 3) {
          vbuf->buf_info[0].frame_id = _rawfmt.frame_id;
-         vbuf->buf_info[0].exp_gain = (float)_finfo.normal_gain;
-         vbuf->buf_info[0].exp_time = (float)_finfo.normal_exp;
-         vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.normal_gain_reg;
-         vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.normal_exp_reg;
+         vbuf->buf_info[0].exp_gain = (float)_finfo.hdr_gain_s;
+         vbuf->buf_info[0].exp_time = (float)_finfo.hdr_exp_s;
+         vbuf->buf_info[0].exp_gain_reg = (uint32_t)_finfo.hdr_gain_s_reg;
+         vbuf->buf_info[0].exp_time_reg = (uint32_t)_finfo.hdr_exp_s_reg;
          vbuf->buf_info[0].valid = true;
          LOGD_CAMHW_SUBM(FAKECAM_SUBM,"buf_info[0]: data_addr=%p,fd=%d,,length=%d\n",
                                       vbuf->buf_info[0].data_addr,
@@ -1095,5 +1111,59 @@ FakeCamHwIsp32::poll_event_ready (uint32_t sequence, int type)
 {
    return  FakeCamHwIsp20::poll_event_ready (sequence, type);
 }
+
+#if defined(ISP_HW_V39)
+FakeCamHwIsp39::FakeCamHwIsp39()
+: FakeCamHwIsp20() {
+}
+
+FakeCamHwIsp39::~FakeCamHwIsp39()
+{
+    ENTER_CAMHW_FUNCTION();
+    EXIT_CAMHW_FUNCTION();
+}
+
+XCamReturn
+FakeCamHwIsp39::init(const char* sns_ent_name)
+{
+    return FakeCamHwIsp20::init(sns_ent_name);
+}
+
+XCamReturn
+FakeCamHwIsp39::prepare(uint32_t width, uint32_t height, int mode, int t_delay, int g_delay)
+{
+    return FakeCamHwIsp20::prepare(width, height, mode, t_delay, g_delay);
+}
+
+XCamReturn
+FakeCamHwIsp39::enqueueRawBuffer(void *rawdata, bool sync)
+{
+   return  FakeCamHwIsp20::enqueueRawBuffer(rawdata, sync);
+}
+
+XCamReturn
+FakeCamHwIsp39::enqueueRawFile(const char *path)
+{
+   return  FakeCamHwIsp20::enqueueRawFile(path);
+}
+
+XCamReturn
+FakeCamHwIsp39::registRawdataCb(void (*callback)(void *))
+{
+   return  FakeCamHwIsp20::registRawdataCb(callback);
+}
+
+XCamReturn
+FakeCamHwIsp39::rawdataPrepare(rk_aiq_raw_prop_t prop)
+{
+   return  FakeCamHwIsp20::rawdataPrepare(prop);
+}
+
+XCamReturn
+FakeCamHwIsp39::poll_event_ready (uint32_t sequence, int type)
+{
+   return  FakeCamHwIsp20::poll_event_ready (sequence, type);
+}
+#endif
 
 } //namspace RkCam

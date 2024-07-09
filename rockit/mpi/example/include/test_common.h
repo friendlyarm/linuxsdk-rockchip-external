@@ -28,4 +28,11 @@
 #endif
 
 #define RGB(r, g, b)       (((RK_U8)(r) << 16) | ((RK_U8)(g) << 8) | (RK_U8)(b))
+
+typedef enum rkTEST_MPI_SOURCE_E {
+    TEST_MPI_SOURCE_SEND = 0,
+    TEST_MPI_SOURCE_BIND,
+    TEST_MPI_SOURCE_BUTT
+} TEST_MPI_SOURCE_E;
+
 #endif  // SRC_TESTS_RT_MPI_COMMON_TEST_COMMON_H_

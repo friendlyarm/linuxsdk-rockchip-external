@@ -533,17 +533,18 @@ static RK_S32 create_vo(RK_U32 ChCnt) {
         return s32Ret;
     }
 
+    s32Ret = RK_MPI_VO_SetLayerAttr(VoLayer, &stLayerAttr);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("RK_MPI_VO_SetLayerAttr failed,s32Ret:%d\n", s32Ret);
+        return RK_FAILURE;
+    }
+
     s32Ret = RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("RK_MPI_VO_BindLayer failed,s32Ret:%d\n", s32Ret);
         return RK_FAILURE;
     }
 
-    s32Ret = RK_MPI_VO_SetLayerAttr(VoLayer, &stLayerAttr);
-    if (s32Ret != RK_SUCCESS) {
-        RK_LOGE("RK_MPI_VO_SetLayerAttr failed,s32Ret:%d\n", s32Ret);
-        return RK_FAILURE;
-    }
 
     s32Ret = RK_MPI_VO_EnableLayer(VoLayer);
     if (s32Ret != RK_SUCCESS) {

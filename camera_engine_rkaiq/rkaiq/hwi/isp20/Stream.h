@@ -51,7 +51,7 @@ protected:
     }
     XCamReturn create_stop_fds ();
     void destroy_stop_fds ();
-    int mCamPhyId;
+    int mCamPhyId{-1};
 protected:
     static const int default_poll_timeout;
     SmartPtr<V4l2Device> _dev;
@@ -139,7 +139,7 @@ protected:
     int _dev_type;
     SmartPtr<RkPollThread> _poll_thread;
     bool _dev_prepared;
-    int mCamPhyId;
+    int mCamPhyId{-1};
 };
 
 class BaseSensorHw;
@@ -163,7 +163,7 @@ private:
     SmartPtr<BaseSensorHw> _event_handle_dev;
     SmartPtr<LensHw> _iris_handle_dev;
     SmartPtr<LensHw> _focus_handle_dev;
-    CamHwIsp20* _rx_handle_dev;
+    CamHwIsp20* _rx_handle_dev{NULL};
 };
 
 class RKSofEventStream : public RKStream
@@ -183,6 +183,29 @@ protected:
     XCAM_DEAD_COPY (RKSofEventStream);
 };
 
+class RKAiispEventStream : public RKStream
+{
+public:
+    RKAiispEventStream               (SmartPtr<V4l2SubDevice> dev, int type);
+    // RKSofEventStream               (const char *name, int type, bool linkedTo1608 = false);
+    virtual ~RKAiispEventStream      ();
+    virtual void start             ();
+    virtual void stop();
+    XCamReturn set_aiisp_linecnt(rk_aiq_aiisp_cfg_t aiisp_cfg);
+    XCamReturn get_aiisp_bay3dbuf();
+    virtual SmartPtr<VideoBuffer>
+    new_video_buffer               (struct v4l2_event &event, SmartPtr<V4l2Device> dev);
+    XCamReturn call_aiisp_rd_start();
+    XCamReturn close_aiisp();
+protected:
+    rkisp_bay3dbuf_info_t bay3dbuf;
+    void* iir_address;
+    void* gain_address;
+    void* aiisp_address;
+    static std::atomic<bool> _is_subscribed;
+    XCAM_DEAD_COPY (RKAiispEventStream);
+};
+
 class RKRawStream : public RKStream
 {
 public:
@@ -195,8 +218,8 @@ public:
     void set_reserved_data(int bpp);
 public:
     int _dev_index;
-    int _bpp;
-    int _reserved[2];
+    int _bpp{16};
+    int _reserved[2]{0};
 protected:
     XCAM_DEAD_COPY (RKRawStream);
 };
@@ -228,6 +251,8 @@ public:
     explicit SubVideoBuffer(int fd)
              :VideoBuffer()
     {
+        _buff_num = 0;
+        _buff_idx = -1;
         _buff_fd = fd;
         _buff_size = 0;
         _buff_ptr = MAP_FAILED;
@@ -236,6 +261,8 @@ public:
     explicit SubVideoBuffer(SmartPtr<V4l2BufferProxy> &buf)
             :VideoBuffer()
     {
+        _buff_num = 0;
+        _buff_idx = -1;
         _buff_fd = -1;
         _buff_size = 0;
         _buff_ptr = MAP_FAILED;
@@ -244,6 +271,8 @@ public:
     explicit SubVideoBuffer()
              :VideoBuffer()
     {
+        _buff_num = 0;
+        _buff_idx = -1;
         _buff_fd = -1;
         _buff_size = 0;
         _buff_ptr = MAP_FAILED;

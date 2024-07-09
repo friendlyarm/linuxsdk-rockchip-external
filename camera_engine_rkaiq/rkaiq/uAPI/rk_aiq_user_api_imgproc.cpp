@@ -1031,12 +1031,21 @@ XCamReturn rk_aiq_uapi_setFixedModeCode(const rk_aiq_sys_ctx_t* ctx, short code)
 
 XCamReturn rk_aiq_uapi_getFixedModeCode(const rk_aiq_sys_ctx_t* ctx, short *code)
 {
+    bool zoom_support = ctx->_analyzer->mAlogsComSharedParams.snsDes.lens_des.zoom_support;
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
     rk_aiq_af_attrib_t attr;
     IMGPROC_FUNC_ENTER
-    ret = rk_aiq_user_api_af_GetAttrib(ctx, &attr);
-    RKAIQ_IMGPROC_CHECK_RET(ret, "getFixedModeCode failed!");
-    *code = attr.fixedModeDefCode;
+    if (zoom_support) {
+        ret = rk_aiq_user_api_af_GetAttrib(ctx, &attr);
+        RKAIQ_IMGPROC_CHECK_RET(ret, "getFixedModeCode failed!");
+        *code = attr.fixedModeDefCode;
+    } else {
+        int pos;
+        ret = rk_aiq_user_api_af_GetFocusPos(ctx, &pos);
+        RKAIQ_IMGPROC_CHECK_RET(ret, "getFixedModeCode failed!");
+        *code = pos;
+    }
+    // LOGD_AF("%s: focus position %d", __func__, *code);
     IMGPROC_FUNC_EXIT
     return ret;
 }
@@ -1457,7 +1466,7 @@ XCamReturn rk_aiq_uapi_setNRMode(const rk_aiq_sys_ctx_t* ctx, opMode_t mode)
     }
 
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_ynr_attrib_v22_t ynrV22_attr;
         ynrV22_attr.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         rk_aiq_cnr_attrib_v30_t cnrV30_attr;
@@ -1590,7 +1599,7 @@ XCamReturn rk_aiq_uapi_getNRMode(const rk_aiq_sys_ctx_t* ctx, opMode_t *mode)
         }
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_ynr_attrib_v22_t ynrV22_attr;
         ynrV22_attr.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         rk_aiq_cnr_attrib_v30_t cnrV30_attr;
@@ -1686,7 +1695,7 @@ XCamReturn rk_aiq_uapi_setANRStrth(const rk_aiq_sys_ctx_t* ctx, unsigned int lev
         ret = rk_aiq_user_api_abayertnrV2_SetStrength(ctx, &bayertnrV2Strenght);
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_ynr_strength_v22_t ynrV22Strength;
         ynrV22Strength.strength_enable = true;
         ynrV22Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
@@ -1741,7 +1750,7 @@ XCamReturn rk_aiq_uapi_getANRStrth(const rk_aiq_sys_ctx_t* ctx, unsigned int *le
         *level = (unsigned int)(percent * 100);
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_bayertnr_strength_v23_t bayertnrV23Strength;
         bayertnrV23Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         ret = rk_aiq_user_api_abayertnrV23_GetStrength(ctx, &bayertnrV23Strength);
@@ -1797,7 +1806,7 @@ XCamReturn rk_aiq_uapi_setMSpaNRStrth(const rk_aiq_sys_ctx_t* ctx, bool on, unsi
         ret = rk_aiq_user_api_abayer2dnrV2_SetStrength(ctx, &bayer2dnrV2Strenght);
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_ynr_strength_v22_t ynrStrength;
         ynrStrength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         ynrStrength.strength_enable = true;
@@ -1850,7 +1859,7 @@ XCamReturn rk_aiq_uapi_getMSpaNRStrth(const rk_aiq_sys_ctx_t* ctx, bool *on, uns
         percent = bayer2dnrV2Strenght.percent;
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_bayer2dnr_strength_v23_t bayer2dnrV23Strength;
         bayer2dnrV23Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         ret = rk_aiq_user_api_abayer2dnrV23_GetStrength(ctx, &bayer2dnrV23Strength);
@@ -1899,7 +1908,7 @@ XCamReturn rk_aiq_uapi_setMTNRStrth(const rk_aiq_sys_ctx_t* ctx, bool on, unsign
         ret = rk_aiq_user_api_abayertnrV2_SetStrength(ctx, &bayertnrV2Strenght);
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_bayertnr_strength_v23_t bayertnrV23Strength;
         bayertnrV23Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         bayertnrV23Strength.strength_enable = true;
@@ -1947,7 +1956,7 @@ XCamReturn rk_aiq_uapi_getMTNRStrth(const rk_aiq_sys_ctx_t* ctx, bool *on, unsig
         percent = bayertnrV2Strenght.percent;
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_bayertnr_strength_v23_t bayertnrV23Strength;
         bayertnrV23Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         ret = rk_aiq_user_api_abayertnrV23_GetStrength(ctx, &bayertnrV23Strength);
@@ -2378,7 +2387,7 @@ XCamReturn rk_aiq_uapi_setSharpness(const rk_aiq_sys_ctx_t* ctx, unsigned int le
         ret = rk_aiq_user_api_asharpV4_SetStrength(ctx, &sharpV4Strenght);
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_sharp_strength_v33_t sharpV33Strength;
         sharpV33Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         sharpV33Strength.strength_enable = true;
@@ -2417,7 +2426,7 @@ XCamReturn rk_aiq_uapi_getSharpness(const rk_aiq_sys_ctx_t* ctx, unsigned int *l
         fPercent = sharpV4Strenght.percent;
     }
 
-    if (CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
+    if (CHECK_ISP_HW_V39() || CHECK_ISP_HW_V32() || CHECK_ISP_HW_V32_LITE()) {
         rk_aiq_sharp_strength_v33_t sharpV33Strength;
         sharpV33Strength.sync.sync_mode = RK_AIQ_UAPI_MODE_SYNC;
         ret = rk_aiq_user_api_asharpV33_GetStrength(ctx, &sharpV33Strength);

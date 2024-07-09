@@ -2,9 +2,9 @@
  * Definitions for API from sdio common code (bcmsdh) to individual
  * host controller drivers.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -83,7 +83,7 @@ typedef struct sdioh_info sdioh_info_t;
 
 /* callback function, taking one arg */
 typedef void (*sdioh_cb_fn_t)(void *);
-#if defined(BT_OVER_SDIO)
+#if defined(BT_OVER_SDIO) && defined(BCMLXSDMMC)
 extern
 void sdioh_sdmmc_card_enable_func_f3(sdioh_info_t *sd, struct sdio_func *func);
 #endif /* defined (BT_OVER_SDIO) */

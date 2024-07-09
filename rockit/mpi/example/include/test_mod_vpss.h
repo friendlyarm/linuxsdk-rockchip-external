@@ -51,6 +51,8 @@ typedef struct _rkMpiVPSSCtx {
     RK_S32  s32DstPixFormat;
 
     RK_S32  s32GrpRotation;
+    RK_S32  s32GrpMirror;
+    RK_S32  s32GrpFlip;
     RK_S32  s32Rotation;
     RK_S32  s32RotationEx;
     RK_S32  s32Mirror;

@@ -1,9 +1,9 @@
 /*
  * Linux cfg80211 driver - Dongle Host Driver (DHD) related
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -36,7 +36,9 @@
 #include <wldev_common.h>
 #include <wl_cfg80211.h>
 #include <dhd_cfg80211.h>
-
+#ifdef WL_DHD_XR
+#include <wl_cfg80211_xr.h>
+#endif /* WL_DHD_XR */
 #ifdef PKT_FILTER_SUPPORT
 #include <dngl_stats.h>
 #include <dhd.h>
@@ -86,19 +88,30 @@ s32 dhd_cfg80211_deinit(struct bcm_cfg80211 *cfg)
 	return 0;
 }
 
-s32 dhd_cfg80211_down(struct bcm_cfg80211 *cfg)
+s32 dhd_cfg80211_down(struct bcm_cfg80211 *cfg
+#ifdef WL_DHD_XR_CLIENT
+, struct net_device *ndev
+#endif /* WL_DHD_XR_CLIENT */
+)
 {
+#ifndef WL_DHD_XR_CLIENT
 	struct net_device *ndev;
+#endif /* !WL_DHD_XR_CLIENT */
 	s32 err = 0;
+#ifdef WL_DHD_XR_CLIENT
+	dhd_pub_t *dhd =  (dhd_pub_t *) dhd_get_pub(ndev);
+#else
 	dhd_pub_t *dhd =  (dhd_pub_t *)(cfg->pub);
-
+#endif /* WL_DHD_XR_CLIENT */
 	WL_TRACE(("In\n"));
 	if ((!dhd_dongle_up) || (!dhd->up)) {
 		WL_INFORM_MEM(("Dongle is already down\n"));
 		err = 0;
 		goto done;
 	}
+#ifndef WL_DHD_XR_CLIENT
 	ndev = bcmcfg_to_prmry_ndev(cfg);
+#endif /* !WL_DHD_XR_CLIENT */
 	wl_dongle_down(ndev);
 done:
 	dhd_dongle_up = FALSE;
@@ -150,32 +163,98 @@ wl_cfg80211_update_iflist_info(struct bcm_cfg80211 *cfg, struct net_device *ndev
 struct net_device* wl_cfg80211_allocate_if(struct bcm_cfg80211 *cfg, int ifidx, const char *name,
 	uint8 *mac, uint8 bssidx, const char *dngl_name)
 {
+#ifdef WL_DHD_XR_CLIENT
+	struct net_device *primary_ndev = DHD_XR_GET_SLAVE_NDEV(cfg);
+	dhd_pub_t *pub = dhd_get_pub(primary_ndev);
+	int dhd_ifidx = dhd_get_dhd_ifidx(primary_ndev);
+
+	if (!pub) {
+		WL_ERR(("%s:dhd pub is NULL\n", __func__));
+		return NULL;
+	}
+	if (ifidx >= DHD_MAX_IFS/2)
+		ifidx = dhd_ifidx - ifidx;
+
+	return dhd_allocate_if(pub, ifidx, name, mac, bssidx, FALSE, dngl_name);
+
+#else
 	return dhd_allocate_if(cfg->pub, ifidx, name, mac, bssidx, FALSE, dngl_name);
+#endif /* WL_DHD_XR_CLIENT */
 }
 
 int wl_cfg80211_register_if(struct bcm_cfg80211 *cfg,
 	int ifidx, struct net_device* ndev, bool rtnl_lock_reqd)
 {
+#ifdef WL_DHD_XR_CLIENT
+	struct net_device *primary_ndev = DHD_XR_GET_SLAVE_NDEV(cfg);
+	dhd_pub_t *pub = dhd_get_pub(primary_ndev);
+	int dhd_ifidx = dhd_get_dhd_ifidx(primary_ndev);
+
+	if (!pub) {
+		WL_ERR(("%s:dhd pub is NULL\n", __func__));
+		return BCME_ERROR;
+	}
+	if (ifidx >= DHD_MAX_IFS/2)
+		ifidx = dhd_ifidx - ifidx;
+
+	return dhd_register_if(pub, ifidx, rtnl_lock_reqd);
+
+#else
 	return dhd_register_if(cfg->pub, ifidx, rtnl_lock_reqd);
+#endif /* WL_DHD_XR_CLIENT */
 }
 
 int wl_cfg80211_remove_if(struct bcm_cfg80211 *cfg,
 	int ifidx, struct net_device* ndev, bool rtnl_lock_reqd)
 {
+#ifdef WL_DHD_XR_CLIENT
+	struct net_device *primary_ndev = DHD_XR_GET_SLAVE_NDEV(cfg);
+	dhd_pub_t *pub = dhd_get_pub(primary_ndev);
+	int dhd_ifidx = dhd_get_dhd_ifidx(primary_ndev);
+	if (!pub) {
+		WL_ERR(("%s:dhd pub is NULL\n", __func__));
+		return BCME_ERROR;
+	}
+
+	if (ifidx >= DHD_MAX_IFS/2)
+		ifidx = dhd_ifidx - ifidx;
+
+#ifdef DHD_PCIE_RUNTIMEPM
+	dhdpcie_runtime_bus_wake(pub, CAN_SLEEP(), __builtin_return_address(0));
+#endif /* DHD_PCIE_RUNTIMEPM */
+	return dhd_remove_if(pub, ifidx, rtnl_lock_reqd);
+#else
+
 #ifdef DHD_PCIE_RUNTIMEPM
 	dhdpcie_runtime_bus_wake(cfg->pub, CAN_SLEEP(), __builtin_return_address(0));
 #endif /* DHD_PCIE_RUNTIMEPM */
 	return dhd_remove_if(cfg->pub, ifidx, rtnl_lock_reqd);
+#endif /* WL_DHD_XR_CLIENT */
 }
 
 void wl_cfg80211_cleanup_if(struct net_device *net)
 {
 	struct bcm_cfg80211 *cfg = wl_get_cfg(net);
+#ifdef WL_DHD_XR_CLIENT
+	struct net_device *primary_ndev = DHD_XR_GET_SLAVE_NDEV(cfg);
+	dhd_pub_t *pub = dhd_get_pub(primary_ndev);
+
+	if (!pub) {
+		WL_ERR(("%s:dhd pub is NULL\n", __func__));
+		return;
+	}
+#ifdef DHD_PCIE_RUNTIMEPM
+	dhdpcie_runtime_bus_wake(pub, CAN_SLEEP(), __builtin_return_address(0));
+#else
+	BCM_REFERENCE(cfg);
+#endif /* DHD_PCIE_RUNTIMEPM */
+#else
 #ifdef DHD_PCIE_RUNTIMEPM
 	dhdpcie_runtime_bus_wake(cfg->pub, CAN_SLEEP(), __builtin_return_address(0));
 #else
 	BCM_REFERENCE(cfg);
 #endif /* DHD_PCIE_RUNTIMEPM */
+#endif /* WL_DHD_XR_CLIENT */
 	dhd_cleanup_if(net);
 }
 
@@ -475,25 +554,39 @@ dongle_filter_out:
 }
 #endif /* OEM_ANDROID */
 
-s32 dhd_config_dongle(struct bcm_cfg80211 *cfg)
+s32 dhd_config_dongle(struct bcm_cfg80211 *cfg
+#ifdef WL_DHD_XR_CLIENT
+, struct net_device *ndev
+#endif /* WL_DHD_XR_CLIENT */
+)
 {
 #ifndef DHD_SDALIGN
 #define DHD_SDALIGN	32
 #endif // endif
+#ifndef WL_DHD_XR_CLIENT
 	struct net_device *ndev;
+#endif /* !WL_DHD_XR_CLIENT */
 	s32 err = 0;
 #if !defined(OEM_ANDROID) && defined(BCMSDIO)
 	s32 glom = CUSTOM_GLOM_SETTING;
 #endif // endif
 
 	WL_TRACE(("In\n"));
+#ifdef WL_DHD_XR_CLIENT
+	if (!ndev) {
+		WL_ERR(("ndev is null\n"));
+		err = -EINVAL;
+		return err;
+	}
+#endif /* WL_DHD_XR_CLIENT */
 	if (dhd_dongle_up) {
 		WL_ERR(("Dongle is already up\n"));
 		return err;
 	}
 
+#ifndef WL_DHD_XR_CLIENT
 	ndev = bcmcfg_to_prmry_ndev(cfg);
-
+#endif /* !WL_DHD_XR_CLIENT */
 	err = wl_dongle_up(ndev);
 	if (unlikely(err)) {
 		WL_ERR(("wl_dongle_up failed\n"));

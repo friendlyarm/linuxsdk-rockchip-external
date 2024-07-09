@@ -46,6 +46,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := xtest
 LOCAL_VENDOR_MODULE := true
 LOCAL_SHARED_LIBRARIES := libteec
+CFG_PKCS11_TA := y
 
 TA_DIR ?= /vendor/lib/optee_armtz
 
@@ -149,6 +150,37 @@ endif
 LOCAL_ADDITIONAL_DEPENDENCIES += $(OPTEE_BIN)
 
 include $(BUILD_EXECUTABLE)
+
+################################################################################
+# Build tee-supplicant test plugin                                             #
+################################################################################
+include $(CLEAR_VARS)
+
+PLUGIN_UUID = f07bfc66-958c-4a15-99c0-260e4e7375dd
+
+PLUGIN                  = $(PLUGIN_UUID).plugin
+PLUGIN_INCLUDES_DIR     = $(LOCAL_PATH)/host/supp_plugin/include
+
+LOCAL_MODULE := $(PLUGIN)
+LOCAL_MODULE_RELATIVE_PATH := tee-supplicant/plugins
+LOCAL_VENDOR_MODULE := true
+# below is needed to locate optee_client exported headers
+LOCAL_SHARED_LIBRARIES := libteec
+
+LOCAL_SRC_FILES += host/supp_plugin/test_supp_plugin.c
+LOCAL_C_INCLUDES += $(PLUGIN_INCLUDES_DIR) $(OPTEE_CLIENT_PATH)/public
+LOCAL_CFLAGS += -Wno-unused-parameter
+
+$(info $$LOCAL_SRC_FILES = ${LOCAL_SRC_FILES})
+
+LOCAL_MODULE_TAGS := optional
+
+# Build the 32-bit and 64-bit versions.
+LOCAL_MULTILIB := both
+LOCAL_MODULE_TARGET_ARCH := arm arm64
+
+include $(BUILD_SHARED_LIBRARY)
+
 ################################################################################
 # Build rktest                                                                 #
 ################################################################################
@@ -171,6 +203,29 @@ LOCAL_MODULE_TAGS := optional
 ifeq (1,$(strip $(shell expr $(PLATFORM_VERSION) \>= 8)))
 	LOCAL_PROPRIETARY_MODULE := true
 endif
+include $(BUILD_EXECUTABLE)
+
+################################################################################
+# Build rk_anti_copy_board                                                     #
+################################################################################
+include $(CLEAR_VARS)
+LOCAL_CFLAGS += -DANDROID_BUILD -DUSER_SPACE
+LOCAL_CFLAGS += -Wall
+LOCAL_LDFLAGS += $(CLIENT_LIB_PATH)/libteec.so
+LOCAL_LDFLAGS += -llog
+
+SRC_FILES_DIR := $(wildcard $(LOCAL_PATH)/host/rk_anti_copy_board/*.c)
+LOCAL_SRC_FILES += $(SRC_FILES_DIR:$(LOCAL_PATH)/%=%)
+
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/ta/rk_anti_copy_board/include \
+		$(LOCAL_PATH)/host/rk_anti_copy_board \
+		$(LOCAL_PATH)/export-ta_arm32/host_include \
+		$(OPTEE_CLIENT_PATH)/public
+
+LOCAL_SHARED_LIBRARIES := libteec libcrypto
+LOCAL_MODULE := rk_anti_copy_board
+LOCAL_MODULE_TAGS := optional
+LOCAL_VENDOR_MODULE := true
 include $(BUILD_EXECUTABLE)
 
 include $(LOCAL_PATH)/ta/Android.mk

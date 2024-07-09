@@ -31,6 +31,7 @@
 
 #include "test_comm_argparse.h"
 #include "test_comm_utils.h"
+#include "test_comm_tmd.h"
 
 #define MAX_FRAME_QUEUE              8
 #define MAX_TIME_OUT_MS              20
@@ -69,6 +70,7 @@ typedef struct _rkWbcCfg {
 typedef struct _rkVdecCfg {
     RK_U32 u32FrameBufferCnt;
     COMPRESS_MODE_E enCompressMode;
+    RK_BOOL bTemporalMvpEnable;
 } VDEC_CFG;
 
 typedef struct _rkVOCfg {
@@ -104,14 +106,28 @@ typedef struct _rkBorderCfg {
 #define RK356X_VOP_LAYER_SMART_0        6
 #define RK356X_VOP_LAYER_SMART_1        7
 
-#define RK356X_VO_DEV_HD0               0
-#define RK356X_VO_DEV_HD1               1
+#define  VO_LAYER_CLUSTER0         0
+#define  VO_LAYER_CLUSTER1         1
+#define  VO_LAYER_CLUSTER2         2
+#define  VO_LAYER_CLUSTER3         3
+#define  VO_LAYER_ESMART0          4
+#define  VO_LAYER_ESMART1          5
+#define  VO_LAYER_ESMART2          6
+#define  VO_LAYER_ESMART3          7
 
-#define DISPLAY_TYPE_HDMI               0
-#define DISPLAY_TYPE_EDP                1
-#define DISPLAY_TYPE_VGA                2
-#define DISPLAY_TYPE_DP                 3
-#define DISPLAY_TYPE_HDMI_EDP           4
+
+#define RK356X_VO_DEV_HD0          0
+#define RK356X_VO_DEV_HD1          1
+#define RK356X_VO_DEV_HD2          2
+
+#define DISPLAY_TYPE_HDMI          0    /* HDMI0 */
+#define DISPLAY_TYPE_EDP           1
+#define DISPLAY_TYPE_MIPI          2    /* MIPI */
+#define DISPLAY_TYPE_DP            3    /* DP->VGA */
+#define DISPLAY_TYPE_DP_1          4    /* DP->HDMI */
+#define DISPLAY_TYPE_HDMI_1        5    /* HDMI1 */
+#define DISPLAY_TYPE_HDMI_HDM1     6    /* HDMI0 + HDMI1 */
+#define DISPLAY_TYPE_DP_DP1        7    /* DP->VGA +  DP->HDMI */
 
 typedef struct _PixelFormatMap {
     RK_U32 index;
@@ -119,7 +135,6 @@ typedef struct _PixelFormatMap {
 } PixelFormatMap;
 
 const static PixelFormatMap testPixelFormat[] = {
-    // usual yuv/rga formats
     {1,              RK_FMT_YUV420SP},
     {2,              RK_FMT_YUV420SP_VU},
     {3,              RK_FMT_RGB565},
@@ -129,7 +144,15 @@ const static PixelFormatMap testPixelFormat[] = {
     {7,              RK_FMT_BGRA8888},
     {8,              RK_FMT_RGBA8888},
     {9,              RK_FMT_RGBA5551},
-    {10,             RK_FMT_BGRA5551}
+    {10,             RK_FMT_BGRA5551},
+    {11,             RK_FMT_YUV422SP},
+    {12,             RK_FMT_YUV422SP_VU},
+    {13,             RK_FMT_YUV420SP_10BIT},
+    {14,             RK_FMT_YUV422SP_10BIT},
+    {15,             RK_FMT_YUV422_YVYU},
+    {16,             RK_FMT_YUV422_VYUY},
+    {17,             RK_FMT_YUV422_UYVY},
+    {18,             RK_FMT_YUV422SP_10BIT},
 };
 
 #define MAX_VO_FORMAT_RGB_NUM        17
@@ -159,8 +182,9 @@ typedef struct _TEST_MODE {
     VO_INTF_SYNC_E enIntfSync;
 } TEST_MODE_S;
 
-static VO_DEV VoLayer = RK356X_VOP_LAYER_CLUSTER_0;
-static VO_DEV VoLayer_second = RK356X_VOP_LAYER_CLUSTER_1;
+static VO_DEV VoLayer = VO_LAYER_CLUSTER2;
+static VO_DEV VoLayer_second = VO_LAYER_CLUSTER0;
+static RK_U32 s32PrivateData;
 
 TEST_MODE_S test_mode_table[] = {
     {0,     VO_OUTPUT_640x480_60},
@@ -168,28 +192,36 @@ TEST_MODE_S test_mode_table[] = {
     {2,     VO_OUTPUT_576P50},
     {3,     VO_OUTPUT_NTSC},
     {4,     VO_OUTPUT_480P60},
-    {5,     VO_OUTPUT_800x600_60},
-    {6,     VO_OUTPUT_1024x768_60},
-    {7,     VO_OUTPUT_720P50},
-    {8,     VO_OUTPUT_720P60},
-    {9,     VO_OUTPUT_1280x1024_60},
-    {10,    VO_OUTPUT_1080P24},
-    {11,    VO_OUTPUT_1080P25},
-    {12,    VO_OUTPUT_1080P30},
-    {13,    VO_OUTPUT_1080I50},
-    {14,    VO_OUTPUT_1080I60},
-    {15,    VO_OUTPUT_1080P50},
-    {16,    VO_OUTPUT_1080P60},
-    {17,    VO_OUTPUT_3840x2160_24},
-    {18,    VO_OUTPUT_3840x2160_25},
-    {19,    VO_OUTPUT_3840x2160_30},
-    {20,    VO_OUTPUT_3840x2160_50},
-    {21,    VO_OUTPUT_3840x2160_60},
-    {22,    VO_OUTPUT_4096x2160_24},
-    {23,    VO_OUTPUT_4096x2160_25},
-    {24,    VO_OUTPUT_4096x2160_30},
-    {25,    VO_OUTPUT_4096x2160_50},
-    {26,    VO_OUTPUT_4096x2160_60},
+    {5,    VO_OUTPUT_1280P60},
+    {6,     VO_OUTPUT_800x600_60},
+    {7,     VO_OUTPUT_1024x768_60},
+    {8,     VO_OUTPUT_720P50},
+    {9,     VO_OUTPUT_720P60},
+    {10,     VO_OUTPUT_1280x1024_60},
+    {11,    VO_OUTPUT_1080P24},
+    {12,    VO_OUTPUT_1080P25},
+    {13,    VO_OUTPUT_1080P30},
+    {14,    VO_OUTPUT_1080I50},
+    {15,    VO_OUTPUT_1080I60},
+    {16,    VO_OUTPUT_1080P50},
+    {17,    VO_OUTPUT_1080P60},
+    {18,    VO_OUTPUT_3840x1080_60},
+    {19,    VO_OUTPUT_3840x2160_24},
+    {20,    VO_OUTPUT_3840x2160_25},
+    {21,    VO_OUTPUT_3840x2160_30},
+    {22,    VO_OUTPUT_3840x2160_50},
+    {23,    VO_OUTPUT_3840x2160_60},
+    {24,    VO_OUTPUT_4096x2160_24},
+    {25,    VO_OUTPUT_4096x2160_25},
+    {26,    VO_OUTPUT_4096x2160_30},
+    {27,    VO_OUTPUT_4096x2160_50},
+    {28,    VO_OUTPUT_4096x2160_60},
+    {29,    VO_OUTPUT_7680x4320_24},
+    {30,    VO_OUTPUT_7680x4320_25},
+    {31,    VO_OUTPUT_7680x4320_30},
+    {32,    VO_OUTPUT_7680x4320_50},
+    {33,    VO_OUTPUT_7680x4320_60},
+    {34,    VO_OUTPUT_DEFAULT},
 };
 
 static VO_Timing_S stVoTimings[] = {
@@ -219,6 +251,10 @@ static void Sample_VO_GetDisplaySize(RK_S32 enIntfSync, RK_U32 *s32W, RK_U32 *s3
         case VO_OUTPUT_480P60:
             *s32W = 720;
             *s32H = 480;
+            break;
+        case VO_OUTPUT_1280P60:
+            *s32W = 720;
+            *s32H = 1280;
             break;
         case VO_OUTPUT_800x600_60:
             *s32W = 800;
@@ -263,6 +299,14 @@ static void Sample_VO_GetDisplaySize(RK_S32 enIntfSync, RK_U32 *s32W, RK_U32 *s3
             *s32W = 4096;
             *s32H = 2160;
             break;
+        case VO_OUTPUT_7680x4320_24: /* 7680x4320_24 */
+        case VO_OUTPUT_7680x4320_25: /* 7680x4320_25 */
+        case VO_OUTPUT_7680x4320_30: /* 7680x4320_30 */
+        case VO_OUTPUT_7680x4320_50: /* 7680x4320_50 */
+        case VO_OUTPUT_7680x4320_60: /* 7680x4320_60 */
+            *s32W = 7680;
+            *s32H = 4320;
+            break;
         default:
             for (RK_S32 i = 0; i < ARRAY_LENGTH(stVoTimings); i++) {
                 if (stVoTimings[i].enIntfSync == enIntfSync) {
@@ -279,13 +323,16 @@ static void Sample_VO_GetDisplaySize(RK_S32 enIntfSync, RK_U32 *s32W, RK_U32 *s3
 
 typedef struct _rkMpiVOCtx {
     RK_S32  VoDev;
+    RK_S32  VoDevSecond;
     RK_S32  VoLayer;
+    RK_S32  VoLayerSecond;
     RK_S32  VoLayerMode;
 
     RK_S32  u32Windows;
     RK_U32  enIntfType; /* 0 HDMI 1 edp */
+    RK_U32  enIntfTypeSecond;
     RK_U32  enIntfSync; /* VO_OUTPUT_1080P50 */
-    RK_U32  enIntfSync_second;
+    RK_U32  enIntfSyncSecond;
     RK_U32  s32X;
     RK_U32  s32Y;
 
@@ -328,6 +375,7 @@ typedef struct _rkMpiVOCtx {
     VO_LAYER   VOGfxLayer;
     RK_BOOL    threadExit;
 
+    RK_U32      bResolution;
     RK_BOOL     bVoPlay;
     const char *cfgFileUri;
     RK_S32      s32LoopCount;
@@ -340,6 +388,7 @@ typedef struct _rkMpiVOCtx {
     RK_BOOL     bEnWbc;
     RK_BOOL     bEnWbcToVO;
     RK_BOOL     bChnPriority;
+    RK_BOOL     bHideWbc;
 
     PARSER_CFG  stParserCfg;
     VDEC_CFG    stVdecCfg;
@@ -348,6 +397,9 @@ typedef struct _rkMpiVOCtx {
     RK_BOOL     wbc_bind;
     RK_U32      bHomologous;
     Border_CFG  stBorderCfg;
+    MIRROR_E enMirror;
+    ROTATION_E enRotation;
+    RK_BOOL bUseRga;
 } TEST_VO_CTX_S;
 
 typedef struct _VO_Send_Thread_Param {
@@ -393,6 +445,42 @@ static PIXEL_FORMAT_E Sample_wbc_formt(RK_S32 format) {
         default:
             return RK_FMT_BUTT;
     }
+}
+
+static VO_INTF_TYPE_E Sample_get_IntfType(RK_U32  u32IntfType) {
+    VO_INTF_TYPE_E IntfType;
+
+    switch (u32IntfType) {
+        case DISPLAY_TYPE_HDMI:
+            IntfType = VO_INTF_HDMI;
+            break;
+        case DISPLAY_TYPE_EDP:
+            IntfType = VO_INTF_EDP;
+            break;
+        case DISPLAY_TYPE_MIPI:
+            IntfType = VO_INTF_MIPI;
+            break;
+        case DISPLAY_TYPE_DP:
+            IntfType = VO_INTF_DP;
+            break;
+        case DISPLAY_TYPE_DP_1:
+            IntfType = VO_INTF_DP1;
+            break;
+        case DISPLAY_TYPE_HDMI_1 :
+            IntfType = VO_INTF_HDMI1;
+            break;
+        case DISPLAY_TYPE_HDMI_HDM1:
+            IntfType = VO_INTF_HDMI | VO_INTF_HDMI1;
+            break;
+        case DISPLAY_TYPE_DP_DP1:
+            IntfType = VO_INTF_DP | VO_INTF_DP1;
+            break;
+        default:
+            IntfType = VO_INTF_HDMI;
+            Sample_Print("Sample_get_IntfType IntfType not set,use INTF_HDMI default\n");
+    }
+
+    return IntfType;
 }
 
 static void* vochn_test_thread_func(void *pArgs) {
@@ -474,11 +562,13 @@ static void* vochn_test_thread_func(void *pArgs) {
 
 static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_S32 secondRows) {
     VO_PUB_ATTR_S VoPubAttr;
+    VO_PUB_ATTR_S VoPubAttr1;
     VO_VIDEO_LAYER_ATTR_S stLayerAttr;
     VO_CSC_S  VideoCSC;
     VO_CHN_ATTR_S VoChnAttr[64];
     VO_BORDER_S border;
     RK_S32  i;
+    PIXEL_FORMAT_E video_format;
     RK_U32 count = 0;
     RK_U32 u32DispBufLen;
     RK_U32 s32Ret;
@@ -488,12 +578,13 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
     RK_U32 u32ImageHeight = u32DispHeight;
 
     memset(&VoPubAttr, 0, sizeof(VO_PUB_ATTR_S));
+    memset(&VoPubAttr1, 0, sizeof(VO_PUB_ATTR_S));
     memset(&stLayerAttr, 0, sizeof(VO_VIDEO_LAYER_ATTR_S));
     memset(&VideoCSC, 0, sizeof(VO_CSC_S));
     memset(&VoChnAttr, 0, sizeof(VoChnAttr));
     memset(&border, 0, sizeof(VO_BORDER_S));
 
-    VoPubAttr.enIntfType = VO_INTF_HDMI;
+    VoPubAttr.enIntfType = Sample_get_IntfType(ctx->enIntfType);
     VoPubAttr.enIntfSync = VO_OUTPUT_1080P60;
 
     s32Ret = RK_MPI_VO_SetPubAttr(RK356X_VO_DEV_HD0, &VoPubAttr);
@@ -504,10 +595,15 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
-    if (ctx->stVoCfg.bDoubleScreen) {
-        VO_PUB_ATTR_S VoPubAttr1;
-        VoPubAttr1.enIntfType = VO_INTF_EDP;
-        VoPubAttr1.enIntfSync = VO_OUTPUT_1024x768_60;
+
+    if (ctx->bDoubleScreen) {
+        if (TEST_COMM_GetSocType() == RK_SOC_3588) {
+            VoPubAttr1.enIntfType = VO_INTF_DP;
+            VoPubAttr1.enIntfSync = VO_OUTPUT_1080P60;
+        } else {
+            VoPubAttr1.enIntfType = VO_INTF_EDP;
+            VoPubAttr1.enIntfSync = VO_OUTPUT_1024x768_60;
+        }
         VoPubAttr1.u32BgColor = 0x000000;
         s32Ret = RK_MPI_VO_SetPubAttr(RK356X_VO_DEV_HD1, &VoPubAttr1);
         if (s32Ret != RK_SUCCESS) {
@@ -518,25 +614,25 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
             return s32Ret;
         }
 
-        s32Ret = RK_MPI_VO_GetLayerDispBufLen(VoLayer_second, &u32DispBufLen);
+        s32Ret = RK_MPI_VO_GetLayerDispBufLen(ctx->stVoCfg.u32Screen1VoLayer, &u32DispBufLen);
         if (s32Ret != RK_SUCCESS) {
             RK_LOGE("Get display buf len failed with error code %d!\n", s32Ret);
             return s32Ret;
         }
         u32DispBufLen = 4;
-        s32Ret = RK_MPI_VO_SetLayerDispBufLen(VoLayer_second, u32DispBufLen);
+        s32Ret = RK_MPI_VO_SetLayerDispBufLen(ctx->stVoCfg.u32Screen1VoLayer, u32DispBufLen);
         if (s32Ret != RK_SUCCESS) {
             return s32Ret;
         }
     }
 
-    s32Ret = RK_MPI_VO_GetLayerDispBufLen(VoLayer, &u32DispBufLen);
+    s32Ret = RK_MPI_VO_GetLayerDispBufLen(ctx->stVoCfg.u32Screen0VoLayer, &u32DispBufLen);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("Get display buf len failed with error code %d!\n", s32Ret);
         return s32Ret;
     }
     u32DispBufLen = 4;
-    s32Ret = RK_MPI_VO_SetLayerDispBufLen(VoLayer, u32DispBufLen);
+    s32Ret = RK_MPI_VO_SetLayerDispBufLen(ctx->stVoCfg.u32Screen0VoLayer, u32DispBufLen);
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
@@ -549,46 +645,52 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
     stLayerAttr.stImageSize.u32Height = u32ImageHeight;
 
     stLayerAttr.u32DispFrmRt = 30;
-    if (VoLayer == RK356X_VOP_LAYER_ESMART_0) {
-        stLayerAttr.enPixFormat = RK_FMT_YUV420SP;
-    } else {
-       stLayerAttr.enPixFormat = RK_FMT_RGBA8888;
+
+    for (RK_U32 j = 0; j < VDEC_ARRAY_ELEMS(testPixelFormat); j++) {
+        if (ctx->s32PixFormat == testPixelFormat[j].index) {
+            video_format =  testPixelFormat[j].format;
+            break;
+        }
     }
+    stLayerAttr.enPixFormat = video_format;
+    stLayerAttr.enCompressMode = COMPRESS_AFBC_16x16;
+    stLayerAttr.bBypassFrame = RK_FALSE;
     VideoCSC.enCscMatrix = VO_CSC_MATRIX_IDENTITY;
     VideoCSC.u32Contrast =  50;
     VideoCSC.u32Hue = 50;
     VideoCSC.u32Luma = 50;
     VideoCSC.u32Satuature = 50;
 
-    s32Ret = RK_MPI_VO_SetLayerAttr(VoLayer, &stLayerAttr);
+    s32Ret = RK_MPI_VO_SetLayerAttr(ctx->stVoCfg.u32Screen0VoLayer, &stLayerAttr);
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
-    s32Ret = RK_MPI_VO_EnableLayer(VoLayer);
+    s32Ret = RK_MPI_VO_EnableLayer(ctx->stVoCfg.u32Screen0VoLayer);
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
-    s32Ret = RK_MPI_VO_SetLayerCSC(VoLayer, &VideoCSC);
+    s32Ret = RK_MPI_VO_SetLayerCSC(ctx->stVoCfg.u32Screen0VoLayer, &VideoCSC);
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
 
     RK_S32 totalCH = primRows * primRows;
     for (i = 0; i < totalCH; i++) {
-        VoChnAttr[i].bDeflicker = RK_FALSE;
-        VoChnAttr[i].u32Priority = 1;
-        VoChnAttr[i].stRect.s32X = (u32ImageWidth/primRows)*(i%primRows);
-        VoChnAttr[i].stRect.s32Y = (u32ImageHeight/primRows)*(i/primRows);
-        VoChnAttr[i].stRect.u32Width = u32ImageWidth/primRows;
-        VoChnAttr[i].stRect.u32Width = VoChnAttr[i].stRect.u32Width;
+        VoChnAttr[i].bDeflicker       = RK_FALSE;
+        VoChnAttr[i].u32Priority      = 1;
+        VoChnAttr[i].stRect.s32X      = (u32ImageWidth/primRows)*(i%primRows);
+        VoChnAttr[i].stRect.s32Y      = (u32ImageHeight/primRows)*(i/primRows);
+        VoChnAttr[i].stRect.u32Width  = u32ImageWidth/primRows;
+        VoChnAttr[i].stRect.u32Width  = VoChnAttr[i].stRect.u32Width;
         VoChnAttr[i].stRect.u32Height = u32ImageHeight/primRows;
         VoChnAttr[i].stRect.u32Height = VoChnAttr[i].stRect.u32Height;
+        VoChnAttr[i].u32MaxChnQueue   = 3;    /* if not config, defaul is 10 */
     }
 
     for (i = 0; i < totalCH; i++) {
-        RK_S32 s32ret = RK_MPI_VO_SetChnAttr(VoLayer, i, &VoChnAttr[i]);
+        RK_S32 s32ret = RK_MPI_VO_SetChnAttr(ctx->stVoCfg.u32Screen0VoLayer, i, &VoChnAttr[i]);
         if (RK_SUCCESS != s32ret) {
-            RK_LOGE("vo set dev %d chn %d attr failed! \n", VoLayer, i);
+            RK_LOGE("vo set dev %d chn %d attr failed! \n", ctx->stVoCfg.u32Screen0VoLayer, i);
         }
         border.bBorderEn = RK_TRUE;
         border.stBorder.u32Color = 0x191970;
@@ -596,18 +698,18 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
         border.stBorder.u32RightWidth = 2;
         border.stBorder.u32TopWidth = 2;
         border.stBorder.u32BottomWidth = 2;
-        s32Ret = RK_MPI_VO_SetChnBorder(VoLayer, i, &border);
+        s32Ret = RK_MPI_VO_SetChnBorder(ctx->stVoCfg.u32Screen0VoLayer, i, &border);
         if (s32Ret != RK_SUCCESS) {
             return s32Ret;
         }
     }
 
-    if (ctx->stVoCfg.bDoubleScreen) {
+    if (ctx->bDoubleScreen) {
         u32DispWidth = ctx->u32Screen1DisplayWidth;
         u32DispHeight = ctx->u32Screen1DisplayHeight;
         u32ImageWidth = u32DispWidth;
         u32ImageHeight = u32DispHeight;
-        Sample_VO_GetDisplaySize(VO_OUTPUT_1024x768_60, &u32DispWidth, &u32DispHeight);
+        Sample_VO_GetDisplaySize(VoPubAttr1.enIntfSync, &u32DispWidth, &u32DispHeight);
         stLayerAttr.stDispRect.s32X = 0;
         stLayerAttr.stDispRect.s32Y = 0;
         stLayerAttr.stDispRect.u32Width = u32DispWidth;
@@ -616,35 +718,34 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
         stLayerAttr.stImageSize.u32Height = u32ImageHeight;
 
         stLayerAttr.u32DispFrmRt = 30;
-        if (VoLayer_second == RK356X_VOP_LAYER_ESMART_1) {
-            stLayerAttr.enPixFormat = RK_FMT_YUV420SP;
-        } else {
-           stLayerAttr.enPixFormat = RK_FMT_BGR888;
-        }
+        stLayerAttr.enPixFormat = video_format;
+        stLayerAttr.enCompressMode = COMPRESS_AFBC_16x16;
+        stLayerAttr.bBypassFrame = RK_FALSE;
 
-        s32Ret = RK_MPI_VO_SetLayerAttr(VoLayer_second, &stLayerAttr);
+        s32Ret = RK_MPI_VO_SetLayerAttr(ctx->stVoCfg.u32Screen1VoLayer, &stLayerAttr);
         if (s32Ret != RK_SUCCESS) {
             return s32Ret;
         }
-        s32Ret = RK_MPI_VO_EnableLayer(VoLayer_second);
+        s32Ret = RK_MPI_VO_EnableLayer(ctx->stVoCfg.u32Screen1VoLayer);
         if (s32Ret != RK_SUCCESS) {
             return s32Ret;
         }
-        s32Ret = RK_MPI_VO_SetLayerCSC(VoLayer_second, &VideoCSC);
+        s32Ret = RK_MPI_VO_SetLayerCSC(ctx->stVoCfg.u32Screen1VoLayer, &VideoCSC);
         if (s32Ret != RK_SUCCESS) {
             return s32Ret;
         }
 
         totalCH = secondRows * secondRows;
         for (i = 0; i < totalCH; i++) {
-            VoChnAttr[i].bDeflicker = RK_FALSE;
-            VoChnAttr[i].u32Priority = 1;
-            VoChnAttr[i].stRect.s32X = (u32ImageWidth/secondRows)*(i%secondRows);
-            VoChnAttr[i].stRect.s32Y = (u32ImageHeight/secondRows)*(i/secondRows);
-            VoChnAttr[i].stRect.u32Width = u32ImageWidth/secondRows;
-            VoChnAttr[i].stRect.u32Width = VoChnAttr[i].stRect.u32Width;
+            VoChnAttr[i].bDeflicker       = RK_FALSE;
+            VoChnAttr[i].u32Priority      = 1;
+            VoChnAttr[i].stRect.s32X      = (u32ImageWidth/secondRows)*(i%secondRows);
+            VoChnAttr[i].stRect.s32Y      = (u32ImageHeight/secondRows)*(i/secondRows);
+            VoChnAttr[i].stRect.u32Width  = u32ImageWidth/secondRows;
+            VoChnAttr[i].stRect.u32Width  = VoChnAttr[i].stRect.u32Width;
             VoChnAttr[i].stRect.u32Height = u32ImageHeight/secondRows;
             VoChnAttr[i].stRect.u32Height = VoChnAttr[i].stRect.u32Height;
+            VoChnAttr[i].u32MaxChnQueue   = 3;    /* if not config, defaul is 10*/
         }
         /* demo Chn Priority test */
         if (ctx->bChnPriority) {
@@ -662,9 +763,12 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
         }
 
         for (i = 0; i < totalCH; i++) {
-            RK_S32 s32ret = RK_MPI_VO_SetChnAttr(VoLayer_second, i, &VoChnAttr[i]);
+            if (ctx->bHideWbc) {
+                RK_MPI_VO_HideChn(ctx->stVoCfg.u32Screen1VoLayer, i);
+            }
+            RK_S32 s32ret = RK_MPI_VO_SetChnAttr(ctx->stVoCfg.u32Screen1VoLayer, i, &VoChnAttr[i]);
             if (RK_SUCCESS != s32ret) {
-                RK_LOGE("vo set dev %d chn %d attr failed! \n", VoLayer_second, i);
+                RK_LOGE("vo set dev %d chn %d attr failed! \n", ctx->stVoCfg.u32Screen1VoLayer, i);
             }
             border.bBorderEn = RK_TRUE;
             border.stBorder.u32Color = 0x191970;
@@ -672,7 +776,8 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
             border.stBorder.u32RightWidth = 2;
             border.stBorder.u32TopWidth = 2;
             border.stBorder.u32BottomWidth = 2;
-            s32Ret = RK_MPI_VO_SetChnBorder(VoLayer_second, i, &border);
+
+            s32Ret = RK_MPI_VO_SetChnBorder(ctx->stVoCfg.u32Screen1VoLayer, i, &border);
             if (s32Ret != RK_SUCCESS) {
                 return s32Ret;
             }
@@ -686,12 +791,12 @@ static RK_S32 mpi_vo_init_sample(const TEST_VO_CTX_S *ctx, RK_S32 primRows , RK_
 static RK_S32 mpi_vo_deinit_sample(const TEST_VO_CTX_S *ctx) {
     RK_S32 s32Ret = RK_SUCCESS;
 
-    s32Ret = RK_MPI_VO_DisableLayer(VoLayer);
+    s32Ret = RK_MPI_VO_DisableLayer(ctx->stVoCfg.u32Screen0VoLayer);
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
-    if (ctx->stVoCfg.bDoubleScreen) {
-        s32Ret = RK_MPI_VO_DisableLayer(VoLayer_second);
+    if (ctx->bDoubleScreen) {
+        s32Ret = RK_MPI_VO_DisableLayer(ctx->stVoCfg.u32Screen1VoLayer);
         if (s32Ret != RK_SUCCESS) {
             return s32Ret;
         }
@@ -701,7 +806,7 @@ static RK_S32 mpi_vo_deinit_sample(const TEST_VO_CTX_S *ctx) {
     if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
-    if (ctx->stVoCfg.bDoubleScreen) {
+    if (ctx->bDoubleScreen) {
         s32Ret = RK_MPI_VO_Disable(RK356X_VO_DEV_HD1);
         if (s32Ret != RK_SUCCESS) {
             return s32Ret;
@@ -799,24 +904,28 @@ static RK_S32 destory_wbc(RK_U32 u32Ch) {
     return RK_SUCCESS;
 }
 
-static RK_S32 creat_vdec(TEST_VO_CTX_S *ctx, RK_U32 u32Ch) {
+static RK_S32 create_vdec(TEST_VO_CTX_S *ctx, RK_U32 u32Ch) {
     RK_S32 s32Ret = RK_SUCCESS;
-    VDEC_CHN_ATTR_S pstAttr;
+    VDEC_CHN_ATTR_S stAttr;
     VDEC_CHN_PARAM_S stVdecParam;
 
-    pstAttr.enMode = VIDEO_MODE_FRAME;
-    pstAttr.enType = ctx->stParserCfg.enCodecId;
-    pstAttr.u32PicWidth = ctx->stParserCfg.u32SrcWidth;
-    pstAttr.u32PicHeight = ctx->stParserCfg.u32SrcHeight;
-    pstAttr.u32FrameBufCnt = ctx->stVdecCfg.u32FrameBufferCnt;
+    memset(&stAttr, 0, sizeof(VDEC_CHN_ATTR_S));
+    memset(&stVdecParam, 0, sizeof(VDEC_CHN_PARAM_S));
 
-    s32Ret = RK_MPI_VDEC_CreateChn(u32Ch, &pstAttr);
+    stAttr.enMode = VIDEO_MODE_FRAME;
+    stAttr.enType = ctx->stParserCfg.enCodecId;
+    stAttr.u32PicWidth = ctx->stParserCfg.u32SrcWidth;
+    stAttr.u32PicHeight = ctx->stParserCfg.u32SrcHeight;
+    stAttr.u32FrameBufCnt = ctx->stVdecCfg.u32FrameBufferCnt;
+    stAttr.stVdecVideoAttr.bTemporalMvpEnable = ctx->stVdecCfg.bTemporalMvpEnable;
+
+    s32Ret = RK_MPI_VDEC_CreateChn(u32Ch, &stAttr);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("create %d vdec failed! ", u32Ch);
         RK_LOGE(R"(enMode %d enType %d u32PicWidth %d u32PicHeight %d \
-            u32PicVirWidth %d u32PicVirHeight %d u32FrameBufCnt %d)", \
-            pstAttr.enMode, pstAttr.enType, pstAttr.u32PicWidth, pstAttr.u32PicHeight, \
-            pstAttr.u32PicVirWidth, pstAttr.u32PicVirHeight, pstAttr.u32FrameBufCnt);
+                u32PicVirWidth %d u32PicVirHeight %d u32FrameBufCnt %d)", \
+                stAttr.enMode, stAttr.enType, stAttr.u32PicWidth, stAttr.u32PicHeight, \
+                stAttr.u32PicVirWidth, stAttr.u32PicVirHeight, stAttr.u32FrameBufCnt);
         return s32Ret;
     }
 
@@ -843,36 +952,36 @@ static RK_S32 creat_vdec(TEST_VO_CTX_S *ctx, RK_U32 u32Ch) {
     return RK_SUCCESS;
 }
 
-static RK_S32 screen1_process(TEST_VO_CTX_S *ctx, RK_U32 u32Index) {
+static RK_S32 screen_init(TEST_VO_CTX_S *ctx, RK_U32 u32VoLayer, RK_U32 u32Index, RK_U32 u32VoChn) {
     RK_S32 s32Ret = RK_SUCCESS;
-    MPP_CHN_S stSrcChn, stDstChn; 
+    MPP_CHN_S stVdecChn, stVoChn;
 
-    s32Ret = creat_vdec(ctx, u32Index);
+    s32Ret = create_vdec(ctx, u32Index);
     if (s32Ret != RK_SUCCESS) {
-        RK_LOGE("creat %d ch vdec failed!", u32Index);
+        RK_LOGE("create %d ch vdec failed!", u32Index);
         return s32Ret;
     }
 
-    s32Ret = RK_MPI_VO_EnableChn(ctx->stVoCfg.u32Screen1VoLayer, u32Index - ctx->u32Screen0Chn);
+    s32Ret = RK_MPI_VO_EnableChn(u32VoLayer, u32VoChn);
     if (s32Ret != RK_SUCCESS) {
-        RK_LOGE("creat %d layer %d ch vo failed!",
-            ctx->stVoCfg.u32Screen1VoLayer, u32Index - ctx->u32Screen0Chn);
+        RK_LOGE("create %d layer %d ch vo failed!", u32VoLayer, u32VoChn);
         return s32Ret;
     }
-    RK_LOGD("create vo layer %d ch %d", ctx->stVoCfg.u32Screen1VoLayer,  u32Index - ctx->u32Screen0Chn);
 
-    stSrcChn.enModId = RK_ID_VDEC;
-    stSrcChn.s32DevId = 0;
-    stSrcChn.s32ChnId = u32Index;
+    RK_LOGD("create vo layer %d ch %d", u32VoLayer,  u32VoChn);
 
-    RK_LOGD("vdec  Ch %d", stSrcChn.s32ChnId);
-    stDstChn.enModId = RK_ID_VO;
-    stDstChn.s32DevId = ctx->stVoCfg.u32Screen1VoLayer;
-    stDstChn.s32ChnId = u32Index - ctx->u32Screen0Chn;
+    stVdecChn.enModId = RK_ID_VDEC;
+    stVdecChn.s32DevId = 0;
+    stVdecChn.s32ChnId = u32Index;
+    RK_LOGD("vdec ch %d", stVdecChn.s32ChnId);
 
-    RK_LOGD("VoLayer %d, voCh %d", ctx->stVoCfg.u32Screen1VoLayer,  u32Index - ctx->u32Screen0Chn);
+    stVoChn.enModId = RK_ID_VO;
+    stVoChn.s32DevId = u32VoLayer;
+    stVoChn.s32ChnId = u32VoChn;
 
-    s32Ret = RK_MPI_SYS_Bind(&stSrcChn, &stDstChn);
+    RK_LOGD("VoLayer %d, voCh %d", u32VoLayer, u32VoChn);
+
+    s32Ret = RK_MPI_SYS_Bind(&stVdecChn, &stVoChn);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("vdec and vo bind error");
         return s32Ret;
@@ -881,37 +990,34 @@ static RK_S32 screen1_process(TEST_VO_CTX_S *ctx, RK_U32 u32Index) {
     return RK_SUCCESS;
 }
 
-static RK_S32 screen0_process(TEST_VO_CTX_S *ctx, RK_U32 u32Index) {
+static RK_S32 screen_deinit(TEST_VO_CTX_S *ctx, RK_U32 u32VoLayer, RK_U32 u32Index, RK_U32 u32VoChn) {
     RK_S32 s32Ret = RK_SUCCESS;
-    MPP_CHN_S stSrcChn, stDstChn;
-   
-    s32Ret = creat_vdec(ctx, u32Index);
+    MPP_CHN_S stVdecChn, stVoChn;
+
+    stVdecChn.enModId = RK_ID_VDEC;
+    stVdecChn.s32DevId = 0;
+    stVdecChn.s32ChnId = u32Index;
+
+    stVoChn.enModId = RK_ID_VO;
+    stVoChn.s32DevId = u32VoLayer;
+    stVoChn.s32ChnId = u32VoChn;
+
+    s32Ret = RK_MPI_SYS_UnBind(&stVdecChn, &stVoChn);
     if (s32Ret != RK_SUCCESS) {
-        RK_LOGE("creat %d ch vdec failed!", u32Index);
+        RK_LOGE("unbind vdec and vo bind error");
         return s32Ret;
     }
 
-    s32Ret = RK_MPI_VO_EnableChn(ctx->stVoCfg.u32Screen0VoLayer, u32Index);
+    s32Ret = RK_MPI_VDEC_StopRecvStream(u32Index);
     if (s32Ret != RK_SUCCESS) {
-         RK_LOGE("creat %d layer %d ch vo failed!", ctx->stVoCfg.u32Screen0VoLayer, u32Index);
-         return s32Ret;
+        return s32Ret;
     }
-
-    RK_LOGD("create vo layer %d ch %d", ctx->stVoCfg.u32Screen0VoLayer, u32Index);
-
-    stSrcChn.enModId = RK_ID_VDEC;
-    stSrcChn.s32DevId = 0;
-    stSrcChn.s32ChnId = u32Index;
-    RK_LOGD("vdec  Ch %d", stSrcChn.s32ChnId);
-
-    stDstChn.enModId = RK_ID_VO;
-    stDstChn.s32DevId = ctx->stVoCfg.u32Screen0VoLayer;
-    stDstChn.s32ChnId = u32Index;
-    RK_LOGD("voLayer %d, voCh %d", stDstChn.s32DevId,  stDstChn.s32ChnId);
-
-    s32Ret = RK_MPI_SYS_Bind(&stSrcChn, &stDstChn);
+    s32Ret = RK_MPI_VDEC_DestroyChn(u32Index);
     if (s32Ret != RK_SUCCESS) {
-        RK_LOGE("vdec and vo bind error ");
+        return s32Ret;
+    }
+    s32Ret = RK_MPI_VO_DisableChn(u32VoLayer, u32VoChn);
+    if (s32Ret != RK_SUCCESS) {
         return s32Ret;
     }
 
@@ -939,7 +1045,7 @@ static RK_S32 wbc_process(TEST_VO_CTX_S *ctx) {
             s32Ret = RK_MPI_VO_EnableChn(ctx->stVoCfg.u32Screen0VoLayer, ctx->u32Screen0Chn);
             if (s32Ret != RK_SUCCESS) {
                 RK_LOGE("creat %d layer %d ch vo failed!",
-                    ctx->stVoCfg.u32Screen0VoLayer, ctx->u32Screen0Chn);
+                        ctx->stVoCfg.u32Screen0VoLayer, ctx->u32Screen0Chn);
                 return s32Ret;
             }
             stDstChn.s32DevId  = ctx->stVoCfg.u32Screen0VoLayer;
@@ -947,7 +1053,7 @@ static RK_S32 wbc_process(TEST_VO_CTX_S *ctx) {
             s32Ret = RK_MPI_VO_EnableChn(ctx->stVoCfg.u32Screen1VoLayer, ctx->u32Screen1Chn);
             if (s32Ret != RK_SUCCESS) {
                 RK_LOGE("creat %d layer %d ch vo failed!",
-                    ctx->stVoCfg.u32Screen1VoLayer, ctx->u32Screen1Chn);
+                        ctx->stVoCfg.u32Screen1VoLayer, ctx->u32Screen1Chn);
                 return s32Ret;
             }
             stDstChn.s32DevId  = ctx->stVoCfg.u32Screen1VoLayer;
@@ -1002,27 +1108,27 @@ RK_S32 unit_mpi_voplay_test(TEST_VO_CTX_S *ctx) {
     RK_LOGD("screen0Ch %d screen1Ch %d maxCh %d", ctx->u32Screen0Chn, ctx->u32Screen1Chn, u32MaxCh);
 
     for (i = 0; i < ctx->u32Screen0Chn; i++) {
-        s32Ret = screen0_process(ctx, i);
+        s32Ret = screen_init(ctx, ctx->stVoCfg.u32Screen0VoLayer, i, i);
         if (s32Ret != RK_SUCCESS) {
             RK_LOGE("screen0_process failed!", i);
             continue;
         }
+
         ctx->u32ChnIndex = i;
-        memcpy(&(mpiVdecCtx[i]), ctx, sizeof(TEST_VO_CTX_S));       
-        u32VdecSendThreadNum++;
+
+
     }
 
-
     for (i = ctx->u32Screen0Chn; i < u32MaxCh; i++) {
-            s32Ret = screen1_process(ctx, i);
-            if (s32Ret != RK_SUCCESS) {
-                RK_LOGE("screen1_process failed!", i);
-                continue;
-            }
-            ctx->u32ChnIndex = i;
-            memcpy(&(mpiVdecCtx[i]), ctx, sizeof(TEST_VO_CTX_S));           
-            u32VdecSendThreadNum++;
+        s32Ret = screen_init(ctx, ctx->stVoCfg.u32Screen1VoLayer, i, i - ctx->u32Screen0Chn);
+        if (s32Ret != RK_SUCCESS) {
+            RK_LOGE("vpss screen_init failed!", i);
+            continue;
         }
+        ctx->u32ChnIndex = i;
+
+
+    }
 
     pthread_create(&voThread, 0, vochn_test_thread_func, reinterpret_cast<void *>(ctx));
 
@@ -1035,67 +1141,23 @@ RK_S32 unit_mpi_voplay_test(TEST_VO_CTX_S *ctx) {
         }
     }
 
-    u32VdecSendThreadNum = 0;
     for (i = 0; i< ctx->u32Screen0Chn; i++) {
-        pthread_join(vdecSendThread[u32VdecSendThreadNum], RK_NULL);
-        u32VdecSendThreadNum++;
 
-        stSrcChn.enModId = RK_ID_VDEC;
-        stSrcChn.s32DevId = 0;
-        stSrcChn.s32ChnId = i;
-
-        stDstChn.enModId = RK_ID_VO;
-        stDstChn.s32DevId = ctx->stVoCfg.u32Screen0VoLayer;
-        stDstChn.s32ChnId = i;
-
-        s32Ret = RK_MPI_SYS_UnBind(&stSrcChn, &stDstChn);
+        s32Ret = screen_deinit(ctx, ctx->stVoCfg.u32Screen0VoLayer, i, i);
         if (s32Ret != RK_SUCCESS) {
-            return s32Ret;
-        }
-
-        s32Ret = RK_MPI_VDEC_StopRecvStream(i);
-        if (s32Ret != RK_SUCCESS) {
-            return s32Ret;
-        }
-        s32Ret = RK_MPI_VDEC_DestroyChn(i);
-        if (s32Ret != RK_SUCCESS) {
-            return s32Ret;
-        }
-        s32Ret = RK_MPI_VO_DisableChn(ctx->stVoCfg.u32Screen0VoLayer, i);
-        if (s32Ret != RK_SUCCESS) {
-            return s32Ret;
+            RK_LOGE("screen deinit failed! vplay %d chn %d", ctx->stVoCfg.u32Screen0VoLayer, i);
+            continue;
         }
     }
 
     for (i = ctx->u32Screen0Chn; i < u32MaxCh; i++) {
-            pthread_join(vdecSendThread[u32VdecSendThreadNum], RK_NULL);
-            u32VdecSendThreadNum++;
 
-            stSrcChn.enModId = RK_ID_VDEC;
-            stSrcChn.s32DevId = 0;
-            stSrcChn.s32ChnId = i;
-
-            stDstChn.enModId = RK_ID_VO;
-            stDstChn.s32DevId = ctx->stVoCfg.u32Screen1VoLayer;
-            stDstChn.s32ChnId = i;
-
-            s32Ret = RK_MPI_SYS_UnBind(&stSrcChn, &stDstChn);
-            if (s32Ret != RK_SUCCESS) {
-                return s32Ret;
-            }
-            s32Ret = RK_MPI_VDEC_StopRecvStream(i);
-            if (s32Ret != RK_SUCCESS) {
-                return s32Ret;
-            }
-            s32Ret = RK_MPI_VDEC_DestroyChn(i);
-            if (s32Ret != RK_SUCCESS) {
-                return s32Ret;
-            }
-            s32Ret = RK_MPI_VO_DisableChn(ctx->stVoCfg.u32Screen1VoLayer, i);
-            if (s32Ret != RK_SUCCESS) {
-                return s32Ret;
-            }
+        s32Ret = screen_deinit(ctx, ctx->stVoCfg.u32Screen1VoLayer, i, i - ctx->u32Screen0Chn);
+        if (s32Ret != RK_SUCCESS) {
+            RK_LOGE("screen deinit failed! vplay %d chn %d", ctx->stVoCfg.u32Screen0VoLayer, i);
+            continue;
         }
+    }
 
     if (ctx->bEnWbc) {
         if (ctx->bEnWbcToVO) {
@@ -1107,21 +1169,12 @@ RK_S32 unit_mpi_voplay_test(TEST_VO_CTX_S *ctx) {
             stDstChn.s32DevId  = ctx->stVoCfg.u32Screen0VoLayer;
             stDstChn.s32ChnId  = 0;
 
-            s32Ret = RK_MPI_SYS_UnBind(&stSrcChn, &stDstChn);
-            if (s32Ret != RK_SUCCESS) {
-                return s32Ret;
-            }
             s32Ret = destory_wbc(0);
-            if (s32Ret != RK_SUCCESS) {
-                return s32Ret;
-            }
-            s32Ret = RK_MPI_VO_DisableChn(ctx->stVoCfg.u32Screen0VoLayer, 0);
             if (s32Ret != RK_SUCCESS) {
                 return s32Ret;
             }
         }
     }
-
     mpi_vo_deinit_sample(ctx);
     close_config(ctx);
     return RK_SUCCESS;
@@ -1150,7 +1203,7 @@ static void Sample_VO_GetPictureData(VO_FRAME_INFO_S *pstFrameInfo, const char *
 
     u32Fd = open(pFileName, O_RDONLY);
     if (u32Fd < 0) {
-        Sample_Print("cat not find file\n");
+        Sample_Print("cat not find file: %s\n", pFileName);
         return;
     }
     u32Size = lseek(u32Fd, 0, SEEK_END);
@@ -1328,6 +1381,8 @@ static RK_S32 Sample_VO_MultiWindowns_Start(TEST_VO_CTX_S *ctx) {
         stChnAttr.stRect.u32Height = u32WinHeight;
         stChnAttr.u32FgAlpha = 255;
         stChnAttr.u32BgAlpha = 0;
+        stChnAttr.enMirror = ctx->enMirror;
+        stChnAttr.enRotation = ctx->enRotation;
         // set priority
         stChnAttr.u32Priority = 1;
 
@@ -1367,6 +1422,26 @@ static RK_S32 Sample_VO_MultiWindowns_Start(TEST_VO_CTX_S *ctx) {
             return RK_FAILURE;
     }
 
+    //watermark
+    stChnAttr.stRect.s32X = 128;
+    stChnAttr.stRect.s32Y = 128;
+    stChnAttr.stRect.u32Width = 128;
+    stChnAttr.stRect.u32Height = 128;
+    stChnAttr.u32FgAlpha = 255;
+    stChnAttr.u32BgAlpha = 0;
+    stChnAttr.enMirror = ctx->enMirror;
+    stChnAttr.enRotation = ctx->enRotation;
+    // set priority
+    stChnAttr.u32Priority = 1;
+
+    s32Ret = RK_MPI_VO_SetChnAttr(ctx->VoLayer, ctx->u32Windows + 1, &stChnAttr);
+    if (s32Ret != RK_SUCCESS)
+        return RK_FAILURE;
+
+    s32Ret = RK_MPI_VO_EnableChn(ctx->VoLayer, ctx->u32Windows + 1);
+    if (s32Ret != RK_SUCCESS)
+        return RK_FAILURE;
+
     return s32Ret;
 }
 
@@ -1379,6 +1454,10 @@ static RK_S32 Sample_VO_MultiWindowns_Stop(VO_LAYER VoLayer, RK_U32 u32Windows) 
         if (s32Ret != RK_SUCCESS)
             return RK_FAILURE;
     }
+
+    s32Ret = RK_MPI_VO_DisableChn(VoLayer, u32Windows + 1);
+    if (s32Ret != RK_SUCCESS)
+        return RK_FAILURE;
 
     return s32Ret;
 }
@@ -1407,12 +1486,15 @@ static RK_S32 Sample_VO_StopDev(VO_DEV VoDev) {
     return s32Ret;
 }
 
-static RK_S32 Sample_VO_StartLayer(VO_LAYER VoLayer, const VO_VIDEO_LAYER_ATTR_S *pstLayerAttr) {
+static RK_S32 Sample_VO_StartLayer(VO_LAYER VoLayer, const VO_VIDEO_LAYER_ATTR_S *pstLayerAttr,
+                                RK_BOOL bUseRga) {
     RK_S32 s32Ret = RK_SUCCESS;
 
     s32Ret = RK_MPI_VO_SetLayerAttr(VoLayer, pstLayerAttr);
     if (s32Ret != RK_SUCCESS)
         return RK_FAILURE;
+    if (bUseRga)
+        RK_MPI_VO_SetLayerSpliceMode(VoLayer, VO_SPLICE_MODE_RGA);
 
     s32Ret = RK_MPI_VO_EnableLayer(VoLayer);
     if (s32Ret != RK_SUCCESS)
@@ -1432,12 +1514,12 @@ static RK_S32 Sample_VO_StopLayer(VO_LAYER VoLayer) {
 }
 
 static RK_S32 Sample_VO_SetVFrame(VIDEO_FRAME_INFO_S *pVFrame,
-                                   RK_U32              u32Width,
-                                   RK_U32              u32Height,
-                                   RK_U32              u32VirWidth,
-                                   RK_U32              u32VirHeight,
-                                   PIXEL_FORMAT_E      enPixelFormat,
-                                   RK_VOID             *pMblk) {
+                                  RK_U32              u32Width,
+                                  RK_U32              u32Height,
+                                  RK_U32              u32VirWidth,
+                                  RK_U32              u32VirHeight,
+                                  PIXEL_FORMAT_E      enPixelFormat,
+                                  RK_VOID             *pMblk) {
     RK_S32 s32Ret = RK_SUCCESS;
 
     if (pVFrame == NULL && pMblk == NULL)
@@ -1498,24 +1580,26 @@ static RK_S32 Sample_VO_CreateGFXData(RK_U32 u32Width, RK_U32 u32Height, RK_U32 
     RK_MPI_VO_GetFrameInfo(*pMblk, &stFrameInfo);
     if (foramt == RK_FMT_RGB888) {
         if (u32Width == 1920 && u32Height == 1080 && value == 0)
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_1080P_RGB_0.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_1080P_RGB_0.yuv");
         else if (u32Width == 1920 && u32Height == 1080 && value == 1 )
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_1080P_RGB_1.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_1080P_RGB_1.yuv");
         else if (u32Width == 1024 && u32Height == 768 && value == 0 )
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_768P_RGB_0.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_768P_RGB_0.yuv");
         else if (u32Width == 1024 && u32Height == 768 && value == 1)
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_768P_RGB_1.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_768P_RGB_1.yuv");
         else
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_480P_RGB.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_480P_RGB.yuv");
     } else if (foramt == RK_FMT_RGBA8888) {
         if (u32Width == 1920 && u32Height == 1080 && value == 0 )
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_1080P_RGBA.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_1080P_RGBA.yuv");
         else if (u32Width == 1920 && u32Height == 1080 && value == 1 )
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_1080P2_RGBA.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_1080P2_RGBA.yuv");
         else if (u32Width == 1024 && u32Height == 768)
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_768P_RGBA.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_768P_RGBA.yuv");
+        else if (u32Width == 128 && u32Height == 128 && value == 0)
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_128P_RGBA.yuv");
         else
-            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/vo/res_480P_RGBA.yuv");
+            Sample_VO_GetPictureData(&stFrameInfo, "/userdata/test/res/res_480P_RGBA.yuv");
     } else {
         Sample_VO_DrawUI(&stFrameInfo, foramt, value);
     }
@@ -1526,15 +1610,17 @@ static RK_S32 Sample_VO_CreateGFXData(RK_U32 u32Width, RK_U32 u32Height, RK_U32 
 static RK_VOID * Sample_VO_SendPicture_Mosaic(RK_VOID *pArg) {
     VoThreadParam *pParam = reinterpret_cast<VoThreadParam *>(pArg);
     VIDEO_FRAME_INFO_S *pstVFrame;
-    RK_VOID *pMblk, *pMblk_1080P, *pMblk_1080P2, *pMblk_768P, *pMblk_480P, *pMblk_G0, *pMblk_G1;
+    RK_VOID *pMblk, *pMblk_1080P, *pMblk_1080P2, *pMblk_768P, *pMblk_480P, *pMblk_G0, *pMblk_G1, *pMblk_WATER_MAKER;
     RK_U32 count;
 
     Sample_VO_CreateGFXData(1920, 1080, RK_FMT_RGBA8888, 0, &pMblk_1080P);
     Sample_VO_CreateGFXData(1920, 1080, RK_FMT_RGBA8888, 1, &pMblk_1080P2);
     Sample_VO_CreateGFXData(720,  480,  RK_FMT_RGBA8888, 0, &pMblk_480P);
     Sample_VO_CreateGFXData(1024, 768,  RK_FMT_RGBA8888, 0, &pMblk_768P);
+    Sample_VO_CreateGFXData(128, 128,   RK_FMT_RGBA8888, 0, &pMblk_WATER_MAKER);
     Sample_VO_CreateGFXData(1920, 1080, RK_FMT_BGRA5551, 0x1F, &pMblk_G0);
     Sample_VO_CreateGFXData(1920, 1080, RK_FMT_BGRA5551, 0x1F << 10, &pMblk_G1);
+
 
     pstVFrame = reinterpret_cast<VIDEO_FRAME_INFO_S *>(malloc(sizeof(VIDEO_FRAME_INFO_S)));
 
@@ -1569,6 +1655,15 @@ static RK_VOID * Sample_VO_SendPicture_Mosaic(RK_VOID *pArg) {
                 pstVFrame->stVFrame.pMbBlk = pMblk;
                 RK_MPI_VO_SendFrame(pParam->VoVideoLayer, i, pstVFrame, 0);
             }
+
+            pstVFrame->stVFrame.u32Width = 128;
+            pstVFrame->stVFrame.u32Height = 128;
+            pstVFrame->stVFrame.u32VirWidth = 128;
+            pstVFrame->stVFrame.u32VirHeight = 128;
+            pstVFrame->stVFrame.enPixelFormat = RK_FMT_RGBA8888;
+            pstVFrame->stVFrame.pMbBlk = pMblk_WATER_MAKER;
+            pMblk = pMblk_WATER_MAKER;
+            RK_MPI_VO_SendFrame(pParam->VoVideoLayer, pParam->u32VideoWindows + 1, pstVFrame, 0);
         }
         if (pParam->VOGfxLayer >= 0) {
             for (RK_U32 i = 0; i < pParam->u32GFXLayers; i++) {
@@ -1592,7 +1687,13 @@ static RK_VOID * Sample_VO_SendPicture_Mosaic(RK_VOID *pArg) {
         count++;
     }
     free(pstVFrame);
-    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk);
+    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk_1080P);
+    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk_1080P2);
+    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk_480P);
+    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk_768P);
+    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk_G0);
+    RK_MPI_VO_DestroyGraphicsFrameBuffer(pMblk_G1);
+
     Sample_Print("%s exit\n", __func__);
 
     return NULL;
@@ -1607,71 +1708,146 @@ static RK_VOID Sample_VO_StopSendPicture_Mosaic(pthread_t tThreadID, VoThreadPar
     pthread_join(tThreadID, RK_NULL);
 }
 
+static void Sample_VO_GetVsyncEvent(RK_VOID *pPrivateData, VO_CB_INFO_S* info) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_U32 *pSyncType = (RK_U32 *) pPrivateData;
+
+    if (info != NULL)
+        Sample_Print("[%s] timestamp: %d %d\n", __func__, info->u32Sec, info->u32Usec);
+}
+
+static void Sample_VO_GetStatus(RK_VOID *pPrivateData) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    VO_SINK_CAPABILITY_S    stSinkCap;
+    VO_EDID_S *pstEdid = RK_NULL;
+    RK_U32 *pSyncType = (RK_U32 *) pPrivateData;
+
+    Sample_Print("[%s] \n", __func__);
+    if (!pPrivateData) {
+         Sample_Print("Sample_VO_GetStatus, no privatedata");
+        return;
+    }
+    s32Ret = RK_MPI_VO_GetSinkCapability(*pSyncType, 0, &stSinkCap);
+    if (s32Ret != RK_SUCCESS) {
+        Sample_Print("fail RK_MPI_VO_GetSinkCapability, 0x%x", s32Ret);
+        return;
+    }
+
+    Sample_Print("[%s] Connector %d Connection %d\n", __func__, *pSyncType, stSinkCap.bConnected);
+
+    if (stSinkCap.bConnected == RK_FALSE)
+        return;
+
+    pstEdid = (VO_EDID_S *)malloc(sizeof(VO_EDID_S));
+    if (pstEdid == RK_NULL)
+        return;
+
+    s32Ret = RK_MPI_VO_Get_Edid(*pSyncType, 0, pstEdid);
+    if (s32Ret != RK_SUCCESS) {
+        free(pstEdid);
+        return;
+    }
+
+    Sample_Print("[%s] EDID Valid %d length %d\n", __func__, pstEdid->bEdidValid, pstEdid->u32Edidlength);
+    if (pstEdid->bEdidValid)
+        Sample_Print("[%s] %02x %02x %02x %02x %02x %02x %02x %02x\n", __func__,
+                     pstEdid->u8Edid[0], pstEdid->u8Edid[1], pstEdid->u8Edid[2], pstEdid->u8Edid[3],
+                     pstEdid->u8Edid[4], pstEdid->u8Edid[5], pstEdid->u8Edid[6], pstEdid->u8Edid[7]);
+    free(pstEdid);
+}
+
+static RK_S32 Sample_VO_RegHpdCallback(RK_U32 eSyncType, VO_DEV VoDev) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_VO_CALLBACK_FUNC_S stCallbackFunc;
+
+    s32PrivateData = eSyncType;
+    stCallbackFunc.pfnEventCallback = Sample_VO_GetStatus;
+    stCallbackFunc.pPrivateData = &s32PrivateData;
+    s32Ret = RK_MPI_VO_RegCallbackFunc(eSyncType, VoDev, &stCallbackFunc);
+    if (s32Ret != RK_SUCCESS) {
+        Sample_Print("RK_MPI_VO_RegCallbackFunc failed 0x%x\n", s32Ret);
+        return RK_FAILURE;
+    }
+    Sample_Print("RK_MPI_VO_RegCallbackFunc success 0x%x\n", s32Ret);
+    return RK_SUCCESS;
+}
+
+static RK_S32 Sample_VO_UnRegHpdCallback(RK_U32 eSyncType, VO_DEV VoDev) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_VO_CALLBACK_FUNC_S stCallbackFunc;
+
+    s32PrivateData = eSyncType;
+    stCallbackFunc.pfnEventCallback = Sample_VO_GetStatus;
+    stCallbackFunc.pPrivateData = &s32PrivateData;
+    s32Ret = RK_MPI_VO_UnRegCallbackFunc(eSyncType, VoDev, &stCallbackFunc);
+    if (s32Ret != RK_SUCCESS)
+        return RK_FAILURE;
+
+    return RK_SUCCESS;
+}
+
+static RK_S32 Sample_VO_RegVsyncCallback(VO_DEV VoDev) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_VO_VSYNC_CALLBACK_FUNC_S stCallbackFunc;
+
+    stCallbackFunc.pfnEventCallback = Sample_VO_GetVsyncEvent;
+    stCallbackFunc.pPrivateData = NULL;
+    s32Ret = RK_MPI_VO_RegVsyncCallbackFunc(VoDev, &stCallbackFunc);
+    if (s32Ret != RK_SUCCESS) {
+        Sample_Print("Sample_VO_RegVsyncCallback failed 0x%x\n", s32Ret);
+        return RK_FAILURE;
+    }
+    Sample_Print("Sample_VO_RegVsyncCallback success 0x%x\n", s32Ret);
+    return RK_SUCCESS;
+}
+
+static RK_S32 Sample_VO_UnRegVsyncCallback(VO_DEV VoDev) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_VO_VSYNC_CALLBACK_FUNC_S stCallbackFunc;
+
+    stCallbackFunc.pfnEventCallback = Sample_VO_GetVsyncEvent;
+    stCallbackFunc.pPrivateData = NULL;
+    s32Ret = RK_MPI_VO_UnRegVsyncCallbackFunc(VoDev, &stCallbackFunc);
+    if (s32Ret != RK_SUCCESS) {
+        Sample_Print("Sample_VO_UnRegVsyncCallback failed 0x%x\n", s32Ret);
+        return RK_FAILURE;
+    }
+    Sample_Print("Sample_VO_UnRegVsyncCallback success 0x%x\n", s32Ret);
+    return RK_SUCCESS;
+}
+
 static RK_S32 Sample_VO_Demo_Video_Mosaic(TEST_VO_CTX_S *ctx) {
-    VO_PUB_ATTR_S            stVoPubAttr;
-    VO_VIDEO_LAYER_ATTR_S    stLayerAttr;
+    VO_PUB_ATTR_S            stVoPubAttr, stVoPubAttrSecond;
+    VO_VIDEO_LAYER_ATTR_S    stLayerAttr, stLayerAttrSecond;
     RK_U32                   u32DispWidth, u32DispHeight;
     RK_U32                   u32ImageWidth, u32ImageHeight;
-    VO_LAYER                 VoLayer;
-    VO_DEV                   VoDev;
+    VO_LAYER                 VoLayer, VoLayerSecond;
+    VO_DEV                   VoDev, VoDevSecond;
     RK_S32                   u32Windows;
     RK_U32                   u32Fps, i;
-    pthread_t                tThreadID;
+    pthread_t                tThreadID, tThreadID_1;
     RK_S32                   s32Ret = RK_SUCCESS;
     VO_LAYER_MODE_E          Vo_layer_mode;
-    VoThreadParam            stThreadParam;
+    VoThreadParam            stThreadParam, stThreadParamSecond;
     PIXEL_FORMAT_E           video_format;
 
     VoDev = ctx->VoDev;
+    VoDevSecond = ctx->VoDevSecond;
     u32Windows = ctx->u32Windows;
     u32Fps =  ctx->u32DispFrmRt;
     VoLayer = ctx->VoLayer;
+    VoLayerSecond = ctx->VoLayerSecond;
+
     for (RK_U32 j = 0; j < VDEC_ARRAY_ELEMS(testPixelFormat); j++) {
         if (ctx->s32PixFormat == testPixelFormat[j].index) {
             video_format =  testPixelFormat[j].format;
             break;
         }
     }
-
     Sample_Print("%s VoDev %u Windows %u video_format %x\n", __func__, VoDev, u32Windows, video_format);
-
     /* Bind Layer */
-    switch (ctx->VoLayerMode) {
-        case 0:
-            Vo_layer_mode = VO_LAYER_MODE_CURSOR;
-            break;
-        case 1:
-            Vo_layer_mode = VO_LAYER_MODE_GRAPHIC;
-            break;
-        case 2:
-            Vo_layer_mode = VO_LAYER_MODE_VIDEO;
-            break;
-        default:
-            Vo_layer_mode = VO_LAYER_MODE_VIDEO;
-    }
-
-    RK_MPI_VO_BindLayer(VoLayer, VoDev, Vo_layer_mode);
-
-    switch (ctx->enIntfType) {
-        case DISPLAY_TYPE_VGA:
-            stVoPubAttr.enIntfType = VO_INTF_VGA;
-            break;
-        case DISPLAY_TYPE_HDMI:
-            stVoPubAttr.enIntfType = VO_INTF_HDMI;
-            break;
-        case DISPLAY_TYPE_EDP:
-            stVoPubAttr.enIntfType = VO_INTF_EDP;
-            break;
-        case DISPLAY_TYPE_DP:
-            stVoPubAttr.enIntfType = VO_INTF_DP;
-            break;
-        case DISPLAY_TYPE_HDMI_EDP :
-            stVoPubAttr.enIntfType = VO_INTF_HDMI | VO_INTF_EDP;
-            break;
-        default:
-            stVoPubAttr.enIntfType = VO_INTF_HDMI;
-            Sample_Print("IntfType not set,use INTF_HDMI default\n");
-    }
+    RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
+    stVoPubAttr.enIntfType = Sample_get_IntfType(ctx->enIntfType);
 
     for (i = 0; i < ARRAY_LENGTH(test_mode_table); i++) {
         if (ctx->enIntfSync == test_mode_table[i].mode)
@@ -1686,11 +1862,14 @@ static RK_S32 Sample_VO_Demo_Video_Mosaic(TEST_VO_CTX_S *ctx) {
     stVoPubAttr.enIntfSync = test_mode_table[i].enIntfSync;
     stVoPubAttr.u32BgColor = 0x000000;
     Sample_VO_StartDev(VoDev, &stVoPubAttr);
+    Sample_VO_RegHpdCallback(VO_INTF_HDMI, 0);
+    Sample_VO_RegVsyncCallback(0);
 
-     /* Enable Layer */
-    stLayerAttr.enPixFormat           = video_format;
-    stLayerAttr.stDispRect.s32X       = 0;
-    stLayerAttr.stDispRect.s32Y       = 0;
+    /* Enable Layer */
+    stLayerAttr.enPixFormat      = video_format;
+    stLayerAttr.enCompressMode   = COMPRESS_AFBC_16x16;
+    stLayerAttr.stDispRect.s32X  = 0;
+    stLayerAttr.stDispRect.s32Y  = 0;
     Sample_VO_GetDisplaySize(stVoPubAttr.enIntfSync, &u32DispWidth, &u32DispHeight);
 
     u32ImageWidth  = u32DispWidth;
@@ -1700,8 +1879,7 @@ static RK_S32 Sample_VO_Demo_Video_Mosaic(TEST_VO_CTX_S *ctx) {
     stLayerAttr.stImageSize.u32Width  = u32ImageWidth;
     stLayerAttr.stImageSize.u32Height = u32ImageHeight;
     stLayerAttr.u32DispFrmRt          = ctx->u32DispFrmRt;
-
-    Sample_VO_StartLayer(VoLayer, &stLayerAttr);
+    Sample_VO_StartLayer(VoLayer, &stLayerAttr, ctx->bUseRga);
     Sample_VO_MultiWindowns_Start(ctx);
     stThreadParam.u32Exit = 0;
     stThreadParam.u32VideoWindows = u32Windows;
@@ -1709,8 +1887,46 @@ static RK_S32 Sample_VO_Demo_Video_Mosaic(TEST_VO_CTX_S *ctx) {
     stThreadParam.VOGfxLayer = -1;
     stThreadParam.u32GFXLayers = -1;
 
-    Sample_Print("Start Send Picture\n");
+    Sample_Print("Start Send Picture 0\n");
     Sample_VO_StartSendPicture_Mosaic(&tThreadID, &stThreadParam);
+
+    if (ctx->bDoubleScreen) {
+        sleep(3);
+        RK_MPI_VO_BindLayer(VoLayerSecond, VoDevSecond, VO_LAYER_MODE_VIDEO);
+        stVoPubAttrSecond.enIntfType = Sample_get_IntfType(ctx->enIntfTypeSecond);
+        stVoPubAttrSecond.enIntfSync = VO_OUTPUT_1080P60;
+        stVoPubAttrSecond.u32BgColor = 0x000000;
+        if (ctx->VoDevSecond!= ctx->VoDev) {
+           Sample_VO_StartDev(VoDevSecond, &stVoPubAttrSecond);
+        }
+        /* Enable Layer */
+        stLayerAttrSecond.enPixFormat     = video_format;
+        stLayerAttrSecond.enCompressMode  = COMPRESS_AFBC_16x16;
+        stLayerAttrSecond.stDispRect.s32X = 0;
+        stLayerAttrSecond.stDispRect.s32Y = 0;
+        Sample_VO_GetDisplaySize(stVoPubAttrSecond.enIntfSync, &u32DispWidth, &u32DispHeight);
+        u32ImageWidth  = u32DispWidth;
+        u32ImageHeight = u32DispHeight;
+        stLayerAttrSecond.stDispRect.u32Width   = u32DispWidth;
+        stLayerAttrSecond.stDispRect.u32Height  = u32DispHeight;
+        stLayerAttrSecond.stImageSize.u32Width  = u32ImageWidth;
+        stLayerAttrSecond.stImageSize.u32Height = u32ImageHeight;
+        stLayerAttrSecond.u32DispFrmRt          = ctx->u32DispFrmRt;
+
+        Sample_VO_StartLayer(VoLayerSecond, &stLayerAttrSecond, ctx->bUseRga);
+        ctx->VoLayer = VoLayerSecond;
+        Sample_VO_MultiWindowns_Start(ctx);
+        stThreadParamSecond.u32Exit = 0;
+        stThreadParamSecond.u32VideoWindows = u32Windows;
+        stThreadParamSecond.VoVideoLayer = VoLayerSecond;
+        stThreadParamSecond.VOGfxLayer = -1;
+        stThreadParamSecond.u32GFXLayers = -1;
+        if (ctx->VoDevSecond!= ctx->VoDev) {
+            sleep(3);
+            Sample_Print("Start Send Picture 1\n");
+            Sample_VO_StartSendPicture_Mosaic(&tThreadID_1, &stThreadParamSecond);
+        }
+    }
 
     while (1) {
         Sample_Print("Press 'q' to quit\n");
@@ -1721,7 +1937,20 @@ static RK_S32 Sample_VO_Demo_Video_Mosaic(TEST_VO_CTX_S *ctx) {
     Sample_VO_StopSendPicture_Mosaic(tThreadID, &stThreadParam);
     Sample_VO_MultiWindowns_Stop(VoLayer, u32Windows);
     Sample_VO_StopLayer(VoLayer);
+    Sample_VO_UnRegHpdCallback(VO_INTF_HDMI, VoDev);
+    Sample_VO_UnRegVsyncCallback(VoDev);
     Sample_VO_StopDev(VoDev);
+
+    if (ctx->bDoubleScreen) {
+        if (ctx->VoDevSecond != ctx->VoDev) {
+            Sample_VO_StopSendPicture_Mosaic(tThreadID_1, &stThreadParamSecond);
+            Sample_VO_MultiWindowns_Stop(VoLayerSecond, u32Windows);
+         }
+        Sample_VO_StopLayer(VoLayerSecond);
+        Sample_VO_StopDev(VoDevSecond);
+        RK_MPI_VO_UnBindLayer(VoLayerSecond, VoDevSecond);
+    }
+
  end:
     RK_MPI_VO_UnBindLayer(VoLayer, VoDev);
     RK_MPI_VO_CloseFd();
@@ -1764,21 +1993,22 @@ static RK_S32 Sample_VO_Demo_UI(TEST_VO_CTX_S *ctx) {
     /* GFX buffer dispaly on VoDev 1 */
     if (ctx->bDoubleScreen) {
         Sample_Print("DoubleScreen UI Demo test");
-        Sample_VO_CreateGFXData(1024, 768,
+        Sample_VO_CreateGFXData(ctx->u32Screen1ImageWidth, ctx->u32Screen1ImageHeight,
                                 RK_FMT_RGB888, 0, &pMblk_768P_1);
-        Sample_VO_CreateGFXData(1024, 768,
+        Sample_VO_CreateGFXData(ctx->u32Screen1ImageWidth, ctx->u32Screen1ImageHeight,
                                 RK_FMT_RGB888, 1, &pMblk_768P_2);
     } else if (ctx->bHomologous) {
          Sample_Print("Homologous UI Demo test");
     } else {
         Sample_Print("Single HDMI Screen UI Demo test");
     }
+
     /* Bind Layer */
     VoLayer = RK356X_VOP_LAYER_ESMART_0;
     VoDev   = RK356X_VO_DEV_HD0;
     if (ctx->bDoubleScreen) {
-        VoLayer_second = RK356X_VOP_LAYER_ESMART_1;
-        VoDev_second   = RK356X_VO_DEV_HD1;
+        VoLayer_second = ctx->VoLayer;
+        VoDev_second   = ctx->VoDev;
         RK_MPI_VO_BindLayer(VoLayer_second, VoDev_second, VO_LAYER_MODE_GRAPHIC);
     }
     RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_GRAPHIC);
@@ -1799,12 +2029,12 @@ static RK_S32 Sample_VO_Demo_UI(TEST_VO_CTX_S *ctx) {
     stLayerAttr.stDispRect.u32Height         = ctx->u32Screen0DisplayHeight;
     stLayerAttr.stImageSize.u32Width         = ctx->u32Screen0ImageWidth;
     stLayerAttr.stImageSize.u32Height        = ctx->u32Screen0ImageHeight;
-    Sample_VO_StartLayer(VoLayer, &stLayerAttr);
+    Sample_VO_StartLayer(VoLayer, &stLayerAttr, ctx->bUseRga);
 
     if (ctx->bDoubleScreen) {
-        stVoPubAttr.enIntfType = VO_INTF_EDP;
+        stVoPubAttr.enIntfType = VO_INTF_DP;
         stVoPubAttr.u32BgColor = 0x000000;
-        SampleSetVoInterfacetiming(&stVoPubAttr, ctx->enIntfSync_second);
+        SampleSetVoInterfacetiming(&stVoPubAttr, ctx->enIntfSyncSecond);
         Sample_VO_StartDev(VoDev_second, &stVoPubAttr);
         stLayerAttr.enPixFormat                  = plane_format;
         stLayerAttr.stDispRect.s32X              = 0;
@@ -1813,13 +2043,13 @@ static RK_S32 Sample_VO_Demo_UI(TEST_VO_CTX_S *ctx) {
         stLayerAttr.stDispRect.u32Height         = ctx->u32Screen1DisplayHeight;
         stLayerAttr.stImageSize.u32Width         = ctx->u32Screen1ImageWidth;
         stLayerAttr.stImageSize.u32Height        = ctx->u32Screen1ImageHeight;
-        Sample_VO_StartLayer(VoLayer_second, &stLayerAttr);
+        Sample_VO_StartLayer(VoLayer_second, &stLayerAttr, ctx->bUseRga);
     }
 
     while (1) {
         sleep(1);
         count++;
-        if (count % 2) {
+        if (count % 2) {    // send 1
             Sample_VO_SetVFrame(pstVFrame,
                                 1920,
                                 1080,
@@ -1838,7 +2068,7 @@ static RK_S32 Sample_VO_Demo_UI(TEST_VO_CTX_S *ctx) {
                                     pMblk_768P_1);
                 RK_MPI_VO_SendLayerFrame(VoLayer_second, pstVFrame);
             }
-        } else {
+        } else {    // send 2
             Sample_VO_SetVFrame(pstVFrame,
                                 1920,
                                 1080,
@@ -1882,6 +2112,89 @@ end:
     return s32Ret;
 }
 
+static RK_S32 Sample_VO_Resolution(TEST_VO_CTX_S *ctx) {
+    VO_PUB_ATTR_S            stVoPubAttr;
+    VO_VIDEO_LAYER_ATTR_S    stLayerAttr;
+    RK_U32                   u32DispWidth, u32DispHeight;
+    RK_U32                   u32ImageWidth, u32ImageHeight;
+    VO_LAYER                 VoLayer;
+    VO_DEV                   VoDev;
+    RK_S32                   u32Windows;
+    RK_U32                   u32Fps, i;
+    pthread_t                tThreadID;
+    RK_S32                   s32Ret = RK_SUCCESS;
+    VoThreadParam            stThreadParam;
+    PIXEL_FORMAT_E           video_format;
+    RK_U32                   test_mode;
+
+    VoDev = ctx->VoDev;
+    u32Windows = ctx->u32Windows;
+    u32Fps =  ctx->u32DispFrmRt;
+    VoLayer = ctx->VoLayer;
+
+    for (RK_U32 j = 0; j < VDEC_ARRAY_ELEMS(testPixelFormat); j++) {
+        if (ctx->s32PixFormat == testPixelFormat[j].index) {
+            video_format =  testPixelFormat[j].format;
+            break;
+        }
+    }
+
+    while (1) {
+        i = 0;
+        memset(&stVoPubAttr, 0, sizeof(VO_PUB_ATTR_S));
+        memset(&stLayerAttr, 0, sizeof(VO_VIDEO_LAYER_ATTR_S));
+        stVoPubAttr.enIntfType = Sample_get_IntfType(ctx->enIntfType);
+        for (i = 0; i < ARRAY_LENGTH(test_mode_table); i++) {
+           if (test_mode == test_mode_table[i].mode) {
+               Sample_Print("%s resontoun test %d\n", __func__, test_mode);
+               break;
+           }
+        }
+        if (i == ARRAY_LENGTH(test_mode_table)) {
+            Sample_Print("%s not found supported mode in test mode_table\n", __func__);
+            return RK_FAILURE;
+        }
+        stVoPubAttr.enIntfSync = test_mode_table[i].enIntfSync;
+        stVoPubAttr.u32BgColor = 0x000000;
+        Sample_VO_StartDev(VoDev, &stVoPubAttr);
+        RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
+        stLayerAttr.enPixFormat           = video_format;
+        stLayerAttr.stDispRect.s32X       = 0;
+        stLayerAttr.stDispRect.s32Y       = 0;
+        Sample_VO_GetDisplaySize(stVoPubAttr.enIntfSync, &u32DispWidth, &u32DispHeight);
+
+        u32ImageWidth  = u32DispWidth;
+        u32ImageHeight = u32DispHeight;
+        stLayerAttr.stDispRect.u32Width   = u32DispWidth;
+        stLayerAttr.stDispRect.u32Height  = u32DispHeight;
+        stLayerAttr.stImageSize.u32Width  = u32ImageWidth;
+        stLayerAttr.stImageSize.u32Height = u32ImageHeight;
+        stLayerAttr.u32DispFrmRt          = ctx->u32DispFrmRt;
+
+        Sample_VO_StartLayer(VoLayer, &stLayerAttr, ctx->bUseRga);
+        Sample_VO_MultiWindowns_Start(ctx);
+        stThreadParam.u32Exit = 0;
+        stThreadParam.u32VideoWindows = u32Windows;
+        stThreadParam.VoVideoLayer = VoLayer;
+        stThreadParam.VOGfxLayer = -1;
+        stThreadParam.u32GFXLayers = -1;
+        Sample_VO_StartSendPicture_Mosaic(&tThreadID, &stThreadParam);
+        sleep(10);
+
+        test_mode++;
+        if (test_mode > 16) {
+            test_mode = 0;
+        }
+        Sample_VO_StopSendPicture_Mosaic(tThreadID, &stThreadParam);
+        Sample_VO_MultiWindowns_Stop(VoLayer, u32Windows);
+        Sample_VO_StopLayer(VoLayer);
+        Sample_VO_StopDev(VoDev);
+        RK_MPI_VO_UnBindLayer(VoLayer, VoDev);
+    }
+
+    return RK_SUCCESS;
+}
+
 static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
     VO_PUB_ATTR_S           stVoPubAttr;
     VO_VIDEO_LAYER_ATTR_S   stLayerAttr;
@@ -1896,6 +2209,7 @@ static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
     PIXEL_FORMAT_E          wbc_format;
     VO_LAYER                VoLayer;
     VO_DEV                  VoDev;
+    RK_S32                  count;
 
     u32VideoWindows =  ctx->u32Windows;
     for (RK_U32 j = 0; j < VDEC_ARRAY_ELEMS(testPixelFormat); j++) {
@@ -1906,15 +2220,16 @@ static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
     }
     /* Bind Layer */
     VoDev == RK356X_VO_DEV_HD0;
-    VoGfxLayer = RK356X_VOP_LAYER_ESMART_0;
-    VoVideoLayer = RK356X_VOP_LAYER_CLUSTER_0;
+    VoGfxLayer = VO_LAYER_ESMART0;
+    VoVideoLayer = VO_LAYER_CLUSTER0;
     RK_MPI_VO_BindLayer(VoGfxLayer, VoDev, VO_LAYER_MODE_GRAPHIC);
     RK_MPI_VO_BindLayer(VoVideoLayer, VoDev, VO_LAYER_MODE_VIDEO);
     /* Enable VO Dev0 Device */
     u32DispWidth = 1920;
     u32DispHeight = 1080;
-    stVoPubAttr.enIntfType = VO_INTF_HDMI;
+    stVoPubAttr.enIntfType = Sample_get_IntfType(ctx->enIntfType);
     stVoPubAttr.enIntfSync = VO_OUTPUT_1080P60;
+    stVoPubAttr.u32BgColor = 0x000000;
     Sample_VO_StartDev(VoDev, &stVoPubAttr);
     /* Enable Vodev 0  Video Layer */
     if (VoVideoLayer != -1) {
@@ -1926,7 +2241,7 @@ static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
         stLayerAttr.stImageSize.u32Width     = u32DispWidth;
         stLayerAttr.stImageSize.u32Height    = u32DispHeight;
         stLayerAttr.u32DispFrmRt             = 25;
-        Sample_VO_StartLayer(VoVideoLayer, &stLayerAttr);
+        Sample_VO_StartLayer(VoVideoLayer, &stLayerAttr, ctx->bUseRga);
         ctx->VoLayer = VoVideoLayer;
         Sample_VO_MultiWindowns_Start(ctx);
     }
@@ -1941,7 +2256,7 @@ static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
         stLayerAttr.stImageSize.u32Width         = u32DispWidth;
         stLayerAttr.stImageSize.u32Height        = u32DispHeight;
         stLayerAttr.u32DispFrmRt                 = 25;
-        Sample_VO_StartLayer(VoGfxLayer, &stLayerAttr);
+        Sample_VO_StartLayer(VoGfxLayer, &stLayerAttr, ctx->bUseRga);
         Sample_VO_MultiGFXLayer_Start(VoGfxLayer, u32GfxLayers);
     }
 
@@ -1953,17 +2268,16 @@ static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
     stThreadParam.u32GFXLayers    = u32GfxLayers;
     stThreadParam.VOGfxLayer      = VoGfxLayer;
     Sample_VO_StartSendPicture_Mosaic(&tThreadDev0, &stThreadParam);
-
     Sample_Print("Start HD1\n");
     VoDev = RK356X_VO_DEV_HD1;
     /* Bind Vodev1 Layer */
-    VoLayer = RK356X_VOP_LAYER_CLUSTER_1;
+    VoLayer = VO_LAYER_CLUSTER1;
     RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
     /* Enable VO Dev1 Device */
-    u32DispWidth = 1024;
-    u32DispHeight = 768;
-    stVoPubAttr.enIntfType = VO_INTF_EDP;
-    stVoPubAttr.enIntfSync = VO_OUTPUT_1024x768_60;
+    u32DispWidth = 1920;
+    u32DispHeight = 1080;
+    stVoPubAttr.enIntfType = VO_INTF_DP;
+    stVoPubAttr.enIntfSync = VO_OUTPUT_1080P60;
     stVoPubAttr.u32BgColor = 0x000000;
     Sample_VO_StartDev(VoDev, &stVoPubAttr);
     /* Enable Layer */
@@ -1975,7 +2289,7 @@ static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
     stLayerAttr.stImageSize.u32Width     = u32DispWidth;
     stLayerAttr.stImageSize.u32Height    = u32DispHeight;
     stLayerAttr.u32DispFrmRt             = 25;
-    Sample_VO_StartLayer(VoLayer, &stLayerAttr);
+    Sample_VO_StartLayer(VoLayer, &stLayerAttr, ctx->bUseRga);
 
     ctx->VoLayer = VoLayer;
     ctx->u32Windows = 1;
@@ -2000,7 +2314,9 @@ static RK_S32 Sample_VO_Demo_Alpha(TEST_VO_CTX_S *ctx) {
 
     if (ctx->wbc_bind == RK_TRUE)
         Sample_VO_BindVoWbc(VoWbc, VoLayer, 0);
+
     sleep(2);
+
     while (1) {
         Sample_Print("Press 'q' to quit\n");
         if (getchar() == 'q')
@@ -2039,9 +2355,10 @@ static RK_S32 Sample_VO_Video_Homologous(TEST_VO_CTX_S *ctx) {
     VO_WBC_ATTR_S            stWbcAttr;
     RK_U32 VoWbc;
     VIDEO_FRAME_INFO_S       *pFrame;
-    VO_PUB_ATTR_S            stVoPubAttr;
-    VO_VIDEO_LAYER_ATTR_S    stLayerAttr;
+    VO_PUB_ATTR_S            stVoPubAttr, stVoPubAttr_1;
+    VO_VIDEO_LAYER_ATTR_S    stLayerAttr, stLayerAttr_1;
     RK_U32                   u32DispWidth, u32DispHeight;
+    RK_U32                   u32ImageWidth, u32ImageHeight;
     VO_LAYER                 VoLayer;
     VO_DEV                   VoDev;
     RK_S32                   u32Windows;
@@ -2082,25 +2399,7 @@ static RK_S32 Sample_VO_Video_Homologous(TEST_VO_CTX_S *ctx) {
     }
 
     RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
-
-    switch (ctx->enIntfType) {
-        case DISPLAY_TYPE_VGA:
-            stVoPubAttr.enIntfType = VO_INTF_VGA;
-            break;
-        case DISPLAY_TYPE_HDMI:
-            stVoPubAttr.enIntfType = VO_INTF_HDMI;
-            break;
-        case DISPLAY_TYPE_EDP:
-            stVoPubAttr.enIntfType = VO_INTF_EDP;
-            break;
-        case DISPLAY_TYPE_DP:
-            stVoPubAttr.enIntfType = VO_INTF_DP;
-            break;
-        default:
-            stVoPubAttr.enIntfType = VO_INTF_HDMI;
-            Sample_Print("IntfType not set,use INTF_HDMI default\n");
-    }
-
+    stVoPubAttr.enIntfType = Sample_get_IntfType(ctx->enIntfType);
     for (i = 0; i < ARRAY_LENGTH(test_mode_table); i++) {
         if (ctx->enIntfSync == test_mode_table[i].mode)
             break;
@@ -2114,23 +2413,23 @@ static RK_S32 Sample_VO_Video_Homologous(TEST_VO_CTX_S *ctx) {
     stVoPubAttr.enIntfSync = test_mode_table[i].enIntfSync;
     Sample_VO_StartDev(VoDev, &stVoPubAttr);
 
-     /* Enable Layer */
-    stLayerAttr.enPixFormat                  = video_format;
-    stLayerAttr.stDispRect.s32X              = ctx->s32Y;
-    stLayerAttr.stDispRect.s32Y              = ctx->s32Y;
-    if (ctx->VoDev== RK356X_VO_DEV_HD0) {
-    stLayerAttr.stDispRect.u32Width          = ctx->u32DispWidth;
-    stLayerAttr.stDispRect.u32Height         = ctx->u32DispHeight;
-    stLayerAttr.stImageSize.u32Width         = ctx->u32ImgeWidth;
-    stLayerAttr.stImageSize.u32Height        = ctx->u32ImageHeight;
-    } else if (ctx->VoDev== RK356X_VO_DEV_HD1) {
-    stLayerAttr.stDispRect.u32Width          = 1024;
-    stLayerAttr.stDispRect.u32Height         = 768;
-    stLayerAttr.stImageSize.u32Width         = 1024;
-    stLayerAttr.stImageSize.u32Height        = 768;
+    /* Enable Layer */
+    stLayerAttr.enPixFormat            = video_format;
+    stLayerAttr.stDispRect.s32X        = ctx->s32Y;
+    stLayerAttr.stDispRect.s32Y        = ctx->s32Y;
+    if (ctx->VoDev == RK356X_VO_DEV_HD0) {
+        stLayerAttr.stDispRect.u32Width  = ctx->u32DispWidth;
+        stLayerAttr.stDispRect.u32Height = ctx->u32DispHeight;
+        stLayerAttr.stImageSize.u32Width = ctx->u32ImgeWidth;
+        stLayerAttr.stImageSize.u32Height = ctx->u32ImageHeight;
+    } else if (ctx->VoDev == RK356X_VO_DEV_HD1) {
+        stLayerAttr.stDispRect.u32Width  = 1920;
+        stLayerAttr.stDispRect.u32Height = 1080;
+        stLayerAttr.stImageSize.u32Width = 1920;
+        stLayerAttr.stImageSize.u32Height = 1080;
     }
     stLayerAttr.u32DispFrmRt                 = ctx->u32DispFrmRt;
-    Sample_VO_StartLayer(VoLayer, &stLayerAttr);
+    Sample_VO_StartLayer(VoLayer, &stLayerAttr, ctx->bUseRga);
     Sample_VO_MultiWindowns_Start(ctx);
     stThreadParam.u32Exit = 0;
     stThreadParam.u32VideoWindows = u32Windows;
@@ -2140,32 +2439,31 @@ static RK_S32 Sample_VO_Video_Homologous(TEST_VO_CTX_S *ctx) {
 
     Sample_Print("Start Send Picture\n");
     Sample_VO_StartSendPicture_Mosaic(&tThreadID, &stThreadParam);
-
+    sleep(3);
     Sample_Print("Start HD1\n");
     /* Start HD1 Device */
     VoDev = RK356X_VO_DEV_HD1;
     /* Bind Layer */
-    VoLayer = RK356X_VOP_LAYER_CLUSTER_1;
+    VoLayer = VO_LAYER_CLUSTER1;
     RK_MPI_VO_BindLayer(VoLayer, VoDev, VO_LAYER_MODE_VIDEO);
-
     /* Enable VO Device */
     if (VoDev == RK356X_VO_DEV_HD0) {
         u32DispWidth = 1920;
         u32DispHeight = 1080;
         stVoPubAttr.enIntfType = VO_INTF_HDMI;
-        stVoPubAttr.enIntfSync = VO_OUTPUT_1080P50;
+        stVoPubAttr.enIntfSync = VO_OUTPUT_1080P60;
     } else if (VoDev == RK356X_VO_DEV_HD1) {
-        u32DispWidth = 1024;
-        u32DispHeight = 768;
+        u32DispWidth = 1920;
+        u32DispHeight = 1080;
         stVoPubAttr.u32BgColor = 0x000000;
-        stVoPubAttr.enIntfType = VO_INTF_EDP;
-        stVoPubAttr.enIntfSync = VO_OUTPUT_1024x768_60;
+        stVoPubAttr.enIntfType = VO_INTF_DP;
+        stVoPubAttr.enIntfSync = VO_OUTPUT_1080P60;
     } else {
         s32Ret = RK_FAILURE;
        // goto end;
     }
-    Sample_VO_StartDev(VoDev, &stVoPubAttr);
 
+    Sample_VO_StartDev(VoDev, &stVoPubAttr);
     /* Enable Layer */
     stLayerAttr.enPixFormat              = RK_FMT_BGR888;
     stLayerAttr.stDispRect.s32X          = 0;
@@ -2175,12 +2473,11 @@ static RK_S32 Sample_VO_Video_Homologous(TEST_VO_CTX_S *ctx) {
     stLayerAttr.stImageSize.u32Width     = u32DispWidth;
     stLayerAttr.stImageSize.u32Height    = u32DispHeight;
     stLayerAttr.u32DispFrmRt             = 25;
-    Sample_VO_StartLayer(VoLayer, &stLayerAttr);
+    Sample_VO_StartLayer(VoLayer, &stLayerAttr, ctx->bUseRga);
 
-    ctx->VoLayer = RK356X_VOP_LAYER_CLUSTER_1;
+    ctx->VoLayer = VO_LAYER_CLUSTER1;
     ctx->u32Windows = 1;
     Sample_VO_MultiWindowns_Start(ctx);
-
     Sample_Print("Start Cluster0 WBC\n");
 
     /* Start WBC and bind to HD0 */
@@ -2188,9 +2485,7 @@ static RK_S32 Sample_VO_Video_Homologous(TEST_VO_CTX_S *ctx) {
     /* WBC bind source */
     ctx->stWbcCfg.stWbcSource.enSourceType = VO_WBC_SOURCE_VIDEO;
     ctx->stWbcCfg.stWbcSource.u32SourceId = RK356X_VO_DEV_HD0;
-
     RK_MPI_VO_SetWbcSource(VoWbc, &ctx->stWbcCfg.stWbcSource);
-
     /* Start WBC */
     wbc_format = Sample_wbc_formt(ctx->u32WbcPixFormat);
 
@@ -2285,8 +2580,11 @@ static void  mpi_vo_test_show_options(const TEST_VO_CTX_S *ctx) {
     RK_PRINT("cmd parse result:\n");
     RK_PRINT("vop device id                   : %d\n", ctx->VoDev);
     RK_PRINT("vop layer id                    : %d\n", ctx->VoLayer);
+    RK_PRINT("vop_second layer id             : %d\n", ctx->VoLayerSecond);
+    RK_PRINT("vop_second device id            : %d\n", ctx->VoDevSecond);
     RK_PRINT("window size                     : %d\n", ctx->u32Windows);
-    RK_PRINT("connector type                  : %d\n", ctx->enIntfType);
+    RK_PRINT("connector type1                 : %d\n", ctx->enIntfType);
+    RK_PRINT("connector type2                 : %d\n", ctx->enIntfTypeSecond);
     RK_PRINT("display mode                    : %d\n", ctx->enIntfSync);
     RK_PRINT("layer mode                      : %d\n", ctx->VoLayerMode);
     RK_PRINT("display resolution rect X       : %d\n", ctx->s32X);
@@ -2312,6 +2610,7 @@ static void  mpi_vo_test_show_options(const TEST_VO_CTX_S *ctx) {
     RK_PRINT("ui                              : %d\n", ctx->ui);
     RK_PRINT("loopcount                       : %d\n", ctx->loopCount);
     RK_PRINT("ui alpha                        : %d\n", ctx->ui_alpha);
+    RK_PRINT("resolution                      : %d\n", ctx->bResolution);
     RK_PRINT("wbc enable                      : %d\n", ctx->wbc_enable);
     RK_PRINT("wbc bind enable                 : %d\n", ctx->wbc_bind);
     RK_PRINT("wbc width                       : %d\n", ctx->u32WbcWidth);
@@ -2320,6 +2619,9 @@ static void  mpi_vo_test_show_options(const TEST_VO_CTX_S *ctx) {
     RK_PRINT("wbc pixel format                : %d\n", ctx->u32WbcPixFormat);
     RK_PRINT("wbc source type                 : %d\n", ctx->u32WbcSourceType);
     RK_PRINT("wbc souce id                    : %d\n", ctx->u32WbcSourceId);
+    RK_PRINT("mirror                          : %d\n", ctx->enMirror);
+    RK_PRINT("rotation                        : %d\n", ctx->enRotation);
+    RK_PRINT("use rga                         : %d\n", ctx->bUseRga);
 }
 
 void init_cfg(TEST_VO_CTX_S *ctx) {
@@ -2327,30 +2629,33 @@ void init_cfg(TEST_VO_CTX_S *ctx) {
 
     ctx->loopCount = 10;
     ctx->u32Windows = 4;
-    ctx->enIntfType = 0;  /* 0: HDMI 1: EDP 2: VGA 3: DP */
+    ctx->enIntfType = DISPLAY_TYPE_HDMI;  /* 0: HDMI0 1: EDP 3: DP 4: DP_1 5:HDMI1 */
+    ctx->enIntfTypeSecond = DISPLAY_TYPE_DP_1;
     ctx->enIntfSync = 16; /* 1080P60 */
-    ctx->enIntfSync_second = 6; /* 768P */
+    ctx->enIntfSyncSecond = 16; /* 768P */
 
     ctx->VoDev = RK356X_VO_DEV_HD0;
-    ctx->VoLayer = RK356X_VOP_LAYER_CLUSTER_0;
+    ctx->VoDevSecond = RK356X_VO_DEV_HD1;
+    ctx->VoLayer = VO_LAYER_CLUSTER0;
+    ctx->VoLayerSecond = VO_LAYER_CLUSTER1;
     ctx->VoLayerMode = 1; /* CURSOR = 0,GRAPHIC = 1,VIDEO = 2,*/
 
     ctx->u32ImgeWidth = 1920;
     ctx->u32ImageHeight = 1080;
 
-    ctx->bDoubleScreen = RK_TRUE;
+    ctx->bDoubleScreen = RK_FALSE;
     ctx->stVoCfg.bDoubleScreen = RK_TRUE;
     ctx->s32X = 0;
     ctx->s32Y = 0;
     ctx->u32Screen0DisplayWidth  = 1920;
     ctx->u32Screen0DisplayHeight = 1080;
-    ctx->u32Screen1DisplayWidth  = 1024;
-    ctx->u32Screen1DisplayHeight = 768;
+    ctx->u32Screen1DisplayWidth  = 1920;
+    ctx->u32Screen1DisplayHeight = 1080;
 
     ctx->u32Screen0ImageWidth  = 1920;
     ctx->u32Screen0ImageHeight = 1080;
-    ctx->u32Screen1ImageWidth  = 1024;
-    ctx->u32Screen1ImageHeight = 768;
+    ctx->u32Screen1ImageWidth  = 1920;
+    ctx->u32Screen1ImageHeight = 1080;
 
     ctx->u32DispWidth  = 1920;
     ctx->u32DispHeight = 1080;
@@ -2360,12 +2665,12 @@ void init_cfg(TEST_VO_CTX_S *ctx) {
     ctx->uEnMode = 1;
 
     ctx->wbc_auto = RK_TRUE;
-    ctx->u32WbcWidth = 1024;
-    ctx->u32WbcHeight = 768;
-    ctx->u32WbcPixFormat = WBC_FORMAT_BGR888;
-    ctx->u32WbcCompressMode = COMPRESS_MODE_NONE;
+    ctx->u32WbcWidth = 1920;
+    ctx->u32WbcHeight = 1080;
+    ctx->u32WbcPixFormat = RK_FMT_YUV420SP;
+    ctx->u32WbcCompressMode = COMPRESS_AFBC_16x16;
     ctx->u32WbcSourceType = WBC_SOURCE_VIDEO;
-    ctx->u32WbcSourceId = RK356X_VO_DEV_HD0;
+    ctx->u32WbcSourceId = RK356X_VO_DEV_HD2;
 
     ctx->bVoPlay = RK_FALSE;
     ctx->bBorder = RK_FALSE;
@@ -2373,26 +2678,34 @@ void init_cfg(TEST_VO_CTX_S *ctx) {
     ctx->u32Screen0Chn = 16;
     ctx->u32Screen1Chn = 4;
     ctx->bEnWbc = RK_FALSE;
+    ctx->bHideWbc = RK_FALSE;
     ctx->wbc_bind = RK_FALSE;
     ctx->bChnPriority = RK_FALSE;
     ctx->bEnWbcToVO = RK_TRUE;
     ctx->s32LoopCount = -1;
     ctx->u32ChnDismode = VO_CHANNEL_PLAY_NORMAL;
 
-    ctx->stVoCfg.u32Screen0VoLayer = RK356X_VOP_LAYER_CLUSTER_0;
-    ctx->stVoCfg.u32Screen1VoLayer = RK356X_VOP_LAYER_CLUSTER_1;
+    if (TEST_COMM_GetSocType() == RK_SOC_3588) {
+        ctx->stVoCfg.u32Screen0VoLayer = VO_LAYER_CLUSTER0;
+        ctx->stVoCfg.u32Screen1VoLayer = VO_LAYER_CLUSTER1;
+    } else {
+        ctx->stVoCfg.u32Screen0VoLayer = RK356X_VOP_LAYER_CLUSTER_0;
+        ctx->stVoCfg.u32Screen1VoLayer = RK356X_VOP_LAYER_CLUSTER_1;
+    }
     ctx->stVoCfg.u32Screen0Rows = 4;
     ctx->stVoCfg.u32Screen1Rows = 3;
 
     ctx->stVdecCfg.u32FrameBufferCnt = MAX_FRAME_QUEUE;
     ctx->stVdecCfg.enCompressMode = COMPRESS_AFBC_16x16;
+    ctx->stVdecCfg.bTemporalMvpEnable = RK_TRUE;
+
     ctx->stWbcCfg.stWbcSource.enSourceType = VO_WBC_SOURCE_VIDEO;
-    ctx->stWbcCfg.stWbcSource.u32SourceId = RK356X_VO_DEV_HD0;
-    ctx->stWbcCfg.stWbcAttr.enPixelFormat = RK_FMT_YUV420SP;
-    ctx->stWbcCfg.stWbcAttr.stTargetSize.u32Width = 1024;
-    ctx->stWbcCfg.stWbcAttr.stTargetSize.u32Height = 768;
+    ctx->stWbcCfg.stWbcSource.u32SourceId = RK356X_VO_DEV_HD1;
+    ctx->stWbcCfg.stWbcAttr.enPixelFormat = RK_FMT_RGB888;
+    ctx->stWbcCfg.stWbcAttr.stTargetSize.u32Width = 1920;
+    ctx->stWbcCfg.stWbcAttr.stTargetSize.u32Height = 1080;
     ctx->stWbcCfg.stWbcAttr.u32FrameRate = 25;
-    ctx->stWbcCfg.stWbcAttr.enCompressMode = COMPRESS_MODE_NONE;
+    ctx->stWbcCfg.stWbcAttr.enCompressMode = COMPRESS_AFBC_16x16;
     ctx->stWbcCfg.s32ChnId = 0;
     ctx->stWbcCfg.s32VdecChnId = -1;
 
@@ -2400,6 +2713,9 @@ void init_cfg(TEST_VO_CTX_S *ctx) {
     ctx->stBorderCfg.u32TopWidth = 2;
     ctx->stBorderCfg.u32LeftWidth = 2;
     ctx->stBorderCfg.u32RightWidth = 2;
+    ctx->enMirror = MIRROR_NONE;
+    ctx->enRotation = ROTATION_0;
+    ctx->bUseRga = RK_FALSE;
 }
 
 int main(int argc, const char **argv) {
@@ -2419,6 +2735,10 @@ int main(int argc, const char **argv) {
                      "Vop id. e.g.(0/1). default(0).", NULL, 0, 0),
         OPT_INTEGER('l', "layer_id", &(ctx.VoLayer),
                      "Layer id. e.g.(0/2/4/6) default(0).", NULL, 0, 0),
+        OPT_INTEGER('D', "device1_id", &(ctx.VoDevSecond),
+                     "Vop id. e.g.(0/1). default(0).", NULL, 0, 0),
+        OPT_INTEGER('L', "layer1_id", &(ctx.VoLayerSecond),
+                     "Layer id. e.g.(0/2/4/6) default(0).", NULL, 0, 0),
         OPT_INTEGER('\0', "wbc_enable", &(ctx.wbc_enable),
                      "wbc_enalbe. e.g.(0) default(0).", NULL, 0, 0),
         OPT_INTEGER('\0', "wbc_bind",  &(ctx.wbc_bind),
@@ -2432,12 +2752,14 @@ int main(int argc, const char **argv) {
         OPT_INTEGER('w', "Windows", &(ctx.u32Windows),
                      "windows num. e.g [1-64] default(4),max is 63.", NULL, 0, 0),
         OPT_INTEGER('\0', "ConnectorType", &(ctx.enIntfType),
-                     "Connctor Type. e.g.(0: HDMI 1: EDP 2: VGA). <required>", NULL, 0, 0),
+                     "Connctor Type. e.g.(0: HDMI0 1: EDP 3: DP 4: DP_1 5:HDMI1). <required>", NULL, 0, 0),
+        OPT_INTEGER('\0', "ConnectorType2", &(ctx.enIntfTypeSecond),
+                     "Connctor Type2. e.g.(0: HDMI0 1: EDP 3: DP 4: DP_1 5:HDMI1). <required>", NULL, 0, 0),
         OPT_INTEGER('\0', "layer_mode", &(ctx.VoLayerMode),
                      "Layer type. e.g.(0: CURSOR 1: UI 2: Video). <required>", NULL, 0, 0),
         OPT_INTEGER('\0', "display_mode", &(ctx.enIntfSync),
                      "dispaly. e.g.(12/14) default (12. 12 is 1080P60). <required>", NULL, 0, 0),
-        OPT_INTEGER('\0', "display0_mode", &(ctx.enIntfSync_second),
+        OPT_INTEGER('\0', "display0_mode", &(ctx.enIntfSyncSecond),
                      "dispaly. e.g.(12/14) default (12. 12 is 1080P60). <required>", NULL, 0, 0),
         OPT_INTEGER('\0', "disp_frmrt", &(ctx.u32DispFrmRt),
                      "disp_frmrt. default(25).", NULL, 0, 0),
@@ -2502,6 +2824,8 @@ int main(int argc, const char **argv) {
                      "wbc souce id. default(0).", NULL, 0, 0),
         OPT_STRING('\0', "voplay",  &(ctx.bVoPlay),
                    "play video test, default(0): 0: RK_FALSE, 1: RK_TRUE", NULL, 0, 0),
+        OPT_INTEGER('\0', "resolution",  &(ctx.bResolution),
+                   "Resolution test, default(0): 0: RK_FALSE, 1: RK_TRUE", NULL, 0, 0),
         OPT_STRING('\0', "bBorder",  &(ctx.bBorder),
                    "Border enable, default(0): 0: RK_FALSE, 1: RK_TRUE", NULL, 0, 0),
         OPT_STRING('\0', "wbc_auto",  &(ctx.wbc_auto),
@@ -2519,6 +2843,8 @@ int main(int argc, const char **argv) {
                     "the rows/cols of screen1 display.default(3 : 3x3)", NULL, 0, 0),
         OPT_INTEGER('\0', "en_wbc", &(ctx.bEnWbc),
                     "enable wbc. default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "wbc_hide", &(ctx.bHideWbc),
+                    "hiden wbc. default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "en_chnPriority", &(ctx.bChnPriority),
                     "enable Chn Priority. default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "wbc_src",  &(ctx.stWbcCfg.stWbcSource.u32SourceId),
@@ -2527,6 +2853,12 @@ int main(int argc, const char **argv) {
                    "double screen or not, default(1): 0: FALSE, 1: TRUE", NULL, 0, 0),
         OPT_INTEGER('\0', "Homologous",  &(ctx.bHomologous),
                    "Homologous Display, default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "mirror",  &(ctx.enMirror),
+                   "vo chn set mirror function, default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "rotation",  &(ctx.enRotation),
+                   "vo chn set rotation function, default(0)", NULL, 0, 0),
+        OPT_INTEGER('\0', "rga",  &(ctx.bUseRga),
+                   "use rga vo composer, default(0)", NULL, 0, 0),
         OPT_END(),
     };
 
@@ -2556,13 +2888,30 @@ int main(int argc, const char **argv) {
     } else if (ctx.ui) {
         Sample_VO_Demo_UI(&ctx);
     } else if (ctx.bVoPlay) {
-         unit_mpi_voplay_test(&ctx);
+        if (ctx.loopCount > 0) {
+            RK_S32 loopCnt = ctx.loopCount;
+            while (loopCnt > 0) {
+                if (unit_mpi_voplay_test(&ctx) < 0) {
+                    goto __FAILED;
+                }
+                loopCnt--;
+            }
+        } else {
+            if (unit_mpi_voplay_test(&ctx) < 0) {
+                goto __FAILED;
+            }
+        }
+    } else if (ctx.bResolution) {
+        Sample_VO_Resolution(&ctx);
     } else {
         Sample_VO_Demo_Video_Mosaic(&ctx);
     }
 
-    Sample_Print("test running ok.");
+    if (RK_MPI_SYS_Exit() != RK_SUCCESS) {
+        goto __FAILED;
+    }
 
+    RK_LOGE("test running success!");
     return RK_SUCCESS;
 __FAILED:
     RK_LOGE("test running failed!");

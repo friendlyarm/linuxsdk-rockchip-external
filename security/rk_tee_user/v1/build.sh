@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 WORK_DIR_TOP=$(cd `dirname $0` ; pwd)
 
 #./build.sh or ./build.sh 3232 to compile CA TA with 32 bits

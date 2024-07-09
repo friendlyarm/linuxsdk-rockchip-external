@@ -86,6 +86,9 @@ prepare(RkAiqAlgoCom* params)
         memcpy(&pAgammaHandle->agammaAttrV11.stAuto, calibv2_agamma_calib,
                sizeof(CalibDbV2_gamma_v11_t));  // reload iq
 #endif
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR)
+            return XCAM_RETURN_NO_ERROR;
         pAgammaHandle->ifReCalcStAuto = true;
     }
 

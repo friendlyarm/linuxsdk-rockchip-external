@@ -3,9 +3,9 @@
  *
  * Dependencies: bcmeth.h
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -304,22 +304,19 @@ typedef union bcm_event_msg_u {
 							 *  dwell time complete
 							 */
 #define WLC_E_WSEC                      186     /* wsec keymgmt event */
-
-#ifdef CONFIG_DHD_CYW43455
-#define WLC_E_EXT_AUTH_REQ              166     /* authentication request received */
-#define WLC_E_EXT_AUTH_FRAME_RX         167     /* authentication request received */
-#else /* CONFIG_DHD_CYW43455 */
 #define WLC_E_EXT_AUTH_REQ              187     /* authentication request received */
 #define WLC_E_EXT_AUTH_FRAME_RX         188     /* authentication request received */
-#endif /* CONFIG_DHD_CYW43455 */
 #define WLC_E_MGMT_FRAME_TXSTATUS       189     /* mgmt frame Tx complete */
 #define WLC_E_MGMT_FRAME_OFF_CHAN_COMPLETE              190
 #define WLC_E_IND_DOS_STATUS            191
 #define WLC_E_LDF_HOGGER		192 	/* Detection Hogger Squasher -Cambium */
 #define WLC_E_DLTRO         193     /*   DHCP lease time renew offload */
-#define WLC_E_LAST			194	/* highest val + 1 for range checking */
-#if (WLC_E_LAST > 194)
-#error "WLC_E_LAST: Invalid value for last event; must be <= 193."
+#define WLC_E_OVERTEMP			194	/* Overtemp notification */
+#define WLC_E_TWT_TEARDOWN		195	/* TWT Teardown Complete Event */
+#define WLC_E_EXT_ASSOC_FRAME_RX 	196     /* association requeste received */
+#define WLC_E_LAST			197	/* highest val + 1 for range checking */
+#if (WLC_E_LAST > 197)
+#error "WLC_E_LAST: Invalid value for last event; must be <= 197."
 #endif /* WLC_E_LAST */
 
 /* define an API for getting the string name of an event */
@@ -998,6 +995,16 @@ typedef struct wl_twt_setup_cplt {
 	int32 status;
 	/* wl_twt_sdesc_t desc; - defined in wlioctl.h */
 } wl_twt_setup_cplt_t;
+
+#define WL_TWT_TEARDOWN_CPLT_VER	0
+
+/* TWT Teardown Completion event data */
+typedef struct wl_twt_teardown_cplt {
+	uint16 version;
+	uint16 length;	/* the byte count of fields from 'status' onwards */
+	int32 status;
+	/* wl_twt_teardesc_t desc; - defined in wlioctl.h */
+} wl_twt_teardown_cplt_t;
 
 #define WL_INVALID_IE_EVENT_VERSION	0
 

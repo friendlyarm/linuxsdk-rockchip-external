@@ -101,6 +101,10 @@ prepare(RkAiqAlgoCom* params)
         pAsharpCtx->stSharpCalib = *(CalibDb_Sharp_2_t*)(CALIBDB_GET_MODULE_PTR(pCfgParam->com.u.prepare.calib, sharp));
 		pAsharpCtx->stEdgeFltCalib = *(CalibDb_EdgeFilter_2_t*)(CALIBDB_GET_MODULE_PTR(pCfgParam->com.u.prepare.calib, edgeFilter));
 		#endif
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR) {
+            return XCAM_RETURN_NO_ERROR;
+        }
 		pAsharpCtx->isIQParaUpdate = true;
     }
 

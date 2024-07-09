@@ -42,8 +42,6 @@ XCamReturn RkAiqAfecHandleInt::prepare() {
 
     RkAiqAlgoConfigAfec* afec_config_int     = (RkAiqAlgoConfigAfec*)mConfig;
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
 
     /* memcpy(&afec_config_int->afec_calib_cfg, &shared->calib->afec, sizeof(CalibDb_FEC_t)); */
     afec_config_int->resource_path = sharedCom->resourcePath;
@@ -215,7 +213,7 @@ XCamReturn RkAiqAfecHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
         return XCAM_RETURN_NO_ERROR;
     }
 
-    rk_aiq_isp_fec_params_v20_t* fec_params = params->mFecParams->data().ptr();
+    rk_aiq_isp_fec_params_t* fec_params = params->mFecParams->data().ptr();
 
     if (fec_params->result.usage == RKAIQ_ISPP_FEC_ST_ID) {
         LOGD_ANALYZER("afec not update because EIS enabled");

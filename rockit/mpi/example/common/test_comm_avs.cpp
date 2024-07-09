@@ -163,6 +163,68 @@ __FAILED:
     return s32Ret;
 }
 
+RK_S32 TEST_AVS_ModSetCommPool(TEST_AVS_CTX_S *pstCtx) {
+    RK_S32           s32Ret = RK_SUCCESS;
+    AVS_MOD_PARAM_S  stModParam;
+    MB_CONFIG_S      stMbConfig;
+    MB_POOL_CONFIG_S stMbPoolCfg;
+    PIC_BUF_ATTR_S   stPicBufAttr;
+    MB_PIC_CAL_S     stMbPicCalResult;
+
+    memset(&stModParam, 0, sizeof(AVS_MOD_PARAM_S));
+    memset(&stMbConfig, 0, sizeof(MB_CONFIG_S));
+
+    stPicBufAttr.u32Width = pstCtx->u32DstWidth;
+    stPicBufAttr.u32Height = pstCtx->u32DstHeight;
+    stPicBufAttr.enCompMode = pstCtx->enDstCompressMode;
+    stPicBufAttr.enPixelFormat = pstCtx->enDstPixFormat;
+
+    s32Ret = RK_MPI_CAL_VGS_GetPicBufferSize(&stPicBufAttr, &stMbPicCalResult);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("get picture buffer size failed: %#x!", s32Ret);
+        return s32Ret;
+    }
+
+    stModParam.enMBSource = MB_SOURCE_COMMON;
+
+    s32Ret = RK_MPI_AVS_SetModParam(&stModParam);
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    stMbConfig.astCommPool[0].u64MBSize   = stMbPicCalResult.u32MBSize;
+    stMbConfig.astCommPool[0].u32MBCnt    = 8;
+    stMbConfig.astCommPool[0].enRemapMode = MB_REMAP_MODE_CACHED;
+    stMbConfig.astCommPool[0].enAllocType = MB_ALLOC_TYPE_DMA;
+    stMbConfig.astCommPool[0].enDmaType   = MB_DMA_TYPE_NONE;
+
+    s32Ret = RK_MPI_MB_SetConfig(&stMbConfig);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("RK_MPI_MB_SetConfig failed: %#x!", s32Ret);
+        return s32Ret;
+    }
+
+    s32Ret = RK_MPI_MB_Init();
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("RK_MPI_MB_Init failed: %#x!", s32Ret);
+        return s32Ret;
+    }
+
+    return RK_SUCCESS;
+}
+
+RK_S32 TEST_AVS_ModResetCommPool() {
+    RK_S32 s32Ret = RK_SUCCESS;
+
+    s32Ret = RK_MPI_MB_Exit();
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("RK_MPI_MB_Exit failed: %#x!", s32Ret);
+        return s32Ret;
+    }
+
+    return s32Ret;
+}
+
 RK_S32 TEST_AVS_ModCreateFramePool(TEST_AVS_CTX_S *pstCtx) {
     RK_S32   s32Ret  = RK_SUCCESS;
     MB_POOL_CONFIG_S     stMbPoolCfg;
@@ -259,7 +321,7 @@ RK_S32 TEST_AVS_ModGetFrameFromPool(TEST_AVS_CTX_S *pstCtx,
                         pstBufAttr.u32Width, pstBufAttr.u32Height);
             }
 
-            s32Ret = TEST_COMM_FileReadOneFrame(cWritePath, pstVideoFrames[AvsPipe]);
+            s32Ret = TEST_COMM_FileReadOneFrame(cWritePath, pstVideoFrames[AvsPipe], 0);
             if (s32Ret != RK_SUCCESS) {
                 RK_LOGE("avs [%d, %d] pipe frame %p fread file: %s failed: %#x!",
                         pstCtx->s32GrpIndex, AvsPipe,
@@ -281,7 +343,6 @@ RK_S32 TEST_AVS_ModGetFrameFromPool(TEST_AVS_CTX_S *pstCtx,
                 if (s32Ret != RK_SUCCESS) {
                     RK_LOGE("fill COMPRESS_MODE_NONE data into pipe %d buf %p failed: %#x!",
                             AvsPipe, pstVideoFrames[AvsPipe], s32Ret);
-
                 }
                 s32LoopCnt++;
             } else if (COMPRESS_AFBC_16x16 == pstBufAttr.enCompMode) {
@@ -344,7 +405,7 @@ RK_S32 TEST_AVS_ModCreateFrame(TEST_AVS_CTX_S *pstCtx,
             RK_LOGV("avs [%d, %d] pipe frame %p fread file: %s.",
                     pstCtx->s32GrpIndex, AvsPipe, pstVideoFrames[AvsPipe], cWritePath);
 
-            s32Ret = TEST_COMM_FileReadOneFrame(cWritePath, pstVideoFrames[AvsPipe]);
+            s32Ret = TEST_COMM_FileReadOneFrame(cWritePath, pstVideoFrames[AvsPipe], 0);
             if (s32Ret != RK_SUCCESS) {
                 goto __FAILED;
             }
@@ -408,7 +469,7 @@ RK_S32 TEST_AVS_ModGetChnFrame(AVS_GRP AvsGrp,
 
     for (; AvsChn < s32ChnNum; AvsChn++) {
         s32Ret = RK_MPI_AVS_GetChnFrame(AvsGrp, AvsChn,
-                                        pstVideoFrames[AvsChn], 40);
+                                        pstVideoFrames[AvsChn], -1);
         if (s32Ret != RK_SUCCESS) {
             RK_LOGE("avs [%d, %d] RK_MPI_AVS_GetChnFrame failed: %#x!",
                     AvsGrp, AvsChn, s32Ret);
@@ -738,7 +799,14 @@ RK_S32 TEST_AVS_ModInit(TEST_AVS_CTX_S *pstCtx) {
         return s32Ret;
     }
 
-    if (pstCtx->bGetFinalLut) {
+    if (pstCtx->bCommPool) {
+        s32Ret = TEST_AVS_ModSetCommPool(pstCtx);
+        if (s32Ret != RK_SUCCESS) {
+            return s32Ret;
+        }
+    }
+
+	if (pstCtx->bGetFinalLut) {
         s32Ret = TEST_AVS_GetFinalLut(pstCtx->s32GrpIndex, &stAvsGrpAttr);
         if (s32Ret != RK_SUCCESS) {
             RK_LOGE("avs [%d, %d] TEST_AVS_GetFinalLut failed: %#x!",
@@ -758,6 +826,14 @@ RK_S32 TEST_AVS_ModInit(TEST_AVS_CTX_S *pstCtx) {
     return RK_SUCCESS;
 
 __FAILED:
+
+    if (pstCtx->bCommPool) {
+        s32Ret = RK_MPI_MB_Exit();
+        if (s32Ret != RK_SUCCESS) {
+            return s32Ret;
+        }
+    }
+
     return s32Ret;
 }
 
@@ -979,20 +1055,34 @@ RK_S32 TEST_AVS_GetFinalLut(AVS_GRP AvsGrp, AVS_GRP_ATTR_S *pstAvsGrpAttr) {
 
     RK_U16 *u16LdchData[AVS_PIPE_NUM] = {RK_NULL};
     AVS_FINAL_LUT_S pstFinalLut;
-
     MB_EXT_CONFIG_S stMbExtConfig;
+    PIC_BUF_ATTR_S stBufAttr;
+    MB_PIC_CAL_S stPicCal;
+
     for (RK_S32 i = 0; i < pstAvsGrpAttr->u32PipeNum; i++) {
-        u16LdchData[i] = (RK_U16 *)(malloc(61896));
+        memset(&stBufAttr, 0, sizeof(PIC_BUF_ATTR_S));
+        memset(&stPicCal, 0, sizeof(MB_PIC_CAL_S));
+        stBufAttr.u32Width  = pstAvsGrpAttr->stInAttr.stSize.u32Width;
+        stBufAttr.u32Height = pstAvsGrpAttr->stInAttr.stSize.u32Height;
+        s32Ret = RK_MPI_CAL_AVS_GetFinalLutBufferSize(&stBufAttr, &stPicCal);
+        if (RK_SUCCESS != s32Ret || 0 == stPicCal.u32MBSize) {
+            RK_LOGE("avs [%d, %d] calculator ldch mb size failed with %#x, size %d!",
+                    AvsGrp, i, s32Ret, stPicCal.u32MBSize);
+        }
+        RK_LOGV("avs [%d, %d] calculator ldch mb size already, size %d.",
+                    AvsGrp, i, stPicCal.u32MBSize);
+        u16LdchData[i] = (RK_U16 *)(malloc(stPicCal.u32MBSize));
 
         memset(&stMbExtConfig, 0, sizeof(MB_EXT_CONFIG_S));
-        stMbExtConfig.pOpaque = u16LdchData[i];
         stMbExtConfig.pu8VirAddr = (RK_U8 *)u16LdchData[i];
-        stMbExtConfig.u64Size = 61896;
+        stMbExtConfig.u64Size = stPicCal.u32MBSize;
 
         s32Ret = RK_MPI_SYS_CreateMB(&(pstFinalLut.pLdchBlk[i]), &stMbExtConfig);
         if (RK_SUCCESS != s32Ret) {
-            RK_LOGE("avs [%d, %d] create ldch blk failed with %#x!",
+            RK_LOGE("avs [%d, %d] create ldch mb failed with %#x!",
                     AvsGrp, i, s32Ret);
+        } else {
+            RK_LOGV("avs [%d, %d] create ldch mb already.", AvsGrp, i);
         }
     }
 
@@ -1016,12 +1106,12 @@ __FAILED:
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("avs [%d, %d] RK_MPI_AVS_DestroyGrp failed: %#x!!",
                 AvsGrp, 0, s32Ret);
+    } else {
+        RK_LOGV("avs [%d, %d] RK_MPI_AVS_DestroyGrp already.", AvsGrp, 0);
     }
-    RK_LOGV("avs [%d, %d] RK_MPI_AVS_DestroyGrp already.", AvsGrp, 0);
 
     return s32Ret;
 }
-
 
 #ifdef __cplusplus
 #if __cplusplus

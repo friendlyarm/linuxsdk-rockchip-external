@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <unistd.h>
 #include <pthread.h>
 
 #include "test_comm_tmd.h"
@@ -29,9 +30,10 @@ extern "C" {
 #endif /* End of #ifdef __cplusplus */
 
 typedef struct test_vdec_thread_s {
-     RK_BOOL bThreadStart;
-     pthread_t VdecPid;
-     STREAM_INFO_S stStreamInfo;
+    RK_BOOL bThreadStart;
+    pthread_t VdecPid;
+    STREAM_INFO_S stStreamInfo;
+    RK_S32 s32ReadLoopCnt;
 } TEST_VDEC_THREAD_S;
 
 // get pic thread info
@@ -66,6 +68,7 @@ RK_S32 TEST_VDEC_Start(VDEC_CHN VdecChn,
         return s32Ret;
     }
 
+    gSendStremThread[VdecChn].s32ReadLoopCnt = 1;
     return RK_SUCCESS;
 }
 
@@ -94,6 +97,7 @@ static void* TEST_VDEC_SendStreamProc(void *pArgs) {
     VDEC_STREAM_S stStream;
     TEST_VDEC_THREAD_S *pstThreadInfo = (TEST_VDEC_THREAD_S *)pArgs;
     STREAM_INFO_S *pstStreamInfo = &pstThreadInfo->stStreamInfo;
+    RK_S32 s32LoopCnt = pstThreadInfo->s32ReadLoopCnt == 0 ? 1 : pstThreadInfo->s32ReadLoopCnt;
 
     memset(&stMbExtConfig, 0, sizeof(MB_EXT_CONFIG_S));
     memset(&stStream, 0, sizeof(VDEC_STREAM_S));
@@ -102,8 +106,15 @@ static void* TEST_VDEC_SendStreamProc(void *pArgs) {
         memset(&stStreamData, 0, sizeof(STREAM_DATA_S));
         s32Ret = TEST_COMM_TmdParserRead(pstStreamInfo, &stStreamData);
         if (s32Ret != RK_SUCCESS) {
-            RK_LOGE("TEST_COMM_FFmParserRead failed with 0x%x!", s32Ret);
-            break;
+            continue;
+        }
+
+        if (stStreamData.bEndOfStream) {
+            if (s32LoopCnt == -1 || --s32LoopCnt > 0) {  // -1: Infinite loop
+                // already seek in read
+                RK_LOGD("stream loop count %d", s32LoopCnt);
+                continue;
+            }
         }
 
         stMbExtConfig.pFreeCB = stStreamData.pFreeCB;
@@ -123,9 +134,11 @@ __RETRY:
         s32Ret = RK_MPI_VDEC_SendStream(pstStreamInfo->VdecChn, &stStream, 200);
         if (s32Ret != RK_SUCCESS) {
             if (!pstThreadInfo->bThreadStart) {
+                RK_MPI_SYS_Free(stStream.pMbBlk);
                 break;
             }
             RK_LOGV("RK_MPI_VDEC_SendStream failed with 0x%x", s32Ret);
+            usleep(3000l);
             goto  __RETRY;
         }
         RK_MPI_SYS_Free(stStream.pMbBlk);
@@ -155,7 +168,7 @@ RK_S32 TEST_VDEC_StartSendStream(VDEC_CHN VdecChn, STREAM_INFO_S *pstStreamInfo)
     return RK_SUCCESS;
 }
 
-RK_S32 TEST_VENC_StopSendFrame(VDEC_CHN VdecChn) {
+RK_S32 TEST_VDEC_StopSendStream(VDEC_CHN VdecChn) {
     if (RK_TRUE == gSendStremThread[VdecChn].bThreadStart) {
         gSendStremThread[VdecChn].bThreadStart = RK_FALSE;
         pthread_join(gSendStremThread[VdecChn].VdecPid, 0);
@@ -164,6 +177,19 @@ RK_S32 TEST_VENC_StopSendFrame(VDEC_CHN VdecChn) {
     return RK_SUCCESS;
 }
 
+RK_S32 TEST_VDEC_SetReadLoopCount(VDEC_CHN VdecChn, RK_S32 s32ReadLoopCnt) {
+    gSendStremThread[VdecChn].s32ReadLoopCnt = s32ReadLoopCnt;
+    return RK_SUCCESS;
+}
+
+RK_S32 TEST_VDEC_WaitUntilEos(VDEC_CHN VdecChn) {
+    if (RK_TRUE == gSendStremThread[VdecChn].bThreadStart) {
+        pthread_join(gSendStremThread[VdecChn].VdecPid, 0);
+        gSendStremThread[VdecChn].bThreadStart = RK_FALSE;
+    }
+
+    return RK_SUCCESS;
+}
 
 #ifdef __cplusplus
 #if __cplusplus

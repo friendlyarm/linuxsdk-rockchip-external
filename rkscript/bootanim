@@ -7,21 +7,22 @@
 # Example hook:
 # root@RK3588:/# more /etc/bootanim.d/gst-bootanim.sh
 # #!/bin/sh
-# touch ${TAG_FILE:-/dev/null}
+# [ -r /etc/bootanim.d/bootanim.mp4 ] || exit 1
 # gst-play-1.0 /etc/bootanim.d/bootanim.mp4 -q --no-interactive&
-
-export TAG_FILE=/tmp/.bootanim
-rm -f $TAG_FILE
 
 SCRIPT=/usr/bin/bootanim
 HOOK_DIR=/etc/bootanim.d/
-PID_FILE=/tmp/bootanim.pid
-LOG_FILE=/tmp/bootanim.log
-TIMEOUT=${2:-${BOOTANIM_DEFAULT_TIMEOUT:-5}}
+PID_FILE=/var/run/bootanim.pid
+TIMEOUT=${2:-${BOOTANIM_DEFAULT_TIMEOUT:-10}}
+
+log()
+{
+	logger -s -t bootanim $@
+}
 
 pid_by_sid()
 {
-	sed "s/(.*)//" /proc/*/stat | cut -d' ' -f1,6 | grep -w "$1$" |
+	sed "s/(.*)//" /proc/*/stat 2>/dev/null | cut -d' ' -f1,6 | grep -w "$1$" |
 		cut -d' ' -f1 || true
 }
 
@@ -41,6 +42,10 @@ bootanim_init()
 
 bootanim_deinit()
 {
+	# Kick display service
+	echo "compositor:state:on" >> ${WESTON_DRM_CONFIG:-/tmp/.weston_drm.conf}
+	xrefresh >/dev/null 2>/dev/null
+
 	# Unfreeze display service
 	rm -rf $XSERVER_FREEZE_DISPLAY $WESTON_FREEZE_DISPLAY
 
@@ -51,26 +56,39 @@ bootanim_start()
 {
 	[ -d $HOOK_DIR ] || return
 
-	echo "Starting bootanim..."
+	log "Starting bootanim..."
 
 	bootanim_init
 
 	# Start bootanim hooks
+	unset BOOTANIM_STARTED
 	for hook in $(find $HOOK_DIR -maxdepth 1 -name "*.sh"); do
-		echo "Starting hook: $hook..."
-		$hook
-		echo "Started hook: $hook..."
+		log "Starting hook: $hook..."
+		if $hook; then
+			BOOTANIM_STARTED=1
+		fi
+		log "Started hook: $hook..."
 	done
 
-	if [ ! -e "$TAG_FILE" ]; then
-		echo "No animation started..."
+	if [ -z "$BOOTANIM_STARTED" ]; then
+		log "No animation started..."
 		bootanim_deinit
 		return
 	fi
 
 	# Timeout killer
-	sleep $TIMEOUT
-	bootanim_stop
+	{
+		for t in $(seq 1 "$TIMEOUT"); do
+			# Check panel for x11 desktop
+			if pgrep panel >/dev/null; then
+				# Wait for panel painting
+				sleep 1
+				break
+			fi
+			sleep 1
+		done
+		bootanim_stop
+	}&
 }
 
 children_pid()
@@ -85,7 +103,7 @@ children_pid()
 
 bootanim_stop()
 {
-	echo "Stopping bootanim..."
+	log "Stopping bootanim..."
 
 	# Parse children pid
 	CPID=$(children_pid)
@@ -97,10 +115,10 @@ bootanim_stop()
 
 	{
 		# Pause animation -> unfreeze display -> kill animation
-		kill -STOP $CPID &>/dev/null || true
+		kill -STOP $CPID >/dev/null 2>/dev/null || true
 		bootanim_deinit
-		sleep .1
-		kill -9 $CPID &>/dev/null || true
+		sleep 1
+		kill -9 $CPID >/dev/null 2>/dev/null || true
 	}&
 	wait
 }
@@ -112,14 +130,12 @@ case "$1" in
 			[ $(realpath "$0") != $SCRIPT ] ; then
 			setsid $SCRIPT $@
 		else
-			{
-				bootanim_stop || true
-				bootanim_start
-			} 2>&1 | tee -a $LOG_FILE&
+			bootanim_stop || true
+			bootanim_start
 		fi
 		;;
 	stop)
-		bootanim_stop 2>&1 | tee -a $LOG_FILE
+		bootanim_stop
 		;;
 	*)
 		echo "Usage: $0 [start|stop]"

@@ -15,6 +15,9 @@
  */
 #include "Isp21Params.h"
 
+#ifdef USE_NEWSTRUCT
+#include "rk_aiq_isp39_modules.h"
+#endif
 #include <cstdint>
 #include <type_traits>
 
@@ -89,6 +92,7 @@ struct ConvertBlcHelper {
     }
 };
 
+#if RKAIQ_HAVE_AWB_V21
 template<class T>
 void Isp21Params::convertAiqAwbGainToIsp21Params(T& isp_cfg,
         const rk_aiq_wb_gain_t& awb_gain, const rk_aiq_isp_blc_v21_t *blc,
@@ -130,8 +134,13 @@ void Isp21Params::convertAiqAwbGainToIsp21Params(T& isp_cfg,
     cfg->gain2_green_r   = Gr > max_wb_gain ? max_wb_gain : Gr ;
     cfg->gain2_green_b   = Gb > max_wb_gain ? max_wb_gain : Gb;
 
+#if defined(ISP_HW_V30) || defined(ISP_HW_V21)
+    mLatestWbGainCfg = *cfg;
+#endif
 }
+#endif
 
+#if RKAIQ_HAVE_BLC_V1
 template <class T>
 void Isp21Params::convertAiqBlcToIsp21Params(T& isp_cfg, rk_aiq_isp_blc_v21_t& blc) {
     LOGD_ABLC( "%s:(%d) enter enable:%d\n", __FUNCTION__, __LINE__, blc.v0.enable);
@@ -170,6 +179,7 @@ void Isp21Params::convertAiqBlcToIsp21Params(T& isp_cfg, rk_aiq_isp_blc_v21_t& b
 
     LOGD_ABLC("%s:(%d) exit \n", __FUNCTION__, __LINE__);
 }
+#endif
 
 #if RKAIQ_HAVE_DEHAZE_V11
 void
@@ -236,6 +246,40 @@ Isp21Params::convertAiqAdehazeToIsp21Params(struct isp21_isp_params_cfg& isp_cfg
 
     for(int i = 0; i < ISP21_DHAZ_ENH_CURVE_NUM; i++)
         cfg->enh_curve[i] = dhaze.ProcResV11.enh_curve[i];
+
+    LOG1_ADEHAZE("%s: enhance_en:%d air_lc_en:%d hpara_en:%d hist_en:%d dc_en:%d\n", __func__,
+                 cfg->enhance_en, cfg->air_lc_en, cfg->hpara_en, cfg->hist_en, cfg->dc_en);
+    LOG1_ADEHAZE(
+        "%s: yblk_th:%d yhist_th:%d dc_max_th:%d dc_min_th:%d wt_max:%d bright_max:%d "
+        "bright_min:%d \n",
+        __func__, cfg->yblk_th, cfg->yhist_th, cfg->dc_max_th, cfg->dc_min_th, cfg->wt_max,
+        cfg->bright_max, cfg->bright_min);
+    LOG1_ADEHAZE("%s: tmax_base:%d dark_th:%d air_max:%d air_min:%d tmax_max:%d tmax_off:%d \n",
+                 __func__, cfg->tmax_base, cfg->dark_th, cfg->air_max, cfg->air_min, cfg->tmax_max,
+                 cfg->tmax_off);
+    LOG1_ADEHAZE("%s: hist_k:%d hist_th_off:%d hist_min:%d hist_gratio:%d hist_scale:%d \n",
+                 __func__, cfg->hist_k, cfg->hist_th_off, cfg->hist_min, cfg->hist_gratio,
+                 cfg->hist_scale);
+    LOG1_ADEHAZE("%s: gaus_h0:%d gaus_h1:%d gaus_h2:%d enhance_value:%d enhance_chroma:%d \n",
+                 __func__, cfg->gaus_h0, cfg->gaus_h1, cfg->gaus_h2, cfg->enhance_value,
+                 cfg->enhance_chroma);
+    LOG1_ADEHAZE(
+        "%s: iir_wt_sigma:%d iir_sigma:%d stab_fnum:%d iir_tmax_sigma:%d iir_air_sigma:%d "
+        "iir_pre_wet:%d \n",
+        __func__, cfg->iir_wt_sigma, cfg->iir_sigma, cfg->stab_fnum, cfg->iir_tmax_sigma,
+        cfg->iir_air_sigma, cfg->iir_pre_wet);
+    LOG1_ADEHAZE("%s: cfg_alpha:%d cfg_wt:%d cfg_air:%d cfg_gratio:%d cfg_tmax:%d \n", __func__,
+                 cfg->cfg_alpha, cfg->cfg_wt, cfg->cfg_air, cfg->cfg_gratio, cfg->cfg_tmax);
+    LOG1_ADEHAZE(
+        "%s: range_sima:%d space_sigma_cur:%d space_sigma_pre:%d dc_weitcur:%d bf_weight:%d \n",
+        __func__, cfg->range_sima, cfg->space_sigma_cur, cfg->space_sigma_pre, cfg->dc_weitcur,
+        cfg->bf_weight);
+    LOG1_ADEHAZE("%s: enh_curve: %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+                 __FUNCTION__, cfg->enh_curve[0], cfg->enh_curve[1], cfg->enh_curve[2],
+                 cfg->enh_curve[3], cfg->enh_curve[4], cfg->enh_curve[5], cfg->enh_curve[6],
+                 cfg->enh_curve[7], cfg->enh_curve[8], cfg->enh_curve[9], cfg->enh_curve[10],
+                 cfg->enh_curve[11], cfg->enh_curve[12], cfg->enh_curve[13], cfg->enh_curve[14],
+                 cfg->enh_curve[15], cfg->enh_curve[16]);
 }
 #endif
 #if RKAIQ_HAVE_CCM_V1
@@ -992,6 +1036,36 @@ Isp21Params::convertAiqDrcToIsp21Params(struct isp21_isp_params_cfg& isp_cfg,
 }
 #endif
 
+#ifdef USE_NEWSTRUCT
+void Isp21Params::convertAiqGicToIsp21Params(void *isp_cfg_p, rk_aiq_isp_gic_params_t *gic_attr)
+{
+    struct isp39_isp_params_cfg& isp_cfg       = *(struct isp39_isp_params_cfg*)isp_cfg_p;
+    if (gic_attr->en) {
+        isp_cfg.module_en_update |= 1LL << RK_ISP2X_GIC_ID;
+        isp_cfg.module_ens |= 1LL << RK_ISP2X_GIC_ID;
+        isp_cfg.module_cfg_update |= 1LL << RK_ISP2X_GIC_ID;
+    }
+    else {
+       if (!mCommonCvtInfo.drc_en) {
+            isp_cfg.module_en_update |= 1LL << RK_ISP2X_GIC_ID;
+            isp_cfg.module_ens &= ~(1LL << RK_ISP2X_GIC_ID);
+            isp_cfg.module_cfg_update &= ~(1LL << RK_ISP2X_GIC_ID);
+            return;
+        }
+        else {
+           gic_attr->bypass = 1;
+           // ignore, ISP hw will do this
+           //isp_cfg.module_cfg_update |= 1LL << RK_ISP2X_GIC_ID;
+           LOGW_ACAC("When drc is on, gic can't be off, change to bypass on",
+                "Equivalent effect, but not equivalent power consumption.");
+        }
+    }
+
+    isp_cfg.others.gic_cfg.bypass_en = gic_attr->bypass;
+    rk_aiq_gic21_params_cvt(&gic_attr->result, &isp_cfg.others.gic_cfg);
+    return;
+}
+#else
 template<class T>
 void Isp21Params::convertAiqAgicToIsp21Params(T& isp_cfg,
         const rk_aiq_isp_gic_v21_t& agic)
@@ -1031,6 +1105,7 @@ void Isp21Params::convertAiqAgicToIsp21Params(T& isp_cfg,
     isp_cfg.others.gic_cfg.diff_clip      = agic.ProcResV21.diff_clip;
     for (int i = 0; i < 15; i++) isp_cfg.others.gic_cfg.sigma_y[i] = agic.ProcResV21.sigma_y[i];
 }
+#endif
 
 template<class T>
 void
@@ -1058,6 +1133,23 @@ Isp21Params::convertAiqCsmToIsp21Params(T& isp_cfg,
     }
 }
 #if RKAIQ_HAVE_CGC_V1
+#ifdef USE_NEWSTRUCT
+void Isp21Params::convertAiqCgcToIsp21Params(void *isp_cfg_p,
+    rk_aiq_isp_cgc_params_t* cgc_attr) {
+    struct isp39_isp_params_cfg& isp_cfg       = *(struct isp39_isp_params_cfg*)isp_cfg_p;
+    if (cgc_attr->en) {
+        isp_cfg.module_ens |= ISP2X_MODULE_CGC;
+        isp_cfg.module_en_update |= ISP2X_MODULE_CGC;
+        isp_cfg.module_cfg_update |= ISP2X_MODULE_CGC;
+    } else {
+        isp_cfg.module_ens &= ~ISP2X_MODULE_CGC;
+        isp_cfg.module_en_update |= ISP2X_MODULE_CGC;
+        return;
+    }
+
+    rk_aiq_cgc10_params_cvt(&cgc_attr->result, &isp_cfg);
+}
+#else
 template <class T>
 void Isp21Params::convertAiqCgcToIsp21Params(T& isp_cfg,
         const rk_aiq_acgc_params_t& cgc_param) {
@@ -1076,13 +1168,13 @@ void Isp21Params::convertAiqCgcToIsp21Params(T& isp_cfg,
     }
 }
 #endif
+#endif
 
 #define ISP3X_WBGAIN_INTSCALE_BIT  8
 
 void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpInfo_t ae_exp)
 {
 #if defined(ISP_HW_V30) || defined(ISP_HW_V21)
-
 #if defined(ISP_HW_V30)
     struct isp3x_isp_params_cfg* isp_cfg = (struct isp3x_isp_params_cfg*)isp_cfg_;
     uint16_t max_wb_gain = (1 << (ISP2X_WBGAIN_FIXSCALE_BIT + ISP3X_WBGAIN_INTSCALE_BIT)) - 1;
@@ -1092,7 +1184,8 @@ void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpIn
 #else
    LOGE("not suppport !");
 #endif
-    struct isp21_awb_gain_cfg *  cfg = &isp_cfg->others.awb_gain_cfg;
+    struct isp21_awb_gain_cfg *  dest_cfg = &isp_cfg->others.awb_gain_cfg;
+    struct isp21_awb_gain_cfg *  cfg = &mLatestWbGainCfg;
 
     if(_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
 
@@ -1100,30 +1193,33 @@ void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpIn
         isp_dgain = isp_dgain >= 1.0f ?  isp_dgain : 1.0f;
         LOGD_CAMHW_SUBM(ISP20PARAM_SUBM,"cid: %d, isp_dgain:%0.3f\n", _CamPhyId, isp_dgain);
         bool isRecalc = true;
-        if (isp_dgain < 1.0000001f)
+
+        if (!((isp_dgain != mLatestIspDgain) || (isp_dgain != 1.0f)))
             isRecalc = false;
+        mLatestIspDgain = isp_dgain;
 
         if (isRecalc) {
-            cfg->gain0_red = MIN(cfg->gain0_red * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain0_green_r = MIN(cfg->gain0_green_r * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain0_green_b = MIN(cfg->gain0_green_b * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain0_blue = MIN(cfg->gain0_blue * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain0_red = MIN(cfg->gain0_red * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain0_green_r = MIN(cfg->gain0_green_r * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain0_green_b = MIN(cfg->gain0_green_b * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain0_blue = MIN(cfg->gain0_blue * isp_dgain + 0.5, max_wb_gain);
 
-            cfg->gain1_red = MIN(cfg->gain1_red * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain1_green_r = MIN(cfg->gain1_green_r * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain1_green_b = MIN(cfg->gain1_green_b * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain1_blue = MIN(cfg->gain1_blue * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain1_red = MIN(cfg->gain1_red * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain1_green_r = MIN(cfg->gain1_green_r * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain1_green_b = MIN(cfg->gain1_green_b * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain1_blue = MIN(cfg->gain1_blue * isp_dgain + 0.5, max_wb_gain);
 
-            cfg->gain2_red = MIN(cfg->gain2_red * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain2_green_r = MIN(cfg->gain2_green_r * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain2_green_b = MIN(cfg->gain2_green_b * isp_dgain + 0.5, max_wb_gain);
-            cfg->gain2_blue = MIN(cfg->gain2_blue * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain2_red = MIN(cfg->gain2_red * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain2_green_r = MIN(cfg->gain2_green_r * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain2_green_b = MIN(cfg->gain2_green_b * isp_dgain + 0.5, max_wb_gain);
+            dest_cfg->gain2_blue = MIN(cfg->gain2_blue * isp_dgain + 0.5, max_wb_gain);
+            isp_cfg->module_cfg_update |= 1LL << RK_ISP2X_AWB_GAIN_ID;
         }
 
         if (mBlcResult) {
             uint16_t base_wb_gain = 1 << ISP2X_WBGAIN_FIXSCALE_BIT;
             int32_t tmp = 0;
-            RkAiqIspBlcParamsProxyV21* blc_proxy = dynamic_cast<RkAiqIspBlcParamsProxyV21*>(mBlcResult);
+            RkAiqIspBlcParamsProxy* blc_proxy = dynamic_cast<RkAiqIspBlcParamsProxy*>(mBlcResult);
             rk_aiq_isp_blc_v21_t& blc = blc_proxy->data()->result;
 
             if (isRecalc) {
@@ -1155,6 +1251,7 @@ void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpIn
                 if(tmp < 0)
                     tmp = 0;
                 isp_cfg->others.bls_cfg.bls1_val.b = tmp;
+                isp_cfg->module_cfg_update |= 1LL << RK_ISP2X_BLS_ID;
             }
             #define MAX_LSC_VALUE 8191
 #if defined (RKAIQ_HAVE_LSC_V2) || defined (RKAIQ_HAVE_LSC_V3)
@@ -1177,6 +1274,7 @@ void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpIn
                         cfg->gr_data_tbl[i] = cfg->gr_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.gr);
                         cfg->gr_data_tbl[i] = MIN(cfg->gr_data_tbl[i],MAX_LSC_VALUE);
                     }
+                    isp_cfg->module_cfg_update |= ISP2X_MODULE_LSC;
                 }else{
                     isp_cfg->module_ens |= ISP2X_MODULE_LSC; //force open lsc
                     isp_cfg->module_en_update |= ISP2X_MODULE_LSC;
@@ -1205,27 +1303,28 @@ void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpIn
         isp_dgain1 = isp_dgain1 >= 1.0f ?  isp_dgain1 : 1.0f;
         isp_dgain2 = isp_dgain2 >= 1.0f ?  isp_dgain2 : 1.0f;
 
+        float isp_dgain = isp_dgain0 + isp_dgain1 + isp_dgain2;
+        if (!((isp_dgain != mLatestIspDgain) || (isp_dgain != 3.0f))) return;
+        mLatestIspDgain = isp_dgain;
+
         LOGD_CAMHW_SUBM(ISP20PARAM_SUBM,"cid: %d, isp_dgain:%0.3f,%0.3f,%0.3f\n",
                         _CamPhyId, isp_dgain0, isp_dgain1, isp_dgain2);
-        if (isp_dgain0 < 1.0000001f &&
-            isp_dgain1 < 1.0000001f &&
-            isp_dgain2 < 1.0000001f )
-            return;
 
-        cfg->gain0_red = MIN(cfg->gain0_red * isp_dgain0 + 0.5, max_wb_gain);
-        cfg->gain0_green_r = MIN(cfg->gain0_green_r * isp_dgain0 + 0.5, max_wb_gain);
-        cfg->gain0_green_b = MIN(cfg->gain0_green_b * isp_dgain0 + 0.5, max_wb_gain);
-        cfg->gain0_blue = MIN(cfg->gain0_blue * isp_dgain0 + 0.5, max_wb_gain);
+        dest_cfg->gain0_red = MIN(cfg->gain0_red * isp_dgain0 + 0.5, max_wb_gain);
+        dest_cfg->gain0_green_r = MIN(cfg->gain0_green_r * isp_dgain0 + 0.5, max_wb_gain);
+        dest_cfg->gain0_green_b = MIN(cfg->gain0_green_b * isp_dgain0 + 0.5, max_wb_gain);
+        dest_cfg->gain0_blue = MIN(cfg->gain0_blue * isp_dgain0 + 0.5, max_wb_gain);
 
-        cfg->gain1_red = MIN(cfg->gain1_red * isp_dgain1 + 0.5, max_wb_gain);
-        cfg->gain1_green_r = MIN(cfg->gain1_green_r * isp_dgain1 + 0.5, max_wb_gain);
-        cfg->gain1_green_b = MIN(cfg->gain1_green_b * isp_dgain1 + 0.5, max_wb_gain);
-        cfg->gain1_blue = MIN(cfg->gain1_blue * isp_dgain1 + 0.5, max_wb_gain);
+        dest_cfg->gain1_red = MIN(cfg->gain1_red * isp_dgain1 + 0.5, max_wb_gain);
+        dest_cfg->gain1_green_r = MIN(cfg->gain1_green_r * isp_dgain1 + 0.5, max_wb_gain);
+        dest_cfg->gain1_green_b = MIN(cfg->gain1_green_b * isp_dgain1 + 0.5, max_wb_gain);
+        dest_cfg->gain1_blue = MIN(cfg->gain1_blue * isp_dgain1 + 0.5, max_wb_gain);
 
-        cfg->gain2_red = MIN(cfg->gain2_red * isp_dgain2 + 0.5, max_wb_gain);
-        cfg->gain2_green_r = MIN(cfg->gain2_green_r * isp_dgain2 + 0.5, max_wb_gain);
-        cfg->gain2_green_b = MIN(cfg->gain2_green_b * isp_dgain2 + 0.5, max_wb_gain);
-        cfg->gain2_blue = MIN(cfg->gain2_blue * isp_dgain2 + 0.5, max_wb_gain);
+        dest_cfg->gain2_red = MIN(cfg->gain2_red * isp_dgain2 + 0.5, max_wb_gain);
+        dest_cfg->gain2_green_r = MIN(cfg->gain2_green_r * isp_dgain2 + 0.5, max_wb_gain);
+        dest_cfg->gain2_green_b = MIN(cfg->gain2_green_b * isp_dgain2 + 0.5, max_wb_gain);
+        dest_cfg->gain2_blue = MIN(cfg->gain2_blue * isp_dgain2 + 0.5, max_wb_gain);
+        isp_cfg->module_cfg_update |= 1LL << RK_ISP2X_AWB_GAIN_ID;
 
     }
 #else
@@ -1259,10 +1358,11 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     break;
     case RESULT_TYPE_AWBGAIN_PARAM:
     {
+#if RKAIQ_HAVE_AWB_V21
         RkAiqIspAwbGainParamsProxy* awb_gain = result.get_cast_ptr<RkAiqIspAwbGainParamsProxy>();
         if (awb_gain) {
             if(mBlcResult) {
-                RkAiqIspBlcParamsProxyV21* blc = dynamic_cast<RkAiqIspBlcParamsProxyV21*>(mBlcResult);
+                RkAiqIspBlcParamsProxy* blc = dynamic_cast<RkAiqIspBlcParamsProxy*>(mBlcResult);
                 convertAiqAwbGainToIsp21Params(isp_cfg,
                                                awb_gain->data()->result, &blc->data()->result, true);
             } else {
@@ -1272,14 +1372,14 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
 
         } else
             LOGE("don't get awb_gain params, convert awbgain params failed!");
-
+#endif
     }
     break;
     case RESULT_TYPE_AWB_PARAM:
     {
 #if RKAIQ_HAVE_AWB_V21
         mAwbParams = result.ptr();
-        RkAiqIspAwbParamsProxyV21* params = result.get_cast_ptr<RkAiqIspAwbParamsProxyV21>();
+        RkAiqIspAwbParamsProxy* params = result.get_cast_ptr<RkAiqIspAwbParamsProxy>();
         if (params)
             convertAiqAwbToIsp21Params(isp_cfg, params->data()->result, true);
 #endif
@@ -1305,15 +1405,17 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     break;
     case RESULT_TYPE_BLC_PARAM:
     {
-        RkAiqIspBlcParamsProxyV21* params = result.get_cast_ptr<RkAiqIspBlcParamsProxyV21>();
+#if RKAIQ_HAVE_BLC_V1
+        RkAiqIspBlcParamsProxy* params = result.get_cast_ptr<RkAiqIspBlcParamsProxy>();
         if (params)
             convertAiqBlcToIsp21Params(isp_cfg, params->data()->result);
+#endif
     }
     break;
     case RESULT_TYPE_RAWNR_PARAM:
     {
 #if RKAIQ_HAVE_BAYERNR_V2
-        RkAiqIspBaynrParamsProxyV21* params = result.get_cast_ptr<RkAiqIspBaynrParamsProxyV21>();
+        RkAiqIspBaynrParamsProxy* params = result.get_cast_ptr<RkAiqIspBaynrParamsProxy>();
         if (params)
             convertAiqRawnrToIsp21Params(isp_cfg, params->data()->result);
 #endif
@@ -1322,7 +1424,7 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     case RESULT_TYPE_YNR_PARAM:
     {
 #if RKAIQ_HAVE_YNR_V2
-        RkAiqIspYnrParamsProxyV21* params = result.get_cast_ptr<RkAiqIspYnrParamsProxyV21>();
+        RkAiqIspYnrParamsProxy* params = result.get_cast_ptr<RkAiqIspYnrParamsProxy>();
         if (params)
             convertAiqYnrToIsp21Params(isp_cfg, params->data()->result);
 #endif
@@ -1331,7 +1433,7 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     case RESULT_TYPE_UVNR_PARAM:
     {
 #if RKAIQ_HAVE_CNR_V1
-        RkAiqIspCnrParamsProxyV21* params = result.get_cast_ptr<RkAiqIspCnrParamsProxyV21>();
+        RkAiqIspCnrParamsProxy* params = result.get_cast_ptr<RkAiqIspCnrParamsProxy>();
         if (params)
             convertAiqUvnrToIsp21Params(isp_cfg, params->data()->result);
 #endif
@@ -1340,7 +1442,7 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     case RESULT_TYPE_SHARPEN_PARAM:
     {
 #if RKAIQ_HAVE_SHARP_V3
-        RkAiqIspSharpenParamsProxyV21* params = result.get_cast_ptr<RkAiqIspSharpenParamsProxyV21>();
+        RkAiqIspSharpenParamsProxy* params = result.get_cast_ptr<RkAiqIspSharpenParamsProxy>();
         if (params)
             convertAiqSharpenToIsp21Params(isp_cfg, params->data()->result);
 #endif
@@ -1357,25 +1459,31 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     break;
     case RESULT_TYPE_GIC_PARAM:
     {
-        RkAiqIspGicParamsProxy* params = result.get_cast_ptr<RkAiqIspGicParamsProxy>();
-        if (params)
-            convertAiqAgicToIsp21Params(isp_cfg, params->data()->result);
+#if (USE_NEWSTRUCT == 0)
+        RkAiqIspGicParamsProxy* params =
+            result.get_cast_ptr<RkAiqIspGicParamsProxy>();
+        if (params) convertAiqAgicToIsp21Params(isp_cfg, params->data()->result);
+#endif
     }
     break;
     // followings are the same as isp20
     case RESULT_TYPE_AEC_PARAM:
     {
+#ifdef ISP_HW_V21
         RkAiqIspAecParamsProxy* params = result.get_cast_ptr<RkAiqIspAecParamsProxy>();
         if (params) {
             convertAiqAeToIsp20Params(isp_cfg, params->data()->result);
         }
+#endif
     }
     break;
     case RESULT_TYPE_HIST_PARAM:
     {
+#ifdef ISP_HW_V21
         RkAiqIspHistParamsProxy* params = result.get_cast_ptr<RkAiqIspHistParamsProxy>();
         if (params)
             convertAiqHistToIsp20Params(isp_cfg, params->data()->result);
+#endif
     }
     break;
     case RESULT_TYPE_AF_PARAM:
@@ -1388,11 +1496,15 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     }
     break;
     case RESULT_TYPE_DPCC_PARAM:
+#if RKAIQ_HAVE_DPCC_V1
+#ifndef USE_NEWSTRUCT
     {
         RkAiqIspDpccParamsProxy* params = result.get_cast_ptr<RkAiqIspDpccParamsProxy>();
         if (params)
             convertAiqDpccToIsp20Params(isp_cfg, params->data()->result);
     }
+#endif
+#endif
     break;
     case RESULT_TYPE_MERGE_PARAM:
     {
@@ -1415,21 +1527,25 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     break;
     case RESULT_TYPE_DEBAYER_PARAM:
     {
+#if RKAIQ_HAVE_DEBAYER_V1
         RkAiqIspDebayerParamsProxy* params = result.get_cast_ptr<RkAiqIspDebayerParamsProxy>();
         if (params)
             convertAiqAdemosaicToIsp20Params(isp_cfg, params->data()->result);
+#endif
     }
     break;
     case RESULT_TYPE_LDCH_PARAM:
     {
+#if RKAIQ_HAVE_LDCH_V10
         RkAiqIspLdchParamsProxy* params = result.get_cast_ptr<RkAiqIspLdchParamsProxy>();
         if (params)
             convertAiqAldchToIsp20Params(isp_cfg, params->data()->result);
+#endif
     }
     break;
     case RESULT_TYPE_LUT3D_PARAM:
     {
-#if RKAIQ_HAVE_3DLUT_V1
+#if RKAIQ_HAVE_3DLUT_V1 && !USE_NEWSTRUCT
         RkAiqIspLut3dParamsProxy* params = result.get_cast_ptr<RkAiqIspLut3dParamsProxy>();
         if (params)
             convertAiqA3dlutToIsp20Params(isp_cfg, params->data()->result);
@@ -1463,13 +1579,15 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     break;
     case RESULT_TYPE_CSM_PARAM:
     {
+#ifndef USE_NEWSTRUCT
         RkAiqIspCsmParamsProxy* params = result.get_cast_ptr<RkAiqIspCsmParamsProxy>();
         if (params)
             convertAiqCsmToIsp21Params(isp_cfg, params->data()->result);
+#endif
     }
     break;
     case RESULT_TYPE_CGC_PARAM: {
-#if RKAIQ_HAVE_CGC_V1
+#if RKAIQ_HAVE_CGC_V1  && (USE_NEWSTRUCT == 0)
         RkAiqIspCgcParamsProxy* params = result.get_cast_ptr<RkAiqIspCgcParamsProxy>();
         if (params)
             convertAiqCgcToIsp21Params(isp_cfg, params->data()->result);
@@ -1482,7 +1600,7 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
         break;
     case RESULT_TYPE_CP_PARAM:
     {
-#if RKAIQ_HAVE_ACP_V10
+#if RKAIQ_HAVE_ACP_V10 && (USE_NEWSTRUCT == 0)
         RkAiqIspCpParamsProxy* params = result.get_cast_ptr<RkAiqIspCpParamsProxy>();
         if (params)
             convertAiqCpToIsp20Params(isp_cfg, params->data()->result);
@@ -1491,7 +1609,7 @@ bool Isp21Params::convert3aResultsToIspCfg(SmartPtr<cam3aResult> &result,
     break;
     case RESULT_TYPE_IE_PARAM:
     {
-#if RKAIQ_HAVE_AIE_V10
+#if RKAIQ_HAVE_AIE_V10 && (USE_NEWSTRUCT == 0)
         RkAiqIspIeParamsProxy* params = result.get_cast_ptr<RkAiqIspIeParamsProxy>();
         if (params)
             convertAiqIeToIsp20Params(isp_cfg, params->data()->result);

@@ -26,6 +26,7 @@
 #include "common/rk-camera-module.h"
 #include "v4l2_buffer_proxy.h"
 #include "rk_aiq_offline_raw.h"
+#include "rk_aiq.h"
 
 /************ BELOW FROM kernel/include/uapi/linux/rk-preisp.h ************/
 
@@ -97,14 +98,10 @@ public:
     virtual XCamReturn on_dqueue(int dev_idx, SmartPtr<V4l2BufferProxy> buf_proxy) { return XCAM_RETURN_NO_ERROR; }
     virtual bool is_virtual_sensor() { return false; }
     virtual XCamReturn set_sync_mode(uint32_t mode) {return XCAM_RETURN_NO_ERROR;}
-    void setTbInfo(bool is_pre_aiq) {
-        mTbIsPreAiq = is_pre_aiq;
-    }
 protected:
     XCAM_DEAD_COPY (BaseSensorHw);
     uint32_t get_v4l2_pixelformat(uint32_t pixelcode);
-    int mCamPhyId;
-    bool mTbIsPreAiq;
+    int mCamPhyId{-1};
 };
 
 class SensorHw : public BaseSensorHw {
@@ -132,13 +129,17 @@ public:
     virtual XCamReturn stop();
     virtual XCamReturn set_sync_mode(uint32_t mode);
 
-    virtual XCamReturn set_offline_effecting_exp_map(uint32_t sequence, rk_aiq_frame_info_t *offline_finfo);
+    virtual XCamReturn set_effecting_exp_map(uint32_t sequence, void *exp_ptr, int mode);
+    virtual XCamReturn set_pause_flag(bool isPause, uint32_t frameId, bool isSingleMode);
+    bool get_is_single_mode() {
+        return mIsSingleMode;
+    }
     XCAM_DEAD_COPY (SensorHw);
 protected:
     Mutex _mutex;
     int _working_mode;
     std::list<std::pair<SmartPtr<RkAiqSensorExpParamsProxy>, bool>> _exp_list;
-    std::map<int, SmartPtr<RkAiqSensorExpParamsProxy>> _effecting_exp_map;
+    std::map<uint32_t, SmartPtr<RkAiqSensorExpParamsProxy>> _effecting_exp_map;
     bool _first;
     uint32_t _frame_sequence;
     rk_aiq_exposure_sensor_descriptor _sensor_desc;
@@ -202,8 +203,12 @@ protected:
     XCamReturn handle_sof_internal(int64_t time, uint32_t frameid);
     XCamReturn setI2cDAta(pending_split_exps_t* exps);
     int get_nr_switch(rk_aiq_sensor_nr_switch_t* nr_switch);
+    int get_dcg_ratio(rk_aiq_sensor_dcg_ratio_t* dcg_ratio);
     XCamReturn _set_mirror_flip();
 
+    bool mPauseFlag{false};
+    uint32_t mPauseId{uint32_t(-1)};
+    bool mIsSingleMode{false};
 };
 
 } //namespace RkCam

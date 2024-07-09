@@ -26,6 +26,7 @@ extern "C" {
 #define VERSION_NAME_MAXLEN 64
 
 #define RK_MAX(a, b)           ((a) > (b) ? (a) : (b))
+#define RK_MIN(a, b)           ((a) > (b) ? (b) : (a))
 typedef struct rkMPP_VERSION_S {
     RK_CHAR aVersion[VERSION_NAME_MAXLEN];
 } MPP_VERSION_S;
@@ -107,10 +108,13 @@ typedef enum rkMOD_ID_E {
     RK_ID_WBC     = 16,
     RK_ID_AVS     = 17,
     RK_ID_GDC     = 18,
-	RK_ID_RGA     = 19,
+    RK_ID_RGA     = 19,
     RK_ID_AF      = 20,
     RK_ID_IVS     = 21,
-	RK_ID_PVS     = 22,
+    RK_ID_PVS     = 22,
+    RK_ID_DIS     = 23,
+    RK_ID_SWCAC   = 24,
+    RK_ID_AIISP   = 25,
 
     RK_ID_BUTT,
 } MOD_ID_E;
@@ -145,6 +149,9 @@ typedef struct rkMPP_CHN_S {
 #define RK_MOD_AF        "af"
 #define RK_MOD_IVS       "ivs"
 #define RK_MOD_PVS       "pvs"
+#define RK_MOD_DIS       "dis"
+#define RK_MOD_SWCAC     "cac"
+#define RK_MOD_AIISP     "aiisp"
 
 typedef enum rkCODEC_ID_E {
      RK_VIDEO_ID_Unused,             /**< Value when coding is N/A */
@@ -260,6 +267,16 @@ typedef enum rkCODEC_ID_E {
      RK_SUB_ID_HDMV_TEXT,
      RK_SUB_CodingMax
 } RK_CODEC_ID_E;
+
+typedef enum rkDEVICE_ID_E {
+    RK_DID_ISP    = 0,
+    RK_DID_GPU    = 1,
+    RK_DID_RGA2   = 2,
+    RK_DID_RGA3   = 3,
+    RK_DID_VENC   = 4,
+
+    RK_DID_BUTT,
+} DEVICE_ID_E;
 
 #ifdef __cplusplus
 #if __cplusplus

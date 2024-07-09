@@ -6,7 +6,7 @@
 XCamReturn rk_aiq_uapi_adehaze_v10_SetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v10_t* attr,
                                              bool need_sync) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
+    // AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
 
     // AdehazeHandle->AdehazeAtrrV10.mode = attr->mode;
     // if(attr->mode == DEHAZE_API_MANUAL)
@@ -21,7 +21,7 @@ XCamReturn rk_aiq_uapi_adehaze_v10_SetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v
 
 XCamReturn rk_aiq_uapi_adehaze_v10_GetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v10_t* attr) {
     XCamReturn ret                 = XCAM_RETURN_NO_ERROR;
-    AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
+    // AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
 
     // attr->mode = AdehazeHandle->AdehazeAtrrV10.mode;
     // memcpy(&attr->stManual, &AdehazeHandle->AdehazeAtrrV10.stManual, sizeof(mDehazeAttrV11_t));
@@ -35,6 +35,12 @@ XCamReturn rk_aiq_uapi_adehaze_v11_SetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v
                                              bool need_sync) {
     XCamReturn ret                 = XCAM_RETURN_NO_ERROR;
     AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
+    LOGI_ADEHAZE(
+        "%s api_mode:%d updateMDehazeStrth:%d MDehazeStrth:%d updateMEnhanceStrth:%d "
+        "MEnhanceStrth:%d updateMEnhanceChromeStrth:%d MEnhanceChromeStrth:%d\n",
+        __func__, attr->mode, attr->Info.updateMDehazeStrth, attr->Info.MDehazeStrth,
+        attr->Info.updateMEnhanceStrth, attr->Info.MEnhanceStrth,
+        attr->Info.updateMEnhanceChromeStrth, attr->Info.MEnhanceChromeStrth);
 
 #if RKAIQ_HAVE_DEHAZE_V11
     pAdehazeHandle->AdehazeAtrrV11.mode = attr->mode;
@@ -120,6 +126,12 @@ XCamReturn rk_aiq_uapi_adehaze_v12_SetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v
                                              bool need_sync) {
     XCamReturn ret                 = XCAM_RETURN_NO_ERROR;
     AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
+    LOGI_ADEHAZE(
+        "%s api_mode:%d updateMDehazeStrth:%d MDehazeStrth:%d updateMEnhanceStrth:%d "
+        "MEnhanceStrth:%d updateMEnhanceChromeStrth:%d MEnhanceChromeStrth:%d\n",
+        __func__, attr->mode, attr->Info.updateMDehazeStrth, attr->Info.MDehazeStrth,
+        attr->Info.updateMEnhanceStrth, attr->Info.MEnhanceStrth,
+        attr->Info.updateMEnhanceChromeStrth, attr->Info.MEnhanceChromeStrth);
 
     pAdehazeHandle->AdehazeAtrrV12.mode = attr->mode;
     if (attr->mode == DEHAZE_API_MANUAL) {
@@ -161,5 +173,49 @@ XCamReturn rk_aiq_uapi_adehaze_v12_GetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v
 
     return ret;
 }
+#endif
+#if RKAIQ_HAVE_DEHAZE_V14
+XCamReturn rk_aiq_uapi_adehaze_v14_SetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v14_t* attr,
+                                             bool need_sync) {
+    XCamReturn ret                  = XCAM_RETURN_NO_ERROR;
+    AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
 
+    pAdehazeHandle->AdehazeAtrrV14.mode = attr->mode;
+    if (attr->mode == DEHAZE_API_MANUAL) {
+        memcpy(&pAdehazeHandle->AdehazeAtrrV14.stManual, &attr->stManual, sizeof(mDehazeAttrV14_t));
+        pAdehazeHandle->ifReCalcStManual = true;
+    }
+    if (attr->mode == DEHAZE_API_AUTO) {
+        memcpy(&pAdehazeHandle->AdehazeAtrrV14.stAuto, &attr->stAuto,
+               sizeof(CalibDbV2_dehaze_v14_t));
+        pAdehazeHandle->ifReCalcStAuto = true;
+    }
+
+    if (attr->Info.updateMDehazeStrth) {
+        pAdehazeHandle->AdehazeAtrrV14.Info.MDehazeStrth = attr->Info.MDehazeStrth;
+        attr->Info.updateMDehazeStrth                    = false;
+    }
+    if (attr->Info.updateMEnhanceStrth) {
+        pAdehazeHandle->AdehazeAtrrV14.Info.MEnhanceStrth = attr->Info.MEnhanceStrth;
+        attr->Info.updateMEnhanceStrth                    = false;
+    }
+    if (attr->Info.updateMEnhanceChromeStrth) {
+        pAdehazeHandle->AdehazeAtrrV14.Info.MEnhanceChromeStrth = attr->Info.MEnhanceChromeStrth;
+        attr->Info.updateMEnhanceChromeStrth                    = false;
+    }
+
+    return ret;
+}
+
+XCamReturn rk_aiq_uapi_adehaze_v14_GetAttrib(RkAiqAlgoContext* ctx, adehaze_sw_v14_t* attr) {
+    XCamReturn ret                  = XCAM_RETURN_NO_ERROR;
+    AdehazeHandle_t* pAdehazeHandle = (AdehazeHandle_t*)ctx;
+
+    attr->mode = pAdehazeHandle->AdehazeAtrrV14.mode;
+    attr->Info = pAdehazeHandle->AdehazeAtrrV14.Info;
+    memcpy(&attr->stManual, &pAdehazeHandle->AdehazeAtrrV14.stManual, sizeof(mDehazeAttrV14_t));
+    memcpy(&attr->stAuto, &pAdehazeHandle->AdehazeAtrrV14.stAuto, sizeof(CalibDbV2_dehaze_v14_t));
+
+    return ret;
+}
 #endif

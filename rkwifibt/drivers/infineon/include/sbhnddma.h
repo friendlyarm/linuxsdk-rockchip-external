@@ -2,9 +2,9 @@
  * Generic Broadcom Home Networking Division (HND) DMA engine HW interface
  * This supports the following chips: BCM42xx, 44xx, 47xx .
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -230,6 +230,9 @@ typedef volatile struct {
 	uint32	addrhigh;	/**< descriptor ring base address bits 63:32 (8K aligned) */
 	uint32	status0;	/**< current descriptor, xmt state */
 	uint32	status1;	/**< active descriptor, xmt error */
+#if defined(BCMQT) && defined(BCMSPI)
+	uint32 PAD[2];
+#endif /* defined(BCMQT) && defined(BCMSPI) */
 } dma64regs_t;
 
 typedef volatile struct {

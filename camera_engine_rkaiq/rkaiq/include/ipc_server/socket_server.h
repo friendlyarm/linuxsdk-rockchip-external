@@ -13,7 +13,11 @@
 #include "include/uAPI2/rk_aiq_user_api2_adpcc.h"
 #include "include/uAPI2/rk_aiq_user_api2_helper.h"
 #include "include/uAPI2/rk_aiq_user_api2_sysctl.h"
+#if USE_NEWSTRUCT
+#include "include/uAPI2/rk_aiq_user_api2_awb_v3.h"
+#else
 #include "include/uAPI2/rk_aiq_user_api2_awb.h"
+#endif
 #include "rk_aiq_user_api2_ae.h"
 #include "rk_aiq_user_api_ae.h"
 #include "rkaiq_tool_ae.h"
@@ -51,6 +55,7 @@ using namespace std;
 #define LOGV_IPC(...) XCAM_MODULE_LOG_VERBOSE(XCORE_LOG_MODULE_IPC, 0xff, ##__VA_ARGS__)
 #define LOGI_IPC(...) XCAM_MODULE_LOG_INFO(XCORE_LOG_MODULE_IPC, 0xff, ##__VA_ARGS__)
 #define LOG1_IPC(...) XCAM_MODULE_LOG_LOW1(XCORE_LOG_MODULE_IPC, 0xff, ##__VA_ARGS__)
+#define LOGK_IPC(...) XCAM_MODULE_LOG_KEY(XCORE_LOG_MODULE_IPC, 0xff, ##__VA_ARGS__)
 
 
 typedef struct rk_aiq_sys_ctx_s rk_aiq_sys_ctx_t;
@@ -84,7 +89,7 @@ private:
   int Recvieve(int sync);
   int poll_event(int timeout_msec, int fds[]);
 #ifdef __ANDROID__
-  int getAndroidLocalSocket();
+  int getAndroidLocalSocket(int camid);
 #endif
 
 private:
@@ -100,6 +105,7 @@ private:
   std::shared_ptr<std::thread> tunning_thread;
   RecvCallBack callback_;
   int _stop_fds[2];
+  int camId_{-1};
 };
 
 void hexdump2(char *buf, const int num);
@@ -334,6 +340,8 @@ enum
   ENUM_ID_AIQ_UAPI_SYSCTL_GET3ASTATS,
   ENUM_ID_AIQ_UAPI_SYSCTL_GET3ASTATSBLK,
   ENUM_ID_AIQ_UAPI2_AWB_WRITEAWBIN,
+  ENUM_ID_AIQ_UAPI_SYSCTL_GETTOOLSERVER3ASTATS,
+  ENUM_ID_AIQ_UAPI_SYSCTL_GETTOOLSERVER3ASTATSBLK,
   ENUM_ID_AIQ_UAPI_END,
 };
 

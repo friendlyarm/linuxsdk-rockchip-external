@@ -40,11 +40,11 @@
  * @{
  *
  */
-#include "moduleinfo_head.h"
-#include "aec_head.h"
-#include "sensorinfo_head.h"
-#include "rk_aiq_types_ae_algo.h"
-
+#include "iq_parser_v2/moduleinfo_head.h"
+#include "iq_parser_v2/aec_head.h"
+#include "iq_parser_v2/sensorinfo_head.h"
+#include "algos/ae/rk_aiq_types_ae_algo.h"
+#include "isp/rk_aiq_isp_ae25.h"
 
 #define MAX_HDR_FRAMENUM  (3)
 /*****************************************************************************/
@@ -94,7 +94,6 @@ typedef enum {
     LDM = 0x10,
     CLM = 0x20,
     ECM = 0x40,
-    HDRECM = 0x80,
 } AecLogLevel_t;
 /*****************************************************************************/
 /**
@@ -110,10 +109,11 @@ typedef enum {
     UPDATE_HDRAEROUTEATTR = 0x10,
     UPDATE_IRISATTR = 0x20,
     UPDATE_SYNCTESTATTR = 0x40,
-    UPDATE_EXPWINATTR = 0x80,
+    UPDATE_EXPWINATTR = 0x80, //including win size & offset, hist weight
     UPDATE_EXPINFO = 0x100, //including vts/dcg
-    UPDATE_EXPHWATTR = 0x200, //including aec_meas/hist_meass
+    UPDATE_EXPHWATTR = 0x200, //including aec_meas/hist_meas
     UPDATE_RESOLUTION = 0x400,
+    UPDATE_AECSTATSCFG = 0x800, //including ae stats channel select, stats update flag
     UPDATE_CALIB = 0xffff,//update iq file
 } AecUpdateAttrMode_t;
 
@@ -130,22 +130,22 @@ typedef enum CamIcYRangeMode_e {
 } CamIcYRangeMode_t;
 
 typedef enum CamIcRawStatsMode_e {
-    CAMIC_RAWSTATS_MODE_INVALID       = 0,    /**< lower border (only for an internal evaluation) */
-    CAMIC_RAWSTATS_MODE_R             = 1,    /**< R channel */
-    CAMIC_RAWSTATS_MODE_G             = 2,    /**< G channel */
-    CAMIC_RAWSTATS_MODE_B             = 3,    /**< B channel */
-    CAMIC_RAWSTATS_MODE_Y             = 4,    /**< luminance channel */
-    CAMIC_RAWSTATS_MODE_MAX,                                  /**< upper border (only for an internal evaluation) */
+    CAMIC_RAWSTATS_MODE_INVALID = 0,    /**< lower border (only for an internal evaluation) */
+    CAMIC_RAWSTATS_MODE_R       = 1,    /**< R channel */
+    CAMIC_RAWSTATS_MODE_G       = 2,    /**< G channel */
+    CAMIC_RAWSTATS_MODE_B       = 3,    /**< B channel */
+    CAMIC_RAWSTATS_MODE_Y       = 4,    /**< luminance channel */
+    CAMIC_RAWSTATS_MODE_MAX,            /**< upper border (only for an internal evaluation) */
 } CamIcRawStatsMode_t;
 
 typedef enum CamIcHistStatsMode_e {
-    CAMIC_HIST_MODE_INVALID       = 0,    /**< lower border (only for an internal evaluation) */
-    CAMIC_HIST_MODE_RGB_COMBINED  = 1,    /**< RGB combined histogram */
-    CAMIC_HIST_MODE_R             = 2,    /**< R histogram */
-    CAMIC_HIST_MODE_G             = 3,    /**< G histogram */
-    CAMIC_HIST_MODE_B             = 4,    /**< B histogram */
-    CAMIC_HIST_MODE_Y             = 5,    /**< luminance histogram */
-    CAMIC_HIST_MODE_MAX,                                  /**< upper border (only for an internal evaluation) */
+    CAMIC_HIST_MODE_INVALID         = 0,    /**< lower border (only for an internal evaluation) */
+    CAMIC_HIST_MODE_RGB_COMBINED    = 1,    /**< RGB combined histogram */
+    CAMIC_HIST_MODE_R               = 2,    /**< R histogram */
+    CAMIC_HIST_MODE_G               = 3,    /**< G histogram */
+    CAMIC_HIST_MODE_B               = 4,    /**< B histogram */
+    CAMIC_HIST_MODE_Y               = 5,    /**< luminance histogram */
+    CAMIC_HIST_MODE_MAX,                    /**< upper border (only for an internal evaluation) */
 } CamIcHistStatsMode_t;
 
 /*****************************************************************************/
@@ -240,6 +240,7 @@ typedef enum {
     ISP_HDR_MODE_2_LINE_HDR = AEC_WORKING_MODE_ISP_HDR2 + 2,
     ISP_HDR_MODE_3_FRAME_HDR = AEC_WORKING_MODE_ISP_HDR3 + 1,
     ISP_HDR_MODE_3_LINE_HDR = AEC_WORKING_MODE_ISP_HDR3 + 2,
+    ISP_HDR_MODE_3_BUILT_IN_HDR = AEC_WORKING_MODE_ISP_HDR3 + 3,
 } IspHdrMode_t;
 
 typedef enum {
@@ -360,6 +361,13 @@ typedef struct Aec_Sensor_nr_switch_s {
     uint32_t div_coeff;
 } Aec_Sensor_nr_switch_t;
 
+typedef struct Aec_Sensor_dcg_ratio_s {
+    bool valid;
+    uint32_t integer;
+    uint32_t decimal;
+    uint32_t div_coeff;
+} Aec_Sensor_dcg_ratio_t;
+
 typedef struct Aec_AeRange_s {
     float                   Min;
     float                   Max;
@@ -391,11 +399,31 @@ typedef struct Aec_uapi_advanced_attr_s {
 
 typedef enum AecHwVersion_e
 {
-    AEC_HARDWARE_V0 = 0,  /*at most support Hdr 3_frame, 2 AEBIG & 1 AELITE for input raw, support yuv luma e.g. rv1126/1109*/
-    AEC_HARDWARE_V1 = 1,  /*at most support Hdr 2_frame, 1 AEBIG & 1 AELITE for input raw, not support yuv luma  e.g. rk356X*/
-    AEC_HARDWARE_V2 = 2,  /*at most support Hdr 3_frame, 2 AEBIG & 1 AELITE for input raw, not support yuv luma, share AEBIG3 with AF e.g. rk3588*/
-    AEC_HARDWARE_V3 = 3,  /*at most support Hdr 2_frame, 1 AEBIG & 1 AELITE for input raw, not support yuv luma, share AEBIG3 with AF e.g. rv1106*/
-    AEC_HARDWARE_V4 = 4,  /*at most support Hdr 2_frame, only exist AELITE AEBIG3, not support yuv luma, share AELITE AEBIG3 with AF e.g. rk3562*/
+    /*
+    NOTE: name of rawae/rawhist channel has been renamed!
+       RawAE0 = RawAE lite, addr=0x4500 <=> RawHIST0
+       RawAE1 = RawAE big2, addr=0x4600 <=> RawHIST1
+       RawAE2 = RawAE big3, addr=0x4700 <=> RawHIST2
+       RawAE3 = RawAE big1, addr=0x4400 <=> RawHIST3, extra aebig
+
+    | ISP HW   | RawAE0 | RawAE1 | RawAE2 | RawAE3 | YUVAE | HDR FRAME | NOTES                       | E.G.          |
+    |----------|--------|--------|--------|--------|-------|-----------|-----------------------------|---------------|
+    | V20      | lite   | big    | big    | big    | Y     | 3         | -                           | RV1126/RV1109 |
+    | V21      | lite   | big    | -      | big    | -     | 2         | -                           | RK356X        |
+    | V30      | lite   | big    | big    | big    | -     | 3         | RawAE3 Share with AF        | RK3588        |
+    | V32      | lite   | big    | -      | big    | -     | 2         | RawAE3 Share with AF        | RV1106/RV1103 |
+    | V32_LITE | lite   | -      | -      | big    | -     | 2         | RawAE0/3 can share with AF..| RK3562        |
+    |          |        |        |        |        |       |           | Limit AF only use RAWAE0    |               |
+    | V39      | big    | -      | -      | big    | -     | 2         | RawAE subwin0~4 delete      | RK3576        |
+    | V33      | big    | -      | -      | big    | -     | 2         | -                           | RV1103B       |
+    */
+    AEC_HARDWARE_V20   = 0,
+    AEC_HARDWARE_V21   = 1,
+    AEC_HARDWARE_V30   = 2,
+    AEC_HARDWARE_V32   = 3,
+    AEC_HARDWARE_V32_LITE = 4,
+    AEC_HARDWARE_V39   = 5,
+    AEC_HARDWARE_V33   = 6,
     AEC_HARDWARE_MAX,
 } AecHwVersion_t;
 
@@ -411,19 +439,41 @@ typedef struct AfdPeakRes_s {
     RKAiqAecExpInfo_t       expinfo[2];
 } AfdPeakRes_t;
 
-typedef struct AecConfig_s {
+typedef enum  RawStatsChnEn_e {
+    RAWSTATS_CHN_Y_EN       = 0b0001,
+    RAWSTATS_CHN_R_EN       = 0b0010,
+    RAWSTATS_CHN_G_EN       = 0b0100,
+    RAWSTATS_CHN_B_EN       = 0b1000,
+    RAWSTATS_CHN_RGB_EN     = 0b1110,
+    RAWSTATS_CHN_ALL_EN     = 0b1111,
+} RawStatsChnEn_t;
 
+typedef struct AecStatsCfg_s {
+    bool                    updateStats;
+    int8_t                  rawStatsChnSel;
+} AecStatsCfg_t;
+
+typedef struct AecConfig_s {
     /*Aec Ctrl Configuration from calibdb, support User Api input Ctrl configuration*/
 
+#ifdef USE_NEWSTRUCT
+    //V3: newStruct json params
+    ae_commCtrl_t CommCtrlV3;
+    ae_linAeCtrl_t LinearAeCtrlV3;
+    ae_hdrAeCtrl_t HdrAeCtrlV3;
+    ae_irisCtrl_t IrisCtrlV3;
+    ae_syncTest_t SyncTestV3;
+#else
     //V2: json params
-    CalibDb_AecCommon_AttrV2_t    CommCtrlV2;
-    CalibDb_LinearAE_AttrV2_t     LinearAeCtrlV2;
-    CalibDb_HdrAE_AttrV2_t        HdrAeCtrlV2;
-    CalibDb_AecIrisCtrlV2_t       IrisCtrl;
-    CalibDb_AeSyncTestV2_t        SyncTest; //special module for debug
+    CalibDb_AecCommon_AttrV2_t CommCtrlV2;
+    CalibDb_LinearAE_AttrV2_t LinearAeCtrlV2;
+    CalibDb_HdrAE_AttrV2_t HdrAeCtrlV2;
+    CalibDb_AecIrisCtrlV2_t IrisCtrlV2;
+    CalibDb_AeSyncTestV2_t SyncTestV2;
+#endif
+
     CalibDb_Sensor_ParaV2_t       SensorInfoV2;
     CalibDb_Module_ParaV2_t       ModuleInfoV2;
-
 
     RkAiqAecHwConfig_t            HwCtrl;
     AecHwVersion_t                AecHwVers;
@@ -438,6 +488,7 @@ typedef struct AecConfig_s {
     float                         PixelClockFreqMHZ;
     float                         PixelPeriodsPerLine;
     Aec_Sensor_nr_switch_t        nr_switch;
+    Aec_Sensor_dcg_ratio_t        dcg_ratio;
 
     /*continue to use some old params to keep the same with AecConfig_t*/
     AecDampingMode_t              DampingMode;              /**< damping mode */
@@ -454,6 +505,12 @@ typedef struct AecConfig_s {
     /*add for auto flicker detection*/
     AfdPeakRes_t                  AfdRes;
 
+    /*add for api using ae translator params*/
+    AecStatsCfg_t                 AecStatsCfg;
+    /*for build-in HDR*/
+    bool                          BuildInHdr;
+    int                           ComprBit;
+
     /*update attr flag*/
     uint16_t                      IsReconfig;
 } AecConfig_t;
@@ -468,6 +525,8 @@ typedef struct AecContext_s* AeHandle_t;     /**< handle to AEC context */
 typedef struct AecConfig_s* AeConfig_t;     /**< handle to AEC config */
 
 typedef struct AeInstanceConfig_s {
+    void*                   cbs;
+    bool                    isGrpMode;
     AeHandle_t              hAe;            /**< handle returned by AeInit() */
     AeConfig_t              aecCfg;
     bool                    lockaebyaf;

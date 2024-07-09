@@ -1,9 +1,9 @@
 /*
  * Expose some of the kernel scheduler routines
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -30,14 +30,41 @@
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+#include <uapi/linux/sched/types.h>
+#else
 #include <linux/sched.h>
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0) */
 #include <typedefs.h>
 #include <linuxver.h>
 
 int setScheduler(struct task_struct *p, int policy, struct sched_param *param)
 {
 	int rc = 0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
+	switch (policy) {
+		case SCHED_FIFO:
+			if (param->sched_priority >= MAX_RT_PRIO/2)
+				/* If the priority is MAX_RT_PRIO/2 or higher,
+				 * it is considered as high priority.
+				 * sched_priority of FIFO task dosen't
+				 * exceed MAX_RT_PRIO/2.
+				 */
+				sched_set_fifo(p);
+			else
+				/* For when you don't much care about FIFO,
+				 * but want to be above SCHED_NORMAL.
+				 */
+				sched_set_fifo_low(p);
+			break;
+		case SCHED_NORMAL:
+			sched_set_normal(p, PRIO_TO_NICE(p->static_prio));
+			break;
+	}
+#else
 	rc = sched_setscheduler(p, policy, param);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) */
 	return rc;
 }
 

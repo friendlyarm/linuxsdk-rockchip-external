@@ -123,6 +123,14 @@ XCamReturn RkAiqCustomAeHandle::getExpWinAttr(Uapi_ExpWin_t* pExpWinAttr) {
     return XCAM_RETURN_NO_ERROR;
 }
 
+XCamReturn RkAiqCustomAeHandle::setAecStatsCfg(Uapi_AecStatsCfg_t AecStatsCfg) {
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::getAecStatsCfg(Uapi_AecStatsCfg_t* pAecStatsCfg) {
+    return XCAM_RETURN_NO_ERROR;
+}
+
 XCamReturn RkAiqCustomAeHandle::queryExpInfo(Uapi_ExpQueryInfo_t* pExpQueryInfo) {
     return XCAM_RETURN_NO_ERROR;
 }
@@ -130,6 +138,63 @@ XCamReturn RkAiqCustomAeHandle::queryExpInfo(Uapi_ExpQueryInfo_t* pExpQueryInfo)
 XCamReturn RkAiqCustomAeHandle::setLockAeForAf(bool lock_ae) {
     return XCAM_RETURN_NO_ERROR;
 }
+
+#ifdef USE_NEWSTRUCT
+XCamReturn RkAiqCustomAeHandle::setExpSwAttr(ae_api_expSwAttr_t ExpSwAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::getExpSwAttr(ae_api_expSwAttr_t* pExpSwAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::setLinExpAttr(ae_api_linExpAttr_t LinExpAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::getLinExpAttr(ae_api_linExpAttr_t* pLinExpAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::setHdrExpAttr(ae_api_hdrExpAttr_t HdrExpAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::getHdrExpAttr(ae_api_hdrExpAttr_t* pHdrExpAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::setIrisAttr(ae_api_irisAttr_t IrisAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::getIrisAttr(ae_api_irisAttr_t* pIrisAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::setSyncTestAttr(ae_api_syncTestAttr_t SyncTestAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::getSyncTestAttr(ae_api_syncTestAttr_t* pSyncTestAttr)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn RkAiqCustomAeHandle::queryExpInfo(ae_api_queryInfo_t* pExpQueryInfo)
+{
+    return XCAM_RETURN_NO_ERROR;
+}
+#endif
 
 void
 RkAiqCustomAeHandle::init() {
@@ -185,8 +250,6 @@ XCamReturn RkAiqCustomAeHandle::preProcess() {
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
-    RkAiqAlgoPreAe* ae_pre_int        = (RkAiqAlgoPreAe*)mPreInParam;
-    bool postMsg = true;
 #ifdef BYPASS_CUSTOM_AE
     if (0) {
 #else

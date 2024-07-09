@@ -199,10 +199,6 @@ XCamReturn RkAiqAgicHandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "agic handle prepare failed");
 
-    RkAiqAlgoConfigAgic* agic_config_int = (RkAiqAlgoConfigAgic*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "agic algo prepare failed");
@@ -285,15 +281,17 @@ XCamReturn RkAiqAgicHandleInt::processing() {
 
     RKAiqAecExpInfo_t* aeCurExp = &shared->curExp;
     if (aeCurExp != NULL) {
-        if((rk_aiq_working_mode_t)sharedCom->working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+        if (agic_proc_int->hdr_mode == RK_AIQ_WORKING_MODE_NORMAL) {
             agic_proc_int->iso = aeCurExp->LinearExp.exp_real_params.analog_gain * aeCurExp->LinearExp.exp_real_params.isp_dgain * 50;
             LOGD_AGIC("%s:NORMAL:iso=%d,again=%f\n", __FUNCTION__, agic_proc_int->iso,
                       aeCurExp->LinearExp.exp_real_params.analog_gain);
-        } else if ((rk_aiq_working_mode_t)sharedCom->working_mode == RK_AIQ_WORKING_MODE_ISP_HDR2) {
+        } else if (agic_proc_int->hdr_mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR
+                  || agic_proc_int->hdr_mode == RK_AIQ_ISP_HDR_MODE_2_LINE_HDR) {
             agic_proc_int->iso = aeCurExp->HdrExp[1].exp_real_params.analog_gain * 50;
             LOGD_AGIC("%s:HDR2:iso=%d,again=%f\n", __FUNCTION__, agic_proc_int->iso,
                       aeCurExp->HdrExp[1].exp_real_params.analog_gain);
-        } else if ((rk_aiq_working_mode_t)sharedCom->working_mode == RK_AIQ_WORKING_MODE_ISP_HDR3) {
+        } else if (agic_proc_int->hdr_mode  == RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR
+                  || agic_proc_int->hdr_mode == RK_AIQ_ISP_HDR_MODE_3_LINE_HDR) {
             agic_proc_int->iso = aeCurExp->HdrExp[2].exp_real_params.analog_gain * 50;
             LOGD_AGIC("%s:HDR3:iso=%d,again=%f\n", __FUNCTION__, agic_proc_int->iso,
                       aeCurExp->HdrExp[2].exp_real_params.analog_gain);
@@ -351,7 +349,7 @@ XCamReturn RkAiqAgicHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAgic* agic_com              = (RkAiqAlgoProcResAgic*)mProcOutParam;
-    rk_aiq_isp_gic_params_v20_t* gic_param = params->mGicParams->data().ptr();
+    rk_aiq_isp_gic_params_t* gic_param = params->mGicParams->data().ptr();
 
     if (!agic_com) {
         LOGD_ANALYZER("no agic result");

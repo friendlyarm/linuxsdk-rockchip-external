@@ -2,7 +2,7 @@
  * Dongle BUS interface Abstraction layer
  *   target serial buses like USB, SDIO, SPI, etc.
  *
- * Copyright (C) 2020, Broadcom.
+ * Copyright (C) 2022, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -19,7 +19,7 @@
  * modifications of the software.
  *
  *
- * <<Broadcom-WL-IPTag/Open:>>
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef __DBUS_H__
@@ -67,10 +67,6 @@ enum {
 	DBUS_NVRAM_NONTXT,
 	DBUS_ERR_RXZLP
 };
-
-#define BCM_OTP_SIZE_43236  84	/* number of 16 bit values */
-#define BCM_OTP_SW_RGN_43236	24  /* start offset of SW config region */
-#define BCM_OTP_ADDR_43236 0x18000800 /* address of otp base */
 
 #define ERR_CBMASK_TXFAIL		0x00000001
 #define ERR_CBMASK_RXFAIL		0x00000002
@@ -255,7 +251,7 @@ typedef struct {
 	void *(*pktget)(void *bus, int len);
 	void (*pktfree)(void *bus, void *pkt);
 
-	int  (*iovar_op)(void *bus, const char *name, void *params, int plen, void *arg, int len,
+	int  (*iovar_op)(void *bus, const char *name, void *params, uint plen, void *arg, uint len,
 		bool set);
 	void (*dump)(void *bus, struct bcmstrbuf *strbuf);
 	int  (*set_config)(void *bus, dbus_config_t *config);

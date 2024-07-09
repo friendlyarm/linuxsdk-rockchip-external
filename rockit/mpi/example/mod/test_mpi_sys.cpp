@@ -13,8 +13,10 @@
  * limitations under the License.
  */
 
+#ifdef DBG_MOD_ID
 #undef DBG_MOD_ID
-#define DBG_MOD_ID       RK_ID_SYS
+#endif
+#define DBG_MOD_ID DBG_MOD_COMB1(RK_ID_SYS)
 
 #include <stdio.h>
 #include <unistd.h>
@@ -28,12 +30,19 @@
 
 #include "test_comm_argparse.h"
 
+typedef enum rkTestVIMODE_E {
+    TEST_SYS_MODE_BIND = 0,
+    TEST_SYS_MODE_DUMPSYS = 1,
+    TEST_SYS_MODE_FORCE_LOST_FRAME = 2,
+    TEST_SYS_MODE_MMZ_RELEASE = 3,
+} TEST_SYS_MODE_E;
+
 typedef struct _rkTestSysCtx {
     RK_S32      s32LoopCount;
     RK_S32      s32DevId;
     RK_S32      s32SrcChnId;
     RK_S32      s32DstChnNum;
-
+    TEST_SYS_MODE_E enMode;
     ADEC_CHN_ATTR_S *pstADecChnAttr;
 } TEST_SYS_CTX_S;
 
@@ -43,28 +52,32 @@ RK_S32 test_ao_dev_init(TEST_SYS_CTX_S *pstCtx) {
 
     memset(&aoAttr, 0, sizeof(AIO_ATTR_S));
     aoAttr.enBitwidth = AUDIO_BIT_WIDTH_16;
+    aoAttr.soundCard.sampleRate = AUDIO_SAMPLE_RATE_44100;
+    aoAttr.soundCard.channels = 2;
+    aoAttr.soundCard.bitWidth = AUDIO_BIT_WIDTH_16;
     aoAttr.enSamplerate = AUDIO_SAMPLE_RATE_44100;
     aoAttr.enSoundmode = AUDIO_SOUND_MODE_MONO;
-    aoAttr.u32FrmNum = 512;
+    aoAttr.u32FrmNum = 4;
     aoAttr.u32PtNumPerFrm = 1024;
     aoAttr.u32EXFlag = 0;
     aoAttr.u32ChnCnt = 2;
-
+    memcpy(aoAttr.u8CardName, "hw:0,0", 7);
+#ifdef HAVE_API_MPI_AO
     RK_MPI_AO_SetPubAttr(aoDevId, &aoAttr);
     RK_MPI_AO_Enable(aoDevId);
-
+#endif
     return RK_SUCCESS;
 }
 
 RK_S32 test_ao_dev_deinit(TEST_SYS_CTX_S *pstCtx) {
     RK_S32 s32Ret = RK_SUCCESS;
-
+#ifdef HAVE_API_MPI_AO
     s32Ret =  RK_MPI_AO_Disable(pstCtx->s32DevId);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("failed to disable ao dev, err: %d", s32Ret);
         return RK_FAILURE;
     }
-
+#endif
     return s32Ret;
 }
 
@@ -110,12 +123,13 @@ RK_S32 test_adec_create_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
     RK_S32 s32Ret  = RK_SUCCESS;
     ADEC_CHN AdChn = (ADEC_CHN)s32ChnId;
     ADEC_CHN_ATTR_S *pstChnAttr = test_adec_create_chn_attr();
+#ifdef HAVE_API_MPI_ADEC
     s32Ret = RK_MPI_ADEC_CreateChn(AdChn, pstChnAttr);
     if (s32Ret) {
         RK_LOGE("failed to create adec chn %d, err %d", AdChn, s32Ret);
         return RK_FAILURE;
     }
-
+#endif
     return s32Ret;
 }
 
@@ -123,12 +137,12 @@ RK_S32 test_adec_destroy_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
     RK_S32 s32Ret = RK_SUCCESS;
     RK_S32 s32DevId = pstCtx->s32DevId;
     ADEC_CHN AdChn  = (ADEC_CHN)s32ChnId;
-
+#ifdef HAVE_API_MPI_ADEC
     s32Ret = RK_MPI_ADEC_DestroyChn(AdChn);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("failed to destroy adec channel(%d), err: %d", AdChn, s32Ret);
     }
-
+#endif
     test_adec_destroy_chn_attr(&pstCtx->pstADecChnAttr);
     return s32Ret;
 }
@@ -136,26 +150,26 @@ RK_S32 test_adec_destroy_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
 RK_S32 test_ao_enable_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
     RK_S32 s32Ret = RK_SUCCESS;
     ADEC_CHN AdChn  = (ADEC_CHN)s32ChnId;
-
+#ifdef HAVE_API_MPI_AO
     s32Ret = RK_MPI_AO_EnableChn(pstCtx->s32DevId, AdChn);
     if (s32Ret != 0) {
         RK_LOGE("failed to enable ao chn %d, err %d", AdChn, s32Ret);
         return RK_FAILURE;
     }
-
+#endif
     return s32Ret;
 }
 
 RK_S32 test_ao_disable_channel(TEST_SYS_CTX_S *pstCtx, RK_S32 s32ChnId) {
     RK_S32 s32Ret = RK_SUCCESS;
     AO_CHN AoChn  = (AO_CHN)s32ChnId;
-
+#ifdef HAVE_API_MPI_AO
     s32Ret = RK_MPI_AO_DisableChn(pstCtx->s32DevId, AoChn);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("failed to disable ao channel(%d), err: %d", AoChn, s32Ret);
         return RK_FAILURE;
     }
-
+#endif
     return RK_SUCCESS;
 }
 
@@ -291,15 +305,28 @@ __FAILED_AO:
     return s32Ret;
 }
 
-RK_S32 unit_test_mpi_sys(TEST_SYS_CTX_S *pstCtx) {
+RK_S32 unit_test_mpi_sys_dumpsys(TEST_SYS_CTX_S *pstCtx) {
     RK_S32 s32Ret = RK_SUCCESS;
-    RK_S32 loopCount = pstCtx->s32LoopCount;
-    do {
-        s32Ret = unit_test_mpi_sys_bind(pstCtx);
-        loopCount--;
-        RK_LOGI("looping times %d", pstCtx->s32LoopCount - loopCount);
-    } while (loopCount > 0);
+    char *buf = (char *)malloc(100 * 1024);
+    // init Ao device
+    test_ao_dev_init(pstCtx);
+    test_ao_enable_channel(pstCtx, 0);
 
+    //RK_MPI_SYS_DumpSys("dumpsys ao", buf, 100 * 1024);
+    //printf("%s\n", buf);
+    RK_MPI_SYS_DumpSys("dumpsys cat /dev/mpi/valloc", buf, 100 * 1024);
+    printf("%s\n", buf);
+    free(buf);
+    return s32Ret;
+}
+
+RK_S32 unit_test_mpi_sys_force_lost_frame(TEST_SYS_CTX_S *pstCtx) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    return s32Ret;
+}
+
+RK_S32 unit_test_mpi_sys_mmz_release(TEST_SYS_CTX_S *pstCtx) {
+    RK_S32 s32Ret = RK_SUCCESS;
     return s32Ret;
 }
 
@@ -317,6 +344,7 @@ RK_S32 main(RK_S32 argc, const char **argv) {
     stCtx.s32DevId = 0;
     stCtx.s32SrcChnId = 0;
     stCtx.s32DstChnNum = 1;
+    stCtx.enMode = TEST_SYS_MODE_BIND;
 
     struct argparse_option options[] = {
         OPT_HELP(),
@@ -329,6 +357,12 @@ RK_S32 main(RK_S32 argc, const char **argv) {
                     "source MODULE channel id. default(0)", NULL, 0, 0),
         OPT_INTEGER('\0', "dst_channel_count", &(stCtx.s32DstChnNum),
                     "the count of dst MODULE channel. default(1)", NULL, 0, 0),
+        OPT_INTEGER('m', "mode", &(stCtx.enMode),
+                    "test mode(default 0; \n\t"
+                    "0:test bind api \n\t"
+                    "1:test force lost frame api \n\t"
+                    "2:test mmz release api)) \n\t"
+                    ,NULL, 0, 0),
         OPT_END(),
     };
 
@@ -338,21 +372,32 @@ RK_S32 main(RK_S32 argc, const char **argv) {
                                  "\nuse --help for details.");
 
     argc = argparse_parse(&argparse, argc, argv);
+    RK_S32 loopCount = stCtx.s32LoopCount;
+    do {
+        s32Ret = RK_MPI_SYS_Init();
+        if (s32Ret != RK_SUCCESS) {
+            return s32Ret;
+        }
 
-    s32Ret = RK_MPI_SYS_Init();
-    if (s32Ret != RK_SUCCESS) {
-        return s32Ret;
-    }
+        if (stCtx.enMode == TEST_SYS_MODE_BIND)
+            s32Ret = unit_test_mpi_sys_bind(&stCtx);
+        else if (stCtx.enMode == TEST_SYS_MODE_DUMPSYS)
+            s32Ret = unit_test_mpi_sys_dumpsys(&stCtx);
+        else if (stCtx.enMode == TEST_SYS_MODE_FORCE_LOST_FRAME)
+            s32Ret = unit_test_mpi_sys_force_lost_frame(&stCtx);
+        else if (stCtx.enMode == TEST_SYS_MODE_MMZ_RELEASE)
+            s32Ret = unit_test_mpi_sys_mmz_release(&stCtx);
+        if (s32Ret != RK_SUCCESS) {
+            goto __FAILED;
+        }
 
-    s32Ret = unit_test_mpi_sys(&stCtx);
-    if (s32Ret != RK_SUCCESS) {
-        goto __FAILED;
-    }
-
-    s32Ret = RK_MPI_SYS_Exit();
-    if (s32Ret != RK_SUCCESS) {
-        return s32Ret;
-    }
+        s32Ret = RK_MPI_SYS_Exit();
+        if (s32Ret != RK_SUCCESS) {
+            return s32Ret;
+        }
+        loopCount--;
+        RK_LOGI("looping times %d", stCtx.s32LoopCount - loopCount);
+    } while (loopCount > 0);
     RK_LOGI("test running ok.");
     return RK_SUCCESS;
 

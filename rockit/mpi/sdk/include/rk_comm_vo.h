@@ -133,7 +133,7 @@ typedef enum rkEN_VOU_ERR_CODE_E {
 #define VO_INTF_DP1                    (0x01L << 16)
 #define VO_INTF_DEFAULT                (0x01L << 17)
 
-#define VO_INTF_NUM                     17
+#define VO_INTF_NUM                     18
 
 typedef RK_U32 VO_INTF_TYPE_E;
 

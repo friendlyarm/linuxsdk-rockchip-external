@@ -142,7 +142,41 @@ void TEST_COMM_CloseFileUris(char **pFileUris, RK_U32 u32UriCount) {
     }
 }
 
-RK_S32 TEST_COMM_FileReadOneFrame(const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame) {
+RKSocType TEST_COMM_GetSocType() {
+    char achBuf[1024] = "";
+    FILE *fd = NULL;
+    RKSocType socType = RK_SOC_1126;
+
+    if (gEnRkSocType)
+        return gEnRkSocType;
+
+    fd = fopen("/proc/device-tree/compatible", "r");
+    memset(achBuf, 0, sizeof(achBuf));
+    if (fd != NULL) {
+        fread(achBuf, 1, sizeof(achBuf), fd);
+        if ((strstr(achBuf, "rockchip")) ||
+            (strstr(achBuf, "Rockchip")) ||
+            (strstr(achBuf, "RK30board"))) {
+            if (strstr(achBuf, "1126") || (strstr(achBuf, "1109")))
+                socType = RK_SOC_1126;
+            else if (strstr(achBuf, "3566") || (strstr(achBuf, "3568")))
+                socType = RK_SOC_3568;
+            else if (strstr(achBuf, "3588"))
+                socType = RK_SOC_3588;
+        } else {
+            RK_LOGE("not match rockchips device.");
+        }
+        fclose(fd);
+    } else {
+        RK_LOGE("open failed.");
+    }
+    gEnRkSocType = socType;
+    RK_LOGD("get the rkchip:%d.", socType);
+
+    return socType;
+}
+
+RK_S32 TEST_COMM_FileReadOneFrame(const char *pFileName, VIDEO_FRAME_INFO_S *pstVideoFrame, RK_U32 index) {
     RK_U32 u32ReadSize = 0;
     RK_S32 s32Ret = RK_SUCCESS;
     FILE *fp = RK_NULL;
@@ -166,6 +200,12 @@ RK_S32 TEST_COMM_FileReadOneFrame(const char *pFileName, VIDEO_FRAME_INFO_S *pst
     fp = fopen(pFileName, "rb");
     if (fp == RK_NULL) {
         RK_LOGE("fopen %s failed, error: %s", pFileName, strerror(errno));
+        s32Ret = RK_FAILURE;
+        goto __FAILED;
+    }
+    if (fseek(fp, stMbPicCalResult.u32MBSize * index, SEEK_SET)) {
+        RK_LOGE("fseek %s offset %d failed, error: %s", pFileName,
+                 stMbPicCalResult.u32MBSize * index, strerror(errno));
         s32Ret = RK_FAILURE;
         goto __FAILED;
     }
@@ -274,38 +314,92 @@ RK_S32 TEST_COMM_CheckFileSizeInRange(const char *pFilePath,
     }
 }
 
-RKSocType TEST_COMM_GetSocType() {
-    char achBuf[1024] = "";
-    FILE *fd = NULL;
-    RKSocType socType = RK_SOC_1126;
+/*
+ * Write real width*height data to file
+ */
+RK_S32 TEST_COMM_DumpFrame2File(VIDEO_FRAME_INFO_S *pstFrame, FILE *fp) {
+    RK_S32 s32Ret = RK_SUCCESS;
+    RK_U32 i;
+    RK_U32 width    = 0;
+    RK_U32 height   = 0;
+    RK_U32 h_stride = 0;
+    RK_U32 v_stride = 0;
+    RK_U8 *base_y = RK_NULL;
+    RK_U8 *base_c = RK_NULL;
+    RK_U8 *base = RK_NULL;
 
-    if (gEnRkSocType)
-        return gEnRkSocType;
-
-    fd = fopen("/proc/device-tree/compatible", "r");
-    memset(achBuf, 0, sizeof(achBuf));
-    if (fd != NULL) {
-        fread(achBuf, 1, sizeof(achBuf), fd);
-        if ((strstr(achBuf, "rockchip")) ||
-            (strstr(achBuf, "Rockchip")) ||
-            (strstr(achBuf, "RK30board"))) {
-            if (strstr(achBuf, "1126") || (strstr(achBuf, "1109")))
-                socType = RK_SOC_1126;
-            else if (strstr(achBuf, "3566") || (strstr(achBuf, "3568")))
-                socType = RK_SOC_3568;
-            else if (strstr(achBuf, "3588"))
-                socType = RK_SOC_3588;
-        } else {
-            RK_LOGE("not match rockchips device.");
-        }
-        fclose(fd);
-    } else {
-        RK_LOGE("open failed.");
+    if (RK_NULL == fp || RK_NULL == pstFrame) {
+        RK_LOGV("no file(%p) or frame(%p)", fp, pstFrame);
+        return RK_FAILURE;
     }
-    gEnRkSocType = socType;
-    RK_LOGD("get the rkchip:%d.", socType);
 
-    return socType;
+    base = (RK_U8 *)RK_MPI_MB_Handle2VirAddr(pstFrame->stVFrame.pMbBlk);
+    RK_MPI_SYS_MmzFlushCache(pstFrame->stVFrame.pMbBlk, RK_TRUE);
+    width = pstFrame->stVFrame.u32Width;
+    height = pstFrame->stVFrame.u32Height;
+    h_stride = pstFrame->stVFrame.u32VirWidth;
+    v_stride = pstFrame->stVFrame.u32VirHeight;
+
+    if (COMPRESS_AFBC_16x16 == pstFrame->stVFrame.enCompressMode) {
+        RK_U64 bufSize = RK_MPI_MB_GetSize(pstFrame->stVFrame.pMbBlk);
+        fwrite(base, 1, bufSize, fp);
+        return RK_SUCCESS;
+    }
+
+    switch (pstFrame->stVFrame.enPixelFormat) {
+        case RK_FMT_YUV420SP_VU :
+        case RK_FMT_YUV420SP : {
+            base_y = base;
+            base_c = base + h_stride * v_stride;
+            for (i = 0; i < height; i++, base_y += h_stride) {
+                fwrite(base_y, 1, width, fp);
+            }
+            for (i = 0; i < height / 2; i++, base_c += h_stride) {
+                fwrite(base_c, 1, width, fp);
+            }
+            fflush(fp);
+        } break;
+
+        case RK_FMT_YUV420SP_10BIT : {
+            base_y = base;
+            base_c = base + h_stride * v_stride;
+
+            for (i = 0; i < height; i++, base_y += h_stride) {
+                fwrite(base_y, 1, width, fp);
+            }
+            for (i = 0; i < height / 2; i++, base_c += h_stride) {
+                fwrite(base_c, 1, width, fp);
+            }
+            fflush(fp);
+        } break;
+
+        case RK_FMT_RGB565:
+        case RK_FMT_BGR565: {
+            base_y = base;
+            h_stride = pstFrame->stVFrame.u32VirWidth * 2;
+
+            for (i = 0; i < height; i++, base_y += h_stride)
+                fwrite(base_y, 1, width * 2, fp);
+
+            fflush(fp);
+        } break;
+        case RK_FMT_RGB888:
+        case RK_FMT_BGR888: {
+            base_y = base;
+            h_stride = pstFrame->stVFrame.u32VirWidth * 3;
+
+            for (i = 0; i < height; i++, base_y += h_stride)
+                fwrite(base_y, 1, width * 3, fp);
+
+            fflush(fp);
+        } break;
+        default : {
+            s32Ret = RK_FAILURE;
+            RK_LOGE("not supported format %d", pstFrame->stVFrame.enPixelFormat);
+        } break;
+    }
+
+    return s32Ret;
 }
 
 #ifdef __cplusplus

@@ -2,9 +2,9 @@
  * Broadcom Dongle Host Driver (DHD), Linux-specific network interface
  * Basically selected code segments from usb-cdc.c and usb-rndis.c
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -54,15 +54,27 @@
 #endif /* BCMDHDX */
 
 #ifdef SHOW_LOGTRACE
+#ifdef DEBUGABILITY
+static struct proc_dir_entry *dhd_trace_proc_entry = NULL;
+#endif /* DEBUGABILITY */
+
 extern dhd_pub_t* g_dhd_pub;
 static int dhd_ring_proc_open(struct inode *inode, struct file *file);
 ssize_t dhd_ring_proc_read(struct file *file, char *buffer, size_t tt, loff_t *loff);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0))
+static const struct proc_ops dhd_ring_proc_fops = {
+	.proc_open = dhd_ring_proc_open,
+	.proc_read = dhd_ring_proc_read,
+	.proc_release = single_release,
+};
+#else
 static const struct file_operations dhd_ring_proc_fops = {
 	.open = dhd_ring_proc_open,
 	.read = dhd_ring_proc_read,
 	.release = single_release,
 };
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0) */
 
 static int
 dhd_ring_proc_open(struct inode *inode, struct file *file)
@@ -125,8 +137,9 @@ dhd_dbg_ring_proc_create(dhd_pub_t *dhdp)
 
 	dbg_verbose_ring = dhd_dbg_get_ring_from_ring_id(dhdp, FW_VERBOSE_RING_ID);
 	if (dbg_verbose_ring) {
-		if (!proc_create_data(PROCFS_DIR_TRACE, S_IRUSR, NULL, &dhd_ring_proc_fops,
-			dbg_verbose_ring)) {
+		dhd_trace_proc_entry = proc_create_data(PROCFS_DIR_TRACE, S_IRUSR, NULL,
+			&dhd_ring_proc_fops, dbg_verbose_ring);
+		if (dhd_trace_proc_entry == NULL) {
 			DHD_ERROR(("Failed to create /proc/dhd_trace procfs interface\n"));
 		} else {
 			DHD_ERROR(("Created /proc/dhd_trace procfs interface\n"));
@@ -159,7 +172,10 @@ void
 dhd_dbg_ring_proc_destroy(dhd_pub_t *dhdp)
 {
 #ifdef DEBUGABILITY
-	remove_proc_entry(PROCFS_DIR_TRACE, NULL);
+	if (dhd_trace_proc_entry) {
+		remove_proc_entry(PROCFS_DIR_TRACE, dhd_trace_proc_entry);
+		dhd_trace_proc_entry = NULL;
+	}
 #endif /* DEBUGABILITY */
 
 #ifdef EWP_ECNTRS_LOGGING
@@ -474,6 +490,9 @@ static struct attribute *default_attrs[] = {
 	&dhd_attr_ecounters.attr,
 	NULL
 };
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+ATTRIBUTE_GROUPS(default);
+#endif
 
 #define to_dhd(k) container_of(k, struct dhd_info, dhd_kobj)
 #define to_attr(a) container_of(a, struct dhd_attr, attr)
@@ -537,7 +556,11 @@ static struct sysfs_ops dhd_sysfs_ops = {
 
 static struct kobj_type dhd_ktype = {
 	.sysfs_ops = &dhd_sysfs_ops,
-	.default_attrs = default_attrs,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+    .default_groups = default_groups,
+#else
+    .default_attrs = default_attrs,
+#endif
 };
 
 #ifdef DHD_MAC_ADDR_EXPORT
@@ -753,11 +776,6 @@ get_assert_val_from_file(void)
 		filp_close(fp, NULL);
 	}
 
-#ifdef CUSTOMER_HW4_DEBUG
-	mem_val = (mem_val >= 0) ? mem_val : 1;
-#else
-	mem_val = (mem_val >= 0) ? mem_val : 0;
-#endif /* CUSTOMER_HW4_DEBUG */
 	return mem_val;
 }
 
@@ -767,8 +785,8 @@ void dhd_get_assert_info(dhd_pub_t *dhd)
 	int mem_val = -1;
 
 	mem_val = get_assert_val_from_file();
-
-	g_assert_type = mem_val;
+	if (mem_val != -1)
+		g_assert_type = mem_val;
 #endif /* !DHD_EXPORT_CNTL_FILE */
 }
 
@@ -1405,6 +1423,9 @@ static struct attribute *control_file_attrs[] = {
 #endif /* CUSTOM_CONTROL_HE_ENAB */
 	NULL
 };
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+ATTRIBUTE_GROUPS(control_file);
+#endif
 
 #define to_cntl_dhd(k) container_of(k, struct dhd_info, dhd_conf_file_kobj)
 
@@ -1467,7 +1488,11 @@ static struct sysfs_ops dhd_sysfs_cntl_ops = {
 
 static struct kobj_type dhd_cntl_file_ktype = {
 	.sysfs_ops = &dhd_sysfs_cntl_ops,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+	.default_groups = control_file_groups,
+#else
 	.default_attrs = control_file_attrs,
+#endif
 };
 
 /* Create a kobject and attach to sysfs interface */
@@ -1514,6 +1539,8 @@ void dhd_sysfs_exit(dhd_info_t *dhd)
 	}
 
 	/* Releae the kobject */
-	kobject_put(&dhd->dhd_kobj);
-	kobject_put(&dhd->dhd_conf_file_kobj);
+	if (dhd->dhd_kobj.state_initialized)
+		kobject_put(&dhd->dhd_kobj);
+	if (dhd->dhd_conf_file_kobj.state_initialized)
+		kobject_put(&dhd->dhd_conf_file_kobj);
 }

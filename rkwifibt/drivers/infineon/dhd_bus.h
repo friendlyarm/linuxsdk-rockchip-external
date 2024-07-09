@@ -4,9 +4,9 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -68,8 +68,13 @@ extern void dhd_bus_setidletime(dhd_pub_t *dhdp, int idle_time);
 #ifdef BCMPCIE
 extern int dhd_bus_txdata(struct dhd_bus *bus, void *txp, uint8 ifidx);
 #else
+#if defined(CONFIG_ANDROID_VERSION) && (CONFIG_ANDROID_VERSION >= 13) && \
+	defined(PLATFORM_IMX)
+extern int dhd_bus_txdata(void *ctx, void *txp);
+#else
 extern int dhd_bus_txdata(struct dhd_bus *bus, void *txp);
-#endif // endif
+#endif /* PLATFORM_IMX && CONFIG_ANDROID_VERSION >= 13 */
+#endif /* BCMPCIE */
 
 #ifdef BCMPCIE
 extern void dhdpcie_cto_recovery_handler(dhd_pub_t *dhd);
@@ -233,8 +238,6 @@ extern int dhd_bus_request_irq(struct dhd_bus *bus);
 extern int dhdpcie_get_pcieirq(struct dhd_bus *bus, unsigned int *irq);
 extern void dhd_bus_aer_config(struct dhd_bus *bus);
 
-extern struct device * dhd_bus_to_dev(struct dhd_bus *bus);
-
 extern int dhdpcie_cto_init(struct dhd_bus *bus, bool enable);
 extern int dhdpcie_cto_cfg_init(struct dhd_bus *bus, bool enable);
 
@@ -253,6 +256,8 @@ extern void dhd_bus_idle_tx_ring_suspend(dhd_pub_t *dhd, uint16 flow_ring_id);
 #endif /* IDLE_TX_FLOW_MGMT */
 extern void dhd_bus_handle_mb_data(struct dhd_bus *bus, uint32 d2h_mb_data);
 #endif /* BCMPCIE */
+
+extern struct device * dhd_bus_to_dev(struct dhd_bus *bus);
 
 /* dump the device trap informtation  */
 extern void dhd_bus_dump_trap_info(struct dhd_bus *bus, struct bcmstrbuf *b);

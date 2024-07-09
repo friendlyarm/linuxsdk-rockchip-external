@@ -19,6 +19,11 @@ extern "C" {
 RK_S32 RK_MPI_SYS_Init(RK_VOID);
 RK_S32 RK_MPI_SYS_Exit(RK_VOID);
 
+RK_S32 RK_MPI_SYS_WaitFreeMB(RK_VOID);
+RK_S32 RK_MPI_SYS_RelasePhyMemory(RK_VOID);
+RK_S32 RK_MPI_SYS_SetForceLostFrame(const MPP_CHN_S *pstChn, int frameCnt);
+RK_S32 RK_MPI_SYS_DumpSys(const RK_CHAR *cmd, RK_CHAR *buf, RK_U32 bufSize);
+
 RK_S32 RK_MPI_SYS_Bind(const MPP_CHN_S *pstSrcChn, const MPP_CHN_S *pstDestChn);
 RK_S32 RK_MPI_SYS_UnBind(const MPP_CHN_S *pstSrcChn, const MPP_CHN_S *pstDestChn);
 
@@ -64,6 +69,10 @@ RK_S32 RK_MPI_SYS_SetChnInputMode(const MPP_CHN_S *pstChn, CHN_INPUT_MODE_E mode
 /* log level configuration */
 RK_S32 RK_MPI_LOG_SetLevelConf(LOG_LEVEL_CONF_S *pstConf);
 RK_S32 RK_MPI_LOG_GetLevelConf(LOG_LEVEL_CONF_S *pstConf);
+
+/* device priority level configuration */
+RK_S32 RK_MPI_SYS_SetDevicePriority(DEVICE_PRIORITY_LEVEL_CONFIG_S *pstConf);
+RK_S32 RK_MPI_SYS_GetDevicePriority(DEVICE_PRIORITY_LEVEL_CONFIG_S *pstConf);
 
 #ifdef __cplusplus
 #if __cplusplus

@@ -65,7 +65,9 @@ XCamReturn RkAiqAlscHandleInt::setAttrib(rk_aiq_lsc_attrib_t att) {
     // the new params will be effective later when updateConfig
     // called by RkAiqCore
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
     ret = rk_aiq_uapi_alsc_SetAttrib(mAlgoCtx, att, false);
+#endif
 #else
     bool isChanged = false;
     if (att.sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
@@ -94,10 +96,12 @@ XCamReturn RkAiqAlscHandleInt::getAttrib(rk_aiq_lsc_attrib_t* att) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
+#ifndef USE_NEWSTRUCT
       mCfgMutex.lock();
       ret = rk_aiq_uapi_alsc_GetAttrib(mAlgoCtx, att);
       mCfgMutex.unlock();
       return ret;
+#endif
 #else
     if (att->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
       mCfgMutex.lock();
@@ -175,8 +179,6 @@ XCamReturn RkAiqAlscHandleInt::prepare() {
     RKAIQCORE_CHECK_RET(ret, "alsc handle prepare failed");
 
     RkAiqAlgoConfigAlsc* alsc_config_int = (RkAiqAlgoConfigAlsc*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     alsc_config_int->alsc_sw_info.bayerPattern= getBayerPattern(sharedCom->snsDes.sensor_pixelformat);
@@ -236,7 +238,6 @@ XCamReturn RkAiqAlscHandleInt::processing() {
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
-
     if (!shared->fullParams || !shared->fullParams->mLscParams.ptr()) {
         LOGE_ALSC("[%d]: no lsc buf !", shared->frameId);
         return XCAM_RETURN_BYPASS;
@@ -305,6 +306,21 @@ XCamReturn RkAiqAlscHandleInt::processing() {
         LOGW("fail to get sensor gain form AE module,use default value ");
     }
 
+#if RKAIQ_HAVE_BLC_V32 && !USE_NEWSTRUCT
+        if (shared->res_comb.ablcV32_proc_res->blc_ob_enable) {
+            if (shared->res_comb.ablcV32_proc_res->isp_ob_predgain >= 1.0f) {
+                alsc_proc_int->alsc_sw_info.sensorGain *=  shared->res_comb.ablcV32_proc_res->isp_ob_predgain;
+            }
+        }
+#endif
+
+    if(colorConstFlag==true){
+        memcpy(alsc_proc_int->alsc_sw_info.awbGain,colorSwInfo.awbGain,sizeof(colorSwInfo.awbGain));
+        alsc_proc_int->alsc_sw_info.sensorGain = colorSwInfo.sensorGain;
+    }
+
+
+
 #ifdef DISABLE_HANDLE_ATTRIB
     mCfgMutex.lock();
 #endif
@@ -353,7 +369,7 @@ XCamReturn RkAiqAlscHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
     RkAiqAlgoProcResAlsc* alsc_com              = (RkAiqAlgoProcResAlsc*)mProcOutParam;
-    rk_aiq_isp_lsc_params_v20_t* lsc_param      = params->mLscParams->data().ptr();
+    rk_aiq_isp_lsc_params_t* lsc_param      = params->mLscParams->data().ptr();
 
     if (!alsc_com) {
         LOGD_ANALYZER("no alsc result");
@@ -434,6 +450,19 @@ XCamReturn RkAiqAlscHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPa
 
     EXIT_ANALYZER_FUNCTION();
 
+    return ret;
+}
+XCamReturn RkAiqAlscHandleInt::setAcolorSwInfo(rk_aiq_color_info_t aColor_sw_info) {
+    ENTER_ANALYZER_FUNCTION();
+
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    LOGV_ALSC("%s sensor gain = %f, wbgain=[%f,%f] ",__FUNCTION__,aColor_sw_info.sensorGain,
+      aColor_sw_info.awbGain[0],aColor_sw_info.awbGain[1]);
+    colorSwInfo = aColor_sw_info;
+    colorConstFlag=true;
+    EXIT_ANALYZER_FUNCTION();
     return ret;
 }
 

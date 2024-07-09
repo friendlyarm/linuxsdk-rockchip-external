@@ -16,10 +16,15 @@
 #include "RkAiqAeHandle.h"
 #include "RkAiqAfHandle.h"
 #include "RkAiqAfdHandle.h"
-#include "RkAiqAmergeHandle.h"
-#include "RkAiqAdrcHandle.h"
-#include "smart_buffer_priv.h"
 
+#include "smart_buffer_priv.h"
+#if USE_NEWSTRUCT
+#include "newStruct/RkAiqDrcHandler.h"
+#include "newStruct/RkAiqMergeHandler.h"
+#else
+#include "RkAiqAdrcHandle.h"
+#include "RkAiqAmergeHandle.h"
+#endif
 #include "RkAiqCore.h"
 
 namespace RkCam {
@@ -52,12 +57,14 @@ void RkAiqAeHandleInt::init() {
 
 XCamReturn RkAiqAeHandleInt::updateConfig(bool needSync) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifndef DISABLE_HANDLE_ATTRIB
     if (needSync) mCfgMutex.lock();
     // if something changed, api will modify aecCfg in mAlgoCtx
+
+#ifndef USE_NEWSTRUCT
+    // TODO: update v1
     if (updateExpSwAttr) {
         mCurExpSwAttr   = mNewExpSwAttr;
         rk_aiq_uapi_ae_convExpSwAttr_v1Tov2(&mCurExpSwAttr, &mCurExpSwAttrV2);
@@ -86,7 +93,6 @@ XCamReturn RkAiqAeHandleInt::updateConfig(bool needSync) {
     }
 
     // TODO: update v2
-
     if (updateExpSwAttrV2) {
         mCurExpSwAttrV2   = mNewExpSwAttrV2;
         rk_aiq_uapi_ae_setExpSwAttr(mAlgoCtx, &mCurExpSwAttrV2, false, false);
@@ -139,12 +145,21 @@ XCamReturn RkAiqAeHandleInt::updateConfig(bool needSync) {
         updateAttr |= UPDATE_SYNCTESTATTR;
         sendSignal(mCurAecSyncTestAttr.sync.sync_mode);
     }
+#endif
+
     if (updateExpWinAttr) {
         mCurExpWinAttr   = mNewExpWinAttr;
         rk_aiq_uapi_ae_setExpWinAttr(mAlgoCtx, &mCurExpWinAttr, false);
         updateExpWinAttr = false;
         updateAttr |= UPDATE_EXPWINATTR;
         sendSignal(mCurExpWinAttr.sync.sync_mode);
+    }
+    if (updateAecStatsCfg) {
+        mCurAecStatsCfg   = mNewAecStatsCfg;
+        rk_aiq_uapi_ae_setAecStatsCfg(mAlgoCtx, &mCurAecStatsCfg, false, false);
+        updateAecStatsCfg = false;
+        updateAttr |= UPDATE_AECSTATSCFG;
+        sendSignal(mCurAecStatsCfg.sync.sync_mode);
     }
 
     // once any params are changed, run reconfig to convert aecCfg to paectx
@@ -154,14 +169,16 @@ XCamReturn RkAiqAeHandleInt::updateConfig(bool needSync) {
     updateAttr = 0;
     if (needSync) mCfgMutex.unlock();
 #endif
+
     EXIT_ANALYZER_FUNCTION();
     return ret;
 }
 
+#ifndef USE_NEWSTRUCT
 XCamReturn RkAiqAeHandleInt::setExpSwAttr(Uapi_ExpSwAttr_t ExpSwAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
     mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     Uapi_ExpSwAttrV2_t att2;
@@ -192,12 +209,11 @@ XCamReturn RkAiqAeHandleInt::setExpSwAttr(Uapi_ExpSwAttr_t ExpSwAttr) {
 
 XCamReturn RkAiqAeHandleInt::getExpSwAttr(Uapi_ExpSwAttr_t* pExpSwAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    Uapi_ExpSwAttrV2_t ExpSwAttrV2;
 
     mCfgMutex.lock();
 
+    Uapi_ExpSwAttrV2_t ExpSwAttrV2;
     rk_aiq_uapi_ae_getExpSwAttr(mAlgoCtx, &ExpSwAttrV2, false);
     rk_aiq_uapi_ae_convExpSwAttr_v2Tov1(&ExpSwAttrV2, pExpSwAttr);
 
@@ -207,12 +223,12 @@ XCamReturn RkAiqAeHandleInt::getExpSwAttr(Uapi_ExpSwAttr_t* pExpSwAttr) {
     return ret;
 }
 
-XCamReturn RkAiqAeHandleInt::setExpSwAttr(Uapi_ExpSwAttrV2_t ExpSwAttrV2) {
+XCamReturn RkAiqAeHandleInt::setExpSwAttr(Uapi_ExpSwAttrV2_t ExpSwAttrV2)
+{
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    mCfgMutex.lock();
 
+    mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     rk_aiq_uapi_ae_setExpSwAttr(mAlgoCtx, &ExpSwAttrV2, false, false);
     AeInstanceConfig_t* pAeInstConfig = (AeInstanceConfig_t*)mAlgoCtx;
@@ -246,7 +262,6 @@ XCamReturn RkAiqAeHandleInt::setExpSwAttr(Uapi_ExpSwAttrV2_t ExpSwAttrV2) {
 
 XCamReturn RkAiqAeHandleInt::getExpSwAttr(Uapi_ExpSwAttrV2_t* pExpSwAttrV2) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
@@ -271,7 +286,6 @@ XCamReturn RkAiqAeHandleInt::getExpSwAttr(Uapi_ExpSwAttrV2_t* pExpSwAttrV2) {
         }
     }
 #endif
-    mCfgMutex.unlock();
 
     EXIT_ANALYZER_FUNCTION();
     return ret;
@@ -279,8 +293,8 @@ XCamReturn RkAiqAeHandleInt::getExpSwAttr(Uapi_ExpSwAttrV2_t* pExpSwAttrV2) {
 
 XCamReturn RkAiqAeHandleInt::setLinExpAttr(Uapi_LinExpAttr_t LinExpAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
     mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     Uapi_LinExpAttrV2_t att2;
@@ -311,13 +325,14 @@ XCamReturn RkAiqAeHandleInt::setLinExpAttr(Uapi_LinExpAttr_t LinExpAttr) {
 
 XCamReturn RkAiqAeHandleInt::getLinExpAttr(Uapi_LinExpAttr_t* pLinExpAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     mCfgMutex.lock();
+
     Uapi_LinExpAttrV2_t att2;
     rk_aiq_uapi_ae_getLinExpAttr(mAlgoCtx, &att2, false);
     rk_aiq_uapi_ae_convLinExpAttr_v2Tov1(&att2, pLinExpAttr);
+
     mCfgMutex.unlock();
 
     EXIT_ANALYZER_FUNCTION();
@@ -326,8 +341,8 @@ XCamReturn RkAiqAeHandleInt::getLinExpAttr(Uapi_LinExpAttr_t* pLinExpAttr) {
 
 XCamReturn RkAiqAeHandleInt::setLinExpAttr(Uapi_LinExpAttrV2_t LinExpAttrV2) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
     mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     rk_aiq_uapi_ae_setLinExpAttr(mAlgoCtx, &LinExpAttrV2, false, false);
@@ -362,7 +377,6 @@ XCamReturn RkAiqAeHandleInt::setLinExpAttr(Uapi_LinExpAttrV2_t LinExpAttrV2) {
 
 XCamReturn RkAiqAeHandleInt::getLinExpAttr(Uapi_LinExpAttrV2_t* pLinExpAttrV2) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
@@ -394,8 +408,8 @@ XCamReturn RkAiqAeHandleInt::getLinExpAttr(Uapi_LinExpAttrV2_t* pLinExpAttrV2) {
 
 XCamReturn RkAiqAeHandleInt::setHdrExpAttr(Uapi_HdrExpAttr_t HdrExpAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
     mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     Uapi_HdrExpAttrV2_t att2;
@@ -426,13 +440,14 @@ XCamReturn RkAiqAeHandleInt::setHdrExpAttr(Uapi_HdrExpAttr_t HdrExpAttr) {
 
 XCamReturn RkAiqAeHandleInt::getHdrExpAttr(Uapi_HdrExpAttr_t* pHdrExpAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     mCfgMutex.lock();
+
     Uapi_HdrExpAttrV2_t att2;
     rk_aiq_uapi_ae_getHdrExpAttr(mAlgoCtx, &att2, false);
     rk_aiq_uapi_ae_convHdrExpAttr_v2Tov1(&att2, pHdrExpAttr);
+
     mCfgMutex.unlock();
 
     EXIT_ANALYZER_FUNCTION();
@@ -441,10 +456,9 @@ XCamReturn RkAiqAeHandleInt::getHdrExpAttr(Uapi_HdrExpAttr_t* pHdrExpAttr) {
 
 XCamReturn RkAiqAeHandleInt::setHdrExpAttr(Uapi_HdrExpAttrV2_t HdrExpAttrV2) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    mCfgMutex.lock();
 
+    mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     rk_aiq_uapi_ae_setHdrExpAttr(mAlgoCtx, &HdrExpAttrV2, false, false);
     AeInstanceConfig_t* pAeInstConfig = (AeInstanceConfig_t*)mAlgoCtx;
@@ -474,7 +488,6 @@ XCamReturn RkAiqAeHandleInt::setHdrExpAttr(Uapi_HdrExpAttrV2_t HdrExpAttrV2) {
 
 XCamReturn RkAiqAeHandleInt::getHdrExpAttr(Uapi_HdrExpAttrV2_t* pHdrExpAttrV2) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
@@ -506,10 +519,9 @@ XCamReturn RkAiqAeHandleInt::getHdrExpAttr(Uapi_HdrExpAttrV2_t* pHdrExpAttrV2) {
 
 XCamReturn RkAiqAeHandleInt::setLinAeRouteAttr(Uapi_LinAeRouteAttr_t LinAeRouteAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    mCfgMutex.lock();
 
+    mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     rk_aiq_uapi_ae_setLinAeRouteAttr(mAlgoCtx, &LinAeRouteAttr, false, false);
     AeInstanceConfig_t* pAeInstConfig = (AeInstanceConfig_t*)mAlgoCtx;
@@ -539,7 +551,6 @@ XCamReturn RkAiqAeHandleInt::setLinAeRouteAttr(Uapi_LinAeRouteAttr_t LinAeRouteA
 
 XCamReturn RkAiqAeHandleInt::getLinAeRouteAttr(Uapi_LinAeRouteAttr_t* pLinAeRouteAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
@@ -564,16 +575,16 @@ XCamReturn RkAiqAeHandleInt::getLinAeRouteAttr(Uapi_LinAeRouteAttr_t* pLinAeRout
         }
     }
 #endif
+
     EXIT_ANALYZER_FUNCTION();
     return ret;
 }
 
 XCamReturn RkAiqAeHandleInt::setHdrAeRouteAttr(Uapi_HdrAeRouteAttr_t HdrAeRouteAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    mCfgMutex.lock();
 
+    mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     rk_aiq_uapi_ae_setHdrAeRouteAttr(mAlgoCtx, &HdrAeRouteAttr, false, false);
     AeInstanceConfig_t* pAeInstConfig = (AeInstanceConfig_t*)mAlgoCtx;
@@ -603,7 +614,6 @@ XCamReturn RkAiqAeHandleInt::setHdrAeRouteAttr(Uapi_HdrAeRouteAttr_t HdrAeRouteA
 
 XCamReturn RkAiqAeHandleInt::getHdrAeRouteAttr(Uapi_HdrAeRouteAttr_t* pHdrAeRouteAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
@@ -635,10 +645,9 @@ XCamReturn RkAiqAeHandleInt::getHdrAeRouteAttr(Uapi_HdrAeRouteAttr_t* pHdrAeRout
 
 XCamReturn RkAiqAeHandleInt::setIrisAttr(Uapi_IrisAttrV2_t IrisAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    mCfgMutex.lock();
 
+    mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     rk_aiq_uapi_ae_setIrisAttr(mAlgoCtx, &IrisAttr, false);
     AeInstanceConfig_t* pAeInstConfig = (AeInstanceConfig_t*)mAlgoCtx;
@@ -660,7 +669,6 @@ XCamReturn RkAiqAeHandleInt::setIrisAttr(Uapi_IrisAttrV2_t IrisAttr) {
         waitSignal(IrisAttr.sync.sync_mode);
     }
 #endif
-
     mCfgMutex.unlock();
 
     EXIT_ANALYZER_FUNCTION();
@@ -669,7 +677,6 @@ XCamReturn RkAiqAeHandleInt::setIrisAttr(Uapi_IrisAttrV2_t IrisAttr) {
 
 XCamReturn RkAiqAeHandleInt::getIrisAttr(Uapi_IrisAttrV2_t* pIrisAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
@@ -701,10 +708,9 @@ XCamReturn RkAiqAeHandleInt::getIrisAttr(Uapi_IrisAttrV2_t* pIrisAttr) {
 
 XCamReturn RkAiqAeHandleInt::setSyncTestAttr(Uapi_AecSyncTest_t SyncTestAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    mCfgMutex.lock();
 
+    mCfgMutex.lock();
 #ifdef DISABLE_HANDLE_ATTRIB
     rk_aiq_uapi_ae_setSyncTest(mAlgoCtx, &SyncTestAttr, false, false);
     AeInstanceConfig_t* pAeInstConfig = (AeInstanceConfig_t*)mAlgoCtx;
@@ -726,7 +732,6 @@ XCamReturn RkAiqAeHandleInt::setSyncTestAttr(Uapi_AecSyncTest_t SyncTestAttr) {
         waitSignal(SyncTestAttr.sync.sync_mode);
     }
 #endif
-
     mCfgMutex.unlock();
 
     EXIT_ANALYZER_FUNCTION();
@@ -735,7 +740,6 @@ XCamReturn RkAiqAeHandleInt::setSyncTestAttr(Uapi_AecSyncTest_t SyncTestAttr) {
 
 XCamReturn RkAiqAeHandleInt::getSyncTestAttr(Uapi_AecSyncTest_t* pSyncTestAttr) {
     ENTER_ANALYZER_FUNCTION();
-
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #ifdef DISABLE_HANDLE_ATTRIB
@@ -763,6 +767,190 @@ XCamReturn RkAiqAeHandleInt::getSyncTestAttr(Uapi_AecSyncTest_t* pSyncTestAttr) 
 
     EXIT_ANALYZER_FUNCTION();
     return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::queryExpInfo(Uapi_ExpQueryInfo_t* pExpQueryInfo)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    rk_aiq_uapi_ae_queryExpInfo(mAlgoCtx, pExpQueryInfo, false);
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+#else
+XCamReturn RkAiqAeHandleInt::setExpSwAttr(ae_api_expSwAttr_t ExpSwAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_setExpSwAttr(mAlgoCtx, &ExpSwAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::getExpSwAttr(ae_api_expSwAttr_t* pExpSwAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_getExpSwAttr(mAlgoCtx, pExpSwAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::setLinExpAttr(ae_api_linExpAttr_t LinExpAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_setLinExpAttr(mAlgoCtx, &LinExpAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::getLinExpAttr(ae_api_linExpAttr_t* pLinExpAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_getLinExpAttr(mAlgoCtx, pLinExpAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::setHdrExpAttr(ae_api_hdrExpAttr_t HdrExpAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_setHdrExpAttr(mAlgoCtx, &HdrExpAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::getHdrExpAttr(ae_api_hdrExpAttr_t* pHdrExpAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_getHdrExpAttr(mAlgoCtx, pHdrExpAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::setIrisAttr(ae_api_irisAttr_t IrisAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_setIrisAttr(mAlgoCtx, &IrisAttr);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::getIrisAttr(ae_api_irisAttr_t* pIrisAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_getIrisAttr(mAlgoCtx, pIrisAttr);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::setSyncTestAttr(ae_api_syncTestAttr_t SyncTestAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_setSyncTest(mAlgoCtx, &SyncTestAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::getSyncTestAttr(ae_api_syncTestAttr_t* pSyncTestAttr)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_getSyncTest(mAlgoCtx, pSyncTestAttr, false);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::queryExpInfo(ae_api_queryInfo_t* pExpQueryInfo)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    rk_aiq_uapi_ae_queryExpInfo(mAlgoCtx, pExpQueryInfo, false);
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::getRkAeStats(Uapi_RkAeStats_t* pRkAeStats)
+{
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    rk_aiq_uapi_ae_getRKAeStats(mAlgoCtx, pRkAeStats, false);
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+#endif
+
+XCamReturn RkAiqAeHandleInt::setStatsApiCfg(rk_aiq_op_mode_t mode, aeStats_cfg_t* cfg)
+{
+    mCfgMutex.lock();
+    if (mode == RK_AIQ_OP_MODE_AUTO) {
+        LOGK("setStatsApiCfg use algo stats.");
+        useStatsApiCfg = false;
+    }
+    if (mode == RK_AIQ_OP_MODE_MANUAL) {
+        LOGK("setStatsApiCfg use api stats.");
+        useStatsApiCfg = true;
+        updateStatsApiCfg = true;
+        mStatsApiCfg = *cfg;
+    }
+    mCfgMutex.unlock();
+    return XCAM_RETURN_NO_ERROR;
 }
 
 XCamReturn RkAiqAeHandleInt::setExpWinAttr(Uapi_ExpWin_t ExpWinAttr) {
@@ -831,12 +1019,67 @@ XCamReturn RkAiqAeHandleInt::getExpWinAttr(Uapi_ExpWin_t* pExpWinAttr) {
     return ret;
 }
 
-XCamReturn RkAiqAeHandleInt::queryExpInfo(Uapi_ExpQueryInfo_t* pExpQueryInfo) {
+XCamReturn RkAiqAeHandleInt::setAecStatsCfg(Uapi_AecStatsCfg_t        AecStatsCfg) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+
+#ifdef DISABLE_HANDLE_ATTRIB
+    rk_aiq_uapi_ae_setAecStatsCfg(mAlgoCtx, &AecStatsCfg, false, false);
+    AeInstanceConfig_t* pAeInstConfig = (AeInstanceConfig_t*)mAlgoCtx;
+    AeConfig_t pAecCfg                = pAeInstConfig->aecCfg;
+    pAecCfg->IsReconfig |= UPDATE_AECSTATSCFG;
+#else
+    bool isChanged = false;
+    if (AecStatsCfg.sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
+            memcmp(&mNewAecStatsCfg, &AecStatsCfg, sizeof(AecStatsCfg)))
+        isChanged = true;
+    else if (AecStatsCfg.sync.sync_mode != RK_AIQ_UAPI_MODE_ASYNC && \
+             memcmp(&mCurAecStatsCfg, &AecStatsCfg, sizeof(AecStatsCfg)))
+        isChanged = true;
+
+    // if something changed
+    if (isChanged) {
+        mNewAecStatsCfg   = AecStatsCfg;
+        updateAecStatsCfg = true;
+        waitSignal(AecStatsCfg.sync.sync_mode);
+    }
+#endif
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqAeHandleInt::getAecStatsCfg(Uapi_AecStatsCfg_t* pAecStatsCfg) {
     ENTER_ANALYZER_FUNCTION();
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
-    rk_aiq_uapi_ae_queryExpInfo(mAlgoCtx, pExpQueryInfo, false);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_getAecStatsCfg(mAlgoCtx, pAecStatsCfg, false);
+    pAecStatsCfg->sync.done = true;
+    mCfgMutex.unlock();
+#else
+    if (pAecStatsCfg->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
+        mCfgMutex.lock();
+        rk_aiq_uapi_ae_getAecStatsCfg(mAlgoCtx, pAecStatsCfg, false);
+        pAecStatsCfg->sync.done = true;
+        mCfgMutex.unlock();
+    } else {
+        if (updateAecStatsCfg) {
+            memcpy(pAecStatsCfg, &mNewAecStatsCfg, sizeof(mNewAecStatsCfg));
+            pAecStatsCfg->sync.done = false;
+        } else {
+            rk_aiq_uapi_ae_getExpWinAttr(mAlgoCtx, pAecStatsCfg);
+            pAecStatsCfg->sync.sync_mode = mNewAecStatsCfg.sync.sync_mode;
+            pAecStatsCfg->sync.done      = true;
+        }
+    }
+#endif
 
     EXIT_ANALYZER_FUNCTION();
     return ret;
@@ -866,6 +1109,18 @@ XCamReturn RkAiqAeHandleInt::getAfdResForAE(AfdPeakRes_t AfdRes) {
     return ret;
 }
 
+XCamReturn RkAiqAeHandleInt::setAOVForAE(bool en) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+    rk_aiq_uapi_ae_setAOV(mAlgoCtx, en);
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
 XCamReturn RkAiqAeHandleInt::prepare() {
     ENTER_ANALYZER_FUNCTION();
 
@@ -875,8 +1130,6 @@ XCamReturn RkAiqAeHandleInt::prepare() {
     RKAIQCORE_CHECK_RET(ret, "ae handle prepare failed");
 
     RkAiqAlgoConfigAe* ae_config_int = (RkAiqAlgoConfigAe*)mConfig;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     // TODO config ae common params:
@@ -890,6 +1143,8 @@ XCamReturn RkAiqAeHandleInt::prepare() {
     ae_config_int->RawWidth  = sharedCom->snsDes.isp_acq_width;
     ae_config_int->RawHeight = sharedCom->snsDes.isp_acq_height;
     ae_config_int->nr_switch = sharedCom->snsDes.nr_switch;
+    ae_config_int->compr_bit = sharedCom->snsDes.compr_bit;
+    ae_config_int->dcg_ratio = sharedCom->snsDes.dcg_ratio;
 
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
@@ -905,7 +1160,6 @@ XCamReturn RkAiqAeHandleInt::preProcess() {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     RkAiqAlgoPreAe* ae_pre_int        = (RkAiqAlgoPreAe*)mPreInParam;
-    bool postMsg = true;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
@@ -942,20 +1196,31 @@ XCamReturn RkAiqAeHandleInt::preProcess() {
         return ret;
     }
 
+#ifdef USE_NEWSTRUCT
     if (xAecStats) {
-        ae_pre_int->aecStatsBuf = &xAecStats->aec_stats;
-        ae_pre_int->af_prior= xAecStats->af_prior;
+        ae_pre_int->aecStatsV25Buf = &xAecStats->aec_stats_v25;
+        ae_pre_int->af_prior = xAecStats->af_prior;
     } else {
         ae_pre_int->aecStatsBuf = NULL;
-        ae_pre_int->af_prior= false;
+        ae_pre_int->af_prior = false;
     }
+#else
+    if (xAecStats) {
+        ae_pre_int->aecStatsBuf = &xAecStats->aec_stats;
+        ae_pre_int->af_prior = xAecStats->af_prior;
+    } else {
+        ae_pre_int->aecStatsBuf = NULL;
+        ae_pre_int->af_prior = false;
+    }
+#endif
 
     if (algoId == 0) {
         AeInstanceConfig_t* pAeInstConfig           = (AeInstanceConfig_t*)mAlgoCtx;
-
-        mGetAfdResMutex.lock();
-        pAeInstConfig->aecCfg->AfdRes = mAfdRes;
-        mGetAfdResMutex.unlock();
+        if(pAeInstConfig->cbs == NULL) {
+            mGetAfdResMutex.lock();
+            pAeInstConfig->aecCfg->AfdRes = mAfdRes;
+            mGetAfdResMutex.unlock();
+        }
     }
 
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
@@ -1007,6 +1272,7 @@ XCamReturn RkAiqAeHandleInt::processing() {
     RkAiqAlgoProcAe* ae_proc_int        = (RkAiqAlgoProcAe*)mProcInParam;
     RkAiqAlgoProcResAe* ae_proc_res_int        = (RkAiqAlgoProcResAe*)mProcOutParam;
     bool postMsg = true;
+
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
@@ -1027,17 +1293,23 @@ XCamReturn RkAiqAeHandleInt::processing() {
     int algoId = this->getAlgoId();
     if (algoId == 0) {
         AeInstanceConfig_t* pAeInstConfig           = (AeInstanceConfig_t*)mAlgoCtx;
-
-        mLockAebyAfMutex.lock();
-        pAeInstConfig->lockaebyaf = lockaebyaf;
-        mLockAebyAfMutex.unlock();
+        if(pAeInstConfig->cbs == NULL) {
+            mLockAebyAfMutex.lock();
+            pAeInstConfig->lockaebyaf = lockaebyaf;
+            mLockAebyAfMutex.unlock();
+        }
     }
 
     ae_proc_res_int->new_ae_exp = &shared->fullParams->mExposureParams->data()->result.new_ae_exp;
     ae_proc_res_int->ae_proc_res_rk = &shared->fullParams->mExposureParams->data()->result.ae_proc_res_rk;
     ae_proc_res_int->exp_i2c_params = &shared->fullParams->mExposureParams->data()->result.exp_i2c_params;
+#if USE_NEWSTRUCT
+    ae_proc_res_int->ae_stats_cfg = &shared->fullParams->mAeStatsParams->data()->result;
+#else
     ae_proc_res_int->ae_meas = &shared->fullParams->mAecParams->data()->result;
     ae_proc_res_int->hist_meas = &shared->fullParams->mHistParams->data()->result;
+#endif
+
 
     ret = RkAiqHandle::processing();
     if (ret < 0) {
@@ -1051,10 +1323,19 @@ XCamReturn RkAiqAeHandleInt::processing() {
     }
 
     // TODO config common ae processing params
-    if (xAecStats)
+#if USE_NEWSTRUCT
+    if (xAecStats) {
+        ae_proc_int->aecStatsV25Buf = &xAecStats->aec_stats_v25;
+    } else {
+        ae_proc_int->aecStatsV25Buf = NULL;
+    }
+#else
+    if (xAecStats) {
         ae_proc_int->aecStatsBuf = &xAecStats->aec_stats;
-    else
+    } else {
         ae_proc_int->aecStatsBuf = NULL;
+    }
+#endif
 
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     if (des->processing) {
@@ -1127,7 +1408,7 @@ XCamReturn RkAiqAeHandleInt::processing() {
     aeProcResShared.IsConverged = ae_proc_res_int->ae_proc_res_rk->IsConverged;
     aeProcResShared.IsEnvChanged = ae_proc_res_int->ae_proc_res_rk->IsEnvChanged;
     aeProcResShared.IsAutoAfd =  ae_proc_res_int->ae_proc_res_rk->IsAutoAfd;
-    aeProcResShared.LongFrmMode =  ae_proc_res_int->ae_proc_res_rk->LongFrmMode; 
+    aeProcResShared.LongFrmMode =  ae_proc_res_int->ae_proc_res_rk->LongFrmMode;
 
 #if RKAIQ_HAVE_AFD_V1 || RKAIQ_HAVE_AFD_V2
     if (mAfd_handle) {
@@ -1138,13 +1419,28 @@ XCamReturn RkAiqAeHandleInt::processing() {
 #endif
 
     if (mAmerge_handle) {
+#if USE_NEWSTRUCT
+        RkAiqMergeHandleInt* Merge_algo = dynamic_cast<RkAiqMergeHandleInt*>(mAmerge_handle->ptr());
+        Merge_algo->setAeProcRes(&aeProcResShared);
+#else
         RkAiqAmergeHandleInt* amerge_algo = dynamic_cast<RkAiqAmergeHandleInt*>(mAmerge_handle->ptr());
         amerge_algo->setAeProcRes(&aeProcResShared);
+#endif
     }
 
     if (mAdrc_handle) {
+#if USE_NEWSTRUCT
+        RkAiqDrcHandleInt* Drc_algo = dynamic_cast<RkAiqDrcHandleInt*>(mAdrc_handle->ptr());
+        Drc_algo->setAeProcRes(&aeProcResShared);
+#else
         RkAiqAdrcHandleInt* adrc_algo = dynamic_cast<RkAiqAdrcHandleInt*>(mAdrc_handle->ptr());
         adrc_algo->setAeProcRes(&aeProcResShared);
+#endif
+    }
+
+    RkAiqResourceTranslator* translator = dynamic_cast<RkAiqResourceTranslator*>(mAiqCore->getTranslator());
+    if (ae_proc_res_int->stats_cfg_to_trans.isUpdate) {
+        translator->setAeAlgoStatsCfg(&ae_proc_res_int->stats_cfg_to_trans);
     }
 
     EXIT_ANALYZER_FUNCTION();
@@ -1156,8 +1452,6 @@ XCamReturn RkAiqAeHandleInt::postProcess() {
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
-    RkAiqAlgoPostAe* ae_post_int        = (RkAiqAlgoPostAe*)mPostInParam;
-    RkAiqAlgoPostResAe* ae_post_res_int = (RkAiqAlgoPostResAe*)mPostOutParam;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
         (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
@@ -1207,20 +1501,37 @@ XCamReturn RkAiqAeHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPara
     RkAiqAlgoProcResAe* ae_proc                 = (RkAiqAlgoProcResAe*)mProcOutParam;
     RkAiqAlgoPostResAe* ae_post                 = (RkAiqAlgoPostResAe*)mPostOutParam;
 
-    rk_aiq_isp_aec_params_v20_t* aec_param   = params->mAecParams->data().ptr();
-    rk_aiq_isp_hist_params_v20_t* hist_param = params->mHistParams->data().ptr();
+#if USE_NEWSTRUCT
+    rk_aiq_isp_ae_stats_cfg_t* ae_stats_cfg   = params->mAeStatsParams->data().ptr();
+    // TODO: Why need to copy again?
+    ae_stats_cfg->result = *ae_proc->ae_stats_cfg;
+    if (sharedCom->init) {
+        ae_stats_cfg->frame_id  = 0;
+    } else {
+        ae_stats_cfg->frame_id  = shared->frameId;
+    }
+#else
+
+    rk_aiq_isp_aec_params_t* aec_param   = params->mAecParams->data().ptr();
+    rk_aiq_isp_hist_params_t* hist_param = params->mHistParams->data().ptr();
+
+    if (sharedCom->init) {
+        aec_param->frame_id  = 0;
+        hist_param->frame_id = 0;
+    } else {
+        aec_param->frame_id  = shared->frameId;
+        hist_param->frame_id = shared->frameId;
+    }
+#endif
+
     rk_aiq_exposure_params_wrapper_t* exp_param = params->mExposureParams->data().ptr();
     rk_aiq_iris_params_wrapper_t* iris_param    = params->mIrisParams->data().ptr();
 
     int algo_id = this->getAlgoId();
 
     if (sharedCom->init) {
-        aec_param->frame_id  = 0;
-        hist_param->frame_id = 0;
         exp_param->frame_id  = 0;
     } else {
-        aec_param->frame_id  = shared->frameId;
-        hist_param->frame_id = shared->frameId;
         exp_param->frame_id  = shared->frameId;
     }
 
@@ -1243,55 +1554,119 @@ XCamReturn RkAiqAeHandleInt::genIspResult(RkAiqFullParams* params, RkAiqFullPara
     }
 
     // meas
-    if (ae_proc->ae_meas->ae_meas_update) {
-        mMeasSyncFlag = shared->frameId;
-        aec_param->sync_flag = mMeasSyncFlag;
-        // copy from algo result
-        // set as the latest result
-        cur_params->mAecParams = params->mAecParams;
-        aec_param->is_update = true;
-        LOGD_AEC("[%d] meas params from algo", mMeasSyncFlag);
-    } else if (mMeasSyncFlag != aec_param->sync_flag) {
-        aec_param->sync_flag = mMeasSyncFlag;
-        // copy from latest result
-        if (cur_params->mAecParams.ptr()) {
-            aec_param->result = cur_params->mAecParams->data()->result;
-            aec_param->is_update = true;
-        } else {
-            LOGE_AEC("no latest meas params !");
-            aec_param->is_update = false;
-        }
-        LOGD_AEC("[%d] meas params from latest [%d]", shared->frameId, mMeasSyncFlag);
-    } else {
-        // do nothing, result in buf needn't update
-        aec_param->is_update = false;
-        LOGD_AEC("[%d] meas params needn't update", shared->frameId);
-    }
+    if (useStatsApiCfg) {
+        if (updateStatsApiCfg) {
+#if USE_NEWSTRUCT
+            mMeasSyncFlag = shared->frameId;
+            ae_stats_cfg->result = mStatsApiCfg;
+            ae_stats_cfg->sync_flag = mMeasSyncFlag;
 
-    // hist 
-    if (ae_proc->hist_meas->hist_meas_update) {
-        mHistSyncFlag = shared->frameId;
-        hist_param->sync_flag = mHistSyncFlag;
-        // copy from algo result
-        // set as the latest result
-        cur_params->mHistParams = params->mHistParams;
-        hist_param->is_update = true;
-        LOGD_AEC("[%d] hist params from algo", mHistSyncFlag);
-    } else if (mHistSyncFlag != hist_param->sync_flag) {
-        hist_param->sync_flag = mHistSyncFlag;
-        // copy from latest result
-        if (cur_params->mHistParams.ptr()) {
-            hist_param->result = cur_params->mHistParams->data()->result;
-            hist_param->is_update = true;
-        } else {
-            LOGE_AEC("no latest hist params !");
-            hist_param->is_update = false;
+            cur_params->mAeStatsParams = params->mAeStatsParams;
+            ae_stats_cfg->is_update = true;
+            LOGK_AEC("[%d] update stats cfg from api", mMeasSyncFlag);
+#endif
         }
-        LOGD_AEC("[%d] hist params from latest [%d]", shared->frameId, mHistSyncFlag);
+#if 0
+        else if (mMeasSyncFlag != aec_param->sync_flag) {
+            aec_param->sync_flag = mMeasSyncFlag;
+            // copy from latest result
+            if (cur_params->mAiqStatsCfg.ptr()) {
+                aec_param->result = cur_params->mAiqStatsCfg->data()->result;
+                aec_param->is_update = true;
+            } else {
+                LOGE_AEC("no latest stats api cfg !");
+                aec_param->is_update = false;
+            }
+            LOGK_AEC("[%d] stats api from latest [%d]", shared->frameId, mMeasSyncFlag);
+        } else {
+            // do nothing, result in buf needn't update
+            aec_param->is_update = false;
+            LOGK_AEC("[%d] stats api params needn't update", shared->frameId);
+        }
+#endif
     } else {
-        // do nothing, result in buf needn't update
-        hist_param->is_update = false;
-        LOGD_AEC("[%d] hist params needn't update", shared->frameId);
+
+#if defined(USE_NEWSTRUCT)
+        if (ae_proc->ae_stats_cfg->sw_aeCfg_update) {
+            mMeasSyncFlag = shared->frameId;
+            ae_stats_cfg->sync_flag = mMeasSyncFlag;
+            // copy from algo result
+            // set as the latest result
+            cur_params->mAeStatsParams = params->mAeStatsParams;
+            ae_stats_cfg->is_update = true;
+            ae_proc->ae_stats_cfg->sw_aeCfg_update = false;
+
+            LOGD_AEC("[%d] new aecfg params from algo", mMeasSyncFlag);
+        } else if (mMeasSyncFlag != ae_stats_cfg->sync_flag) {
+            ae_stats_cfg->sync_flag = mMeasSyncFlag;
+            // copy from latest result
+            if (cur_params->mAeStatsParams.ptr()) {
+                ae_stats_cfg->result = cur_params->mAeStatsParams->data()->result;
+                ae_stats_cfg->is_update = true;
+            } else {
+                LOGE_AEC("no new aecfg meas params !");
+                ae_stats_cfg->is_update = false;
+            }
+            LOGD_AEC("[%d] meas new aecfg from latest [%d]", shared->frameId, mMeasSyncFlag);
+        } else {
+            // do nothing, result in buf needn't update
+            ae_stats_cfg->is_update = false;
+            LOGD_AEC("[%d] meas new aecfg needn't update", shared->frameId);
+        }
+#else
+        if (ae_proc->ae_meas->ae_meas_update) {
+            mMeasSyncFlag = shared->frameId;
+            aec_param->sync_flag = mMeasSyncFlag;
+            // copy from algo result
+            // set as the latest result
+            cur_params->mAecParams = params->mAecParams;
+            aec_param->is_update = true;
+            ae_proc->ae_meas->ae_meas_update = false;
+            LOGD_AEC("[%d] meas params from algo", mMeasSyncFlag);
+        } else if (mMeasSyncFlag != aec_param->sync_flag) {
+            aec_param->sync_flag = mMeasSyncFlag;
+            // copy from latest result
+            if (cur_params->mAecParams.ptr()) {
+                aec_param->result = cur_params->mAecParams->data()->result;
+                aec_param->is_update = true;
+            } else {
+                LOGE_AEC("no latest meas params !");
+                aec_param->is_update = false;
+            }
+            LOGD_AEC("[%d] meas params from latest [%d]", shared->frameId, mMeasSyncFlag);
+        } else {
+            // do nothing, result in buf needn't update
+            aec_param->is_update = false;
+            LOGD_AEC("[%d] meas params needn't update", shared->frameId);
+        }
+
+        // hist
+        if (ae_proc->hist_meas->hist_meas_update) {
+            mHistSyncFlag = shared->frameId;
+            hist_param->sync_flag = mHistSyncFlag;
+            // copy from algo result
+            // set as the latest result
+            cur_params->mHistParams = params->mHistParams;
+            hist_param->is_update = true;
+            ae_proc->hist_meas->hist_meas_update = false;
+            LOGD_AEC("[%d] hist params from algo", mHistSyncFlag);
+        } else if (mHistSyncFlag != hist_param->sync_flag) {
+            hist_param->sync_flag = mHistSyncFlag;
+            // copy from latest result
+            if (cur_params->mHistParams.ptr()) {
+                hist_param->result = cur_params->mHistParams->data()->result;
+                hist_param->is_update = true;
+            } else {
+                LOGE_AEC("no latest hist params !");
+                hist_param->is_update = false;
+            }
+            LOGD_AEC("[%d] hist params from latest [%d]", shared->frameId, mHistSyncFlag);
+        } else {
+            // do nothing, result in buf needn't update
+            hist_param->is_update = false;
+            LOGD_AEC("[%d] hist params needn't update", shared->frameId);
+        }
+#endif
     }
 
     mPreResShared = NULL;

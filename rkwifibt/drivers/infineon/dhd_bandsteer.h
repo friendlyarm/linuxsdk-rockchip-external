@@ -4,9 +4,9 @@
  * Feature by which dualband capable PEERs will be
  * forced move on 5GHz interface
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -73,5 +73,8 @@ void dhd_bandsteer_schedule_work_on_timeout(dhd_bandsteer_mac_entry_t *dhd_bands
 void dhd_bandsteer_workqueue_wrapper(void *handle, void *event_info, u8 event);
 s32 dhd_bandsteer_get_ifaces(void *pub, void *ifaces);
 s32 dhd_bandsteer_trigger_bandsteer(struct net_device *, uint8 *);
+#ifdef WL_DHD_XR
+s32 dhd_bandsteer_update_slave_ifaces(dhd_pub_t *pub, struct net_device *ndev);
+#endif /* WL_DHD_XR */
 /* ********************** Function declartion ends ****************** */
 #endif /*  _dhd_bandsteer_h_ */

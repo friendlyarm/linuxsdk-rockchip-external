@@ -1,9 +1,9 @@
 /*
  * bcmevent read-only data shared by kernel or app layers
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -205,6 +205,7 @@ static const bcmevent_name_str_t bcmevent_names[] = {
 	BCMEVENT_NAME(WLC_E_RPSNOA),
 	BCMEVENT_NAME(WLC_E_PHY_CAL),
 	BCMEVENT_NAME(WLC_E_WA_LQM),
+	BCMEVENT_NAME(WLC_E_OVERTEMP),
 };
 
 const char *bcmevent_get_name(uint event_type)

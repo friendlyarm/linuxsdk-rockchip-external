@@ -19,18 +19,22 @@
 
 #ifndef _RK_AIQ_TYPE_ADEHAZE_ALGO_INT_H_
 #define _RK_AIQ_TYPE_ADEHAZE_ALGO_INT_H_
-#include "RkAiqCalibDbTypes.h"
-#include "adehaze/rk_aiq_types_adehaze_algo.h"
-#include "adehaze_head.h"
-#include "adehaze_uapi_head.h"
+#include "iq_parser/RkAiqCalibDbTypes.h"
+#include "algos/adehaze/rk_aiq_types_adehaze_algo.h"
+#include "iq_parser_v2/adehaze_head.h"
+#include "iq_parser_v2/adehaze_uapi_head.h"
 
 #define DEHAZE_DEFAULT_LEVEL         (50)
 #define DEHAZE_DEFAULT_CFG_WT_STEP   (1)
-#define DEHAZE_DEFAULT_CFG_AIR_STEP  (1)
-#define DEHAZE_DEFAULT_CFG_TMAX_STEP (5)
+#define DEHAZE_DEFAULT_CFG_AIR_STEP  (0)
+#define DEHAZE_DEFAULT_CFG_TMAX_STEP (0)
 #define ENHANCE_DEFAULT_LEVEL        (50)
 #define ENHANCE_VALUE_DEFAULT_STEP   (80)
 #define ENH_LUMA_DEFAULT_STEP        (5)
+
+#define DEHAZE_DEFAULT_CFG_WT_STEP_FLOAT (1.0f / 256.0f)
+#define ENHANCE_VALUE_DEFAULT_STEP_FLOAT (80.0f / 1024.0f)
+#define ENH_LUMA_DEFAULT_STEP_FLOAT      (ENHANCE_VALUE_DEFAULT_STEP_FLOAT)
 
 typedef struct AdehazeOBResV12_s {
     bool blc_ob_enable;
@@ -65,5 +69,15 @@ typedef struct adehaze_sw_v12_s {
     mDehazeAttrV12_t stManual;
     mDehazeAttrInfoV11_t Info;
 } adehaze_sw_v12_t;
+
+// dehaze v14
+typedef struct adehaze_sw_v14_s {
+    rk_aiq_uapi_sync_t sync;
+
+    dehaze_api_mode_t mode;
+    CalibDbV2_dehaze_v14_t stAuto;
+    mDehazeAttrV14_t stManual;
+    mDehazeAttrInfoV11_t Info;
+} adehaze_sw_v14_t;
 
 #endif

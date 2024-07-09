@@ -18,106 +18,108 @@
 #ifndef ___RK_AIQ_CALIB_DB_V2_H__
 #define ___RK_AIQ_CALIB_DB_V2_H__
 
-#include <list>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <unordered_map>
+#include "iq_parser_v2/j2s/cJSON.h"
+#include "iq_parser_v2/RkAiqCalibDbTypesV2.h"
+#include "iq_parser_v2/RkAiqCalibDbV2Helper.h"
+#include "iq_parser_v2/ablc_head.h"
+#include "iq_parser_v2/ablc_head_V32.h"
+#include "algos/rk_aiq_algo_des.h"
+#include "iq_parser_v2/sharp_head_v33.h"
+#include "iq_parser_v2/rkpostisp_head_v1.h"
+#include "xcore/base/xcam_log.h"
 
-#include "RkAiqCalibDbTypesV2.h"
-#include "RkAiqCalibDbV2Helper.h"
-#include "ablc_head.h"
-#include "ablc_head_V32.h"
-#include "rk_aiq_algo_des.h"
-#include "sharp_head_v33.h"
-#include "xcam_log.h"
-#include "xcam_mutex.h"
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#define CAMCALIBDB_JSFILE_LEN            128
+#define CAMCALIBDB_MAP_LEN                32
+#define CAMCALIBDB_MODULE_NAME_LEN       128
+#define CAMCALIBDB_MODULE_SIZE_LEN       128
 
 struct cJSON;
 
-namespace RkCam {
+typedef struct CamCalibDbMap_s {
+    char jsFileName[CAMCALIBDB_JSFILE_LEN];
+    CamCalibDbProj_t* calibproj;
+} CamCalibDbMap;
 
-typedef struct __map_index {
-    void *dst_offset;
-    void *ptr_offset;
-    size_t len;
-} map_index_t;
+typedef struct {
+    CamCalibDbV2Context_t* calib;
+    char moduleNames[CAMCALIBDB_MODULE_SIZE_LEN][CAMCALIBDB_MODULE_NAME_LEN];
+    int moduleNamesSize;
+} TuningCalib;
 
-typedef std::shared_ptr<std::list<std::string>> ModuleNameList;
-typedef std::shared_ptr<std::list<RkAiqAlgoType_t>> AlgoList;
+CamCalibDbProj_t *CamCalibDbCreateCalibDbProjFromFile(int sns_id, const char *jsfile);
+CamCalibDbProj_t *CamCalibDbCreateCalibDbProjFromBuf(int sns_id, const void *bin_buff, size_t len);
+CamCalibDbCamgroup_t* CamCalibDbCreateCalibDbCamgroup(const char *jsfile);
+int CamCalibDbCamgroupFree(CamCalibDbCamgroup_t* calib_camgroup);
 
-class RkAiqCalibDbV2 {
-public:
-    explicit RkAiqCalibDbV2() = default;
-    ~RkAiqCalibDbV2() = default;
+CamCalibDbProj_t *CamCalibDbJson2calibprojFromFile(const char *jsfile);
+CamCalibDbProj_t *CamCalibDbJson2calibprojFromStr(const char *jstr, size_t len);
+CamCalibDbProj_t *CamCalibDbBin2calibprojFromFile(const char *binfile);
+CamCalibDbProj_t *CamCalibDbBin2calibprojFromBuf(const void *bin_buff, size_t len);
+CamCalibDbV2Context_t *CamCalibDbJson2calib(const char *jsfile);
+CamCalibDbV2Context_t *CamCalibDbCjson2calib(cJSON *json);
+void CamCalibDbBin2calib(void *bin_buff, void *struct_ptr);
 
-public:
-    class TuningCalib {
-    public:
-        CamCalibDbV2Context_t* calib;
-        ModuleNameList ModuleNames;
-    };
+int CamCalibDbCalib2json(const char *jsfile, CamCalibDbV2Context_t *calib);
+cJSON *CamCalibDbCalib2cjson(const CamCalibDbV2Context_t *calib);
+int CamCalibDbCalibproj2json(const char *jsfile, CamCalibDbProj_t *calibproj);
+int CamCalibDbCalib2bin(void *bin_buf, CamCalibDbV2Context_t *CalibDbV2);
 
-public:
-    static CamCalibDbProj_t *createCalibDbProj(const char *jsfile);
-    static CamCalibDbProj_t *createCalibDbProj(const void *bin_buff, size_t len);
-    static CamCalibDbCamgroup_t* createCalibDbCamgroup(const char *jsfile);
-    static int CamCalibDbCamgroupFree(CamCalibDbCamgroup_t* calib_camgroup);
+void CamCalibDbReleaseCalibDbProj();
+CamCalibDbV2Context_t CamCalibDbToDefaultCalibDb(CamCalibDbProj_t *calibproj);
 
-    static CamCalibDbProj_t *json2calibproj(const char *jsfile);
-    static CamCalibDbProj_t *json2calibproj(const char *jstr, size_t len);
-    static CamCalibDbProj_t *bin2calibproj(const char *binfile);
-    static CamCalibDbProj_t *bin2calibproj(const void *bin_buff, size_t len);
-    static CamCalibDbV2Context_t *json2calib(const char *jsfile);
-    static CamCalibDbV2Context_t *cjson2calib(cJSON *json);
+CamCalibDbProj_t *CamCalibDbProjAlloc();
+CamCalibDbV2Context_t *CamCalibDbCalibV2Alloc();
+int CamCalibDbProjFree(CamCalibDbProj_t *calibproj);
+int CamCalibDbCalibV2Free(CamCalibDbV2Context_t *calibv2);
 
-    static int calib2json(const char *jsfile, CamCalibDbV2Context_t *calib);
-    static cJSON *calib2cjson(const CamCalibDbV2Context_t *calib);
-    static int calibproj2json(const char *jsfile, CamCalibDbProj_t *calibproj);
+RkAiqAlgoType_t CamCalibDbString2algostype(const char* str);
+int CamCalibDbAnalyzChange(cJSON *patch, TuningCalib *tuning_calib);
 
-    static void releaseCalibDbProj();
-    static CamCalibDbV2Context_t toDefaultCalibDb(CamCalibDbProj_t *calibproj);
-
-    static CamCalibDbProj_t *CamCalibDbProjAlloc();
-    static CamCalibDbV2Context_t *CalibV2Alloc();
-    static int CamCalibDbProjFree(CamCalibDbProj_t *calibproj);
-    static int CalibV2Free(CamCalibDbV2Context_t *calibv2);
-
-    static RkAiqAlgoType_t string2algostype(const char* str);
-    static ModuleNameList analyzChange(cJSON* patch);
-
-    static cJSON* readIQNode(const CamCalibDbV2Context_t *calib,
+cJSON* CamCalibDbReadIQNode(const CamCalibDbV2Context_t *calib,
                              const char* node_path);
 
-    static char* readIQNodeStr(const CamCalibDbV2Context_t* calib,
+char* CamCalibDbReadIQNodeStr(const CamCalibDbV2Context_t* calib,
                                const char* node_path);
 
-    static char* readIQNodeStrFromJstr(const CamCalibDbV2Context_t* calib,
+char* CamCalibDbReadIQNodeStrFromJstr(const CamCalibDbV2Context_t* calib,
                                        const char* json_str);
 
-    static CamCalibDbV2Context_t *applyPatch(const CamCalibDbV2Context_t *calib,
+CamCalibDbV2Context_t *CamCalibDbApplyPatchFromcJSON(const CamCalibDbV2Context_t *calib,
             cJSON *patch);
-    static CamCalibDbV2Context_t *applyPatch2(const CamCalibDbV2Context_t *calib,
+CamCalibDbV2Context_t *CamCalibDbApplyPatch2(const CamCalibDbV2Context_t *calib,
             cJSON *patch);
 
-    static CamCalibDbV2Context_t *applyPatch(const CamCalibDbV2Context_t *calib,
+CamCalibDbV2Context_t *CamCalibDbApplyPatch(const CamCalibDbV2Context_t *calib,
             const char *patch_str);
-    static CamCalibDbV2Context_t *
-    applyPatchFile(const CamCalibDbV2Context_t *calib, const char *patch_file);
-    static CamCalibDbV2Context_t *applyPatch(const char *jsfile,
+CamCalibDbV2Context_t *
+    CamCalibDbapplyPatchFile(const CamCalibDbV2Context_t *calib, const char *patch_file);
+CamCalibDbV2Context_t *CamCalibDbapplyPatch(const char *jsfile,
             const char *patch_file);
 
-    static TuningCalib analyzTuningCalib(const CamCalibDbV2Context_t *calib,
-                                         cJSON* patch);
-    static TuningCalib analyzTuningCalib(const CamCalibDbV2Context_t *calib,
-                                         const char* patch_str);
+int CamCalibDbAnalyzTuningCalibFromCJson(const CamCalibDbV2Context_t *calib,
+                                         cJSON* patch, TuningCalib *tuning_calib);
+int CamCalibDbAnalyzTuningCalibFromStr(const CamCalibDbV2Context_t *calib,
+                                         const char* patch_str, TuningCalib *tuning_calib);
 
-    static int FreeCalibByJ2S(void* ctx);
+int CamCalibDbFreeCalibByJ2S(void* ctx);
 
-    static void *loadWholeFile(const char *fpath, size_t *fsize);
-    static int parseBinStructMap(uint8_t *data, size_t len);
+void *CamCalibDbLoadWholeFile(const char *fpath, size_t *fsize);
+int CamCalibDbParseBinStructMap(uint8_t *data, size_t len);
+int CamCalibDbRestoreBinStructMap(uint8_t *data, size_t len, uint8_t *restore_ptr);
+int CamCalibDbCheckBinVersion(uint8_t *data, size_t len);
 
+int CamCalibDbFreeSceneCtx(void* ctx);
+int CamCalibDbFreeSensorCtx(CalibDb_Sensor_ParaV2_t* sensor);
+int CamCalibDbFreeModuleCtx(CalibDb_Module_ParaV2_t* module);
+int CamCalibDbFreeUapiCtx(RkaiqUapi_t* uapi);
+int CamCalibDbFreeSysStaticCtx(CalibDb_SysStaticCfg_ParaV2_t* sys_static);
+
+/*
 private:
     static std::map<std::string, CamCalibDbProj_t *> mCalibDbsMap;
     static CalibDb_Sensor_ParaV2_t mSensorInfo;
@@ -249,7 +251,7 @@ private:
 #endif
 
 // isp 32
-#if RKAIQ_HAVE_AWB_V32
+#if RKAIQ_HAVE_AWB_V32||RKAIQ_HAVE_AWB_V39
     static int CamCalibDbFreeAwbV32Ctx(CalibDbV2_Wb_Para_V32_t* awb);
 #endif
 #if RKAIQ_HAVE_BLC_V32
@@ -261,9 +263,13 @@ private:
 #if RKAIQ_HAVE_DEBAYER_V2_LITE
     static int CamCalibDbFreeDebayerV2Ctx(CalibDbV2_Debayer_v2_lite_t * debayer_v2);
 #endif
+#if RKAIQ_HAVE_DEBAYER_V3
+    static int CamCalibDbFreeDebayerV3Ctx(CalibDbV2_Debayer_v3_t * debayer_v3);
+#endif
 
-#if RKAIQ_HAVE_CCM_V2
-    static int CamCalibDbFreeCcmV2Ctx(CalibDbV2_Ccm_Para_V32_t* ccm);
+#if RKAIQ_HAVE_CCM_V2 || RKAIQ_HAVE_CCM_V3
+    template<class T>
+    static int CamCalibDbFreeCcmV2Ctx(T* ccm);
 #endif
 #if RKAIQ_HAVE_BAYER2DNR_V23
     static int CamCalibDbFreeBayer2dnrV23Ctx(CalibDbV2_Bayer2dnrV23_t* bayer2dnr_v23);
@@ -280,11 +286,17 @@ private:
 #if RKAIQ_HAVE_YNR_V22
     static int CamCalibDbFreeYnrV22Ctx(CalibDbV2_YnrV22_t* ynr_v22);
 #endif
+#if RKAIQ_HAVE_YNR_V24
+    static int CamCalibDbFreeYnrV24Ctx(CalibDbV2_YnrV24_t* ynr_v24);
+#endif
 #if RKAIQ_HAVE_SHARP_V33
     static int CamCalibDbFreeSharpV33Ctx(CalibDbV2_SharpV33_t* sharp_v33);
 #endif
 #if RKAIQ_HAVE_SHARP_V33_LITE
     static int CamCalibDbFreeSharpV33LiteCtx(CalibDbV2_SharpV33Lite_t* sharp_v33);
+#endif
+#if RKAIQ_HAVE_SHARP_V34
+    static int CamCalibDbFreeSharpV34Ctx(CalibDbV2_SharpV34_t* sharp_v34);
 #endif
 
 #if RKAIQ_HAVE_AF_V31
@@ -297,9 +309,24 @@ private:
 #if RKAIQ_HAVE_AF_V32_LITE
     static int CamCalibDbFreeAfV32Ctx(CalibDbV2_AFV32_t* af);
 #endif
+#if RKAIQ_HAVE_BAYERTNR_V30
+    static int CamCalibDbFreeBayertnrV30Ctx(CalibDbV2_BayerTnrV30_t* bayertnr_v30);
+#endif
 
-};
+#if RKAIQ_HAVE_YUVME_V1
+    static int CamCalibDbFreeYuvmeV1Ctx(CalibDbV2_YuvmeV1_t* yuvme_v1);
+#endif
+#if (RKAIQ_HAVE_CNR_V31)
+    static int CamCalibDbFreeCnrV31Ctx(CalibDbV2_CNRV31_t* cnr_v31);
+#endif
 
-} // namespace RkCam
+#if RKAIQ_HAVE_AF_V33
+    static int CamCalibDbFreeAfV33Ctx(CalibDbV2_AFV33_t* af);
+#endif
+*/
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /*___RK_AIQ_CALIB_DB_V2_H__*/

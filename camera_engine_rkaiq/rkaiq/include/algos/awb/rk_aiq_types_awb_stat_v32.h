@@ -23,9 +23,9 @@
 #ifndef __RK_AIQ_TYPE_AWB_STAT_V32_H__
 #define __RK_AIQ_TYPE_AWB_STAT_V32_H__
 
-#include "rk_aiq_types_awb_stat_v201.h"
+#include "algos/awb/rk_aiq_types_awb_stat_v201.h"
 #define RK_AIQ_AWB_MAX_WHITEREGIONS_NUM_V32    4
-#if RKAIQ_HAVE_AWB_V32
+#if RKAIQ_HAVE_AWB_V32||RKAIQ_HAVE_AWB_V39
 #define AWB_MULTI_WINDOW_EN
 #define AWB_EXCWP_RANGE_STAT_EN
 #define AWB_WPNUM2_EN
@@ -101,6 +101,7 @@ typedef struct rk_aiq_awb_stat_cfg_v32_s {
     int  groupIllIndxCurrent;//for time share
     int  IllIndxSetCurrent[RK_AIQ_AWB_MAX_WHITEREGIONS_NUM_V32];//for time share
     char timeSign[64];
+    float preWbgainSw[4];//rggb
 } rk_aiq_awb_stat_cfg_v32_t;
 
 typedef struct rk_aiq_awb_stat_cfg_effect_v32_s {
@@ -109,6 +110,8 @@ typedef struct rk_aiq_awb_stat_cfg_effect_v32_s {
     int  groupIllIndxCurrent;//for time share
     int  IllIndxSetCurrent[RK_AIQ_AWB_MAX_WHITEREGIONS_NUM_V32];//for time share
     char timeSign[64];
+    float preWbgainSw[4];//rggb
+
 } rk_aiq_awb_stat_cfg_effect_v32_t;
 
 typedef struct rk_aiq_awb_stat_res_v32_s {

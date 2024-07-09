@@ -15,6 +15,10 @@ ifeq (1,$(strip $(shell expr $(PLATFORM_SDK_VERSION) \> 25)))
 LOCAL_CFLAGS += -DUSE_AHARDWAREBUFFER=1
 endif
 
+ifeq (1,$(strip $(shell expr $(PLATFORM_SDK_VERSION) \> 31)))
+LOCAL_CFLAGS += -DUSE_HARDWARE_ROCKCHIP=1
+endif
+
 LOCAL_CFLAGS += -Wall -Werror -Wunreachable-code
 
 LOCAL_C_INCLUDES += \
@@ -67,9 +71,11 @@ ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3188)
 LOCAL_CFLAGS += -DRK3188
 endif
 
-LOCAL_SRC_FILES:= \
+LOCAL_SRC_FILES := \
     rgaImDemo.cpp \
     args.cpp
+
+include $(LOCAL_PATH)/../utils/utils.mk
 
 LOCAL_MODULE:= rgaImDemo
 

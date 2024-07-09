@@ -16,7 +16,10 @@
  */
 
 #include "sample_comm.h"
+
 #include "uAPI2/rk_aiq_user_api2_agamma.h"
+#include "uAPI2/rk_aiq_user_api2_helper.h"
+#include <string>
 
 #define LIMIT_VALUE(value,max_value,min_value)      (value > max_value? max_value : value < min_value ? min_value : value)
 
@@ -36,7 +39,10 @@ static void sample_agamma_usage()
     printf("\t 9) AGAMMA:         test rk_aiq_user_api2_agamma_SetAttrib stFast Sync.\n");
     printf("\t a) AGAMMA:         test rk_aiq_user_api2_agamma_SetAttrib stFast Async.\n");
     printf("\t b) AGAMMA:         test rk_aiq_user_api2_agamma_GetAttrib.\n");
-    printf("\t q) AGAMMA:         return to main sample screen.\n");
+    printf("\t c) AGAMMA:         test rk_aiq_user_api2_gamma_GetAttrib.\n");
+    printf("\t d) AGAMMA:         test rk_aiq_user_api2_gamma_SetAttrib manual.\n");
+    printf("\t e) AGAMMA:         test rk_aiq_user_api2_gamma_SetAttrib auto.\n");
+    printf("\t f) AGAMMA:         test rk_aiq_user_api2_gamma_QueryStatus.\n");
 
     printf("\n");
     printf("\t please press the key: ");
@@ -48,26 +54,145 @@ void sample_print_agamma_info(const void *arg)
 {
     printf ("enter AGAMMA modult test!\n");
 }
+#ifdef USE_NEWSTRUCT
+void get_auto_attr(gamma_api_attrib_t* attr) {
+    gamma_param_auto_t* stAuto = &attr->stAuto;
+    for (int i = 0;i < 13;i++) {
+    }
+}
 
-XCamReturn sample_agamma_module(const void *arg)
+void get_manual_attr(gamma_api_attrib_t* attr) {
+    gamma_param_t* stMan = &attr->stMan;
+}
+
+void sample_agamma_test(const rk_aiq_sys_ctx_t* ctx) {
+
+    printf("+++++++ gamma module test start ++++++++\n");
+
+    gamma_api_attrib_t attr;
+    memset(&attr, 0, sizeof(attr));
+
+    rk_aiq_user_api2_gamma_GetAttrib(ctx, &attr);
+
+    printf("gamma attr: opmode:%d, en:%d, bypass:%d\n", attr.opMode, attr.en, attr.bypass);
+
+    srand(time(0));
+    int rand_num = rand() % 101;
+
+    if (rand_num <70) {
+        printf("update gamma arrrib!\n");
+        if (attr.opMode == RK_AIQ_OP_MODE_AUTO) {
+            attr.opMode = RK_AIQ_OP_MODE_MANUAL;
+            get_manual_attr(&attr);
+        }
+        else {
+            get_auto_attr(&attr);
+            attr.opMode = RK_AIQ_OP_MODE_AUTO;
+        }
+    }
+    else {
+        // reverse en
+        printf("reverse gamma en!\n");
+        attr.en = !attr.en;
+    }
+
+    rk_aiq_user_api2_gamma_SetAttrib(ctx, &attr);
+
+    // wait more than 2 frames
+    usleep(90 * 1000);
+
+    gamma_status_t status;
+    memset(&status, 0, sizeof(gamma_status_t));
+
+    rk_aiq_user_api2_gamma_QueryStatus(ctx, &status);
+
+    printf("gamma status: opmode:%d, en:%d, bypass:%d\n", status.opMode, status.en, status.bypass);
+
+    if (status.opMode != attr.opMode || status.en != attr.en)
+        printf("gamma test failed\n");
+    printf("-------- gamma module test done --------\n");
+}
+
+static void sample_gamma_tuningtool_test(const rk_aiq_sys_ctx_t* ctx)
+{
+    char *ret_str = NULL;
+
+    printf(">>> start tuning tool test: op attrib get ...\n");
+
+    std::string json_gamma_status_str = " \n\
+        [{ \n\
+            \"op\":\"get\", \n\
+            \"path\": \"/uapi/0/gamma_uapi/info\", \n\
+            \"value\": \n\
+            { \"opMode\": \"RK_AIQ_OP_MODE_MANUAL\", \"en\": 0,\"bypass\": 3} \n\
+        }]";
+
+    rkaiq_uapi_unified_ctl(const_cast<rk_aiq_sys_ctx_t*>(ctx),
+                           const_cast<char*>(json_gamma_status_str.c_str()), &ret_str, RKAIQUAPI_OPMODE_GET);
+
+    if (ret_str) {
+        printf("gamma status json str: %s\n", ret_str);
+    }
+
+    printf("  start tuning tool test: op attrib set ...\n");
+    std::string json_gamma_str = " \n\
+        [{ \n\
+            \"op\":\"replace\", \n\
+            \"path\": \"/uapi/0/gamma_uapi/attr\", \n\
+            \"value\": \n\
+            { \"opMode\": \"RK_AIQ_OP_MODE_MANUAL\", \"en\": 1,\"bypass\": 1} \n\
+        }]";
+    printf("gamma json_cmd_str: %s\n", json_gamma_str.c_str());
+    ret_str = NULL;
+    rkaiq_uapi_unified_ctl(const_cast<rk_aiq_sys_ctx_t*>(ctx),
+                           const_cast<char*>(json_gamma_str.c_str()), &ret_str, RKAIQUAPI_OPMODE_SET);
+
+    // wait more than 2 frames
+    usleep(90 * 1000);
+
+
+    gamma_status_t status;
+    memset(&status, 0, sizeof(gamma_status_t));
+
+    rk_aiq_user_api2_gamma_QueryStatus(ctx, &status);
+
+    if (status.opMode != RK_AIQ_OP_MODE_MANUAL || status.en != 1 || status.bypass != 1) {
+        printf("gamma op set_attrib failed !\n");
+        printf("gamma status: opmode:%d(EXP:%d), en:%d(EXP:%d), bypass:%d(EXP:%d)\n",
+               status.opMode, RK_AIQ_OP_MODE_MANUAL, status.en, 1, status.bypass, 1);
+    } else {
+        printf("gamma op set_attrib success !\n");
+    }
+
+    printf(">>> tuning tool test done \n");
+}
+#endif
+XCamReturn sample_agamma_module(const void* arg)
 {
     int key = -1;
     CLEAR();
 
+#ifdef USE_NEWSTRUCT
+    gamma_api_attrib_t attr21;
+    gamma_status_t status;
+#endif
     rk_aiq_gamma_v10_attr_t attr_v10;
     rk_aiq_gamma_v11_attr_t attr_v11;
     rk_aiq_gamma_attrib_V2_t attr_v2;
     float X_v10[CALIBDB_AGAMMA_KNOTS_NUM_V10] = {
-        0,   1,   2,   3,   4,   5,   6,    7,    8,    10,   12,   14,   16,   20,   24,
-        28,  32,  40,  48,  56,  64,  80,   96,   112,  128,  160,  192,  224,  256,  320,
-        384, 448, 512, 640, 768, 896, 1024, 1280, 1536, 1792, 2048, 2560, 3072, 3584, 4095};
-    float Y_v10                               = 0.0;
+        0.0f,    1.0f,    2.0f,    3.0f,    4.0f,    5.0f,    6.0f,    7.0f,    8.0f,
+        10.0f,   12.0f,   14.0f,   16.0f,   20.0f,   24.0f,   28.0f,   32.0f,   40.0f,
+        48.0f,   56.0f,   64.0f,   80.0f,   96.0f,   112.0f,  128.0f,  160.0f,  192.0f,
+        224.0f,  256.0f,  320.0f,  384.0f,  448.0f,  512.0f,  640.0f,  768.0f,  896.0f,
+        1024.0f, 1280.0f, 1536.0f, 1792.0f, 2048.0f, 2560.0f, 3072.0f, 3584.0f, 4095.0f};
+    float Y_v10                               = 0.0f;
     float X_v11[CALIBDB_AGAMMA_KNOTS_NUM_V11] = {
-        0,    1,    2,    3,    4,    5,    6,    7,    8,    10,  12,   14,   16,
-        20,   24,   28,   32,   40,   48,   56,   64,   80,   96,  112,  128,  160,
-        192,  224,  256,  320,  384,  448,  512,  640,  768,  896, 1024, 1280, 1536,
-        1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840, 4095};
-    float Y_v11 = 0.0;
+        0.0f,    1.0f,    2.0f,    3.0f,    4.0f,    5.0f,    6.0f,    7.0f,    8.0f,    10.0f,
+        12.0f,   14.0f,   16.0f,   20.0f,   24.0f,   28.0f,   32.0f,   40.0f,   48.0f,   56.0f,
+        64.0f,   80.0f,   96.0f,   112.0f,  128.0f,  160.0f,  192.0f,  224.0f,  256.0f,  320.0f,
+        384.0f,  448.0f,  512.0f,  640.0f,  768.0f,  896.0f,  1024.0f, 1280.0f, 1536.0f, 1792.0f,
+        2048.0f, 2304.0f, 2560.0f, 2816.0f, 3072.0f, 3328.0f, 3584.0f, 3840.0f, 4095.0f};
+    float Y_v11 = 0.0f;
 
     const demo_context_t *demo_ctx = (demo_context_t *)arg;
     const rk_aiq_sys_ctx_t* ctx ;
@@ -97,9 +222,9 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v10.stManual.Gamma_out_segnum = GAMMATYPE_LOG;
             attr_v10.stManual.Gamma_out_offset = 0;
             for (int i = 0; i < CALIBDB_AGAMMA_KNOTS_NUM_V10; i++) {
-                Y_v10                            = 4095 * pow(X_v10[i] / 4095, 1 / 1 + 0.0);
-                Y_v10                            = LIMIT_VALUE(Y_v10, 4095, 0);
-                attr_v10.stManual.Gamma_curve[i] = (int)(Y_v10 + 0.5);
+                Y_v10 = 4095.0f * pow(X_v10[i] / 4095.0f, 1.0f / 1.0f + 0.0f);
+                Y_v10 = LIMIT_VALUE(Y_v10, 4095.0f, 0.0f);
+                attr_v10.stManual.Gamma_curve[i] = (int)(Y_v10 + 0.5f);
             }
             rk_aiq_user_api2_agamma_v10_SetAttrib(ctx, &attr_v10);
             break;
@@ -114,9 +239,9 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v10.stManual.Gamma_out_offset = 1024;
 
             for (int i = 0; i < CALIBDB_AGAMMA_KNOTS_NUM_V10; i++) {
-                Y_v10                            = 4095 * pow(X_v10[i] / 4095, 1 / 2.2 + 0.0);
-                Y_v10                            = LIMIT_VALUE(Y_v10, 4095, 0);
-                attr_v10.stManual.Gamma_curve[i] = (int)(Y_v10 + 0.5);
+                Y_v10 = 4095.0f * pow(X_v10[i] / 4095.0f, 1.0f / 2.0f + 0.0f);
+                Y_v10 = LIMIT_VALUE(Y_v10, 4095.0f, 0.0f);
+                attr_v10.stManual.Gamma_curve[i] = (int)(Y_v10 + 0.5f);
             }
             rk_aiq_user_api2_agamma_v10_SetAttrib(ctx, &attr_v10);
             break;
@@ -135,7 +260,7 @@ XCamReturn sample_agamma_module(const void *arg)
         }
         case '3': {
             printf("\t AGAMMA test rk_aiq_uapi2_setGammaCoef\n\n");
-            rk_aiq_uapi2_setGammaCoef(ctx, 5, 0);
+            rk_aiq_uapi2_setGammaCoef(ctx, 5.0f, 0.0f);
             break;
         }
         case '4': {
@@ -146,9 +271,9 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v11.stManual.Gamma_en         = true;
             attr_v11.stManual.Gamma_out_offset = 0;
             for (int i = 0; i < CALIBDB_AGAMMA_KNOTS_NUM_V11; i++) {
-                Y_v11                            = 4095 * pow(X_v11[i] / 4095, 1 / 1 + 0.0);
-                Y_v11                            = LIMIT_VALUE(Y_v11, 4095, 0);
-                attr_v11.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5);
+                Y_v11 = 4095.0f * pow(X_v11[i] / 4095.0f, 1.0f / 1.0f + 0.0f);
+                Y_v11 = LIMIT_VALUE(Y_v11, 4095.0f, 0.0f);
+                attr_v11.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5f);
             }
             rk_aiq_user_api2_agamma_v11_SetAttrib(ctx, &attr_v11);
             break;
@@ -161,9 +286,9 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v11.stManual.Gamma_en         = true;
             attr_v11.stManual.Gamma_out_offset = 1024;
             for (int i = 0; i < CALIBDB_AGAMMA_KNOTS_NUM_V11; i++) {
-                Y_v11                            = 4095 * pow(X_v11[i] / 4095, 1 / 2.2 + 0.0);
-                Y_v11                            = LIMIT_VALUE(Y_v11, 4095, 0);
-                attr_v11.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5);
+                Y_v11 = 4095.0f * pow(X_v11[i] / 4095.0f, 1.0f / 2.2f + 0.0f);
+                Y_v11 = LIMIT_VALUE(Y_v11, 4095.0f, 0.0f);
+                attr_v11.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5f);
             }
             rk_aiq_user_api2_agamma_v11_SetAttrib(ctx, &attr_v11);
             break;
@@ -188,9 +313,9 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v2.atrrV30.stManual.Gamma_en         = true;
             attr_v2.atrrV30.stManual.Gamma_out_offset = 0;
             for (int i = 0; i < CALIBDB_AGAMMA_KNOTS_NUM_V11; i++) {
-                Y_v11                                   = 4095 * pow(X_v11[i] / 4095, 1 / 1 + 0.0);
-                Y_v11                                   = LIMIT_VALUE(Y_v11, 4095, 0);
-                attr_v2.atrrV30.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5);
+                Y_v11 = 4095.0f * pow(X_v11[i] / 4095.0f, 1.0f / 1.0f + 0.0f);
+                Y_v11 = LIMIT_VALUE(Y_v11, 4095.0f, 0.0f);
+                attr_v2.atrrV30.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5f);
             }
             rk_aiq_user_api2_agamma_SetAttrib(ctx, attr_v2);
             break;
@@ -203,9 +328,9 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v2.atrrV30.stManual.Gamma_en         = true;
             attr_v2.atrrV30.stManual.Gamma_out_offset = 1024;
             for (int i = 0; i < CALIBDB_AGAMMA_KNOTS_NUM_V11; i++) {
-                Y_v11 = 4095 * pow(X_v11[i] / 4095, 1 / 2.2 + 0.0);
-                Y_v11 = LIMIT_VALUE(Y_v11, 4095, 0);
-                attr_v2.atrrV30.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5);
+                Y_v11 = 4095.0f * pow(X_v11[i] / 4095.0f, 1.0f / 2.2f + 0.0f);
+                Y_v11 = LIMIT_VALUE(Y_v11, 4095.0f, 0.0f);
+                attr_v2.atrrV30.stManual.Gamma_curve[i] = (int)(Y_v11 + 0.5f);
             }
             rk_aiq_user_api2_agamma_SetAttrib(ctx, attr_v2);
             break;
@@ -215,8 +340,8 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v2.sync.sync_mode             = RK_AIQ_UAPI_MODE_DEFAULT;
             attr_v2.sync.done                  = false;
             attr_v2.atrrV30.mode               = GAMMA_MODE_FAST;
-            attr_v2.atrrV30.stFast.GammaCoef   = 1.0;
-            attr_v2.atrrV30.stFast.SlopeAtZero = 0;
+            attr_v2.atrrV30.stFast.GammaCoef   = 1.0f;
+            attr_v2.atrrV30.stFast.SlopeAtZero = 0.0f;
             rk_aiq_user_api2_agamma_SetAttrib(ctx, attr_v2);
             break;
         }
@@ -225,8 +350,8 @@ XCamReturn sample_agamma_module(const void *arg)
             attr_v2.sync.sync_mode             = RK_AIQ_UAPI_MODE_ASYNC;
             attr_v2.sync.done                  = false;
             attr_v2.atrrV30.mode               = GAMMA_MODE_FAST;
-            attr_v2.atrrV30.stFast.GammaCoef   = 2.2;
-            attr_v2.atrrV30.stFast.SlopeAtZero = 0;
+            attr_v2.atrrV30.stFast.GammaCoef   = 2.2f;
+            attr_v2.atrrV30.stFast.SlopeAtZero = 0.0f;
             rk_aiq_user_api2_agamma_SetAttrib(ctx, attr_v2);
             break;
         }
@@ -244,6 +369,17 @@ XCamReturn sample_agamma_module(const void *arg)
                    attr_v2.atrrV30.stManual.Gamma_curve[5]);
             break;
         }
+#ifdef USE_NEWSTRUCT
+        case 'g': {
+            sample_gamma_tuningtool_test(ctx);
+            break;
+        }
+
+        case 'h': {
+            sample_agamma_test(ctx);
+            break;
+        }
+#endif
         default:
             break;
         }

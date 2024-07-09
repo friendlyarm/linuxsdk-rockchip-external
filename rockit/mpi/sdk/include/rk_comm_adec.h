@@ -36,7 +36,7 @@ typedef struct rkADEC_ATTR_CODEC_S {
     RK_CODEC_ID_E  enType;
     RK_U32         u32Channels;
     RK_U32         u32SampleRate;
-	RK_U32         u32BitPerCodedSample;  /* codewords */
+    RK_U32         u32BitPerCodedSample;  /* codewords */
     RK_U32         u32Bitrate;
 
     RK_VOID       *pExtraData;
@@ -61,6 +61,7 @@ typedef struct rkADEC_CH_ATTR_S {
     RK_U32          u32BufSize;     /* decode buffer size(buffer size to store pcm data) */
 
     ADEC_ATTR_CODEC_S stCodecAttr;
+    RK_U32          u32Depth;
 } ADEC_CHN_ATTR_S;
 
 typedef struct rkADEC_CH_STATE_S {

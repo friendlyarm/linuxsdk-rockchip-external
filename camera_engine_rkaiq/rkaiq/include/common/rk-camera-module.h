@@ -9,7 +9,7 @@
 
 #include <linux/types.h>
 
-#include "rk_isp20_hw.h"
+#include "common/rk_isp20_hw.h"
 
 #define RKMODULE_API_VERSION		KERNEL_VERSION(0, 1, 0x2)
 
@@ -59,6 +59,7 @@
 							 RKMODULE_CAMERA_BT656_CHANNEL_3)
 
 #define DPHY_MAX_LANE					4
+#define RKMODULE_MULTI_DEV_NUM              4
 
 #define RKMODULE_GET_MODULE_INFO	\
 	_IOR('V', BASE_VIDIOC_PRIVATE + 0, struct rkmodule_inf)
@@ -170,6 +171,18 @@
 
 #define RKMODULE_GET_READOUT_LINE_CNT_PER_LINE  \
 	_IOR('V', BASE_VIDIOC_PRIVATE + 36, __u32)
+
+#define RKMODULE_GET_GROUP_ID       \
+	_IOR('V', BASE_VIDIOC_PRIVATE + 37, __u32)
+
+#define RKMODULE_SET_GROUP_ID       \
+	_IOW('V', BASE_VIDIOC_PRIVATE + 38, __u32)
+
+#define RKMODULE_GET_CAPTURE_MODE  \
+    _IOR('V', BASE_VIDIOC_PRIVATE + 39, struct rkmodule_capture_info)
+
+#define RKMODULE_SET_CAPTURE_MODE  \
+    _IOW('V', BASE_VIDIOC_PRIVATE + 40, struct rkmodule_capture_info)
 
 struct rkmodule_i2cdev_info {
 	u8 slave_addr;
@@ -314,6 +327,7 @@ struct rkmodule_pdaf_inf {
 	__u32 dccmap_height;
 	__u32 dcc_mode;
 	__u32 dcc_dir;
+	__u32 pd_offset;
 	__u16 gainmap[RKMODULE_PADF_GAINMAP_LEN];
 	__u16 dccmap[RKMODULE_PDAF_DCCMAP_LEN];
 } __attribute__ ((packed));
@@ -398,29 +412,25 @@ enum rkmodule_hdr_mode {
 	HDR_COMPR,
 };
 
-enum rkmodule_hdr_compr_segment {
-	HDR_COMPR_SEGMENT_4 = 4,
-	HDR_COMPR_SEGMENT_12 = 12,
-	HDR_COMPR_SEGMENT_16 = 16,
-};
+#define HDR_COMPR_POINT_MAX 32
 
 /* rkmodule_hdr_compr
  * linearised and compressed data for hdr: data_src = K * data_compr + XX
  *
- * bit: bit of src data, max 20 bit.
- * segment: linear segment, support 4, 6 or 16.
+ * src_bit: bit of src data, max 20 bit.
+ * point: linear point number, max 32 for rk3576.
  * k_shift: left shift bit of slop amplification factor, 2^k_shift, [0 15].
  * slope_k: K * 2^k_shift.
- * data_src_shitf: left shift bit of source data, data_src = 2^data_src_shitf
+ * data_src: source data.
  * data_compr: compressed data.
  */
 struct rkmodule_hdr_compr {
-	enum rkmodule_hdr_compr_segment segment;
-	__u8 bit;
+	__u8 point;
+	__u8 src_bit;
 	__u8 k_shift;
-	__u8 data_src_shitf[HDR_COMPR_SEGMENT_16];
-	__u16 data_compr[HDR_COMPR_SEGMENT_16];
-	__u32 slope_k[HDR_COMPR_SEGMENT_16];
+	__u16 data_compr[HDR_COMPR_POINT_MAX];
+	__u32 data_src[HDR_COMPR_POINT_MAX];
+	__u32 slope_k[HDR_COMPR_POINT_MAX];
 };
 
 /**
@@ -760,5 +770,41 @@ struct rkmodule_sensor_fmt {
 struct rkmodule_sensor_infos {
 	struct rkmodule_sensor_fmt sensor_fmt[RKMODULE_MAX_SENSOR_NUM];
 };
+
+enum rkmodule_capture_mode {
+    RKMODULE_CAPTURE_MODE_NONE = 0,
+    RKMODULE_MULTI_DEV_COMBINE_ONE,
+    RKMODULE_ONE_CH_TO_MULTI_ISP,
+    RKMODULE_MULTI_CH_TO_MULTI_ISP,
+    RKMODULE_MULTI_CH_COMBINE_SQUARE,
+};
+
+struct rkmodule_multi_dev_info {
+    __u32 dev_idx[RKMODULE_MULTI_DEV_NUM];
+    __u32 combine_idx[RKMODULE_MULTI_DEV_NUM];
+    __u32 pixel_offset;
+    __u32 dev_num;
+    __u32 reserved[8];
+};
+
+struct rkmodule_one_to_multi_info {
+    __u32 isp_num;
+    __u32 frame_pattern[RKMODULE_MULTI_DEV_NUM];
+};
+
+struct rkmodule_multi_combine_info {
+    __u32 combine_num;
+    __u32 combine_index[RKMODULE_MULTI_DEV_NUM];
+};
+
+struct rkmodule_capture_info {
+    __u32 mode;
+    union {
+        struct rkmodule_multi_dev_info multi_dev;
+        struct rkmodule_one_to_multi_info one_to_multi;
+        struct rkmodule_multi_combine_info multi_combine_info;
+    };
+ };
+
 
 #endif /* _UAPI_RKMODULE_CAMERA_H */

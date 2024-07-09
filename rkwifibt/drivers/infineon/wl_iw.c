@@ -1,9 +1,9 @@
 /*
  * Linux Wireless Extensions support
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -46,6 +46,9 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 #include <linux/sched/signal.h>
 #endif // endif
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+#include <linux/kthread.h>
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)) */
 #include <wlioctl.h>
 #include <wlioctl_utils.h>
 
@@ -240,7 +243,9 @@ dev_wlc_ioctl(
 {
 	struct ifreq ifr;
 	wl_ioctl_t ioc;
+#if defined(KERNEL_DS) && defined(USER_DS)
 	mm_segment_t fs;
+#endif /* KERNEL_DS && USER_DS */
 	int ret;
 
 	memset(&ioc, 0, sizeof(ioc));
@@ -252,16 +257,20 @@ dev_wlc_ioctl(
 	ifr.ifr_name[sizeof(ifr.ifr_name) - 1] = '\0';
 	ifr.ifr_data = (caddr_t) &ioc;
 
+#if defined(KERNEL_DS) && defined(USER_DS)
 	fs = get_fs();
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 0, 21)
 	set_fs(get_ds());
 #endif // endif
+#endif /* KERNEL_DS && USER_DS */
 #if defined(WL_USE_NETDEV_OPS)
 	ret = dev->netdev_ops->ndo_do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
 #else
 	ret = dev->do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
 #endif // endif
+#if defined(KERNEL_DS) && defined(USER_DS)
 	set_fs(fs);
+#endif /* KERNEL_DS && USER_DS */
 
 	return ret;
 }
@@ -3865,7 +3874,12 @@ _iscan_sysioc_thread(void *data)
 				break;
 		 }
 	}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+	kthread_complete_and_exit(&iscan->sysioc_exited, 0);
+#else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)) */
 	complete_and_exit(&iscan->sysioc_exited, 0);
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)) */
 }
 
 int

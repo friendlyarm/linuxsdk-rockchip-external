@@ -95,6 +95,10 @@ gst_mpp_video_info_update_format (GstVideoInfo * info, GstVideoFormat format,
 gboolean gst_mpp_video_info_align (GstVideoInfo * info,
     gint hstride, gint vstride);
 
+gboolean gst_mpp_video_info_matched (GstVideoInfo * info, GstVideoInfo * other);
+
+gboolean gst_mpp_frame_info_changed (MppFrame * frame, MppFrame * other);
+
 guint gst_mpp_get_pixel_stride (GstVideoInfo * info);
 
 G_END_DECLS;

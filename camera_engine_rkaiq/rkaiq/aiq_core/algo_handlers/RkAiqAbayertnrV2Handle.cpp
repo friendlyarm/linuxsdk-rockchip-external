@@ -221,8 +221,6 @@ XCamReturn RkAiqAbayertnrV2HandleInt::prepare() {
     ret = RkAiqHandle::prepare();
     RKAIQCORE_CHECK_RET(ret, "arawnr handle prepare failed");
 
-    RkAiqAlgoConfigAbayertnrV2* abayertnr_config_int = (RkAiqAlgoConfigAbayertnrV2*)mConfig;
-
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
     RKAIQCORE_CHECK_RET(ret, "arawnr algo prepare failed");
@@ -235,13 +233,6 @@ XCamReturn RkAiqAbayertnrV2HandleInt::preProcess() {
     ENTER_ANALYZER_FUNCTION();
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-
-    RkAiqAlgoPreAbayertnrV2* abayertnr_pre_int = (RkAiqAlgoPreAbayertnrV2*)mPreInParam;
-    RkAiqAlgoPreResAbayertnrV2* abayertnr_pre_res_int =
-        (RkAiqAlgoPreResAbayertnrV2*)mPreOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     ret = RkAiqHandle::preProcess();
     if (ret) {
@@ -263,13 +254,12 @@ XCamReturn RkAiqAbayertnrV2HandleInt::processing() {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     RkAiqAlgoProcAbayertnrV2* abayertnr_proc_int = (RkAiqAlgoProcAbayertnrV2*)mProcInParam;
-    RkAiqAlgoProcResAbayertnrV2* abayertnr_proc_res_int =
-        (RkAiqAlgoProcResAbayertnrV2*)mProcOutParam;
+    RkAiqAlgoProcResAbayertnrV2* abayertnr_proc_res_int = (RkAiqAlgoProcResAbayertnrV2*)mProcOutParam;
     RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
+            (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
     RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
-    abayertnr_proc_res_int->stAbayertnrProcResult.st3DFix = &shared->fullParams->mTnrV3xParams->data()->result;
+    abayertnr_proc_res_int->stAbayertnrProcResult.st3DFix = &shared->fullParams->mTnrParams->data()->result;
 
     ret = RkAiqHandle::processing();
     if (ret) {
@@ -298,13 +288,6 @@ XCamReturn RkAiqAbayertnrV2HandleInt::postProcess() {
     ENTER_ANALYZER_FUNCTION();
 
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
-
-    RkAiqAlgoPostAbayer2dnrV2* abayertnr_post_int = (RkAiqAlgoPostAbayer2dnrV2*)mPostInParam;
-    RkAiqAlgoPostResAbayer2dnrV2* abayertnr_post_res_int =
-        (RkAiqAlgoPostResAbayer2dnrV2*)mPostOutParam;
-    RkAiqCore::RkAiqAlgosGroupShared_t* shared =
-        (RkAiqCore::RkAiqAlgosGroupShared_t*)(getGroupShared());
-    RkAiqCore::RkAiqAlgosComShared_t* sharedCom = &mAiqCore->mAlogsComSharedParams;
 
     ret = RkAiqHandle::postProcess();
     if (ret) {
@@ -338,7 +321,7 @@ XCamReturn RkAiqAbayertnrV2HandleInt::genIspResult(RkAiqFullParams* params,
 
     if (!this->getAlgoId()) {
         LOGD_ANR("oyyf: %s:%d output isp param start\n", __FUNCTION__, __LINE__);
-        rk_aiq_isp_tnr_params_v3x_t* tnr_param = params->mTnrV3xParams->data().ptr();
+        rk_aiq_isp_tnr_params_t* tnr_param = params->mTnrParams->data().ptr();
         if (sharedCom->init) {
             tnr_param->frame_id = 0;
         } else {
@@ -350,14 +333,14 @@ XCamReturn RkAiqAbayertnrV2HandleInt::genIspResult(RkAiqFullParams* params,
             tnr_param->sync_flag = mSyncFlag;
             // copy from algo result
             // set as the latest result
-            cur_params->mTnrV3xParams = params->mTnrV3xParams;
+            cur_params->mTnrParams = params->mTnrParams;
             tnr_param->is_update = true;
             LOGD_ANR("[%d] params from algo", mSyncFlag);
         } else if (mSyncFlag != tnr_param->sync_flag) {
             tnr_param->sync_flag = mSyncFlag;
             // copy from latest result
-            if (cur_params->mTnrV3xParams.ptr()) {
-                tnr_param->result = cur_params->mTnrV3xParams->data()->result;
+            if (cur_params->mTnrParams.ptr()) {
+                tnr_param->result = cur_params->mTnrParams->data()->result;
                 tnr_param->is_update = true;
             } else {
                 LOGE_ANR("no latest params !");

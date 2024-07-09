@@ -111,6 +111,8 @@ const BYTE Wipe_All[] = {0x72, 0x65, 0x63, 0x6F, 0x76, 0x65,
 #define LBA_TRANSFER_SIZE_1M        (1024*1024)
 #define LBA_LOOP_SIZE               (1024*1024)
 
+#define RK_PAGE_SIZE                (2048)
+
 #define MAX_PACKAGE_FILES           16
 #define RKIMAGE_TAG             0x46414B52
 #define PARTNAME_PACKAGE_FILE   "package-file"
@@ -253,6 +255,8 @@ private:
     bool RKA_File_Check(STRUCT_RKIMAGE_ITEM &entry, long long &currentByte, long long totalByte);
     bool RKA_Gpt_Download(STRUCT_RKIMAGE_ITEM &entry, long long &currentByte, long long totalByte);
     bool RKA_Gpt_Check(STRUCT_RKIMAGE_ITEM &entry, long long &currentByte, long long totalByte);
+    bool RKA_Gpt_Download_UFS(STRUCT_RKIMAGE_ITEM &entry, long long &currentByte, long long totalByte);
+    bool RKA_Gpt_Check_UFS(STRUCT_RKIMAGE_ITEM &entry, long long &currentByte, long long totalByte);
 
     bool GetParameterPartSize(STRUCT_RKIMAGE_ITEM &paramItem);
     bool ParsePartitionInfo(string &strPartInfo, string &strName, UINT &uiOffset, UINT &uiLen);
@@ -264,6 +268,8 @@ private:
 };
 void create_gpt_buffer(u8 *gpt, PARAM_ITEM_VECTOR &vecParts, CONFIG_ITEM_VECTOR &vecUuid, u64 diskSectors);
 void prepare_gpt_backup(u8 *master, u8 *backup);
+void create_gpt_buffer_ufs(u8 *gpt, PARAM_ITEM_VECTOR &vecParts, CONFIG_ITEM_VECTOR &vecUuid, u64 diskSectors, u32 logicalBlockSectors, bool *align_flag);
+void prepare_gpt_backup_ufs(u8 *master, u8 *backup, u32 logicalBlockSectors);
 void gen_rand_uuid(unsigned char *uuid_bin);
 unsigned int crc32_le(unsigned int crc, unsigned char *p, unsigned int len);
 bool parse_parameter(char *pParameter, PARAM_ITEM_VECTOR &vecItem);

@@ -1,9 +1,9 @@
 /*
  * Linux platform device for DHD WLAN adapter
  *
- * Portions of this code are copyright (c) 2021 Cypress Semiconductor Corporation
+ * Portions of this code are copyright (c) 2023 Cypress Semiconductor Corporation
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -324,7 +324,9 @@ static int wifi_plat_dev_drv_probe(struct platform_device *pdev)
 	struct resource *resource;
 	wifi_adapter_info_t *adapter;
 #ifdef CONFIG_DTS
+#if defined(OOB_INTR_ONLY) || defined(BCMPCIE_OOB_HOST_WAKE)
 	int irq, gpio;
+#endif /* defined(OOB_INTR_ONLY) || defined(BCMPCIE_OOB_HOST_WAKE) */
 #endif /* CONFIG_DTS */
 
 	/* Android style wifi platform data device ("bcmdhd_wlan" or "bcm4329_wlan")
