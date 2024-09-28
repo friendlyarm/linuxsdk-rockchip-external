@@ -1,0 +1,2 @@
+camera_engine_rkaiq/IspFec/src/gen_mesh/android/genMesh_static_64bit/libgenMeshLib.a filter=lfs diff=lfs merge=lfs -text
+camera_engine_rkaiq/IspFec/src/gen_mesh/android/genMesh_static_32bit/libgenMeshLib.a filter=lfs diff=lfs merge=lfs -text
