@@ -1,3 +1,6 @@
 /mpp
 /rknn-toolkit2
 /rknpu2
+/camera_engine_rkaiq/IspFec/src/gen_mesh/android/genMesh_static_64bit/libgenMeshLib.a
+/camera_engine_rkaiq/IspFec/src/gen_mesh/android/genMesh_static_32bit/libgenMeshLib.a
+/buildroot_external_libgenmeshlib.tar
