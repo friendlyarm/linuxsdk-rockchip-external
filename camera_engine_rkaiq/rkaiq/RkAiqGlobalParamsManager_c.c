@@ -22,6 +22,8 @@
 static void
 checkAlgoEnableInit(GlobalParamsManager_t* pMan);
 static bool checkAlgoParams(GlobalParamsManager_t* pMan, rk_aiq_global_params_wrap_t* param);
+static bool checkLscAlgoParams(GlobalParamsManager_t* pMan, lsc_param_static_t* psta, char* print_buf);
+static bool ProcessLdcAlgoManParams(void* src, void* dst);
 
 static inline XCamReturn
 get_locked(GlobalParamsManager_t* pMan, rk_aiq_global_params_wrap_t* param)
@@ -181,7 +183,7 @@ static void init_withCalib(GlobalParamsManager_t* pMan)
         LOGE("no sharp calib !");
     }
 
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40)  || defined(RKAIQ_HAVE_SHARP_V41)
     wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_TEXEST_PARAM];
     texEst_api_attrib_t* texEst_calib = (texEst_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
                 (void*)(pMan->mCalibDb), texEst));
@@ -352,22 +354,24 @@ static void init_withCalib(GlobalParamsManager_t* pMan)
         LOGE("no cac calib !");
     }
 
-    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_LDCH_PARAM];
-    ldch_api_attrib_t* ldch_calib = (ldch_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
-                (void*)(pMan->mCalibDb), ldch));
-    if (ldch_calib) {
-        wrap_ptr->opMode = &ldch_calib->opMode;
-        wrap_ptr->en = &ldch_calib->en;
-        wrap_ptr->bypass = &ldch_calib->bypass;
-        wrap_ptr->aut_param_ptr = &ldch_calib->stAuto;
-        pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_LDCH_PARAM;
-        if (ldch_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
-            ldch_calib->opMode = RK_AIQ_OP_MODE_AUTO;
+    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_LDC_PARAM];
+    if (!wrap_ptr->man_param_ptr)
+        wrap_ptr->man_param_ptr = (ldc_param_t*)aiq_mallocz(sizeof(ldc_param_t));
+    ldc_api_attrib_t* ldc_calib =
+        (ldc_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR((void*)(pMan->mCalibDb), ldc));
+    if (ldc_calib) {
+        wrap_ptr->opMode        = &ldc_calib->opMode;
+        wrap_ptr->en            = &ldc_calib->en;
+        wrap_ptr->bypass        = &ldc_calib->bypass;
+        wrap_ptr->aut_param_ptr = &ldc_calib->tunning;
+        pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_LDC_PARAM;
+        if (ldc_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
+            ldc_calib->opMode = RK_AIQ_OP_MODE_AUTO;
         }
-        LOGK("Module LDCH: opMode:%d,en:%d,bypass:%d,man_ptr:%p",
-             *wrap_ptr->opMode, *wrap_ptr->en, *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
+        LOGK("Module LDC: opMode:%d,en:%d,bypass:%d,man_ptr:%p", *wrap_ptr->opMode, *wrap_ptr->en,
+             *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
     } else {
-        LOGE("no ldch calib !");
+        LOGE("no ldc calib !");
     }
 
     wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_HISTEQ_PARAM];
@@ -514,7 +518,6 @@ static void init_withCalib(GlobalParamsManager_t* pMan)
         wrap_ptr->en = &cgc_calib->en;
         wrap_ptr->bypass = &cgc_calib->bypass;
         wrap_ptr->man_param_ptr = &cgc_calib->stMan;
-        wrap_ptr->aut_param_ptr = &cgc_calib->stAuto;
 		pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_CGC_PARAM;
         if (cgc_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
             cgc_calib->opMode = RK_AIQ_OP_MODE_MANUAL;
@@ -621,6 +624,66 @@ static void init_withCalib(GlobalParamsManager_t* pMan)
     } else {
         LOGE("no ccm calib !");
     }
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
+    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_POSTISP_PARAM];
+    postisp_api_attrib_t* postisp_calib = (postisp_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+                (void*)(pMan->mCalibDb), postisp));
+    if (postisp_calib) {
+        wrap_ptr->opMode = &postisp_calib->opMode;
+        wrap_ptr->en = &postisp_calib->en;
+        wrap_ptr->bypass = &postisp_calib->bypass;
+        wrap_ptr->man_param_ptr = &postisp_calib->stMan;
+        wrap_ptr->aut_param_ptr = &postisp_calib->stAuto;
+		pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_POSTISP_PARAM;
+        if (postisp_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
+            postisp_calib->opMode = RK_AIQ_OP_MODE_MANUAL;
+        }
+        LOGK("Module postisp: opMode:%d,en:%d,bypass:%d,man_ptr:%p",
+             *wrap_ptr->opMode, *wrap_ptr->en, *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
+    } else {
+        LOGE("no postisp calib !");
+    }
+#endif
+#if RKAIQ_HAVE_AIBNR
+    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_AIBNR_PARAM];
+    aibnr_api_attrib_t* aibnr_calib = (aibnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+                (void*)(pMan->mCalibDb), aibnr));
+    if (aibnr_calib) {
+        wrap_ptr->opMode = &aibnr_calib->opMode;
+        wrap_ptr->en = &aibnr_calib->en;
+        wrap_ptr->bypass = &aibnr_calib->bypass;
+        wrap_ptr->man_param_ptr = &aibnr_calib->stMan;
+        wrap_ptr->aut_param_ptr = &aibnr_calib->stAuto;
+        pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_AIBNR_PARAM;
+        if (aibnr_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
+            aibnr_calib->opMode = RK_AIQ_OP_MODE_MANUAL;
+        }
+        LOGK("Module aibnr: opMode:%d,en:%d,bypass:%d,man_ptr:%p",
+             *wrap_ptr->opMode, *wrap_ptr->en, *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
+    } else {
+        LOGE("no aibnr calib !");
+    }
+#endif
+#if RKAIQ_HAVE_AIRMS
+    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_AIRMS_PARAM];
+    airms_api_attrib_t* airms_calib = (airms_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+                (void*)(pMan->mCalibDb), airms));
+    if (airms_calib) {
+        wrap_ptr->opMode = &airms_calib->opMode;
+        wrap_ptr->en = &airms_calib->en;
+        wrap_ptr->bypass = &airms_calib->bypass;
+        wrap_ptr->man_param_ptr = &airms_calib->stMan;
+        wrap_ptr->aut_param_ptr = &airms_calib->stAuto;
+        pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_AIRMS_PARAM;
+        if (airms_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
+            airms_calib->opMode = RK_AIQ_OP_MODE_MANUAL;
+        }
+        LOGK("Module airms: opMode:%d,en:%d,bypass:%d,man_ptr:%p",
+             *wrap_ptr->opMode, *wrap_ptr->en, *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
+    } else {
+        LOGE("no airms calib !");
+    }
+#endif
 #endif
     EXIT_ANALYZER_FUNCTION();
 }
@@ -647,7 +710,26 @@ XCamReturn GlobalParamsManager_init(GlobalParamsManager_t* pMan, bool isFullManM
 
 void GlobalParamsManager_deinit(GlobalParamsManager_t* pMan)
 {
-	aiqMutex_deInit(&pMan->mMutex);
+    void* man_param_ptr = pMan->mGlobalParams[RESULT_TYPE_LDC_PARAM].man_param_ptr;
+    if (man_param_ptr) {
+        ldc_param_t* man = (ldc_param_t*)man_param_ptr;
+        for (int i = 0; i < 2; i++) {
+            if (man->sta.ldchCfg.lutMapCfg.sw_ldcT_lutMapBuf_vaddr[i]) {
+                aiq_free(man->sta.ldchCfg.lutMapCfg.sw_ldcT_lutMapBuf_vaddr[i]);
+                man->sta.ldchCfg.lutMapCfg.sw_ldcT_lutMapBuf_vaddr[i] = NULL;
+            }
+#if RKAIQ_HAVE_LDCV
+            if (man->sta.ldcvCfg.lutMapCfg.sw_ldcT_lutMapBuf_vaddr[i]) {
+                aiq_free(man->sta.ldcvCfg.lutMapCfg.sw_ldcT_lutMapBuf_vaddr[i]);
+                man->sta.ldcvCfg.lutMapCfg.sw_ldcT_lutMapBuf_vaddr[i] = NULL;
+            }
+#endif
+        }
+        aiq_free(man_param_ptr);
+        pMan->mGlobalParams[RESULT_TYPE_LDC_PARAM].man_param_ptr = NULL;
+    }
+
+        aiqMutex_deInit(&pMan->mMutex);
 	for (int i = 0; i < RESULT_TYPE_MAX_PARAM; i++) {
 		aiqMutex_deInit(&pMan->mAlgoMutex[i]);
 	}
@@ -659,18 +741,33 @@ switchCalibDbCheck(GlobalParamsManager_t* pMan, CamCalibDbV2Context_t* calibDb) 
 #if USE_NEWSTRUCT
     btnr_api_attrib_t* btnr_calib = (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
         (void*)(calibDb), bayertnr));
+#if ISP_HW_V39
     if (*pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en != btnr_calib->en) {
         LOGE("The Btnr doesn't support turn on/off in runtime, please use btnr.bypass instead "
                     "or config during the initialization.");
         return XCAM_RETURN_ERROR_FAILED;
     }
+#elif defined(ISP_HW_V33) || defined(ISP_HW_V35)
+    if (!pMan->btnr_init_enable && *pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en != btnr_calib->en) {
+        LOGE("The Btnr didn't enable in first frame, so can't support turn on/off in runtime, "
+            "please use btnr.bypass instead or config during the initialization.");
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+#endif
 #if RKAIQ_HAVE_YUVME
     yme_api_attrib_t* yme_calib = (yme_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
                 (void*)(calibDb), yme));
-    if (*pMan->mGlobalParams[RESULT_TYPE_MOTION_PARAM].en != yme_calib->en) {
-        LOGE("btnr and yuvme should be turned on or off simultaneously,"
-                    " and tnr can't open/close in runtime!");
-        return XCAM_RETURN_ERROR_FAILED;
+    if (*pMan->mGlobalParams[RESULT_TYPE_MOTION_PARAM].en != yme_calib->en && yme_calib->en) {
+        if (!pMan->yme_init_enable) {
+            LOGE("The yme didn't enable in first frame, so can't support turn on/off in runtime, "
+            "please use yme.bypass instead or config during the initialization.");
+            return XCAM_RETURN_ERROR_FAILED;
+        }
+        if (!*pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en) {
+            LOGE("btnr and yuvme should be turned on or off simultaneously,"
+                    "btnr is disable now and can't open/close in runtime!");
+            return XCAM_RETURN_ERROR_FAILED;
+        }
     }
 #endif
     cnr_api_attrib_t* cnr_calib = (cnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
@@ -679,13 +776,14 @@ switchCalibDbCheck(GlobalParamsManager_t* pMan, CamCalibDbV2Context_t* calibDb) 
         (void*)(calibDb), ynr));
     sharp_api_attrib_t* sharp_calib = (sharp_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
         (void*)(calibDb), sharp));
-#if ISP_HW_V39
+#if defined(ISP_HW_V39)
     if (!(cnr_calib->en == ynr_calib->en && ynr_calib->en == sharp_calib->en)) {
         LOGW("ynr, cnr and sharp should be on or off in the same time, "
             "please use rk_aiq_uapi2_sysctl_setModuleEn to set them");
         return XCAM_RETURN_BYPASS;
     }
-#elif ISP_HW_V33
+#endif
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
     enh_api_attrib_t* enh_calib = (enh_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
         (void*)(calibDb), enh));
     if (!(cnr_calib->en == ynr_calib->en && ynr_calib->en == sharp_calib->en && sharp_calib->en == enh_calib->en)) {
@@ -698,7 +796,7 @@ switchCalibDbCheck(GlobalParamsManager_t* pMan, CamCalibDbV2Context_t* calibDb) 
     drc_api_attrib_t* drc_calib = (drc_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
         (void*)(calibDb), drc));
     if (AiqManager_getWorkingMode(pMan->rkAiqManager) != RK_AIQ_WORKING_MODE_NORMAL && drc_calib->en == 0) {
-        LOGE("Drc must be on  when isp is HDR mode. Please turn on by drc.en!");
+        LOGE("Drc must be on when isp is HDR mode. Please turn on by drc.en!");
         return XCAM_RETURN_ERROR_FAILED;
     }
 
@@ -708,18 +806,57 @@ switchCalibDbCheck(GlobalParamsManager_t* pMan, CamCalibDbV2Context_t* calibDb) 
 
 static void
 checkAlgoEnableInit(GlobalParamsManager_t* pMan) {
+#if RKAIQ_HAVE_YUVME
+    int state = AiqManager_getAiqState(pMan->rkAiqManager);
+    if (state == 0) {
+        pMan->yme_init_enable = *pMan->mGlobalParams[RESULT_TYPE_MOTION_PARAM].en;
+    }
+#endif
+
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
+    int state = AiqManager_getAiqState(pMan->rkAiqManager);
+    if (state == 0) {
+        pMan->btnr_init_enable = *pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en;
+    }
+#endif
 #if USE_NEWSTRUCT
     bool cnr_en = *pMan->mGlobalParams[RESULT_TYPE_UVNR_PARAM].en;
     bool ynr_en = *pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].en;
     bool sharp_en = *pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].en;
-#if ISP_HW_V39
+#if defined(ISP_HW_V39)
     if (!(ynr_en == cnr_en && cnr_en == sharp_en)) {
-        LOGW("ynr, cnr and sharp should be on or off in the same time");
+        *pMan->mGlobalParams[RESULT_TYPE_UVNR_PARAM].en = 1;
+        *pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].bypass =
+            !*pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].en ? 1 : *pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].bypass;
+        *pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].en = 1;
+        *pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].bypass =
+            !*pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].en ? 1 : *pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].bypass;
+        *pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].en = 1;
+        *pMan->mGlobalParams[RESULT_TYPE_GAIN_PARAM].en = 1;
+        LOGW("ynr, cnr and sharp should be on or off in the same time, force to turn on ynr, cnr and sharp");
     }
-#elif ISP_HW_V33
+    else {
+        *pMan->mGlobalParams[RESULT_TYPE_GAIN_PARAM].en = cnr_en;
+    }
+#endif
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
     bool enh_en = *pMan->mGlobalParams[RESULT_TYPE_ENH_PARAM].en;
     if (!(ynr_en == cnr_en && cnr_en == sharp_en && sharp_en == enh_en)) {
-        LOGW("ynr, cnr, sharp and enh should be on or off in the same time");
+        *pMan->mGlobalParams[RESULT_TYPE_UVNR_PARAM].en = 1;
+        *pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].bypass =
+            !*pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].en ? 1 : *pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].bypass;
+        *pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM].en = 1;
+        *pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].bypass =
+            !*pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].en ? 1 : *pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].bypass;
+        *pMan->mGlobalParams[RESULT_TYPE_SHARPEN_PARAM].en = 1;
+        *pMan->mGlobalParams[RESULT_TYPE_GAIN_PARAM].en = 1;
+        *pMan->mGlobalParams[RESULT_TYPE_ENH_PARAM].bypass =
+            !*pMan->mGlobalParams[RESULT_TYPE_ENH_PARAM].en ? 1 : *pMan->mGlobalParams[RESULT_TYPE_ENH_PARAM].bypass;
+        *pMan->mGlobalParams[RESULT_TYPE_ENH_PARAM].en = 1;
+        LOGW("ynr, cnr, sharp and enh should be on or off in the same time, force to turn on ynr, cnr, sharp and enh");
+    }
+    else {
+        *pMan->mGlobalParams[RESULT_TYPE_GAIN_PARAM].en = cnr_en;
     }
     bool histeq_en = *pMan->mGlobalParams[RESULT_TYPE_HISTEQ_PARAM].en;
     bool enh_bypass = *pMan->mGlobalParams[RESULT_TYPE_ENH_PARAM].bypass;
@@ -729,11 +866,109 @@ checkAlgoEnableInit(GlobalParamsManager_t* pMan) {
     }
 #endif
 #if RKAIQ_HAVE_YUVME
-    if (*pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en != *pMan->mGlobalParams[RESULT_TYPE_MOTION_PARAM].en) {
+    if (*pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en != *pMan->mGlobalParams[RESULT_TYPE_MOTION_PARAM].en &&
+        *pMan->mGlobalParams[RESULT_TYPE_MOTION_PARAM].en) {
         *pMan->mGlobalParams[RESULT_TYPE_MOTION_PARAM].en = *pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en;
-        LOGE("btnr and yuvme should be turned on or off simultaneously, please check!");
+        LOGE("btnr and yuvme should be turned on or off simultaneously, btnr is disable now and can't open/close in runtime!");
     }
 #endif
+
+#ifdef RKAIQ_HAVE_HSV
+    hsv_calib_attrib_t* hsv_calib = (hsv_calib_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+            (void*)(pMan->mCalibDb), hsv));
+    if (hsv_calib) {
+        ahsv_hsvCalib_t* calibdb = &hsv_calib->calibdb;
+        int tblAll_len = calibdb->sw_hsvCfg_tblAll_len;
+        int lut0_mode = 0, lut1_mode = 0, lut2_mode = 0;
+#ifdef ISP_HW_V35
+        hsv_api_attrib_t* attr = &hsv_calib->tunning;
+        hsv_param_static_t* hsvCfg;
+        rk_aiq_op_mode_t mode = *pMan->mGlobalParams[RESULT_TYPE_HSV_PARAM].opMode;
+        if (mode == RK_AIQ_OP_MODE_AUTO) {
+            hsvCfg = &attr->stAuto.sta.hsvCfg;
+        } else {
+            hsvCfg = &attr->stMan.sta;
+        }
+        if (hsvCfg->hw_hsvT_lut_mode == hsv_1dAnd2d_mode) {
+            if (hsvCfg->hw_hsvT_lut2d1_en || hsvCfg->hw_hsvT_lut2d2_en) {
+                LOGE("lut2d1/lut2d2 should be off when hsv lut mode is 1dAnd2d. "
+                    "Please turn off by hsv.sta.hw_hsvT_lut2d1_en, hsv.sta.hw_hsvT_lut2d2_en!");
+                *pMan->mGlobalParams[RESULT_TYPE_HSV_PARAM].en = 0;
+            }
+        } else if (hsvCfg->hw_hsvT_lut_mode == hsv_only2d_mode) {
+            if (hsvCfg->hw_hsvT_lut1d0_en || hsvCfg->hw_hsvT_lut1d1_en) {
+                LOGE("lut1d0/lut1d1 should be off when hsv lut mode is only2d. "
+                    "Please turn off by hsv.sta.hw_hsvT_lut1d0_en, hsv.sta.hw_hsvT_lut1d1_en!");
+                *pMan->mGlobalParams[RESULT_TYPE_HSV_PARAM].en = 0;
+            }
+        }
+#endif
+        for (int i = 0;i < tblAll_len;i++) {
+#ifdef ISP_HW_V33
+            lut0_mode = calibdb->tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_mode == 3? 1:calibdb->tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_mode;
+            lut1_mode = calibdb->tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_mode == 3? 1:calibdb->tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_mode;
+            lut2_mode = calibdb->tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_mode / 2;
+#elif defined(ISP_HW_V35)
+            if (hsvCfg->hw_hsvT_lut_mode == hsv_1dAnd2d_mode) {
+                lut0_mode = calibdb->tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_mode == 3? 1:calibdb->tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_mode;
+                lut1_mode = calibdb->tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_mode == 3? 1:calibdb->tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_mode;
+                lut2_mode = calibdb->tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_mode / 2;
+            } else if (hsvCfg->hw_hsvT_lut_mode == hsv_only2d_mode) {
+                lut0_mode = calibdb->tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_mode / 2;
+                lut1_mode = calibdb->tableAll[i].meshGain.lut2d1.hw_hsvT_lut2d_mode / 2;
+                lut2_mode = calibdb->tableAll[i].meshGain.lut2d2.hw_hsvT_lut2d_mode / 2;
+            }
+#endif
+            if (lut0_mode == lut1_mode || lut1_mode == lut2_mode || lut2_mode == lut0_mode) {
+                LOGE("HSV config failed, hsv.calibdb in %s is invaild. Three output channels of hsv lut must be different."
+                    "Please configure by hsv.calibdb.tableAll.meshGain.", calibdb->tableAll[i].sw_hsvC_illu_name);
+                *pMan->mGlobalParams[RESULT_TYPE_HSV_PARAM].en = 0;
+            }
+        }
+    }
+    else {
+        LOGE("no hsv calib !");
+    }
+#endif
+
+    lsc_calib_attrib_t* lsc_calib = (lsc_calib_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+            (void*)(pMan->mCalibDb), lsc));
+    if (lsc_calib) {
+        lsc_api_attrib_t* attr = &lsc_calib->tunning;
+        lsc_param_static_t* psta = NULL;
+        rk_aiq_op_mode_t mode = *pMan->mGlobalParams[RESULT_TYPE_LSC_PARAM].opMode;
+        if (mode == RK_AIQ_OP_MODE_AUTO) {
+            psta = &attr->stAuto.sta.lscCfg;
+        } else {
+            psta = &attr->stMan.sta;
+        }
+        char print_buf[160];
+        if (!checkLscAlgoParams(pMan, psta, print_buf)) {
+            LOGE("%s", print_buf);
+            *pMan->mGlobalParams[RESULT_TYPE_LSC_PARAM].en = 0;
+        }
+    } else {
+        LOGE("no lsc calib !");
+    }
+
+    btnr_api_attrib_t* btnr_calib = (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+            (void*)(pMan->mCalibDb), bayertnr));
+    if (btnr_calib) {
+        btnr_params_static_t* psta = NULL;
+        if (btnr_calib->opMode == RK_AIQ_OP_MODE_AUTO) {
+            psta = &btnr_calib->stAuto.sta;
+        }else {
+            psta = &btnr_calib->stMan.sta;
+        }
+        pMan->mBtnrPixDomainMode = psta->hw_btnrCfg_pixDomain_mode;
+    }
+
+    bool drc_en = *pMan->mGlobalParams[RESULT_TYPE_DRC_PARAM].en;
+    bool tnr_en = *pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en;
+    if (!drc_en && tnr_en && pMan->mBtnrPixDomainMode == btnr_pixLog2Domain_mode) {
+        *pMan->mGlobalParams[RESULT_TYPE_DRC_PARAM].en = 1;
+        LOGE("Drc must be on when btnr is working in pixLog2Domain_mode.");
+    }
 
     for (int i = 0;i < RESULT_TYPE_MAX_PARAM;i++) {
         if (pMan->mGlobalParams[i].en != NULL) {
@@ -742,21 +977,51 @@ checkAlgoEnableInit(GlobalParamsManager_t* pMan) {
     }
 #endif
 }
+#if ISP_HW_V35
+XCamReturn GlobalParamsManager_checkStatsrc(GlobalParamsManager_t* pMan, void* calib, int type) {
+    int state = AiqManager_getAiqState(pMan->rkAiqManager);
 
+    if (state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED) {
+        if (*pMan->mGlobalParams[RESULT_TYPE_AIBNR_PARAM].en) {
+            if (type == RESULT_TYPE_AWB_PARAM) {
+                awb_api_attrib_t* awb_calib = (awb_api_attrib_t*)calib;
+                awb_api_attrib_t* old_calib = (awb_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+                    (void*)(pMan->mCalibDb), wb));
+                if (old_calib->awbStats.hw_awbCfg_statsSrc_mode != awb_calib->awbStats.hw_awbCfg_statsSrc_mode) {
+                    LOGW_AWB("It isn't safe to switch 3A statistics source when aibnr is on");
+                    socket_client_setNote(pMan->_socket, IPC_RET_UAPI_WARNING, "It isn't safe to switch 3A statistics source when aibnr is on");
+                }
+            }
+            if (type == RESULT_TYPE_AF_PARAM) {
+                af_param_t* af_calib = (af_param_t*)calib;
+                af_param_t* old_calib = (af_param_t*)(CALIBDBV2_GET_MODULE_PTR(
+                    (void*)(pMan->mCalibDb), af_calib));
+                for (int i = 0;i < old_calib->measCfg.sw_afT_measCfgTbl_len;i++) {
+                    if (old_calib->measCfg.measCfgTbl[i].statsCfg.hw_afCfg_statsSrc_mode != af_calib->measCfg.measCfgTbl[i].statsCfg.hw_afCfg_statsSrc_mode) {
+                        LOGW_AF("It isn't safe to switch 3A statistics source when aibnr is on");
+                        socket_client_setNote(pMan->_socket, IPC_RET_UAPI_WARNING, "It isn't safe to switch 3A statistics source when aibnr is on");
+                    }
+                }
+
+            }
+        }
+    }
+    return XCAM_RETURN_NO_ERROR;
+}
+#endif
 XCamReturn GlobalParamsManager_switchCalibDb(GlobalParamsManager_t* pMan, CamCalibDbV2Context_t* calibDb, bool need_check)
 {
     ENTER_ANALYZER_FUNCTION();
-
 	aiqMutex_lock(&pMan->mMutex);
 
     int state = AiqManager_getAiqState(pMan->rkAiqManager);
 
     if (state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED) {
         if (switchCalibDbCheck(pMan, calibDb) == XCAM_RETURN_ERROR_FAILED) {
+            aiqMutex_unlock(&pMan->mMutex);
             return XCAM_RETURN_ERROR_FAILED;
         }
-	}
-
+    }
     pMan->mCalibDb = calibDb;
     init_withCalib(pMan);
     if (need_check) {
@@ -777,8 +1042,8 @@ XCamReturn GlobalParamsManager_set(GlobalParamsManager_t* pMan, rk_aiq_global_pa
 
     XCamReturn ret =
         GlobalParamsManager_checkAlgoEnableBypass(pMan, param->type, &param->en, &param->bypass);
-    if (ret == XCAM_RETURN_ERROR_FAILED) {
-        return XCAM_RETURN_ERROR_FAILED;
+    if (ret == XCAM_RETURN_ERROR_FAILED || ret == XCAM_RETURN_ERROR_PARAM) {
+        return ret;
     }
     if (!checkAlgoParams(pMan, param)) {
         return XCAM_RETURN_ERROR_FAILED;
@@ -808,8 +1073,20 @@ XCamReturn GlobalParamsManager_set(GlobalParamsManager_t* pMan, rk_aiq_global_pa
 
     bool isUpdateManParam = false;
     if (param->opMode == RK_AIQ_OP_MODE_MANUAL) {
-        memcpy(wrap_ptr->man_param_ptr, param->man_param_ptr, param->man_param_size);
-        isUpdateManParam = true;
+        if (param->type != RESULT_TYPE_LDC_PARAM) {
+            if (param->man_param_ptr && param->man_param_size) {
+                memcpy(wrap_ptr->man_param_ptr, param->man_param_ptr, param->man_param_size);
+                isUpdateManParam = true;
+            }
+        } else {
+            if (param->man_param_ptr && param->man_param_size) {
+                ProcessLdcAlgoManParams(param->man_param_ptr, wrap_ptr->man_param_ptr);
+                isUpdateManParam = true;
+            }
+
+            if (param->aut_param_ptr && param->aut_param_size > 0)
+                memcpy(wrap_ptr->aut_param_ptr, param->aut_param_ptr, param->aut_param_size);
+        }
     }
 
     bool isUpdateAutParam = false;
@@ -904,25 +1181,22 @@ GlobalParamsManager_set_ModuleEn(GlobalParamsManager_t* pMan, rk_aiq_module_list
     for (int i = 0;i < RESULT_TYPE_MAX_PARAM;i++) {
         int cur_type = mod->module_ctl[i].type;
         if (pMan->mGlobalParams[cur_type].en != NULL) {
-            if (GlobalParamsManager_checkAlgoEnableBypass(pMan, cur_type, &mod->module_ctl[i].en, &mod->module_ctl[i].bypass) == XCAM_RETURN_ERROR_FAILED) {
+            XCamReturn ret2 = GlobalParamsManager_checkAlgoEnableBypass(pMan, cur_type, &mod->module_ctl[i].en, &mod->module_ctl[i].bypass);
+            if (ret2 == XCAM_RETURN_ERROR_FAILED) {
+                ret |= ret2;
                 continue;
             }
 			aiqMutex_lock(&pMan->mAlgoMutex[cur_type]);
-            if (*pMan->mGlobalParams[cur_type].en != mod->module_ctl[i].en ||
-                *pMan->mGlobalParams[cur_type].bypass != mod->module_ctl[i].bypass ||
-                *pMan->mGlobalParams[cur_type].opMode != mod->module_ctl[i].opMode) {
-                *pMan->mGlobalParams[cur_type].en = mod->module_ctl[i].en;
-                *pMan->mGlobalParams[cur_type].bypass = mod->module_ctl[i].bypass;
-                if(mod->module_ctl[i].opMode == RK_AIQ_OP_MODE_AUTO || mod->module_ctl[i].opMode == RK_AIQ_OP_MODE_MANUAL)
-                    *pMan->mGlobalParams[cur_type].opMode = mod->module_ctl[i].opMode;
-                else
-                    LOGE("%s invalid opMode %d", __func__ ,mod->module_ctl[i].opMode);
-                pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << cur_type;
-			}
+            *pMan->mGlobalParams[cur_type].en = mod->module_ctl[i].en;
+            *pMan->mGlobalParams[cur_type].bypass = mod->module_ctl[i].bypass;
+            if(mod->module_ctl[i].opMode == RK_AIQ_OP_MODE_AUTO || mod->module_ctl[i].opMode == RK_AIQ_OP_MODE_MANUAL)
+                *pMan->mGlobalParams[cur_type].opMode = mod->module_ctl[i].opMode;
+            else
+                LOGE("%s invalid opMode %d", __func__ ,mod->module_ctl[i].opMode);
+            pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << cur_type;
 			aiqMutex_unlock(&pMan->mAlgoMutex[cur_type]);
         }
     }
-
     EXIT_ANALYZER_FUNCTION();
     return ret;
 }
@@ -965,7 +1239,7 @@ aiq_params_base_t* GlobalParamsManager_getAndClearPending2(GlobalParamsManager_t
 	aiqMutex_unlock(&pMan->mAlgoMutex[type]);
     EXIT_ANALYZER_FUNCTION();
     return NULL;
-	
+
 }
 
 XCamReturn GlobalParamsManager_getAndClearPendingLocked(GlobalParamsManager_t* pMan, rk_aiq_global_params_wrap_t* wrap)
@@ -1058,27 +1332,51 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
 {
     int state = AiqManager_getAiqState(pMan->rkAiqManager);
 #if USE_NEWSTRUCT
+#if ISP_HW_V39
     if (type == RESULT_TYPE_TNR_PARAM) {
         if (*pMan->mGlobalParams[type].en != *en) {
             // tnr can't open/close in runtime
             if (state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED) {
                 LOGE("The Btnr doesn't support turn on/off in runtime, please use btnr.bypass instead "
                     "or config during the initialization.");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "The Btnr doesn't support turn on/off in runtime, please use btnr.bypass instead "
+                    "or config during the initialization.");
                 return XCAM_RETURN_ERROR_FAILED;
             }
         }
     }
-
+#elif defined(ISP_HW_V33) || defined(ISP_HW_V35)
+    if (type == RESULT_TYPE_TNR_PARAM) {
+        if (!pMan->btnr_init_enable && *pMan->mGlobalParams[type].en != *en) {
+            // tnr can't open/close in runtime if not enable in first frame
+            if (state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED) {
+                LOGE("The Btnr doesn't support turn on in runtime if not enable in first frame, "
+                    "please use btnr.bypass instead or config during the initialization.");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "The Btnr doesn't support turn on in runtime if not enable in first frame, "
+                    "please use btnr.bypass instead or config during the initialization.");
+                return XCAM_RETURN_ERROR_FAILED;
+            }
+        }
+    }
+#endif
+#if RKAIQ_HAVE_YUVME
     if (type == RESULT_TYPE_MOTION_PARAM) {
-        if (*pMan->mGlobalParams[type].en != *en) {
-            if (state != AIQ_STATE_INITED &&state != AIQ_STATE_STOPED) {
+        if (*pMan->mGlobalParams[type].en != *en && *en) {
+            if (!pMan->yme_init_enable && state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED) {
+                LOGE("The yme didn't enable in first frame, so can't support turn on/off in runtime, "
+                    "please use yme.bypass instead or config during the initialization.");
+                return XCAM_RETURN_ERROR_FAILED;
+            }
+            if(!*pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en){
                 LOGE("btnr and yuvme should be turned on or off simultaneously,"
-                    " and tnr can't open/close in runtime!");
+                    "tnr is disable now and tnr can't open/close in runtime!");
                 return XCAM_RETURN_ERROR_FAILED;
             }
         }
     }
-
+#endif
     if (type == RESULT_TYPE_RAWNR_PARAM) {
         if ((*en == false) && *pMan->mGlobalParams[RESULT_TYPE_TNR_PARAM].en) {
             // can't disable 2dnr while 3dnr enabled
@@ -1088,14 +1386,20 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
 
     if (type == RESULT_TYPE_UVNR_PARAM || type == RESULT_TYPE_YNR_PARAM || type == RESULT_TYPE_SHARPEN_PARAM) {
         if (*pMan->mGlobalParams[type].en != *en) {
+            if (*en == 1) {
+                return XCAM_RETURN_ERROR_PARAM;
+            }
             LOGD("ynr, cnr or sharp en is changed");
             return XCAM_RETURN_BYPASS;
         }
     }
 
-#ifdef ISP_HW_V33
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
     if (type == RESULT_TYPE_ENH_PARAM) {
-        if (*pMan->mGlobalParams[type].en != *en) {
+        if (*pMan->mGlobalParams[type].en != *en || *pMan->mGlobalParams[type].bypass != *bypass) {
+            if (*pMan->mGlobalParams[type].en != *en && *en == 1) {
+                return XCAM_RETURN_ERROR_PARAM;
+            }
             LOGD("enh en is changed");
             bool enh_en = *en;
             bool enh_bypass = *bypass;
@@ -1113,9 +1417,15 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
 
     if (type == RESULT_TYPE_YNR_PARAM) {
         if (*bypass == 1) {
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
+            LOGE("The ynr doesn't support bypass feature, so bypass ynr instead by ynr.dyn.hiNr.hw_ynrT_hiNr_en, ynr.dyn.midLoNr.mf.hw_ynrT_midNr_en and ynr.dyn.midLoNr.lf.hw_ynrT_loNr_en.");
+            socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "The ynr doesn't support bypass feature, so bypass ynr instead by ynr.dyn.hiNr.hw_ynrT_hiNr_en, ynr.dyn.midLoNr.mf.hw_ynrT_midNr_en and ynr.dyn.midLoNr.lf.hw_ynrT_loNr_en.");
+#else
             LOGE("The ynr doesn't support bypass feature, so bypass ynr instead by ynr.dyn.loNr_en and ynr.dyn.hiNr_filtProc.nlmFilt_en");
             socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
                     "The ynr doesn't support bypass feature, so bypass ynr instead by ynr.dyn.loNr_en and ynr.dyn.hiNr_filtProc.nlmFilt_en");
+#endif
             return XCAM_RETURN_BYPASS;
         }
     }
@@ -1126,12 +1436,21 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
                     "The cnr doesn't support bypass feature, so you can set cnr.hiNr_bifilt.bifiltOut_alpha instead");
             return XCAM_RETURN_ERROR_FAILED;
         }
+#if defined(ISP_HW_V35)
+        if (*en == 0 && *pMan->mGlobalParams[RESULT_TYPE_IE_PARAM].en) {
+            LOGE("The ie is enabled, cnr can't be disabled. ie use cnr module's uv_dis param to set img to gray");
+            socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                "The ie is enabled, cnr can't be disabled. ie use cnr module's uv_dis param to set img to gray");
+            return XCAM_RETURN_ERROR_FAILED;
+        }
+#endif
     }
 
     if (type == RESULT_TYPE_BLC_PARAM || type == RESULT_TYPE_DPCC_PARAM || type == RESULT_TYPE_CCM_PARAM ||
         type == RESULT_TYPE_RGBIR_PARAM || type == RESULT_TYPE_AGAMMA_PARAM || type == RESULT_TYPE_LSC_PARAM ||
-        type == RESULT_TYPE_LDCH_PARAM || type == RESULT_TYPE_CSM_PARAM || type == RESULT_TYPE_CGC_PARAM ||
-        type == RESULT_TYPE_LDC_PARAM) {
+        type == RESULT_TYPE_CSM_PARAM || type == RESULT_TYPE_CGC_PARAM ||
+        type == RESULT_TYPE_LDC_PARAM || type == RESULT_TYPE_TRANS_PARAM || type == RESULT_TYPE_HSV_PARAM ||
+        type == RESULT_TYPE_LUT3D_PARAM || type == RESULT_TYPE_MERGE_PARAM) {
         if (*bypass == 1) {
             LOGE("This module doesn't support bypass feature");
             return XCAM_RETURN_ERROR_FAILED;
@@ -1140,21 +1459,45 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
 
     if (type == RESULT_TYPE_MERGE_PARAM) {
         if (state == AIQ_STATE_PREPARED || state == AIQ_STATE_STARTED) {
-            printf("state %d\n", state);
-            if (AiqManager_getWorkingMode(pMan->rkAiqManager) != RK_AIQ_WORKING_MODE_NORMAL && (*en == 0 || *bypass == 1)) {
+            if (AiqManager_getWorkingMode(pMan->rkAiqManager) != RK_AIQ_WORKING_MODE_NORMAL && *en == 0) {
                 LOGE("HDRMGE must be on  when isp is HDR mode. Please turn on by mge.en");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "HDRMGE must be on  when isp is HDR mode. Please turn on by mge.en");
                 return XCAM_RETURN_ERROR_FAILED;
             }
             if (AiqManager_getWorkingMode(pMan->rkAiqManager) == RK_AIQ_WORKING_MODE_NORMAL && *en == 1) {
                 LOGE("HDRMGE must be off when isp is Liner mode. Please turn off by mge.en");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "HDRMGE must be off when isp is Liner mode. Please turn off by mge.en");
                 return XCAM_RETURN_ERROR_FAILED;
             }
         }
     }
+
+    if (type == RESULT_TYPE_TRANS_PARAM) {
+        if (*pMan->mGlobalParams[type].en != *en && *en == 1 && *en != *pMan->mGlobalParams[RESULT_TYPE_DRC_PARAM].en) {
+            LOGW("Trans must be enable when drc is enable, please use drc.en to turn on drc module.");
+            socket_client_setNote(pMan->_socket, IPC_RET_UAPI_WARNING,
+                    "Trans must be enable when drc is enable, please use drc.en to turn on drc module.");
+        }
+    }
+
     if (type == RESULT_TYPE_DRC_PARAM) {
         if (AiqManager_getWorkingMode(pMan->rkAiqManager) != RK_AIQ_WORKING_MODE_NORMAL && *en == 0) {
             LOGE("Drc must be on  when isp is HDR mode. Please turn on by drc.en");
+            socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,"Drc must be on when isp is HDR mode.");
             return XCAM_RETURN_ERROR_FAILED;
+        }
+        if (*pMan->mGlobalParams[type].en != *en && *en == 0 && pMan->mBtnrPixDomainMode != btnr_pixLinearDomain_mode) {
+            LOGE("Drc must be on when btnr is working in pixLog2Domain_mode.Note that predgain is dynamic in pixLog2Domain_mode.");
+            socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                "Drc must be on when btnr is working in pixLog2Domain_mode.Note that predgain is dynamic in pixLog2Domain_mode.");
+            return XCAM_RETURN_BYPASS;
+        }
+        if (*pMan->mGlobalParams[type].en != *en && *en == 0 && *en != *pMan->mGlobalParams[RESULT_TYPE_TRANS_PARAM].en) {
+            LOGW("Trans must be disable when drc is disable, please use trans.en to turn off trans module.");
+            socket_client_setNote(pMan->_socket, IPC_RET_UAPI_WARNING,
+                "Trans must be disable when drc is disable, please use trans.en to turn off trans module.");
         }
 #ifdef ISP_HW_V39
         if (*pMan->mGlobalParams[type].en != *en && *en == 1) {
@@ -1178,7 +1521,7 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
             }
         }
 #endif
-#ifdef ISP_HW_V33
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
         if (*pMan->mGlobalParams[type].en != *en && *en == 1) {
             if (!*pMan->mGlobalParams[RESULT_TYPE_DEBAYER_PARAM].en || !*pMan->mGlobalParams[RESULT_TYPE_CAC_PARAM].en) {
                 LOGW("DRC relies on the resources of the DEBAYER and CAC,"
@@ -1216,7 +1559,7 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
         }
     }
 #endif
-#ifdef ISP_HW_V33
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
     if (type == RESULT_TYPE_DEBAYER_PARAM || type == RESULT_TYPE_CAC_PARAM) {
         if (*en == 0 && *pMan->mGlobalParams[RESULT_TYPE_DRC_PARAM].en) {
             *en = 1;
@@ -1250,51 +1593,275 @@ static bool checkAlgoParams(GlobalParamsManager_t* pMan, rk_aiq_global_params_wr
         (state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED)) {
         btnr_api_attrib_t attr;
         btnr_api_attrib_t old_attr;
-        btnr_pixDomain_mode_t newmode;
-        btnr_pixDomain_mode_t oldmode;
+        memcpy(&attr.stAuto, param->aut_param_ptr, param->aut_param_size);
+        memcpy(&attr.stMan, param->man_param_ptr, param->man_param_size);
+        memcpy(&old_attr.stAuto, pMan->mGlobalParams[param->type].aut_param_ptr, param->aut_param_size);
+        memcpy(&old_attr.stMan, pMan->mGlobalParams[param->type].man_param_ptr, param->man_param_size);
+        btnr_pixDomain_mode_t newpixmode;
+        btnr_pixDomain_mode_t oldpixmode;
         if (param->opMode == RK_AIQ_OP_MODE_AUTO) {
-            memcpy(&attr.stAuto, param->aut_param_ptr, param->aut_param_size);
-            newmode = attr.stAuto.sta.hw_btnrCfg_pixDomain_mode;
+            newpixmode = attr.stAuto.sta.hw_btnrCfg_pixDomain_mode;
         }
         else {
-            memcpy(&attr.stMan, param->man_param_ptr, param->man_param_size);
-            newmode = attr.stMan.sta.hw_btnrCfg_pixDomain_mode;
+            newpixmode = attr.stMan.sta.hw_btnrCfg_pixDomain_mode;
         }
         if (*pMan->mGlobalParams[param->type].opMode == RK_AIQ_OP_MODE_AUTO) {
-            memcpy(&old_attr.stAuto, pMan->mGlobalParams[param->type].aut_param_ptr, param->aut_param_size);
-            oldmode = old_attr.stAuto.sta.hw_btnrCfg_pixDomain_mode;
+            oldpixmode = old_attr.stAuto.sta.hw_btnrCfg_pixDomain_mode;
         }
         else{
-            memcpy(&old_attr.stMan, pMan->mGlobalParams[param->type].man_param_ptr, param->man_param_size);
-            oldmode = old_attr.stMan.sta.hw_btnrCfg_pixDomain_mode;
+            oldpixmode = old_attr.stMan.sta.hw_btnrCfg_pixDomain_mode;
         }
-        if (newmode != oldmode) {
+        if (newpixmode != oldpixmode) {
+            pMan->mBtnrPixDomainMode = newpixmode;
+            pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_DRC_PARAM;
             LOGE("During the runtime of btnr, it is not allowed to change the pixDomain_mode. Please configure during the initialization.");
             socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "During the runtime of btnr, it is not allowed to change the pixDomain_mode. Please configure during the initialization.\n");
             return true;
         }
+        bool predgain_update = false;
+        predgain_update |= attr.stAuto.sta.debug.predgainWkArd.sw_btnrT_predgainWkArd_en != old_attr.stAuto.sta.debug.predgainWkArd.sw_btnrT_predgainWkArd_en;
+        predgain_update |= attr.stAuto.sta.debug.predgainWkArd.sw_btnrT_predgain_mode != old_attr.stAuto.sta.debug.predgainWkArd.sw_btnrT_predgain_mode;
+        predgain_update |= attr.stMan.sta.debug.predgainWkArd.sw_btnrT_predgain_mode != old_attr.stMan.sta.debug.predgainWkArd.sw_btnrT_predgain_mode;
+        predgain_update |= attr.stMan.sta.debug.predgainWkArd.sw_btnrT_predgainWkArd_en != old_attr.stMan.sta.debug.predgainWkArd.sw_btnrT_predgainWkArd_en;
+        for (int i = 0;i < BTNR_ISO_SEGMENT_MAX;i++) {
+            predgain_update |= attr.stAuto.sta.debug.predgainWkArd.hw_btnrT_predgain_curve[i] != old_attr.stAuto.sta.debug.predgainWkArd.hw_btnrT_predgain_curve[i];
+        }
+        predgain_update |= attr.stMan.sta.debug.predgainWkArd.hw_btnrT_predgain_curve != old_attr.stMan.sta.debug.predgainWkArd.hw_btnrT_predgain_curve;
+
+        if (predgain_update) {
+            pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_DRC_PARAM;
+            return true;
+        }
+
     }
 
-    if (param->type == RESULT_TYPE_BLC_PARAM && AiqManager_getWorkingMode(pMan->rkAiqManager) != RK_AIQ_WORKING_MODE_NORMAL) {
+    if (param->type == RESULT_TYPE_BLC_PARAM) {
         blc_api_attrib_t attr;
-        if (param->opMode == RK_AIQ_OP_MODE_AUTO) {
-            memcpy(&attr.stAuto, param->aut_param_ptr, param->aut_param_size);
-            for (int i = 0;i < BLC_ISO_STEP_MAX;i++) {
-                if (attr.stAuto.dyn[i].obcPostTnr.sw_blcT_obcPostTnr_en) {
+        if (AiqManager_getWorkingMode(pMan->rkAiqManager) != RK_AIQ_WORKING_MODE_NORMAL) {
+            if (param->opMode == RK_AIQ_OP_MODE_AUTO) {
+                memcpy(&attr.stAuto, param->aut_param_ptr, param->aut_param_size);
+                for (int i = 0;i < BLC_ISO_STEP_MAX;i++) {
+                    if (attr.stAuto.dyn[i].obcPostTnr.sw_blcT_obcPostTnr_en) {
+                        LOGE("obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.sw_blcT_obcPostTnr_en!");
+                        socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.obcPostTnr_en\n");
+                        return false;
+                    }
+                }
+            }
+            else {
+                memcpy(&attr.stMan, param->man_param_ptr, param->man_param_size);
+                if (attr.stMan.dyn.obcPostTnr.sw_blcT_obcPostTnr_en) {
                     LOGE("obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.sw_blcT_obcPostTnr_en!");
                     socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.obcPostTnr_en\n");
                     return false;
                 }
             }
         }
-        else {
+    }
+#ifdef RKAIQ_HAVE_HSV
+    if (param->type == RESULT_TYPE_HSV_PARAM) {
+        hsv_api_attrib_t attr;
+        if (param->opMode == RK_AIQ_OP_MODE_MANUAL) {
             memcpy(&attr.stMan, param->man_param_ptr, param->man_param_size);
-            if (attr.stMan.dyn.obcPostTnr.sw_blcT_obcPostTnr_en) {
-                LOGE("obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.sw_blcT_obcPostTnr_en!");
-                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "obcPostTnr is only available in ISP linear mode. Please turn off by blc.dyn.obcPostTnr.obcPostTnr_en\n");
+            int lut0_mode = 0, lut1_mode = 0, lut2_mode = 0;
+#if defined ISP_HW_V33
+            lut0_mode = attr.stMan.dyn.lut1d0.hw_hsvT_lut1d_mode==3? 1: attr.stMan.dyn.lut1d0.hw_hsvT_lut1d_mode;
+            lut1_mode = attr.stMan.dyn.lut1d1.hw_hsvT_lut1d_mode==3? 1: attr.stMan.dyn.lut1d1.hw_hsvT_lut1d_mode;
+            lut2_mode = attr.stMan.dyn.lut2d.hw_hsvT_lut2d_mode / 2;
+#endif
+#if defined(ISP_HW_V35)
+            if (attr.stMan.sta.hw_hsvT_lut_mode == hsv_1dAnd2d_mode) {
+                if (attr.stMan.sta.hw_hsvT_lut2d1_en || attr.stMan.sta.hw_hsvT_lut2d2_en) {
+                    LOGE("lut2d1/lut2d2 should be off when hsv lut mode is 1dAnd2d. "
+                        "Please turn off by hsv.sta.hw_hsvT_lut2d1_en, hsv.sta.hw_hsvT_lut2d2_en!");
+                    socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "lut2d1/lut2d2 should be off when hsv lut mode is 1dAnd2d. "
+                        "Please turn off by hsv.sta.hw_hsvT_lut2d1_en, hsv.sta.hw_hsvT_lut2d2_en!\n");
+                }
+                lut0_mode = attr.stMan.dyn.lut1d0.hw_hsvT_lut1d_mode==3? 1: attr.stMan.dyn.lut1d0.hw_hsvT_lut1d_mode;
+                lut1_mode = attr.stMan.dyn.lut1d1.hw_hsvT_lut1d_mode==3? 1: attr.stMan.dyn.lut1d1.hw_hsvT_lut1d_mode;
+                lut2_mode = attr.stMan.dyn.lut2d.hw_hsvT_lut2d_mode / 2;
+            } else if (attr.stMan.sta.hw_hsvT_lut_mode == hsv_only2d_mode) {
+                if (attr.stMan.sta.hw_hsvT_lut1d0_en || attr.stMan.sta.hw_hsvT_lut1d1_en) {
+                    LOGE("lut1d0/lut1d1 should be off when hsv lut mode is only2d. "
+                        "Please turn off by hsv.sta.hw_hsvT_lut1d0_en, hsv.sta.hw_hsvT_lut1d1_en!");
+                    socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "lut1d0/lut1d1 should be off when hsv lut mode is only2d. "
+                        "Please turn off by hsv.sta.hw_hsvT_lut1d0_en, hsv.sta.hw_hsvT_lut1d1_en!\n");
+                }
+                lut0_mode = attr.stMan.dyn.lut2d.hw_hsvT_lut2d_mode / 2;
+                lut1_mode = attr.stMan.dyn.lut2d1.hw_hsvT_lut2d_mode / 2;
+                lut2_mode = attr.stMan.dyn.lut2d2.hw_hsvT_lut2d_mode / 2;
+            }
+#endif
+            if (lut0_mode == lut1_mode || lut1_mode == lut2_mode || lut2_mode == lut0_mode) {
+                LOGE("Three output channels of hsv lut must be different. "
+                    "Please configure by hsv.dyn.lut1d0.hw_hsvT_lut1d_mode, hsv.dyn.lut1d1.hw_hsvT_lut1d_mode, hsv.dyn.lut2d.hw_hsvT_lut2d_mode!");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "Three output channels of hsv lut must be different. "
+                    "Please configure by hsv.dyn.lut1d0.hw_hsvT_lut1d_mode, hsv.dyn.lut1d1.hw_hsvT_lut1d_mode, hsv.dyn.lut2d.hw_hsvT_lut2d_mode!\n");
                 return false;
             }
         }
+#ifdef ISP_HW_V35
+        if (state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED) {
+            hsv_lutcfg_mode_t newmode;
+            hsv_lutcfg_mode_t oldmode;
+            hsv_api_attrib_t old_attr;
+            memcpy(&attr.stAuto, param->aut_param_ptr, param->aut_param_size);
+            memcpy(&old_attr.stAuto, pMan->mGlobalParams[param->type].aut_param_ptr, param->aut_param_size);
+            memcpy(&old_attr.stMan, pMan->mGlobalParams[param->type].man_param_ptr, param->man_param_size);
+            if (param->opMode == RK_AIQ_OP_MODE_AUTO) {
+                newmode = attr.stAuto.sta.hsvCfg.hw_hsvT_lut_mode;
+            }
+            else {
+                newmode = attr.stMan.sta.hw_hsvT_lut_mode;
+            }
+            if (*pMan->mGlobalParams[param->type].opMode == RK_AIQ_OP_MODE_AUTO) {
+                oldmode = old_attr.stAuto.sta.hsvCfg.hw_hsvT_lut_mode;
+            }
+            else{
+                oldmode = old_attr.stMan.sta.hw_hsvT_lut_mode;
+            }
+            if (newmode != oldmode) {
+                LOGE("During the runtime of hsv, it is not allowed to change the hsvT_lut_mode. Please configure during the initialization.");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, "During the runtime of hsv, it is not allowed to change the hsvT_lut_mode. Please configure during the initialization.\n");
+                return true;
+            }
+        }
+#endif
+    }
+#endif
+
+    if (param->type == RESULT_TYPE_LSC_PARAM) {
+        lsc_api_attrib_t attr;
+        lsc_param_static_t* psta = NULL;
+        if (param->opMode == RK_AIQ_OP_MODE_AUTO) {
+            memcpy(&attr.stAuto, param->aut_param_ptr, param->aut_param_size);
+            psta = &attr.stAuto.sta.lscCfg;
+        } else {
+            memcpy(&attr.stMan, param->man_param_ptr, param->man_param_size);
+            psta = &attr.stMan.sta;
+        }
+        char print_buf[160];
+        if (!checkLscAlgoParams(pMan, psta, print_buf)){
+            LOGE("%s", print_buf);
+            socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR, print_buf);
+        }
+    }
+
+    if (param->type == RESULT_TYPE_DRC_PARAM) {
+        drc_api_attrib_t attr;
+        if (param->opMode == RK_AIQ_OP_MODE_MANUAL) {
+            memcpy(&attr.stMan, param->man_param_ptr, param->man_param_size);
+            if (attr.stMan.dyn.drcProc.sw_drcT_drcCurve_mode == adrc_auto_mode) {
+                LOGE(
+                    "sw_drcT_drcCurve_mode == adrc_auto_mode is not supported in RK_AIQ_OP_MODE_MANUAL "
+                    "mode. Please using adrc_usrConfig_mode/adrc_vendorDefault_mode instead.");
+                socket_client_setNote(
+                    pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "sw_drcT_drcCurve_mode == adrc_auto_mode is not supported in RK_AIQ_OP_MODE_MANUAL "
+                    "mode. Please using adrc_usrConfig_mode/adrc_vendorDefault_mode instead.\n");
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool checkLscAlgoParams(GlobalParamsManager_t* pMan, lsc_param_static_t* psta, char* print_buf) {
+    if (psta->sw_lscT_meshGrid_mode == 0) {
+        if (fabs(psta->meshGrid.posX_f[0]) > DIVMIN ||
+            fabs(psta->meshGrid.posY_f[0]) > DIVMIN ||
+            fabs(psta->meshGrid.posX_f[LSC_MESHGRID_SIZE] - 1) > DIVMIN ||
+            fabs(psta->meshGrid.posY_f[LSC_MESHGRID_SIZE] - 1) > DIVMIN) {
+            sprintf(print_buf, "posX_f and posY_f must be began with 0 and ended with 1. "
+                "Please configure by lsc.sta.meshGrid.posX_f, lsc.sta.meshGrid.posY_f!\n");
+            return false;
+        }
+        int x0, x1, y0, y1;
+        x0 = 0;
+        y0 = 0;
+        rk_aiq_exposure_sensor_descriptor sensor_des;
+        AiqCamHw_getSensorModeData(pMan->rkAiqManager->mCamHw, pMan->rkAiqManager->mSnsEntName, &sensor_des);
+        for (int i=0; i<LSC_MESHGRID_SIZE; i++) {
+            x1 = (int)(psta->meshGrid.posX_f[i+1] * (float)sensor_des.isp_acq_width);
+            y1 = (int)(psta->meshGrid.posY_f[i+1] * (float)sensor_des.isp_acq_height);
+            if ((x1 - x0 < 12) || (y1 - y0 < 8)) {
+                sprintf(print_buf, "XYinterval between %d-th and %d-th sample point must greater than [12, 8]."
+                "Please configure by lsc.sta.meshGrid.posX_f[%d], lsc.sta.meshGrid.posY_f[%d]!\n", i, i+1, i+1, i+1);
+                return false;
+            }
+            x0 = x1;
+            y0 = y1;
+        }
     }
     return true;
+}
+
+static bool ProcessLdcAlgoManParams(void* src, void* dst) {
+    ldc_param_t* pSrc = (ldc_param_t*)src;
+    ldc_param_t* pDst = (ldc_param_t*)dst;
+
+    pDst->sta.ldchCfg.en = pSrc->sta.ldchCfg.en;
+    if (pDst->sta.ldchCfg.en) {
+        ldc_lutMapCfg_t* pSrcLutCfgX = &pSrc->sta.ldchCfg.lutMapCfg;
+        ldc_lutMapCfg_t* pDstLutCfgX = &pDst->sta.ldchCfg.lutMapCfg;
+
+        uint32_t size = pSrcLutCfgX->sw_ldcT_lutMap_size;
+        if (!size) return false;
+
+        if (!pDstLutCfgX->sw_ldcT_lutMapBuf_vaddr[0]) {
+            pDstLutCfgX->sw_ldcT_lutMapBuf_vaddr[0] = aiq_mallocz(size);
+            LOGK_ALDC("Malloc lut buf size %u for ldch", size);
+        } else if (size != pDstLutCfgX->sw_ldcT_lutMap_size) {
+            aiq_free(pDstLutCfgX->sw_ldcT_lutMapBuf_vaddr[0]);
+            pDstLutCfgX->sw_ldcT_lutMapBuf_vaddr[0] = aiq_mallocz(size);
+            LOGK_ALDC("Old lut buf size %u, remalloc lut buf size %u for ldch",
+                      pDstLutCfgX->sw_ldcT_lutMap_size, size);
+        }
+
+        pDstLutCfgX->sw_ldcT_lutMap_size = size;
+
+        // copy ldch lut buffer from api
+        if (pSrcLutCfgX->sw_ldcT_lutMapBuf_vaddr[0] && pDstLutCfgX->sw_ldcT_lutMapBuf_vaddr[0])
+            memcpy(pDstLutCfgX->sw_ldcT_lutMapBuf_vaddr[0], pSrcLutCfgX->sw_ldcT_lutMapBuf_vaddr[0],
+                   size);
+    }
+
+#if RKAIQ_HAVE_LDCV
+    pDst->sta.ldcvCfg.en = pSrc->sta.ldcvCfg.en;
+    if (pDst->sta.ldcvCfg.en) {
+        ldc_lutMapCfg_t* pSrcLutCfgY = &pSrc->sta.ldcvCfg.lutMapCfg;
+        ldc_lutMapCfg_t* pDstLutCfgY = &pDst->sta.ldcvCfg.lutMapCfg;
+
+        uint32_t size = pSrcLutCfgY->sw_ldcT_lutMap_size;
+        if (!size) return false;
+
+        if (!pDstLutCfgY->sw_ldcT_lutMapBuf_vaddr[0]) {
+            pDstLutCfgY->sw_ldcT_lutMapBuf_vaddr[0] = aiq_mallocz(size);
+            LOGK_ALDC("Malloc lut buf size %u for ldcv", size);
+        } else if (size != pDstLutCfgY->sw_ldcT_lutMap_size) {
+            aiq_free(pDstLutCfgY->sw_ldcT_lutMapBuf_vaddr[0]);
+            pDstLutCfgY->sw_ldcT_lutMapBuf_vaddr[0] = aiq_mallocz(size);
+            LOGK_ALDC("Old lut buf size %u, remalloc lut buf size %u for ldcv",
+                      pDstLutCfgY->sw_ldcT_lutMap_size, size);
+        }
+
+        pDstLutCfgY->sw_ldcT_lutMap_size = size;
+
+        // copy ldcv lut buffer from api
+        if (pSrcLutCfgY->sw_ldcT_lutMapBuf_vaddr[0] && pDstLutCfgY->sw_ldcT_lutMapBuf_vaddr[0])
+            memcpy(pDstLutCfgY->sw_ldcT_lutMapBuf_vaddr[0], pSrcLutCfgY->sw_ldcT_lutMapBuf_vaddr[0],
+                   size);
+    }
+#endif
+
+    return true;
+}
+
+bool GlobalParamsManager_get_SingleModuleEn(GlobalParamsManager_t* pMan, int type)
+{
+    if (pMan->mGlobalParams[type].en) {
+        return *pMan->mGlobalParams[type].en;
+    }
+
+    return false;
 }

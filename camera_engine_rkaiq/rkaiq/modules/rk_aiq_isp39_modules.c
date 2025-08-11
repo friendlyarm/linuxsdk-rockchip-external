@@ -5,6 +5,7 @@
 #include "rk_aiq_isp39_modules.h"
 
 #include "range_check.h"
+#include "rk_aiq_module_common.c"
 #include "rk_aiq_module_ae25.c"
 #include "rk_aiq_module_blc30.c"
 #include "rk_aiq_module_dpcc21.c"
@@ -28,4 +29,5 @@
 #include "rk_aiq_module_3dlut20.c"
 #include "rk_aiq_module_dehaze23.c"
 #include "rk_aiq_module_ldch22.c"
+#include "rk_aiq_module_ldcv22.c"
 #include "rk_aiq_module_dm23.c"

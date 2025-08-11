@@ -20,6 +20,10 @@ include_directories(
 	./
 )
 
+if(RKAIQ_HAVE_DUMPSYS)
+    include_directories(${CMAKE_SOURCE_DIR}/dumpcam_server/info/include)
+endif()
+
 if(WIN32)
     set(PREFIX )
 	set(SUFFIX lib)
@@ -44,6 +48,10 @@ set (GROUP_AE_SRC
     ae/rk_aiq_algo_camgroup_ae_itf.c
 	ae/rk_aiq_group_ae_algo.c
 )
+
+if (RKAIQ_HAVE_DUMPSYS)
+    set(GROUP_AE_SRC ${GROUP_AE_SRC} ae/rk_aiq_group_ae_algo_info.c)
+endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ae/rk_aiq_algo_camgroup_ae_itf.c")
 	message(${LIBRARY_OUTPUT_PATH})
@@ -175,7 +183,7 @@ elseif (RKAIQ_HAVE_YNR_V22)
         list(APPEND MISC_SRC aynrV22/rk_aiq_algo_camgroup_aynr_itf_v22.cpp)
         list(APPEND MISC_SRC aynrV22/rk_aiq_uapi_camgroup_aynr_int_v22.cpp)
     endif()
-elseif (RKAIQ_HAVE_YNR_V24 OR RKAIQ_HAVE_YNR_V40)
+elseif (RKAIQ_HAVE_YNR_V24 OR RKAIQ_HAVE_YNR_V40 OR RKAIQ_HAVE_YNR_V41)
 	if (RKAIQ_NEWSTRUCT_TEST)
         list(APPEND MISC_SRC newStruct/ynr/rk_aiq_algo_camgroup_ynr.c)
 	else ()
@@ -194,7 +202,7 @@ elseif (RKAIQ_HAVE_BAYERTNR_V23 OR RKAIQ_HAVE_BAYERTNR_V23_LITE)
         list(APPEND MISC_SRC abayertnrV23/rk_aiq_uapi_camgroup_abayertnr_int_v23.cpp)
         list(APPEND MISC_SRC abayertnrV23/rk_aiq_algo_camgroup_abayertnr_itf_v23.cpp)
     endif()
-elseif (RKAIQ_HAVE_BAYERTNR_V30 OR RKAIQ_HAVE_BAYERTNR_V41)
+elseif (RKAIQ_HAVE_BAYERTNR_V30 OR RKAIQ_HAVE_BAYERTNR_V41 OR RKAIQ_HAVE_BAYERTNR_V42)
 	if (RKAIQ_NEWSTRUCT_TEST)
         list(APPEND MISC_SRC newStruct/bayertnr/rk_aiq_algo_camgroup_btnr.c)
 	else ()

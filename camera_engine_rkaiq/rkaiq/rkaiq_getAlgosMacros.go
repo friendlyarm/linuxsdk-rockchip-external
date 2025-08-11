@@ -6,8 +6,16 @@ import (
 
 func rkaiq_getAlgosMacros(macros_map map[string]bool) []string {
     var flag0 bool = false;
+    var flag1 bool = false;
+    var flag2 bool = false;
+    var flag3 bool = false;
 
     var cflags []string;
+
+    flag0 = macros_map["RKAIQ_IMPLEMENT_C"]
+    if (flag0) {
+        cflags = append(cflags, "-DUSE_IMPLEMENT_C=1")
+    }
 
     flag0 = macros_map["RKAIQ_USE_RAWSTREAM_LIB"]
     if (flag0) {
@@ -252,6 +260,11 @@ func rkaiq_getAlgosMacros(macros_map map[string]bool) []string {
         cflags = append(cflags, "-DRKAIQ_HAVE_AMD_V1=1")
         cflags = append(cflags, "-DRKAIQ_HAVE_AMD=1")
     }
+    flag0 = macros_map["RKAIQ_HAVE_AMTD_V1"]
+    if (flag0) {
+        cflags = append(cflags, "-DRKAIQ_HAVE_AMTD_V1=1")
+        cflags = append(cflags, "-DRKAIQ_HAVE_AMTD=1")
+    }
     flag0 = macros_map["RKAIQ_HAVE_YUVME_V1"]
     if (flag0) {
         cflags = append(cflags, "-DRKAIQ_HAVE_YUVME_V1=1")
@@ -306,6 +319,11 @@ func rkaiq_getAlgosMacros(macros_map map[string]bool) []string {
         cflags = append(cflags, "-DRKAIQ_HAVE_MERGE_V12=1")
         cflags = append(cflags, "-DRKAIQ_HAVE_MERGE=1")
     }
+    flag0 = macros_map["RKAIQ_HAVE_MERGE_V13"]
+    if (flag0) {
+        cflags = append(cflags, "-DRKAIQ_HAVE_MERGE_V13=1")
+        cflags = append(cflags, "-DRKAIQ_HAVE_MERGE=1")
+    }
     flag0 = macros_map["RKAIQ_HAVE_DRC_V10"]
     if (flag0) {
         cflags = append(cflags, "-DRKAIQ_HAVE_DRC_V10=1")
@@ -324,6 +342,11 @@ func rkaiq_getAlgosMacros(macros_map map[string]bool) []string {
     flag0 = macros_map["RKAIQ_HAVE_DRC_V20"]
     if (flag0) {
         cflags = append(cflags, "-DRKAIQ_HAVE_DRC_V20=1")
+        cflags = append(cflags, "-DRKAIQ_HAVE_DRC=1")
+    }
+    flag0 = macros_map["RKAIQ_HAVE_DRC_V21"]
+    if (flag0) {
+        cflags = append(cflags, "-DRKAIQ_HAVE_DRC_V21=1")
         cflags = append(cflags, "-DRKAIQ_HAVE_DRC=1")
     }
     flag0 = macros_map["RKAIQ_HAVE_DEHAZE_V10"]
@@ -375,6 +398,15 @@ func rkaiq_getAlgosMacros(macros_map map[string]bool) []string {
     if (flag0) {
         cflags = append(cflags, "-DRKAIQ_HAVE_LDCH_V10=1")
         cflags = append(cflags, "-DRKAIQ_HAVE_LDCH=1")
+    }
+    flag0 = macros_map["RKAIQ_HAVE_LDCH_V22"]
+    if (flag0) {
+        cflags = append(cflags, "-DRKAIQ_HAVE_LDCH_V22=1")
+        cflags = append(cflags, "-DRKAIQ_HAVE_LDCH=1")
+    }
+    flag0 = macros_map["RKAIQ_HAVE_LDCV_V22"]
+    if (flag0) {
+        cflags = append(cflags, "-DRKAIQ_HAVE_LDCV_V22=1")
     }
     flag0 = macros_map["RKAIQ_HAVE_FEC_V10"]
     if (flag0) {
@@ -551,6 +583,23 @@ func rkaiq_getAlgosMacros(macros_map map[string]bool) []string {
         cflags = append(cflags, "-DRKAIQ_HAVE_DRC_V12_LITE=1")
         cflags = append(cflags, "-DRKAIQ_HAVE_DRC=1")
     }
+    flag0 = macros_map["RKAIQ_ENABLE_SIMULATOR"]
+    flag1 = macros_map["RKAIQ_HAVE_LDCH_V10"]
+    flag2 = macros_map["RKAIQ_HAVE_LDCH_V21"]
+    flag3 = macros_map["RKAIQ_HAVE_LDCH_V22"]
+    if !flag0 {
+        if flag3 {
+            cflags = append(cflags, "-DRKAIQ_HAVE_DRC=1")
+        } else if flag1 || flag2 {
+            cflags = append(cflags, "-DGENMESH_ONLINE")
+        }
+    }
+
+    flag0 = macros_map["RKAIQ_HAVE_DUMPSYS"]
+    if (flag0) {
+        cflags = append(cflags, "-DRKAIQ_HAVE_DUMPSYS=1")
+    }
+
     for i, v := range cflags {
         fmt.Printf("%d %s\n", i, v)
     }

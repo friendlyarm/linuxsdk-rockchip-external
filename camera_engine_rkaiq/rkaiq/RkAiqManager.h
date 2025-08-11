@@ -192,6 +192,7 @@ public:
     XCamReturn syncSofEvt(SmartPtr<VideoBuffer>& hwres);
     // from RkAiqAnalyzerCb
     void rkAiqCalcDone(SmartPtr<RkAiqFullParamsProxy>& results);
+    void rkAiqCalcExpDone(SmartPtr<RkAiqExpParamsProxy>& results);
     void rkAiqCalcFailed(const char* msg);
     // from RkLumaAnalyzerCb
     void rkLumaCalcDone(rk_aiq_luma_params_t luma_params);
@@ -234,6 +235,7 @@ public:
     bool ainr_status;
 protected:
     XCamReturn applyAnalyzerResult(SmartPtr<RkAiqFullParamsProxy>& results, bool ignoreIsUpdate = false);
+    XCamReturn applyAnalyzerExpResult(SmartPtr<RkAiqExpParamsProxy>& results);
     XCamReturn swWorkingModeDyn(rk_aiq_working_mode_t mode);
 private:
     XCAM_DEAD_COPY (RkAiqManager);
@@ -277,6 +279,7 @@ private:
     int mTBStatsCnt {0};
     uint32_t mLastAweekId{(uint32_t)-1};
     SmartPtr<GlobalParamsManager> mGlobalParamsManager;
+    bool mIsAovMode{false};
 };
 
 } //namespace RkCam

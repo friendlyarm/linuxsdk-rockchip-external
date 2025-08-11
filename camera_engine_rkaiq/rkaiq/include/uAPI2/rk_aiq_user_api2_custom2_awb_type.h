@@ -75,6 +75,7 @@ typedef struct _RkAiqAwbAlgoContext2 {
     int camIdArrayLen;
     bool isGroupMode;
     bool isRkCb;
+    int camId;
 } RkAiqAwbAlgoContext2;
 
 

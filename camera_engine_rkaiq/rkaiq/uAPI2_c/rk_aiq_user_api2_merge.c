@@ -15,7 +15,7 @@
  */
 
 
-#include "isp/rk_aiq_isp_merge22.h"
+#include "newStruct/merge/include/merge_algo_api.h"
 #include "uAPI2/rk_aiq_user_api2_merge.h"
 #include "aiq_core_c/algo_handlers/RkAiqMergeHandler.h"
 #include "uAPI2_c/rk_aiq_user_api2_common.h"

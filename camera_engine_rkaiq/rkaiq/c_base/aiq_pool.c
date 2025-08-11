@@ -194,6 +194,30 @@ void aiqPool_reset(AiqPool_t* pool) {
     aiqMutex_unlock(&pool->_mutex);
 }
 
+int aiqPool_getItemNums(AiqPool_t* pool) {
+    int ret = 0;
+
+    XCAM_ASSERT(pool);
+
+    aiqMutex_lock(&pool->_mutex);
+    ret = pool->_item_nums;
+    aiqMutex_unlock(&pool->_mutex);
+
+    return ret;
+}
+
+int aiqPool_getItemSize(AiqPool_t* pool) {
+    int ret = 0;
+
+    XCAM_ASSERT(pool);
+
+    aiqMutex_lock(&pool->_mutex);
+    ret = pool->_item_size;
+    aiqMutex_unlock(&pool->_mutex);
+
+    return ret;
+}
+
 void aiqPool_dump(AiqPool_t* pool) {
     int size             = 0;
     int i                = 0;

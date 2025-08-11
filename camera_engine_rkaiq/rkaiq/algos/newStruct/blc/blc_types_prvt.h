@@ -52,9 +52,11 @@
 typedef struct BlcContext_s {
     const RkAiqAlgoCom_prepare_t* prepare_params;
     blc_api_attrib_t* blc_attrib;
+    uint32_t *iso_list;
     int iso;
     bool isReCal_;
     bool isAiIsp;
+    bool aeIsConverged;
 } BlcContext_t;
 
 XCAM_BEGIN_DECLARE

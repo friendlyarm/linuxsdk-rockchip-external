@@ -38,6 +38,7 @@
 
 typedef struct LscContext_s {
     lsc_calib_attrib_t* lsc_attrib;
+    int lsc_tableAll_use_len;
 
     // all mesh table of current illuminant
     uint8_t illu_mesh_len;
@@ -51,6 +52,7 @@ typedef struct LscContext_s {
     lsc_meshGain_t damped_matrix;
 
     bool is_calib_update;
+    bool isReCal_;
 
 } LscContext_t;
 

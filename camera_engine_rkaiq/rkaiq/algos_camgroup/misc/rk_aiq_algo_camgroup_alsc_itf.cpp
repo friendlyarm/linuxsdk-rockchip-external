@@ -66,8 +66,8 @@ prepare(RkAiqAlgoCom* params)
     sprintf(hAlsc->cur_res.name, "%dx%d", para->gcom.com.u.prepare.sns_op_width,
             para->gcom.com.u.prepare.sns_op_height );
     hAlsc->alscSwInfo.prepare_type = params->u.prepare.conf_type;
-   if(!!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB )){
-       hAlsc->calibLscV2 =
+    if(!!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB )){
+        hAlsc->calibLscV2 =
             (CalibDbV2_LSC_t*)(CALIBDBV2_GET_MODULE_PTR((CamCalibDbV2Context_t*)(para->s_calibv2), lsc_v2));
    }
     AlscPrepare((alsc_handle_t)(params->ctx->alsc_para));
@@ -155,6 +155,23 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
         if (hAlsc->isReCal_) {
             *(procResParaGroup->camgroupParmasArray[i]->_lscConfig) =
                 hAlsc->lscHwConf;
+
+            struct rkmodule_lsc_inf* otp_lsc = &procParaGroup->camgroupParmasArray[i]->_otp_lsc;
+            if (otp_lsc && otp_lsc->flag && otp_lsc->table_size > 0) {
+                rk_aiq_lsc_cfg_t* lsc_res = procResParaGroup->camgroupParmasArray[i]->_lscConfig;
+                // apply sensor lsc otp
+                for (int32_t i = 0; i < LSC_DATA_TBL_SIZE; i++) {
+                    lsc_res->r_data_tbl[i]  = (float) (hAlsc->lscHwConf.r_data_tbl[i] * \
+                                                       otp_lsc->lsc_r[i]) / 1024 + 0.5;
+                    lsc_res->gr_data_tbl[i] = (float) (hAlsc->lscHwConf.gr_data_tbl[i] * \
+                                                       otp_lsc->lsc_gr[i]) / 1024 + 0.5;
+                    lsc_res->gb_data_tbl[i] = (float) (hAlsc->lscHwConf.gb_data_tbl[i] * \
+                                                       otp_lsc->lsc_gb[i]) / 1024 + 0.5;
+                    lsc_res->b_data_tbl[i]  = (float) (hAlsc->lscHwConf.b_data_tbl[i] * \
+                                                       otp_lsc->lsc_b[i]) / 1024 + 0.5;
+                }
+            }
+
             outparams->cfg_update = true;
         } else {
             outparams->cfg_update = false;
@@ -183,6 +200,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAlsc = {
     .pre_process = NULL,
     .processing = processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

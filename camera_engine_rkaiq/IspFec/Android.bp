@@ -23,7 +23,7 @@ cc_library_shared {
     rtti: true,
     stl: "c++_static",
 
-    defaults: [ "rkaiq-defaults", "rkaiq-defaults-flags", ],
+    defaults: [ "rkaiq-defaults", ],
 
     local_include_dirs: [
         "include",

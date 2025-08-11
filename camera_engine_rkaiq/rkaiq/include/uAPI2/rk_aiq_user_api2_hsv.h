@@ -37,6 +37,18 @@ XCamReturn
 rk_aiq_user_api2_hsv_SetCalib(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_hsvCalib_t* calib);
 XCamReturn
 rk_aiq_user_api2_hsv_GetCalib(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_hsvCalib_t* calib);
+XCamReturn
+rk_aiq_user_api2_setHsvSatStrth(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_satStrg_t ctrl);
+XCamReturn
+rk_aiq_user_api2_getHsvSatStrth(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_satStrg_t *ctrl);
+XCamReturn
+rk_aiq_user_api2_setHsvHueOffset(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_hueOffset_t ctrl);
+XCamReturn
+rk_aiq_user_api2_getHsvHueOffset(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_hueOffset_t *ctrl);
+XCamReturn
+rk_aiq_user_api2_setHsvValOffset(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_valOffset_t ctrl);
+XCamReturn
+rk_aiq_user_api2_getHsvValOffset(const rk_aiq_sys_ctx_t* sys_ctx, ahsv_valOffset_t *ctrl);
 RKAIQ_END_DECLARE
 
 #endif

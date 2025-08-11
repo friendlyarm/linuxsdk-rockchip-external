@@ -86,7 +86,7 @@ rk_aiq_user_api2_lsc_QueryStatus(const rk_aiq_sys_ctx_t* sys_ctx, lsc_status_t* 
 	if (algo_handle) {
 		ret = AiqAlgoHandler_queryStatus_common(algo_handle,
 				&status->opMode, &status->en, &status->bypass, &status->stMan);
-        if (status->opMode == RK_AIQ_OP_MODE_AUTO) 
+        if (status->opMode == RK_AIQ_OP_MODE_AUTO)
             AiqAlgoHandlerLsc_queryalscStatus((AiqAlgoHandlerLsc_t*)algo_handle, &status->alscStatus);
 
 	}
@@ -129,13 +129,13 @@ rk_aiq_user_api2_lsc_GetCalib(const rk_aiq_sys_ctx_t* sys_ctx, alsc_lscCalib_t* 
     AiqAlgoHandler_t* algo_handle =
 		ctx->_analyzer->mAlgoHandleMaps[RK_AIQ_ALGO_TYPE_ALSC];
 
-	if (algo_handle) 
+	if (algo_handle)
         return AiqAlgoHandlerLsc_getCalib((AiqAlgoHandlerLsc_t*)algo_handle, calib);
     else {
         LOGE_ALSC("GetCalib failed!");
         return XCAM_RETURN_ERROR_FAILED;
     }
-        
+
 }
 
 RKAIQ_END_DECLARE

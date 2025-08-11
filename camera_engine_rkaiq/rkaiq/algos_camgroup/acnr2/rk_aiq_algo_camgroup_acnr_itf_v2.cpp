@@ -115,6 +115,7 @@ static XCamReturn groupAcnrV2Prepare(RkAiqAlgoCom* params)
 
     if(CHECK_ISP_HW_V30()) {
         Acnr_Context_V2_t * acnr_contex_v2 = acnr_group_contex->acnr_contex_v2;
+        acnr_contex_v2->prepare_type = params->u.prepare.conf_type;
         if(!!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB )) {
             // todo  update calib pars for surround view
 #if ACNR_USE_JSON_FILE_V2
@@ -270,6 +271,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAcnrV2 = {
     .pre_process = NULL,
     .processing = groupAcnrV2Processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

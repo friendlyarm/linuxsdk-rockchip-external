@@ -40,6 +40,8 @@ typedef enum CalibDbV2_Af_SS_s {
     CalibDbV2_AFSS_FULLRANGE       = 0,    /**< scan the full focus range to find the point of best focus */
     CalibDbV2_AFSS_ADAPTIVE_RANGE  = 1,    /**< similar to full range search, but with multiple subsequent scans
                                                 with decreasing range and step size will be performed. */
+    CalibDbV2_AFSS_ZOOM_FIXSTEP    = 2,
+    CalibDbV2_AFSS_ZOOM_VARSTEP    = 3,
 } CalibDbV2_Af_SS_t;
 
 typedef enum CalibDbV2_AF_MODE_s
@@ -68,6 +70,23 @@ typedef enum {
     CalibDbV2_PDAF_SENSOR_TYPE2,
     CalibDbV2_PDAF_SENSOR_TYPE3
 } CalibDbV2_PDAF_SENSOR_TYPE_t;
+
+typedef struct CalibDbV2_Af_VarStepCfg_s {
+    // M4_NUMBER_DESC("ZoomIdx", "u32", M4_RANGE(0,100000), "0", M4_DIGIT(0), M4_HIDE(0))
+    unsigned short          ZoomIdx;
+    // M4_ARRAY_DESC("Iso", "s32", M4_SIZE(1,13), M4_RANGE(0,1000000), "[50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200, 102400, 204800]", M4_DIGIT(0), M4_DYNAMIC(0))
+    int                     Iso[CALIBDBV2_MAX_ISO_LEVEL];
+    // M4_ARRAY_DESC("SearchStep", "u16", M4_SIZE(1,13), M4_RANGE(0,255), "1", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned short          SearchStep[CALIBDBV2_MAX_ISO_LEVEL];
+    // M4_ARRAY_DESC("Stage1SkipThers", "f32", M4_SIZE(1,13), M4_RANGE(0,1), "0.02", M4_DIGIT(3), M4_DYNAMIC(0))
+    float                   Stage1SkipThers[CALIBDBV2_MAX_ISO_LEVEL];
+    // M4_ARRAY_DESC("Stage2QuickEndThers", "f32", M4_SIZE(1,13), M4_RANGE(0,1), "0.02", M4_DIGIT(3), M4_DYNAMIC(0))
+    float                   Stage2QuickEndThers[CALIBDBV2_MAX_ISO_LEVEL];
+    // M4_ARRAY_DESC("SkipStepCnt", "u16", M4_SIZE(1,13), M4_RANGE(0,255), "4", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned short          SkipStepCnt[CALIBDBV2_MAX_ISO_LEVEL];
+    // M4_ARRAY_DESC("SkipStepThers", "f32", M4_SIZE(1,13), M4_RANGE(0,1), "0.02", M4_DIGIT(3), M4_DYNAMIC(0))
+    float                   SkipStepThers[CALIBDBV2_MAX_ISO_LEVEL];
+} CalibDbV2_Af_VarStepCfg_t;
 
 typedef struct CalibDbV2_Af_ContrastZoom_s {
     // M4_ARRAY_DESC("QuickFoundThersZoomIdx", "u16", M4_SIZE(1,32), M4_RANGE(0,65535), "0", M4_DIGIT(0), M4_DYNAMIC(0))
@@ -107,6 +126,11 @@ typedef struct CalibDbV2_Af_ContrastZoom_s {
     float                   SpotlightLumaRatio[3];
     // M4_ARRAY_DESC("Spotlight BlkCnt", "f32", M4_SIZE(1,3), M4_RANGE(0,1), "[0.2, 0.5, 0.25]", M4_DIGIT(3), M4_DYNAMIC(0))
     float                   SpotlightBlkCnt[3];
+
+    // M4_STRUCT_LIST_DESC("VarStepCfg", M4_SIZE(1,10), "normal_ui_style")
+    CalibDbV2_Af_VarStepCfg_t VarStepCfg[10];
+    // M4_NUMBER_DESC("VarStepCfg_len", "s32", M4_RANGE(1,32), "1", M4_DIGIT(0), M4_HIDE(0))
+    int                       VarStepCfg_len;
 } CalibDbV2_Af_ContrastZoom_t;
 
 typedef struct CalibDbV2_Af_Contrast_s {
@@ -353,6 +377,8 @@ typedef struct CalibDbV2_Af_Pdaf_s {
     float pdLessTextureRatio;
     // M4_NUMBER_DESC("pdTargetOffset", "s16", M4_RANGE(-4096,4096), "0", M4_DIGIT(0),M4_HIDE(0))
     short pdTargetOffset;
+    // M4_NUMBER_DESC("pdNumJobs", "u16", M4_RANGE(0,64), "1", M4_DIGIT(0),M4_HIDE(0))
+    unsigned short pdNumJobs;
     // M4_STRUCT_DESC("pdCalibInf", "normal_ui_style")
     CalibDbV2_Af_PdafCalibInf_t pdCalibInf;
     // M4_NUMBER_DESC("pdConfdMwinFactor", "u16", M4_RANGE(0,225), "3", M4_DIGIT(0),M4_HIDE(0))
@@ -970,6 +996,106 @@ typedef struct {
     CalibDbV2_AFV32_Tuning_Para_t TuningPara;
 } CalibDbV2_AFV32_t;
 
+typedef struct Af_ZoomVarStepCfg_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(ZoomIdx),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,100000),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(Zoom index to get search config.\n
+        Freq of use: low))  */
+    unsigned short          ZoomIdx;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(Iso),
+        M4_TYPE(s32),
+        M4_SIZE_EX(1,13),
+        M4_RANGE_EX(0,1000000),
+        M4_DEFAULT([50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200, 102400, 204800]),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_DYNAMIC_EX(0),
+        M4_ORDER(1),
+        M4_NOTES(Iso value to get search config.\n
+        Freq of use: low))  */
+    int                     Iso[CALIBDBV2_MAX_ISO_LEVEL];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(SearchStep),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,13),
+        M4_RANGE_EX(0,255),
+        M4_DEFAULT(1),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_DYNAMIC_EX(0),
+        M4_ORDER(2),
+        M4_NOTES(Search step value.\n
+        Freq of use: low))  */
+    unsigned short          SearchStep[CALIBDBV2_MAX_ISO_LEVEL];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(Stage1SkipThers),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,13),
+        M4_RANGE_EX(0,1),
+        M4_DEFAULT(0.02),
+        M4_DIGIT_EX(3),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_DYNAMIC_EX(0),
+        M4_ORDER(3),
+        M4_NOTES(Stage 1 skip threshold value.\n
+        Freq of use: low))  */
+    float                   Stage1SkipThers[CALIBDBV2_MAX_ISO_LEVEL];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(Stage2QuickEndThers),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,13),
+        M4_RANGE_EX(0,1),
+        M4_DEFAULT(0.02),
+        M4_DIGIT_EX(3),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_DYNAMIC_EX(0),
+        M4_ORDER(4),
+        M4_NOTES(Stage 2 quick found threshold value.\n
+        Freq of use: low))  */
+    float                   Stage2QuickEndThers[CALIBDBV2_MAX_ISO_LEVEL];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(SkipStepCnt),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,13),
+        M4_RANGE_EX(0,255),
+        M4_DEFAULT(4),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_DYNAMIC_EX(0),
+        M4_ORDER(5),
+        M4_NOTES(Skip next step count value.\n
+        Freq of use: low))  */
+    unsigned short          SkipStepCnt[CALIBDBV2_MAX_ISO_LEVEL];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(Stage2QuickEndThers),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,13),
+        M4_RANGE_EX(0,1),
+        M4_DEFAULT(0.02),
+        M4_DIGIT_EX(3),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_DYNAMIC_EX(0),
+        M4_ORDER(6),
+        M4_NOTES(Skip next step threshold value.\n
+        Freq of use: low))  */
+    float                   SkipStepThers[CALIBDBV2_MAX_ISO_LEVEL];
+} Af_ZoomVarStepCfg_t;
+
 typedef struct Af_ContrastZoom_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(QuickFoundThersZoomIdx),
@@ -1185,6 +1311,31 @@ typedef struct Af_ContrastZoom_s {
         M4_NOTES(Threshold for block count ratio(low/mid/high).\n
         Freq of use: low))  */
     float                   SpotlightBlkCnt[3];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(VarStepCfg),
+        M4_TYPE(struct_list),
+        M4_SIZE_EX(1,10),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_DYNAMIC_EX(1),
+        M4_ORDER(16),
+        M4_NOTES(Parameter for variable step search.\n
+        Freq of use: low))  */
+    Af_ZoomVarStepCfg_t     VarStepCfg[10];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(VarStepCfg_len),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(1,32),
+        M4_DEFAULT(1),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(17),
+        M4_NOTES(Length of  variable step search table.\n
+        Freq of use: low))  */
+    int                     VarStepCfg_len;
 } Af_ContrastZoom_t;
 
 typedef struct Af_Contrast_s {
@@ -1530,6 +1681,7 @@ typedef struct Af_Contrast_s {
         M4_RO(0),
         M4_DYNAMIC_EX(0),
         M4_ORDER(26),
+        M4_UI_MODULE(grid_weight_table),
         M4_NOTES(Weight matrix to get focus value.\n
         Freq of use: low))  */
     unsigned char           Weight[225];
@@ -2124,7 +2276,7 @@ typedef struct Af_PdafResolution_s {
         M4_ALIAS(PdBaseWidth),
         M4_TYPE(u16),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,1000),
+        M4_RANGE_EX(0,65535),
         M4_DEFAULT(2048),
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
@@ -2137,7 +2289,7 @@ typedef struct Af_PdafResolution_s {
         M4_ALIAS(PdBaseHeight),
         M4_TYPE(u16),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,1000),
+        M4_RANGE_EX(0,65535),
         M4_DEFAULT(768),
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
@@ -2465,12 +2617,25 @@ typedef struct Af_Pdaf_s {
         Freq of use: low))  */
     short PdTargetOffset;
     /* M4_GENERIC_DESC(
+        M4_ALIAS(PdNumJobs),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,64),
+        M4_DEFAULT(1),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(26),
+        M4_NOTES(Thread number to do calculate.\n
+        Freq of use: low))  */
+    unsigned short PdNumJobs;
+    /* M4_GENERIC_DESC(
         M4_ALIAS(PdCalibInf),
         M4_TYPE(struct),
         M4_UI_MODULE(normal_ui_style),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(26),
+        M4_ORDER(27),
         M4_NOTES(Calibration information.\n
         Freq of use: high))  */
     Af_PdafCalibInf_t PdCalibInf;
@@ -2483,7 +2648,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(27),
+        M4_ORDER(28),
         M4_NOTES(Confidence adjust factor in muti-window in roi case.\n
         Freq of use: low))  */
     unsigned short PdConfdMwinFactor;
@@ -2496,7 +2661,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(28),
+        M4_ORDER(29),
         M4_NOTES(Min fv to switch roi, keep 0 generally.\n
         Freq of use: low))  */
     unsigned int PdCenterMinFv;
@@ -2509,7 +2674,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(3),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(29),
+        M4_ORDER(30),
         M4_NOTES(Ratio to switch roi, keep 0 generally.\n
         Freq of use: low))  */
     float PdCenterMinRatio;
@@ -2522,7 +2687,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(3),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(30),
+        M4_ORDER(31),
         M4_NOTES(Ratio to judge high light scene.\n
         Freq of use: low))  */
     float PdHighlightRatio;
@@ -2535,7 +2700,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(3),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(31),
+        M4_ORDER(32),
         M4_NOTES(Discount ratio table for motor move.\n
         Freq of use: high))  */
     float PdStepRatio[7];
@@ -2548,7 +2713,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(3),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(32),
+        M4_ORDER(33),
         M4_NOTES(Defous step table to search PdStepRatio.\n
         Freq of use: high))  */
     unsigned short PdStepDefocus[7];
@@ -2560,7 +2725,7 @@ typedef struct Af_Pdaf_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_DYNAMIC_EX(1),
-        M4_ORDER(33),
+        M4_ORDER(34),
         M4_NOTES(Parameter table changed with iso.\n
         Freq of use: high))  */
     Af_PdafIsoPara_t PdIsoPara[CALIBDBV2_MAX_ISO_LEVEL];
@@ -2573,7 +2738,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(34),
+        M4_ORDER(35),
         M4_NOTES(Length of parameter table changed with iso.\n
         Freq of use: high))  */
     int PdIsoPara_len;
@@ -2585,7 +2750,7 @@ typedef struct Af_Pdaf_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_DYNAMIC_EX(1),
-        M4_ORDER(35),
+        M4_ORDER(36),
         M4_NOTES(Resolution information table.\n
         Freq of use: high))  */
     Af_PdafResolution_t PdResoInf[16];
@@ -2598,7 +2763,7 @@ typedef struct Af_Pdaf_s {
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(36),
+        M4_ORDER(37),
         M4_NOTES(Length of resolution information table.\n
         Freq of use: high))  */
     int PdResoInf_len;
@@ -3448,7 +3613,7 @@ typedef struct CalibDbV2_AFV33_s {
         M4_RO(0),
         M4_ORDER(5),
         M4_NOTES(Vcm config.\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     Af_VcmCfg_t VcmCfg;
     /* M4_GENERIC_DESC(
         M4_ALIAS(ZoomFocusTbl),
@@ -3459,7 +3624,7 @@ typedef struct CalibDbV2_AFV33_s {
         M4_ORDER(6),
         M4_GROUP(contrast_en_group),
         M4_NOTES(Optical zoom config.\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     Af_ZoomFocusTbl_t ZoomFocusTbl;
     /* M4_GENERIC_DESC(
         M4_ALIAS(MeasCfg),
@@ -3470,7 +3635,7 @@ typedef struct CalibDbV2_AFV33_s {
         M4_RO(0),
         M4_ORDER(7),
         M4_NOTES(Af measurement config.\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     AfV33_Meas_t MeasCfg;
 } CalibDbV2_AFV33_t;
 

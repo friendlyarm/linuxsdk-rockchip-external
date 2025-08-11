@@ -124,6 +124,11 @@ typedef enum _camAlgoResultType {
     RESULT_TYPE_ENH_PARAM,
     RESULT_TYPE_TEXEST_PARAM,
     RESULT_TYPE_HSV_PARAM,
+    // hold postisp params
+    RESULT_TYPE_POSTISP_PARAM,
+    RESULT_TYPE_AIBNR_PARAM,
+    RESULT_TYPE_AMTD_PARAM,
+    RESULT_TYPE_AIRMS_PARAM,
     RESULT_TYPE_MAX_PARAM,
 } camAlgoResultType;
 
@@ -609,6 +614,9 @@ extern int g_rkaiq_isp_hw_ver;
 #define CHECK_ISP_HW_V33() \
     (g_rkaiq_isp_hw_ver == 33 ? true : false)
 
+#define CHECK_ISP_HW_V35() \
+    (g_rkaiq_isp_hw_ver == 35 ? true : false)
+
 #define CHECK_ISP_HW_V3X() \
     (g_rkaiq_isp_hw_ver == 30 ? true : \
      g_rkaiq_isp_hw_ver == 31 ? true : false)
@@ -628,6 +636,29 @@ extern int g_rkaiq_isp_hw_ver;
 #define AIQ_UNUSED_PARAM(x) (void)(x)
 #endif
 #endif  // AIQ_UNUSED_PARAM
+
+// 函数用于将补码表示的整数转换为真值，指定符号位位置
+static inline int32_t c2trval(int signBitPosition, uint32_t complement)
+{
+    // 计算符号掩码，只保留符号位
+    uint32_t signMask = 1 << signBitPosition;
+    if ((complement & signMask) == 0) {
+        // 符号位为 0，补码就是真值
+        return (int32_t)complement;
+    }
+    else {
+        // 符号位为 1，计算真值
+        // 取反所有位，然后加1得到反码
+        // 注意：这里使用了 uint32_t 来避免在取反时发生符号扩展
+        uint32_t oneComplement = ~complement + 1;
+        // 现在 oneComplement 可能包含比原整数更多的1
+        // 需要将其限制到原整数的位数内
+        oneComplement &= (signMask << 1) - 1;
+        // 将反码转换为真值，即取反后加1的结果
+        return -(int32_t)oneComplement;
+    }
+}
+
 
 RKAIQ_END_DECLARE
 

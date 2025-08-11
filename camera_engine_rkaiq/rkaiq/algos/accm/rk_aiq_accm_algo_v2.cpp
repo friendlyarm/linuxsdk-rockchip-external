@@ -418,6 +418,28 @@ XCamReturn AccmConfig(accm_handle_t hAccm) {
         // graymode/api/calib changed
         hAccm->isReCal_ = hAccm->isReCal_ || hAccm->updateAtt || hAccm->calib_update;
     }
+
+    hAccm->asym_en_update = hAccm->ccmHwConf_v2.asym_adj_en != hAccm->pre_asym_en;
+    
+    if (hAccm->asym_en_update) {
+        hAccm->pre_asym_en = hAccm->ccmHwConf_v2.asym_adj_en;
+    }
+
+    if (memcmp(hAccm->ccmHwConf_v2.alp_y, hAccm->pre_alp_y, sizeof(hAccm->pre_alp_y))) {
+        hAccm->isReCal_ = true;
+        if (hAccm->asym_en_update) {
+            uint16_t tmp;
+            for (int i = 0; i < CCM_CURVE_DOT_NUM_V2; i++) {
+                tmp = hAccm->ccmHwConf_v2.alp_y[i];
+                hAccm->ccmHwConf_v2.alp_y[i] = hAccm->pre_alp_y[i];
+                hAccm->pre_alp_y[i] = tmp;
+            }
+        } else {
+            memcpy(hAccm->ccmHwConf_v2.alp_y, hAccm->pre_alp_y, sizeof(hAccm->pre_alp_y));
+        }
+    }
+
+
     hAccm->updateAtt = false;
     hAccm->calib_update = false;
     hAccm->count = ((hAccm->count + 2) > (65536)) ? 2 : (hAccm->count + 1);
@@ -663,6 +685,10 @@ XCamReturn AccmInit(accm_handle_t* hAccm, const CamCalibDbV2Context_t* calibv2) 
     accm_context->accmRest.fScale = 1;
     accm_context->accmRest.color_inhibition_level = 0;
     accm_context->accmRest.color_saturation_level = 100;
+    accm_context->pre_asym_en = false;
+    accm_context->asym_en_update = false;
+    for (int i = 0; i < CCM_CURVE_DOT_NUM_V2; i++)
+        accm_context->pre_alp_y[i] = 1024;
 
     LOGI_ACCM("%s: (exit)\n", __FUNCTION__);
     return (ret);

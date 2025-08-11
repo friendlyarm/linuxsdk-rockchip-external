@@ -9,6 +9,9 @@
 #elif RKAIQ_HAVE_SHARP_V40
 #include "isp/rk_aiq_isp_sharp40.h"
 #include "isp/rk_aiq_isp_texEst40.h"
+#elif RKAIQ_HAVE_SHARP_V41
+#include "isp/rk_aiq_isp_sharp41.h"
+#include "isp/rk_aiq_isp_texEst40.h"
 #else
 #error "wrong sharp hw version !"
 #endif

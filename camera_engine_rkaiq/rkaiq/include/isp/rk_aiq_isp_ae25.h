@@ -365,6 +365,86 @@ typedef struct ae_antiFlicker_s {
     ae_antiFlicker_mode_t sw_aeT_antiFlicker_mode;
 } ae_antiFlicker_t;
 
+typedef struct ae_deMotionBlur_strg_s {
+    /* M4_GENERIC_DESC(
+            M4_ALIAS(sw_aeT_dyStrg_len),
+            M4_TYPE(u8),
+            M4_SIZE_EX(1,1),
+            M4_RANGE_EX(1,12),
+            M4_DEFAULT(6),
+            M4_DIGIT_EX(0),
+            M4_HIDE_EX(0),
+            M4_RO(0),
+            M4_ORDER(0),
+            M4_NOTES(The actual length of dot used.\n
+            Freq of use: low))  */
+    uint8_t sw_aeT_dyStrg_len;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_aeT_expLevel_dot),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,12),
+        M4_RANGE_EX(0,300),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(6),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(1),
+        M4_NOTES(The dot of exposure level = sum of exposure value.\n
+        Freq of use: low))  */
+    float sw_aeT_expLevel_dot[AE_ROUTE_DOT_MAX_NUM];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_aeT_deBlurScale_dot),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,12),
+        M4_RANGE_EX(0,5),
+        M4_DEFAULT(1),
+        M4_DIGIT_EX(2),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(2),
+        M4_NOTES(The dot of dynamic scale coeff.\n
+        Freq of use: low))  */
+    float sw_aeT_deBlurScale_dot[AE_ROUTE_DOT_MAX_NUM];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_aeT_deBlurMinLim_dot),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,12),
+        M4_RANGE_EX(1,200),
+        M4_DEFAULT(10),
+        M4_DIGIT_EX(2),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(2),
+        M4_NOTES(The dot of time min-limit.\n
+        Freq of use: low))  */
+    float sw_aeT_deBlurMinLim_dot[AE_ROUTE_DOT_MAX_NUM];
+} ae_deMotionBlur_strg_t;
+
+typedef struct ae_deMotionBlur_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_aeT_deMotionBlur_en),
+        M4_TYPE(bool),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_GROUP_CTRL(de_motionblur_group),
+        M4_NOTES(The enable bit of de-MotionBlur control.\n
+        Freq of use: high))  */
+    bool sw_aeT_deMotionBlur_en;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(dyStrg),
+        M4_TYPE(struct),
+        M4_UI_MODULE(array_table_ui),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(1),
+        M4_GROUP(de_motionblur_group),
+           M4_NOTES(The strength params for de-MotionBlur control.))  */
+    ae_deMotionBlur_strg_t dyStrg;
+} ae_deMotionBlur_t;
+
+
 // manual exposure
 typedef struct ae_linMe_s {
     /* M4_GENERIC_DESC(
@@ -773,6 +853,7 @@ typedef struct ae_commCtrl_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(6),
+        M4_UI_MODULE(grid_weight_table),
         M4_NOTES(The grid weight used in ae algorithm.\n
         Freq of use: high))  */
     uint8_t sw_aeT_grid_wgt[AE_GRIDWEIGHT_MAX_NUM];
@@ -829,12 +910,22 @@ typedef struct ae_commCtrl_s {
     ae_antiFlicker_t antiFlicker;
 
     /* M4_GENERIC_DESC(
-        M4_ALIAS(envLvCalib),
+        M4_ALIAS(deMotionBlur),
         M4_TYPE(struct),
         M4_UI_MODULE(normal_ui_style),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(12),
+        M4_NOTES(The params for de-MotionBlur control.))  */
+    ae_deMotionBlur_t deMotionBlur;
+
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(envLvCalib),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(13),
         M4_NOTES(The params for environment luma calibration (no used yet).\n
         Freq of use: low))  */
     ae_envLvCalib_t envLvCalib;
@@ -845,7 +936,7 @@ typedef struct ae_commCtrl_s {
         M4_UI_MODULE(normal_ui_style),
         M4_HIDE_EX(0),
         M4_RO(0),
-        M4_ORDER(13),
+        M4_ORDER(14),
         M4_NOTES(The params for windows scale.\n
         Freq of use: low))  */
     ae_winScale_t winScale;

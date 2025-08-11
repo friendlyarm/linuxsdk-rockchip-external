@@ -1223,6 +1223,7 @@ void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpIn
             rk_aiq_isp_blc_v21_t& blc = blc_proxy->data()->result;
 
             if (isRecalc) {
+                convertAiqBlcToIsp21Params(*isp_cfg, blc);
                 tmp = (uint16_t)(blc.v0.blc1_r * cfg->gain0_red / base_wb_gain + 0.5);
                 if(tmp > 0x1fff)
                     tmp = 0x1fff;
@@ -1263,15 +1264,20 @@ void Isp21Params::convertAiqExpIspDgainToIspParams(void* isp_cfg_, RKAiqAecExpIn
             struct isp21_bls_cfg &bls_cfg = isp_cfg->others.bls_cfg;
             if(bls_cfg.bls1_en && bls_cfg.bls1_val.b >0 && bls_cfg.bls1_val.r>0
                 && bls_cfg.bls1_val.gb >0 && bls_cfg.bls1_val.gr>0 ){
+                memcpy(cfg->x_size_tbl, mLatestLscCfg.x_size_tbl, sizeof(mLatestLscCfg.x_size_tbl));
+                memcpy(cfg->y_size_tbl, mLatestLscCfg.y_size_tbl, sizeof(mLatestLscCfg.y_size_tbl));
+                memcpy(cfg->x_grad_tbl, mLatestLscCfg.x_grad_tbl, sizeof(mLatestLscCfg.x_grad_tbl));
+                memcpy(cfg->y_grad_tbl, mLatestLscCfg.y_grad_tbl, sizeof(mLatestLscCfg.y_grad_tbl));
+
                 if(_lsc_en){
                     for(int i=0;i<ISP3X_LSC_DATA_TBL_SIZE;i++){
-                        cfg->b_data_tbl[i] = cfg->b_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.b);
+                        cfg->b_data_tbl[i] = mLatestLscCfg.b_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.b);
                         cfg->b_data_tbl[i] = MIN(cfg->b_data_tbl[i],MAX_LSC_VALUE);
-                        cfg->gb_data_tbl[i] = cfg->gb_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.gb);
+                        cfg->gb_data_tbl[i] = mLatestLscCfg.gb_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.gb);
                         cfg->gb_data_tbl[i] = MIN(cfg->gb_data_tbl[i],MAX_LSC_VALUE);
-                        cfg->r_data_tbl[i] = cfg->r_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.r);
+                        cfg->r_data_tbl[i] = mLatestLscCfg.r_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.r);
                         cfg->r_data_tbl[i] = MIN(cfg->r_data_tbl[i],MAX_LSC_VALUE);
-                        cfg->gr_data_tbl[i] = cfg->gr_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.gr);
+                        cfg->gr_data_tbl[i] = mLatestLscCfg.gr_data_tbl[i]*((1 << ISP2X_BLC_BIT_MAX) - 1) / ((1 << ISP2X_BLC_BIT_MAX) - 1 - bls_cfg.bls1_val.gr);
                         cfg->gr_data_tbl[i] = MIN(cfg->gr_data_tbl[i],MAX_LSC_VALUE);
                     }
                     isp_cfg->module_cfg_update |= ISP2X_MODULE_LSC;

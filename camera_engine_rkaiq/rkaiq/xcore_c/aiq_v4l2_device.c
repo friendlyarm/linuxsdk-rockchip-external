@@ -591,6 +591,17 @@ XCamReturn AiqV4l2Device_setSelection(AiqV4l2Device_t* v4l2_dev, struct v4l2_sel
     return XCAM_RETURN_NO_ERROR;
 }
 
+XCamReturn AiqV4l2Device_getSelection(AiqV4l2Device_t* v4l2_dev, struct v4l2_selection* select) {
+    int ret = 0;
+    XCAM_ASSERT(AiqV4l2Device_isOpened(v4l2_dev));
+    ret = (*v4l2_dev->io_control)(v4l2_dev, VIDIOC_G_SELECTION, select);
+    if (ret < 0) {
+        XCAM_LOG_ERROR("videodev (%s) VIDIOC_G_SELECTION failed", v4l2_dev->_name);
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    return XCAM_RETURN_NO_ERROR;
+}
+
 XCamReturn AiqV4l2Device_getV4lFmt(AiqV4l2Device_t* v4l2_dev, struct v4l2_format* format) {
     if (AiqV4l2Device_isActivated(v4l2_dev)) {
         *format = v4l2_dev->_format;
@@ -1016,8 +1027,10 @@ XCamReturn AiqV4l2Device_qbuf(AiqV4l2Device_t* v4l2_dev, AiqV4l2Buffer_t* buf, b
     struct v4l2_buffer v4l2_buf_s;
     struct v4l2_buffer* v4l2_buf = &v4l2_buf_s;
     struct v4l2_plane planes[v4l2_dev->_mplanes_count];
+    uint32_t sequence = 0;
 
     if (!locked) aiqMutex_lock(&v4l2_dev->_buf_mutex);
+    if (buf) sequence = AiqV4l2Buffer_getSequence(buf);
 
     XCAM_ASSERT(buf);
     AiqV4l2Buffer_reset(buf);
@@ -1075,6 +1088,8 @@ XCamReturn AiqV4l2Device_qbuf(AiqV4l2Device_t* v4l2_dev, AiqV4l2Buffer_t* buf, b
 
         return XCAM_RETURN_ERROR_IOCTL;
     }
+
+    AiqV4l2Buffer_setSequence(buf, sequence);
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -1170,6 +1185,42 @@ XCamReturn AiqV4l2Device_unsubscribeEvt(AiqV4l2Device_t* v4l2_dev, int event) {
 
     xcam_mem_clear(sub);
     sub.type = event;
+
+    ret = (*v4l2_dev->io_control)(v4l2_dev, VIDIOC_UNSUBSCRIBE_EVENT, &sub);
+    if (ret < 0) {
+        XCAM_LOG_DEBUG("subdev(%s) unsubscribe event(%d) failed", (v4l2_dev->_name), event);
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn AiqV4l2Device_subscribeEvt2(AiqV4l2Device_t* v4l2_dev, int event, int id) {
+    struct v4l2_event_subscription sub;
+    int ret = 0;
+
+    XCAM_ASSERT(AiqV4l2Device_isOpened(v4l2_dev));
+
+    xcam_mem_clear(sub);
+    sub.type = event;
+    sub.id = id;
+
+    ret = (*v4l2_dev->io_control)(v4l2_dev, VIDIOC_SUBSCRIBE_EVENT, &sub);
+    if (ret < 0) {
+        XCAM_LOG_ERROR("subdev(%s) subscribe event(%d) failed", (v4l2_dev->_name), event);
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn AiqV4l2Device_unsubscribeEvt2(AiqV4l2Device_t* v4l2_dev, int event, int id) {
+    struct v4l2_event_subscription sub;
+    int ret = 0;
+
+    XCAM_ASSERT(AiqV4l2Device_isOpened(v4l2_dev));
+
+    xcam_mem_clear(sub);
+    sub.type = event;
+    sub.id = id;
 
     ret = (*v4l2_dev->io_control)(v4l2_dev, VIDIOC_UNSUBSCRIBE_EVENT, &sub);
     if (ret < 0) {

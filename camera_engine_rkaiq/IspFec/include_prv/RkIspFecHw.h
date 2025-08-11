@@ -18,16 +18,29 @@
 #ifndef _RK_ISPFEC_HW_H_
 #define _RK_ISPFEC_HW_H_
 
+#include "rkfec_config.h"
+#ifdef RKFEC_HW_V20
+#include "rk-fec-config.h"
+#else
 #include "rkispp-config.h"
+#endif
 
 namespace RKISPFEC {
+
+#ifdef RKFEC_HW_V20
+using RKFecInOut = struct rkfec_in_out;
+#else
+using RKFecInOut = struct rkispp_fec_in_out;
+#endif
 
 class RkIspFecHw {
 public:
     virtual ~RkIspFecHw();
     explicit RkIspFecHw(const char* dev);
-    int process(struct rkispp_fec_in_out& param);
-private:
+    int process(RKFecInOut& param);
+    int detach_dma_buffer(int dma_fd);
+
+ private:
     RkIspFecHw(const RkIspFecHw&) = default;
     RkIspFecHw & operator = (const RkIspFecHw&) = default;
     int mFd;

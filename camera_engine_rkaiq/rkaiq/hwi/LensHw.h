@@ -105,11 +105,13 @@ struct rk_cam_set_focus {
 
 struct rk_cam_zoom_pos {
     s32 zoom_pos;
+    s32 zoom1_pos;
     s32 focus_pos;
 };
 
 struct rk_cam_set_zoom {
     bool is_need_zoom_reback;
+    bool is_need_zoom1_reback;
     bool is_need_focus_reback;
     u32 setzoom_cnt;
     struct rk_cam_zoom_pos zoom_pos[VCMDRV_SETZOOM_MAXCNT];
@@ -174,9 +176,12 @@ public:
     XCamReturn setZoomFocusParamsSync(SmartPtr<rk_aiq_focus_params_t> attrPtr, bool is_update_time);
     XCamReturn setZoomFocusRebackSync(SmartPtr<rk_aiq_focus_params_t> attrPtr, bool is_update_time);
     XCamReturn endZoomChgSync(SmartPtr<rk_aiq_focus_params_t> attrPtr, bool is_update_time);
+    XCamReturn startZoomChgSync(SmartPtr<rk_aiq_focus_params_t> attrPtr, bool is_update_time);
     XCamReturn getPIrisParams(int* step);
     XCamReturn getFocusParams(int* position);
     XCamReturn getZoomParams(int* position);
+    bool IsFocusInCorrectionSync();
+    bool IsZoomInCorrectionSync();
     XCamReturn FocusCorrectionSync();
     XCamReturn ZoomCorrectionSync();
     XCamReturn FocusCorrection();
@@ -201,13 +206,16 @@ private:
     struct v4l2_queryctrl _iris_query;
     struct v4l2_queryctrl _focus_query;
     struct v4l2_queryctrl _zoom_query;
+    struct v4l2_queryctrl _zoom1_query;
     struct rk_cam_motor_tim _dciris_tim;
     struct rk_cam_motor_tim _piris_tim;
     struct rk_cam_vcm_tim _focus_tim;
     struct rk_cam_vcm_tim _zoom_tim;
+    struct rk_cam_vcm_tim _zoom1_tim;
     bool _iris_enable;
     bool _focus_enable;
     bool _zoom_enable;
+    bool _zoom1_enable;
     bool _zoom_correction;
     bool _focus_correction;
     int _piris_step;
@@ -218,8 +226,10 @@ private:
     int _last_hdciris_target;
     int _focus_pos;
     int _zoom_pos;
+    int _zoom1_pos;
     int _last_zoomchg_focus;
     int _last_zoomchg_zoom;
+    int _last_zoomchg_zoom1;
     int64_t _frame_time[LENSHW_RECORD_SOF_NUM];
     uint32_t _frame_sequence[LENSHW_RECORD_SOF_NUM];
     int _rec_sof_idx;

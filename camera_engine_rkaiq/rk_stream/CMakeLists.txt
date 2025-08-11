@@ -64,7 +64,7 @@ add_library(${RK_VI_STREAM_CFG_LIB} SHARED ${STREAMCFG_SRC} ${XCORE_SRC} )
 target_link_libraries(${RK_VI_STREAM_CFG_LIB} PRIVATE)
 install(TARGETS ${RK_VI_STREAM_CFG_LIB} LIBRARY DESTINATION lib)
 
-
+set(RKVIDEMO_HAVE_AIQ TRUE CACHE INTERNAL "")
 if(RKVIDEMO_HAVE_AIQ)
     set(RK_AIQ_LIB rkaiq)
     add_compile_options(-DHAVE_RKAIQ)
@@ -82,6 +82,7 @@ message("\n****** rkvi_demo build with: ${RK_VI_STREAM_CFG_LIB} ${RK_AIQ_LIB} ${
 
 set (VI_DEMO_SRCS
     rkvi_demo/rkrawstream_demo.c
+    rkvi_demo/rkrawstream_video_out.c
     )
 
 set (RKAIQ_TEST_SRCS
@@ -103,9 +104,10 @@ cmake_policy(SET CMP0015 NEW)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/all_lib/${CMAKE_BUILD_TYPE})
 link_directories("${LIBRARY_OUTPUT_PATH}")
 
+set(RKRAWSTREAM_DEMO TRUE CACHE INTERNAL "")
 if(RKRAWSTREAM_DEMO)
 add_executable(rkrawstream_demo ${VI_DEMO_SRCS})
-target_link_libraries(rkrawstream_demo rkrawstream pthread)
+target_link_libraries(rkrawstream_demo rkrawstream pthread ${RK_AIQ_LIB})
 endif()
 
 if(RKAIQ_TEST)

@@ -20,15 +20,27 @@
 #include "hwi_c/aiq_CamHwBase.h"
 #include "hwi_c/aiq_sensorHw.h"
 #include "algos/af/rk_aiq_types_af_algo_int.h"
+#if RKAIQ_HAVE_DUMPSYS
+#include "dumpcam_server/third-party/argparse/argparse.h"
+#include "info/aiq_coreBufMgrInfo.h"
+#include "info/aiq_coreInfo.h"
+#include "info/aiq_coreIspModsInfo.h"
+#include "info/aiq_coreIspParamsInfo.h"
+#include "rk_info_utils.h"
+#include "st_string.h"
+#endif
 
 #define EPSINON 0.0000001
-static uint16_t DEFAULT_POOL_SIZE           = 3;
-static uint16_t FULLPARMAS_MAX_PENDING_SIZE = 2;
 
 #define grpId2GrpMask(grpId) \
     ((grpId) == RK_AIQ_CORE_ANALYZE_ALL ? (uint64_t)(grpId) : (1ULL << (grpId)))
 
 static XCamReturn fixAiqParamsIsp(AiqCore_t* pAiqCore, AiqFullParams_t* aiqParams);
+#if RKAIQ_HAVE_DUMPSYS
+static void AiqCore_initNotifier(AiqCore_t* pAiqCore);
+static int AiqCore_dump(void* self, st_string* result, int argc, void* argv[]);
+static int AiqCore_algosDump(void* self, st_string* result, int argc, void* argv[]);
+#endif
 
 bool AiqCore_isGroupAlgo(AiqCore_t* pAiqCore, int algoType) {
 #ifdef RKAIQ_ENABLE_CAMGROUP
@@ -77,6 +89,7 @@ AiqPool_t* AiqCore_createPool(const char* name, int num, int itemSize, int type)
 			LOG1("pool:%s, %p", poolCfg._name, pBase->_data);
         } else if (type == AIQCORE_POOL_TYPE_PARAMS) {
             aiq_params_base_t* pBase = (aiq_params_base_t*)(pItem->_pData);
+            AIQ_PARAMS_BASE_INIT(pBase);
             AIQ_REF_BASE_INIT(&pBase->_ref_base, pItem, aiqPoolItem_ref, aiqPoolItem_unref);
             SET_HEAD_DATA_PTR(pBase);
 			LOG1("pool:%s, %p", poolCfg._name, pBase->_data);
@@ -91,6 +104,9 @@ AiqPool_t* AiqCore_createPool(const char* name, int num, int itemSize, int type)
 }
 
 static XCamReturn newAiqParamPool(AiqCore_t* pAiqCore, int type) {
+
+    uint16_t DEFAULT_POOL_SIZE = pAiqCore->mDefaultDelayCnt + 1;
+
 #define NEW_PARAMS_POOL(RESULT, PTYPE)                                                     \
     do {                                                                                  \
         if (!pAiqCore->mAiqParamsPoolArray[RESULT]) {                                     \
@@ -226,9 +242,6 @@ static XCamReturn newAiqParamPool(AiqCore_t* pAiqCore, int type) {
             NEW_PARAMS_POOL(RESULT_TYPE_DEBAYER_PARAM, rk_aiq_isp_debayer_params_t);
 #endif
             break;
-        case RK_AIQ_ALGO_TYPE_ALDCH:
-            NEW_PARAMS_POOL(RESULT_TYPE_LDCH_PARAM, rk_aiq_isp_ldch_params_t);
-            break;
         case RK_AIQ_ALGO_TYPE_A3DLUT:
 #if RKAIQ_HAVE_3DLUT
             NEW_PARAMS_POOL(RESULT_TYPE_LUT3D_PARAM, rk_aiq_isp_lut3d_params_t);
@@ -257,7 +270,7 @@ static XCamReturn newAiqParamPool(AiqCore_t* pAiqCore, int type) {
             NEW_PARAMS_POOL(RESULT_TYPE_ENH_PARAM, rk_aiq_isp_enh_params_t);
             break;
 #endif
-#if RKAIQ_HAVE_HSV_V10
+#if RKAIQ_HAVE_HSV
         case RK_AIQ_ALGO_TYPE_AHSV:
             NEW_PARAMS_POOL(RESULT_TYPE_HSV_PARAM, rk_aiq_isp_hsv_params_t);
             break;
@@ -361,7 +374,7 @@ static XCamReturn newAiqParamPool(AiqCore_t* pAiqCore, int type) {
             NEW_PARAMS_POOL(RESULT_TYPE_SHARPEN_PARAM, rk_aiq_isp_sharpen_params_t);
 #endif
 
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
             NEW_PARAMS_POOL(RESULT_TYPE_TEXEST_PARAM, rk_aiq_isp_texEst_params_t);
 #endif
             break;
@@ -390,6 +403,16 @@ static XCamReturn newAiqParamPool(AiqCore_t* pAiqCore, int type) {
             NEW_PARAMS_POOL(RESULT_TYPE_LDC_PARAM, rk_aiq_isp_ldc_params_t);
 #endif
             break;
+#if RKAIQ_HAVE_AIBNR
+        case RK_AIQ_ALGO_TYPE_AIBNR:
+            NEW_PARAMS_POOL(RESULT_TYPE_AIBNR_PARAM, rk_aiq_isp_aibnr_params_t);
+            break;
+#endif
+#if RKAIQ_HAVE_AIRMS
+        case RK_AIQ_ALGO_TYPE_AIRMS:
+            NEW_PARAMS_POOL(RESULT_TYPE_AIRMS_PARAM, rk_aiq_isp_airms_params_t);
+            break;
+#endif
         default:
             break;
     }
@@ -414,6 +437,81 @@ static XCamReturn newAllAiqParamPool(AiqCore_t* pAiqCore) {
             ret |= newAiqParamPool(pAiqCore, i);
         }
         i++;
+    }
+
+    return ret;
+}
+
+static XCamReturn deleteAllAiqParamPool(AiqCore_t* pAiqCore) {
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (pAiqCore->mAiqAecStatsPool) {
+        aiqPool_deinit(pAiqCore->mAiqAecStatsPool);
+        pAiqCore->mAiqAecStatsPool = NULL;
+    }
+
+    if (pAiqCore->mAiqAwbStatsPool) {
+        aiqPool_deinit(pAiqCore->mAiqAwbStatsPool);
+        pAiqCore->mAiqAwbStatsPool = NULL;
+    }
+
+    if (pAiqCore->mAiqAdehazeStatsPool) {
+        aiqPool_deinit(pAiqCore->mAiqAdehazeStatsPool);
+        pAiqCore->mAiqAdehazeStatsPool = NULL;
+    }
+
+    if (pAiqCore->mAiqAgainStatsPool) {
+        aiqPool_deinit(pAiqCore->mAiqAgainStatsPool);
+        pAiqCore->mAiqAgainStatsPool = NULL;
+    }
+
+    if (pAiqCore->mAiqAfStatsPool) {
+        aiqPool_deinit(pAiqCore->mAiqAfStatsPool);
+        pAiqCore->mAiqAfStatsPool = NULL;
+    }
+
+#if RKAIQ_HAVE_PDAF
+    if (pAiqCore->mAiqPdafStatsPool) {
+        aiqPool_deinit(pAiqCore->mAiqPdafStatsPool);
+        pAiqCore->mAiqPdafStatsPool = NULL;
+    }
+#endif
+
+    for (int i = 0; i < RESULT_TYPE_MAX_PARAM; i++) {
+		if (pAiqCore->mAiqParamsPoolArray[i])
+			aiqPool_deinit(pAiqCore->mAiqParamsPoolArray[i]);
+        pAiqCore->mAiqParamsPoolArray[i] = NULL;
+    }
+
+    if (pAiqCore->bay3dStatList) {
+        aiqList_deinit(pAiqCore->bay3dStatList);
+        pAiqCore->bay3dStatList = NULL;
+    }
+
+    if (pAiqCore->mbay3dStatPool) {
+        aiqPool_deinit(pAiqCore->mbay3dStatPool);
+        pAiqCore->mbay3dStatPool = NULL;
+    }
+
+    if (pAiqCore->mPreResAeSharedPool) {
+        aiqPool_deinit(pAiqCore->mPreResAeSharedPool);
+        pAiqCore->mPreResAeSharedPool = NULL;
+    }
+
+    if (pAiqCore->mProcResAwbSharedPool) {
+        aiqPool_deinit(pAiqCore->mProcResAwbSharedPool);
+        pAiqCore->mProcResAwbSharedPool = NULL;
+    }
+
+    if (pAiqCore->mProcResBlcSharedPool) {
+        aiqPool_deinit(pAiqCore->mProcResBlcSharedPool);
+        pAiqCore->mProcResBlcSharedPool = NULL;
+    }
+
+    if (pAiqCore->mProcResYnrSharedPool) {
+        aiqPool_deinit(pAiqCore->mProcResYnrSharedPool);
+        pAiqCore->mProcResYnrSharedPool = NULL;
     }
 
     return ret;
@@ -608,9 +706,6 @@ static uint64_t getReqAlgoResMask(AiqCore_t* pAiqCore, int algoType) {
         case RK_AIQ_ALGO_TYPE_ADEBAYER:
             tmp |= 1ULL << RESULT_TYPE_DEBAYER_PARAM;
             break;
-        case RK_AIQ_ALGO_TYPE_ALDCH:
-            tmp |= 1ULL << RESULT_TYPE_LDCH_PARAM;
-            break;
         case RK_AIQ_ALGO_TYPE_A3DLUT:
             tmp |= 1ULL << RESULT_TYPE_LUT3D_PARAM;
             break;
@@ -684,6 +779,11 @@ static uint64_t getReqAlgoResMask(AiqCore_t* pAiqCore, int algoType) {
 		case RK_AIQ_ALGO_TYPE_ALDC:
             tmp |= 1ULL << RESULT_TYPE_LDC_PARAM;
 			break;
+#if RKAIQ_HAVE_AIBNR
+        case RK_AIQ_ALGO_TYPE_AIBNR:
+            tmp |= 1ULL << RESULT_TYPE_AIBNR_PARAM;
+            break;
+#endif
         default:
             break;
     }
@@ -849,6 +949,7 @@ static void newPdafStatsPool(AiqCore_t* pAiqCore) {
 #endif
 
 #if RKAIQ_HAVE_AF_V33
+#if ISP_HW_V39
     CalibDbV2_AFV33_t* af_v33 =
         (CalibDbV2_AFV33_t*)(CALIBDBV2_GET_MODULE_PTR((void*)aiqCalib, af_v33));
     Af_Pdaf_t* pdaf = &af_v33->Pdaf;
@@ -873,6 +974,32 @@ static void newPdafStatsPool(AiqCore_t* pAiqCore) {
             pdaf_stats->pdRData = NULL;
         }
     }
+#else
+    af_param_t* af_calib =
+        (af_param_t*)(CALIBDBV2_GET_MODULE_PTR((void*)aiqCalib, af_calib));
+    af_pdaf_t *pdaf = &af_calib->pdaf;
+
+    pd_size = pdaf->sw_afT_pdMax_width * pdaf->sw_afT_pdMax_height * sizeof(short);
+    if (pd_size > 0 && pdaf && pdaf->sw_afT_pdAf_en) {
+        AiqPoolItem_t* pItem = NULL;
+        AIQ_POOL_FOREACH(pAiqCore->mAiqPdafStatsPool, pItem) {
+            rk_aiq_isp_pdaf_stats_t* pdaf_stats =
+                (rk_aiq_isp_pdaf_stats_t*)(((aiq_stats_base_t*)pItem->_pData)->_data);
+            pdaf_stats->pdWidth  = pdaf->sw_afT_pdMax_width;
+            pdaf_stats->pdHeight = pdaf->sw_afT_pdMax_height;
+            pdaf_stats->pdLData  = (unsigned short*)aiq_mallocz(pd_size);
+            pdaf_stats->pdRData  = (unsigned short*)aiq_mallocz(pd_size);
+        }
+    } else {
+        AiqPoolItem_t* pItem = NULL;
+        AIQ_POOL_FOREACH(pAiqCore->mAiqPdafStatsPool, pItem) {
+            rk_aiq_isp_pdaf_stats_t* pdaf_stats =
+                (rk_aiq_isp_pdaf_stats_t*)(((aiq_stats_base_t*)pItem->_pData)->_data);
+            pdaf_stats->pdLData = NULL;
+            pdaf_stats->pdRData = NULL;
+        }
+    }
+#endif
 #endif
 }
 
@@ -973,6 +1100,9 @@ XCamReturn AiqCore_init(AiqCore_t* pAiqCore, const char* sns_ent_name,
     aiqCond_init(&pAiqCore->mIspStatsCond);
     aiqCond_init(&pAiqCore->mApiMutexCond);
 
+    pAiqCore->mDefaultDelayCnt       = ISP_PARAMS_EFFECT_DELAY_CNT;
+    uint16_t DEFAULT_POOL_SIZE       = pAiqCore->mDefaultDelayCnt + 1;
+
     {
         AiqPoolConfig_t poolCfg;
         int i                        = 0;
@@ -1042,6 +1172,22 @@ XCamReturn AiqCore_init(AiqCore_t* pAiqCore, const char* sns_ent_name,
         goto fail;
     }
 
+#if RKAIQ_HAVE_DUMPSYS
+    {
+        pAiqCore->dump_core  = AiqCore_dump;
+        pAiqCore->dump_algos = AiqCore_algosDump;
+
+        AiqCore_initNotifier(pAiqCore);
+        pAiqCore->mForceDoneCnt = 0;
+        pAiqCore->mForceDoneId  = 0;
+        pAiqCore->mSofLoss      = 0;
+        pAiqCore->mStatsLoss    = 0;
+
+        xcam_mem_clear(pAiqCore->mNoFreeBufCnt);
+        xcam_mem_clear(pAiqCore->mIsStatsAvail);
+    }
+#endif
+
     pAiqCore->mState = RK_AIQ_CORE_STATE_INITED;
     return XCAM_RETURN_NO_ERROR;
 fail:
@@ -1079,38 +1225,10 @@ XCamReturn AiqCore_deinit(AiqCore_t* pAiqCore) {
         pAiqCore->mAlgoHandleMaps[i] = NULL;
     }
 
-    if (pAiqCore->mAiqAecStatsPool) {
-        aiqPool_deinit(pAiqCore->mAiqAecStatsPool);
-        pAiqCore->mAiqAecStatsPool = NULL;
-    }
-
-    if (pAiqCore->mAiqAwbStatsPool) {
-        aiqPool_deinit(pAiqCore->mAiqAwbStatsPool);
-        pAiqCore->mAiqAwbStatsPool = NULL;
-    }
-
-    if (pAiqCore->mAiqAdehazeStatsPool) {
-        aiqPool_deinit(pAiqCore->mAiqAdehazeStatsPool);
-        pAiqCore->mAiqAdehazeStatsPool = NULL;
-    }
-
-    if (pAiqCore->mAiqAgainStatsPool) {
-        aiqPool_deinit(pAiqCore->mAiqAgainStatsPool);
-        pAiqCore->mAiqAgainStatsPool = NULL;
-    }
-
-    if (pAiqCore->mAiqAfStatsPool) {
-        aiqPool_deinit(pAiqCore->mAiqAfStatsPool);
-        pAiqCore->mAiqAfStatsPool = NULL;
-    }
-
 #if RKAIQ_HAVE_PDAF
     delPdafStatsPool(pAiqCore);
-    if (pAiqCore->mAiqPdafStatsPool) {
-        aiqPool_deinit(pAiqCore->mAiqPdafStatsPool);
-        pAiqCore->mAiqPdafStatsPool = NULL;
-    }
 #endif
+    deleteAllAiqParamPool(pAiqCore);
 
 	if (pAiqCore->mAiqCurParams) {
         AIQ_REF_BASE_UNREF(&pAiqCore->mAiqCurParams->_base._ref_base);
@@ -1120,12 +1238,6 @@ XCamReturn AiqCore_deinit(AiqCore_t* pAiqCore) {
     if (pAiqCore->mAiqFullParamsPool) {
         aiqPool_deinit(pAiqCore->mAiqFullParamsPool);
         pAiqCore->mAiqFullParamsPool = NULL;
-    }
-
-    for (int i = 0; i < RESULT_TYPE_MAX_PARAM; i++) {
-		if (pAiqCore->mAiqParamsPoolArray[i])
-			aiqPool_deinit(pAiqCore->mAiqParamsPoolArray[i]);
-        pAiqCore->mAiqParamsPoolArray[i] = NULL;
     }
 
     if (pAiqCore->mFullParamsPendingMap) {
@@ -1138,39 +1250,9 @@ XCamReturn AiqCore_deinit(AiqCore_t* pAiqCore) {
         pAiqCore->mUpdateCalibAlgosList = NULL;
     }
 
-    if (pAiqCore->bay3dStatList) {
-        aiqList_deinit(pAiqCore->bay3dStatList);
-        pAiqCore->bay3dStatList = NULL;
-    }
-
-    if (pAiqCore->mbay3dStatPool) {
-        aiqPool_deinit(pAiqCore->mbay3dStatPool);
-        pAiqCore->mbay3dStatPool = NULL;
-    }
-
     if (pAiqCore->mAiqSofInfoWrapperPool) {
         aiqPool_deinit(pAiqCore->mAiqSofInfoWrapperPool);
         pAiqCore->mAiqSofInfoWrapperPool = NULL;
-    }
-
-    if (pAiqCore->mPreResAeSharedPool) {
-        aiqPool_deinit(pAiqCore->mPreResAeSharedPool);
-        pAiqCore->mPreResAeSharedPool = NULL;
-    }
-
-    if (pAiqCore->mProcResAwbSharedPool) {
-        aiqPool_deinit(pAiqCore->mProcResAwbSharedPool);
-        pAiqCore->mProcResAwbSharedPool = NULL;
-    }
-
-    if (pAiqCore->mProcResBlcSharedPool) {
-        aiqPool_deinit(pAiqCore->mProcResBlcSharedPool);
-        pAiqCore->mProcResBlcSharedPool = NULL;
-    }
-
-    if (pAiqCore->mProcResYnrSharedPool) {
-        aiqPool_deinit(pAiqCore->mProcResYnrSharedPool);
-        pAiqCore->mProcResYnrSharedPool = NULL;
     }
 
     aiqMutex_deInit(&pAiqCore->_update_mutex);
@@ -1186,6 +1268,90 @@ XCamReturn AiqCore_deinit(AiqCore_t* pAiqCore) {
     pAiqCore->mState = RK_AIQ_CORE_STATE_INVALID;
 
     EXIT_ANALYZER_FUNCTION();
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn AiqCore_reinitForNewStatsDelay(AiqCore_t* pAiqCore, int delayCnt)
+{
+    if (pAiqCore->mDefaultDelayCnt == delayCnt) {
+        return XCAM_RETURN_NO_ERROR;
+    }
+
+#if RKAIQ_HAVE_PDAF
+    delPdafStatsPool(pAiqCore);
+#endif
+    deleteAllAiqParamPool(pAiqCore);
+
+	if (pAiqCore->mAiqCurParams) {
+        AIQ_REF_BASE_UNREF(&pAiqCore->mAiqCurParams->_base._ref_base);
+		pAiqCore->mAiqCurParams = NULL;
+	}
+
+    if (pAiqCore->mAiqFullParamsPool) {
+        aiqPool_deinit(pAiqCore->mAiqFullParamsPool);
+        pAiqCore->mAiqFullParamsPool = NULL;
+    }
+
+    if (pAiqCore->mFullParamsPendingMap) {
+        aiqMap_deinit(pAiqCore->mFullParamsPendingMap);
+        pAiqCore->mFullParamsPendingMap = NULL;
+    }
+
+    if (pAiqCore->mAiqSofInfoWrapperPool) {
+        aiqPool_deinit(pAiqCore->mAiqSofInfoWrapperPool);
+        pAiqCore->mAiqSofInfoWrapperPool = NULL;
+    }
+
+    pAiqCore->mDefaultDelayCnt = delayCnt;
+    uint16_t DEFAULT_POOL_SIZE = pAiqCore->mDefaultDelayCnt + 1;
+
+    {
+        AiqPoolConfig_t poolCfg;
+        int i                        = 0;
+        AiqPool_t* ret               = NULL;
+        poolCfg._name                = "fullParam";
+        poolCfg._item_nums           = DEFAULT_POOL_SIZE + 1;
+        poolCfg._item_size           = sizeof(AiqFullParams_t);
+        pAiqCore->mAiqFullParamsPool = aiqPool_init(&poolCfg);
+        if (!pAiqCore->mAiqFullParamsPool ) {
+            LOGE_ANALYZER("init %s error", poolCfg._name);
+            return XCAM_RETURN_ERROR_ANALYZER;
+        }
+        AiqPoolItem_t* pItem = NULL;
+        AIQ_POOL_FOREACH(pAiqCore->mAiqFullParamsPool, pItem) {
+            aiq_params_base_t* pBase = (aiq_params_base_t*)(pItem->_pData);
+            AIQ_REF_BASE_INIT(&pBase->_ref_base, pItem, aiqPoolItem_ref, aiqPoolItem_unref);
+        }
+		pItem = aiqPool_getFree(pAiqCore->mAiqFullParamsPool);
+		pAiqCore->mAiqCurParams = (AiqFullParams_t*)pItem->_pData;
+    }
+
+    {
+        AiqMapConfig_t pendingParamsCfg;
+        pendingParamsCfg._name          = "pendingParams";
+        pendingParamsCfg._key_type		= AIQ_MAP_KEY_TYPE_UINT32;
+        pendingParamsCfg._item_nums     = DEFAULT_POOL_SIZE;
+        pendingParamsCfg._item_size     = sizeof(pending_params_t);
+        pAiqCore->mFullParamsPendingMap = aiqMap_init(&pendingParamsCfg);
+        if (!pAiqCore->mFullParamsPendingMap)
+            LOGE_ANALYZER("cId:%d init %s error", pAiqCore->mAlogsComSharedParams.mCamPhyId,
+                          pendingParamsCfg._name);
+    }
+    newAllAiqParamPool(pAiqCore);
+#if RKAIQ_HAVE_PDAF
+    newPdafStatsPool(pAiqCore);
+#endif
+
+    pAiqCore->mAiqSofInfoWrapperPool = AiqCore_createPool(
+        "sofInfo", DEFAULT_POOL_SIZE, CALC_SIZE_WITH_HEAD(AlgoRstShared_t, AiqSofInfoWrapper_t),
+        AIQCORE_POOL_TYPE_SHARED);
+    if (!pAiqCore->mAiqSofInfoWrapperPool) {
+        LOGE_ANALYZER("init sofInfo pool failed");
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    AiqAnalyzeGroupManager_resetDelayCnt(&pAiqCore->mRkAiqCoreGroupManager, delayCnt);
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -1302,6 +1468,15 @@ void AiqCore_clean(AiqCore_t* pAiqCore)
     pAiqCore->mLatestParamsDoneId = 0;
     pAiqCore->mLatestEvtsId       = 0;
     pAiqCore->mLatestStatsId      = 0;
+#if RKAIQ_HAVE_DUMPSYS
+    pAiqCore->mForceDoneCnt = 0;
+    pAiqCore->mForceDoneId  = 0;
+    pAiqCore->mSofLoss      = 0;
+    pAiqCore->mStatsLoss    = 0;
+
+    xcam_mem_clear(pAiqCore->mNoFreeBufCnt);
+    xcam_mem_clear(pAiqCore->mIsStatsAvail);
+#endif
 
 #if defined(RKAIQ_HAVE_BAYERTNR_V30)
 #if (USE_NEWSTRUCT == 0)
@@ -1403,28 +1578,34 @@ static void clearAlgosGroupSharedParams(RkAiqAlgosGroupShared_t* pSahred) {
 
 static XCamReturn getAiqParamsBuffer(AiqCore_t* pAiqCore, AiqFullParams_t* aiqParams, int type,
                                      uint32_t frame_id) {
+#if RKAIQ_HAVE_DUMPSYS
+#define INC_NO_FREE_CNT(type) pAiqCore->mNoFreeBufCnt.algosParams[type]++
+#else
+#define INC_NO_FREE_CNT(type)
+#endif
 
-#define NEW_PARAMS_BUFFER(BC)																		   \
-	do {																							   \
-		aiq_params_base_t* pBase = aiqParams->pParamsArray[RESULT_TYPE_##BC##_PARAM];                  \
-		if (!pBase) {                                                                                  \
-			AiqPoolItem_t* pItem =                                                                     \
-				aiqPool_getFree(pAiqCore->mAiqParamsPoolArray[RESULT_TYPE_##BC##_PARAM]);              \
-			if (pItem) {                                                                               \
-				pBase                                             = (aiq_params_base_t*)pItem->_pData; \
-				pBase->frame_id                                   = frame_id;                          \
-				pBase->is_update                                  = false;                             \
-				pBase->type										  = RESULT_TYPE_##BC##_PARAM;		   \
-				aiqParams->pParamsArray[RESULT_TYPE_##BC##_PARAM] = pBase;                             \
-			} else {                                                                                   \
-				LOGE_ANALYZER("no free %s buffer for Id: %d !", #BC, frame_id);                        \
-				return XCAM_RETURN_ERROR_MEM;                                                          \
-			}                                                                                          \
-		} else {                                                                                       \
-			pBase->frame_id  = frame_id;                                                               \
-			pBase->is_update = false;                                                                  \
-		}																							   \
-	} while(0)
+#define NEW_PARAMS_BUFFER(BC)                                                             \
+    do {                                                                                  \
+        aiq_params_base_t* pBase = aiqParams->pParamsArray[RESULT_TYPE_##BC##_PARAM];     \
+        if (!pBase) {                                                                     \
+            AiqPoolItem_t* pItem =                                                        \
+                aiqPool_getFree(pAiqCore->mAiqParamsPoolArray[RESULT_TYPE_##BC##_PARAM]); \
+            if (pItem) {                                                                  \
+                pBase            = (aiq_params_base_t*)pItem->_pData;                     \
+                pBase->frame_id  = frame_id;                                              \
+                pBase->is_update = false;                                                 \
+                pBase->type      = RESULT_TYPE_##BC##_PARAM;                              \
+                aiqParams->pParamsArray[RESULT_TYPE_##BC##_PARAM] = pBase;                \
+            } else {                                                                      \
+                LOGE_ANALYZER("no free %s buffer for Id: %d !", #BC, frame_id);           \
+                INC_NO_FREE_CNT(RESULT_TYPE_##BC##_PARAM);                                \
+                return XCAM_RETURN_ERROR_MEM;                                             \
+            }                                                                             \
+        } else {                                                                          \
+            pBase->frame_id  = frame_id;                                                  \
+            pBase->is_update = false;                                                     \
+        }                                                                                 \
+    } while (0)
 
     switch (type) {
         case RK_AIQ_ALGO_TYPE_AE:
@@ -1487,9 +1668,6 @@ static XCamReturn getAiqParamsBuffer(AiqCore_t* pAiqCore, AiqFullParams_t* aiqPa
         case RK_AIQ_ALGO_TYPE_A3DLUT:
             NEW_PARAMS_BUFFER(LUT3D);
             break;
-        case RK_AIQ_ALGO_TYPE_ALDCH:
-            NEW_PARAMS_BUFFER(LDCH);
-            break;
         case RK_AIQ_ALGO_TYPE_ACSM:
             NEW_PARAMS_BUFFER(CSM);
             break;
@@ -1522,7 +1700,7 @@ static XCamReturn getAiqParamsBuffer(AiqCore_t* pAiqCore, AiqFullParams_t* aiqPa
             break;
         case RK_AIQ_ALGO_TYPE_ASHARP:
             NEW_PARAMS_BUFFER(SHARPEN);
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
             NEW_PARAMS_BUFFER(TEXEST);
 #endif
             break;
@@ -1558,6 +1736,16 @@ static XCamReturn getAiqParamsBuffer(AiqCore_t* pAiqCore, AiqFullParams_t* aiqPa
             NEW_PARAMS_BUFFER(LDC);
 #endif
 			break;
+        case RK_AIQ_ALGO_TYPE_AIBNR:
+#if RKAIQ_HAVE_AIBNR
+            NEW_PARAMS_BUFFER(AIBNR);
+#endif
+            break;
+        case RK_AIQ_ALGO_TYPE_AIRMS:
+#if RKAIQ_HAVE_AIRMS
+            NEW_PARAMS_BUFFER(AIRMS);
+#endif
+            break;
         default:
             break;
     }
@@ -1592,7 +1780,10 @@ static void getDummyAlgoRes(AiqCore_t * pAiqCore, int type, uint32_t frame_id) {
 		AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mPreResAeSharedPool);
 		if (!pItem) {
 			LOGE_ANALYZER("fid:%d, get free AePreRes faild !", frame_id);
-			return;
+#if RKAIQ_HAVE_DUMPSYS
+                        pAiqCore->mNoFreeBufCnt.aePreRes++;
+#endif
+                        return;
 		}
 		AlgoRstShared_t* pSahred = (AlgoRstShared_t*)pItem->_pData;
 		pSahred->frame_id        = frame_id;
@@ -1606,7 +1797,10 @@ static void getDummyAlgoRes(AiqCore_t * pAiqCore, int type, uint32_t frame_id) {
 		AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mProcResAwbSharedPool);
 		if (!pItem) {
 			LOGE_ANALYZER("fid:%d, get free AwbProcRes faild !", frame_id);
-			return;
+#if RKAIQ_HAVE_DUMPSYS
+                        pAiqCore->mNoFreeBufCnt.awbProcRes++;
+#endif
+                        return;
 		}
 		AlgoRstShared_t* pSahred = (AlgoRstShared_t*)pItem->_pData;
 		pSahred->frame_id        = frame_id;
@@ -1620,7 +1814,10 @@ static void getDummyAlgoRes(AiqCore_t * pAiqCore, int type, uint32_t frame_id) {
 		AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mProcResBlcSharedPool);
 		if (!pItem) {
 			LOGE_ANALYZER("fid:%d, get free BlcProcRes faild !", frame_id);
-			return;
+#if RKAIQ_HAVE_DUMPSYS
+                        pAiqCore->mNoFreeBufCnt.blcProcRes++;
+#endif
+                        return;
 		}
 		AlgoRstShared_t* pSahred = (AlgoRstShared_t*)pItem->_pData;
 		pSahred->frame_id        = frame_id;
@@ -1634,7 +1831,10 @@ static void getDummyAlgoRes(AiqCore_t * pAiqCore, int type, uint32_t frame_id) {
 		AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mProcResYnrSharedPool);
 		if (!pItem) {
 			LOGE_ANALYZER("fid:%d, get free YnrProcRes faild !", frame_id);
-			return;
+#if RKAIQ_HAVE_DUMPSYS
+                        pAiqCore->mNoFreeBufCnt.ynrProcRes++;
+#endif
+                        return;
 		}
 		AlgoRstShared_t* pSahred = (AlgoRstShared_t*)pItem->_pData;
 		pSahred->frame_id        = frame_id;
@@ -1697,16 +1897,19 @@ static AiqFullParams_t* analyzeInternal(AiqCore_t * pAiqCore,
 							if (!pPoolItem) {
 								LOGE_ANALYZER("cid:%d, fid:%d, no free aiq params buffer!",
 									pAiqCore->mAlogsComSharedParams.mCamPhyId, frame_id);
-								// dump pending
-								bool rm = false;
-								AIQ_MAP_FOREACH(pAiqCore->mFullParamsPendingMap, pItem, rm) {
+                                                                // dump pending
+                                                                bool rm = false;
+                                                                AIQ_MAP_FOREACH(pAiqCore->mFullParamsPendingMap, pItem, rm) {
 									pPendingParams = (pending_params_t*)pItem->_pData;
 									LOGE_ANALYZER("pendings: fid:%d, grpmask:0x%lx",pItem->_key, pPendingParams->groupMasks);
 								}
 								aiqMutex_unlock(&pAiqCore->_mFullParam_mutex);
-								return NULL;
-							}
-							pAiqFullParams = (AiqFullParams_t*)pPoolItem->_pData;
+#if RKAIQ_HAVE_DUMPSYS
+                                                                pAiqCore->mNoFreeBufCnt.fullParams++;
+#endif
+                                                                return NULL;
+                                                        }
+                                                        pAiqFullParams = (AiqFullParams_t*)pPoolItem->_pData;
 
 							LOGD_ANALYZER(
 								"[%d] new params, algo_type: 0x%x, grp_type: 0x%x, "
@@ -1745,10 +1948,18 @@ static AiqFullParams_t* analyzeInternal(AiqCore_t * pAiqCore,
 				if (true/*pAiqCore->mAlogsComSharedParams.init || !AiqCore_isGroupAlgo(pAiqCore, type)*/) {
 					if (pHdl->preProcess)
 						ret = pHdl->preProcess(pHdl);
-					if (ret) break;
+                    if (ret) {
+                        LOGW("cid[%d], preProc %d error", pAiqCore->mAlogsComSharedParams.mCamPhyId, type);
+                        pHdl->genIspResult(pHdl, pAiqFullParams, pAiqCore->mAiqCurParams);
+                        break;
+                    }
 					if (pHdl->processing)
 						ret = pHdl->processing(pHdl);
-					if (ret) break;
+                    if (ret) {
+                        LOGW("cid[%d], Proc %d error", pAiqCore->mAlogsComSharedParams.mCamPhyId, type);
+                        pHdl->genIspResult(pHdl, pAiqFullParams, pAiqCore->mAiqCurParams);
+                        break;
+                    }
 					if (pHdl->postProcess)
 						ret = pHdl->postProcess(pHdl);
 					pHdl->genIspResult(pHdl, pAiqFullParams, pAiqCore->mAiqCurParams);
@@ -1758,7 +1969,7 @@ static AiqFullParams_t* analyzeInternal(AiqCore_t * pAiqCore,
 		}
 	}
 
-	return pAiqFullParams;
+        return pAiqFullParams;
 }
 
 XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
@@ -1799,9 +2010,6 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 	}
 
 	pAiqCore->mAlogsComSharedParams.snsDes = *sensor_des;
-	if (pAiqCore->mUserOtpInfo.otp_awb.flag) {
-		pAiqCore->mAlogsComSharedParams.snsDes.otp_awb = pAiqCore->mUserOtpInfo.otp_awb;
-	}
 	pAiqCore->mAlogsComSharedParams.working_mode    = mode;
 	pAiqCore->mAlogsComSharedParams.spWidth         = pAiqCore->mSpWidth;
 	pAiqCore->mAlogsComSharedParams.spHeight        = pAiqCore->mSpHeight;
@@ -1826,6 +2034,7 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 			pAiqCore->mAlogsComSharedParams.gray_mode = false;
 		}
 	}
+
 #if defined(RKAIQ_HAVE_MULTIISP)
 
 	if (pAiqCore->mHwInfo.is_multi_isp_mode) {
@@ -1833,10 +2042,11 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 		//(sensor_des->isp_acq_height % 16 == 0));
 		uint32_t extended_pixel          = pAiqCore->mHwInfo.multi_isp_extended_pixel;
 		AiqStatsTranslator_t* translator = pAiqCore->mTranslator;
-		uint32_t size = sensor_des->isp_acq_width * sensor_des->isp_acq_height;
-		if (size > 2 * RK_AIQ_ISP_CIF_INPUT_MAX_SIZE) {
+		uint32_t size                    = sensor_des->isp_acq_width * sensor_des->isp_acq_height;
+		int isp_unite_mode               = translator->mIspUniteMode;
+        if (isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
 			AiqStatsTranslator_SetMultiIspMode(translator, true);
-			AiqStatsTranslator_SetIspUnitedMode(translator, RK_AIQ_ISP_UNITED_MODE_FOUR_GRID);
+			AiqStatsTranslator_SetIspUniteMode(translator, RK_AIQ_ISP_UNITE_MODE_FOUR_GRID);
 			Rectangle_t rect;
 			rect.x = 0;
 			rect.y = 0;
@@ -1863,9 +2073,9 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 			rect.w = sensor_des->isp_acq_width / 2 + extended_pixel;
 			rect.h = sensor_des->isp_acq_height / 2 + extended_pixel;
 			AiqStatsTranslator_SetBottomRightIspRect(translator, &rect);
-		} else if (size > RK_AIQ_ISP_CIF_INPUT_MAX_SIZE) {
+		} else if (isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
 			AiqStatsTranslator_SetMultiIspMode(translator, true);
-			AiqStatsTranslator_SetIspUnitedMode(translator, RK_AIQ_ISP_UNITED_MODE_TWO_GRID);
+			AiqStatsTranslator_SetIspUniteMode(translator, RK_AIQ_ISP_UNITE_MODE_TWO_GRID);
 			Rectangle_t rect;
 			rect.x = 0;
 			rect.y = 0;
@@ -1881,7 +2091,7 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 			AiqStatsTranslator_SetRightIspRect(translator, &rect);
 		} else {
 			AiqStatsTranslator_SetMultiIspMode(translator, true);
-			AiqStatsTranslator_SetIspUnitedMode(translator, RK_AIQ_ISP_UNITED_MODE_NORMAL);
+			AiqStatsTranslator_SetIspUniteMode(translator, RK_AIQ_ISP_UNITE_MODE_NORMAL);
 			Rectangle_t rect;
 			rect.x = 0;
 			rect.y = 0;
@@ -1959,6 +2169,9 @@ static XCamReturn handleAecStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t* b
     AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mAiqAecStatsPool);
     if (!pItem) {
         LOGW_AEC("fid:%d no free aecStats buffer!", AiqVideoBuffer_getSequence(buffer));
+#if RKAIQ_HAVE_DUMPSYS
+        pAiqCore->mNoFreeBufCnt.aeStats++;
+#endif
         return XCAM_RETURN_BYPASS;
     }
     aecStats = (aiq_stats_base_t*)pItem->_pData;
@@ -1973,6 +2186,12 @@ static XCamReturn handleAecStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t* b
     if (pAiqCore->mCurAeStats) AIQ_REF_BASE_UNREF(&pAiqCore->mCurAeStats->_ref_base);
 
     pAiqCore->mCurAeStats = aecStats;
+#if RKAIQ_HAVE_DUMPSYS
+    if (aecStats->bValid)
+        pAiqCore->mIsStatsAvail.ae = true;
+    else
+        pAiqCore->mIsStatsAvail.ae = false;
+#endif
     AIQ_REF_BASE_REF(&aecStats->_ref_base);
     aiqMutex_unlock(&pAiqCore->mIspStatsMutex);
 
@@ -1997,6 +2216,9 @@ static XCamReturn handleAwbStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t* b
     AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mAiqAwbStatsPool);
     if (!pItem) {
         LOGW_AWB("no free awbStat buffer!");
+#if RKAIQ_HAVE_DUMPSYS
+        pAiqCore->mNoFreeBufCnt.awbStats++;
+#endif
         return XCAM_RETURN_BYPASS;
     }
     awbStat = (aiq_stats_base_t*)pItem->_pData;
@@ -2011,6 +2233,12 @@ static XCamReturn handleAwbStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t* b
     if (pAiqCore->mCurAwbStats) AIQ_REF_BASE_UNREF(&pAiqCore->mCurAwbStats->_ref_base);
 
     pAiqCore->mCurAwbStats = awbStat;
+#if RKAIQ_HAVE_DUMPSYS
+    if (awbStat->bValid)
+        pAiqCore->mIsStatsAvail.awb = true;
+    else
+        pAiqCore->mIsStatsAvail.awb = false;
+#endif
     AIQ_REF_BASE_REF(&awbStat->_ref_base);
     aiqMutex_unlock(&pAiqCore->mIspStatsMutex);
 
@@ -2110,6 +2338,12 @@ static XCamReturn handleAfStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t* bu
     if (pAiqCore->mCurAfStats) AIQ_REF_BASE_UNREF(&pAiqCore->mCurAfStats->_ref_base);
 
     pAiqCore->mCurAfStats = afStat;
+#if RKAIQ_HAVE_DUMPSYS
+    if (afStat->bValid)
+        pAiqCore->mIsStatsAvail.af = true;
+    else
+        pAiqCore->mIsStatsAvail.af = false;
+#endif
     AIQ_REF_BASE_REF(&afStat->_ref_base);
     aiqMutex_unlock(&pAiqCore->mIspStatsMutex);
 
@@ -2200,6 +2434,9 @@ static XCamReturn handleAdehazeStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_
     AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mAiqAdehazeStatsPool);
     if (!pItem) {
         LOGW_ADEHAZE("no free dehazeStat buffer!");
+#if RKAIQ_HAVE_DUMPSYS
+        pAiqCore->mNoFreeBufCnt.dhazStats++;
+#endif
         return XCAM_RETURN_BYPASS;
     }
     dehazeStat = (aiq_stats_base_t*)pItem->_pData;
@@ -2215,6 +2452,12 @@ static XCamReturn handleAdehazeStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_
     msg.frame_id                   = AiqVideoBuffer_getSequence(buffer);
     *(aiq_stats_base_t**)(msg.buf) = dehazeStat;
     ret                            = AiqCore_post_message(pAiqCore, &msg);
+#if RKAIQ_HAVE_DUMPSYS
+    if (dehazeStat->bValid)
+        pAiqCore->mIsStatsAvail.dhaze = true;
+    else
+        pAiqCore->mIsStatsAvail.dhaze = false;
+#endif
     AIQ_REF_BASE_UNREF(&dehazeStat->_ref_base);
 
     return ret;
@@ -2232,6 +2475,9 @@ static XCamReturn handleAgainStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t*
     AiqPoolItem_t* pItem = aiqPool_getFree(pAiqCore->mAiqAgainStatsPool);
     if (!pItem) {
         LOGW("no free gainStat buffer!");
+#if RKAIQ_HAVE_DUMPSYS
+        pAiqCore->mNoFreeBufCnt.gainStats++;
+#endif
         return XCAM_RETURN_BYPASS;
     }
     gainStat = (aiq_stats_base_t*)pItem->_pData;
@@ -2248,6 +2494,12 @@ static XCamReturn handleAgainStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t*
         msg.frame_id                   = AiqVideoBuffer_getSequence(buffer);
         *(aiq_stats_base_t**)(msg.buf) = gainStat;
         ret                            = AiqCore_post_message(pAiqCore, &msg);
+#if RKAIQ_HAVE_DUMPSYS
+        if (gainStat->bValid)
+            pAiqCore->mIsStatsAvail.gain = true;
+        else
+            pAiqCore->mIsStatsAvail.gain = false;
+#endif
         AIQ_REF_BASE_UNREF(&gainStat->_ref_base);
     }
     return ret;
@@ -2271,8 +2523,18 @@ static XCamReturn handleBay3dStats(AiqCore_t* pAiqCore, const aiq_VideoBuffer_t*
         &pAiqCore->bay3dStatListMutex);
     if (ret) {
         LOGE_ANALYZER("translate bay3d stats failed!");
+#if RKAIQ_HAVE_DUMPSYS
+        pAiqCore->mNoFreeBufCnt.btnrStats++;
+#endif
         ret = XCAM_RETURN_BYPASS;
     }
+
+#if RKAIQ_HAVE_DUMPSYS
+    if (ret == XCAM_RETURN_NO_ERROR)
+        pAiqCore->mIsStatsAvail.btnr = true;
+    else
+        pAiqCore->mIsStatsAvail.btnr = false;
+#endif
 
     return ret;
 }
@@ -2363,6 +2625,44 @@ static XCamReturn handleVicapScaleBufs(AiqCore_t* pAiqCore, aiq_VideoBuffer_t* b
     return ret;
 }
 
+typedef enum AIQ_STATS_TYPE_e {
+    AIQ_STATS_TYPE_AEC,
+    AIQ_STATS_TYPE_AWB,
+    AIQ_STATS_TYPE_AF,
+    AIQ_STATS_TYPE_DHAZ,
+    AIQ_STATS_TYPE_BAY3D,
+} AIQ_STATS_TYPE_t;
+
+static bool _check_stats_valid(aiq_VideoBuffer_t* buffer, AIQ_STATS_TYPE_t check_type)
+{
+#if defined(ISP_HW_V39)
+    struct rkisp39_stat_buffer* stats =
+        (struct rkisp39_stat_buffer*)(AiqV4l2Buffer_getExpbufUsrptr((AiqV4l2Buffer_t*)buffer));
+#elif defined(ISP_HW_V33)
+    struct rkisp33_stat_buffer* stats =
+        (struct rkisp33_stat_buffer*)(AiqV4l2Buffer_getExpbufUsrptr((AiqV4l2Buffer_t*)buffer));
+#elif defined(ISP_HW_V35)
+    struct rkisp35_stat_buffer* stats =
+        (struct rkisp35_stat_buffer*)(AiqV4l2Buffer_getExpbufUsrptr((AiqV4l2Buffer_t*)buffer));
+#else
+#error "wrong plateform !"
+#endif
+    uint32_t meas_type = stats->meas_type;
+    LOGD_ANALYZER("sequence(%d), meas_type:0x%x",
+                  AiqVideoBuffer_getSequence(buffer), meas_type);
+    if (AIQ_STATS_TYPE_AEC == check_type)
+        return (!!(meas_type & ISP2X_STAT_RAWAE0) && !!(meas_type & ISP2X_STAT_RAWHST0));
+    if (AIQ_STATS_TYPE_DHAZ == check_type)
+        return !!(meas_type & ISP2X_STAT_DHAZ);
+    if (AIQ_STATS_TYPE_AWB == check_type)
+        return !!(meas_type & ISP2X_STAT_RAWAWB);
+    if (AIQ_STATS_TYPE_AF == check_type)
+        return !!(meas_type & ISP2X_STAT_RAWAF);
+    if (AIQ_STATS_TYPE_BAY3D == check_type)
+        return !!(meas_type & ISP39_STAT_BAY3D);
+    return false;
+}
+
 static XCamReturn RkAiqCore_analyze(AiqCore_t * pAiqCore, AiqHwEvt_t * evt) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
@@ -2377,6 +2677,7 @@ static XCamReturn RkAiqCore_analyze(AiqCore_t * pAiqCore, AiqHwEvt_t * evt) {
 
     aiq_VideoBuffer_t* buffer  = (aiq_VideoBuffer_t*)evt->vb;
     AiqHwStatsEvt_t* pStatsEvt = (AiqHwStatsEvt_t*)evt;
+    bool is_broadcast          = false;
     if (buffer->_buf_type == ISP_POLL_3A_STATS) {
         LOGD_ANALYZER("new stats: camId:%d, sequence(%d)",
                       pAiqCore->mAlogsComSharedParams.mCamPhyId,
@@ -2390,19 +2691,39 @@ static XCamReturn RkAiqCore_analyze(AiqCore_t * pAiqCore, AiqHwEvt_t * evt) {
 			AiqStatsTranslator_releaseParams(pAiqCore->mTranslator);
 			return ret;
 		}
-        handleAecStats(pAiqCore, buffer);
-        handleAwbStats(pAiqCore, buffer);
-        handleAfStats(pAiqCore, buffer);
-        handleAdehazeStats(pAiqCore, buffer);
+        if (_check_stats_valid(buffer, AIQ_STATS_TYPE_AEC)) {
+            LOGD_ANALYZER("new aec stats: camId:%d, sequence(%d), ts: %lld, buf:%p",
+                          pAiqCore->mAlogsComSharedParams.mCamPhyId,
+                          AiqVideoBuffer_getSequence(buffer), AiqVideoBuffer_getTimestamp(buffer), buffer);
+            handleAecStats(pAiqCore, buffer);
+        }
+        if (_check_stats_valid(buffer, AIQ_STATS_TYPE_AWB)) {
+            LOGD_ANALYZER("new awb stats: camId:%d, sequence(%d), ts: %lld, buf:%p",
+                          pAiqCore->mAlogsComSharedParams.mCamPhyId,
+                          AiqVideoBuffer_getSequence(buffer), AiqVideoBuffer_getTimestamp(buffer), buffer);
+            handleAwbStats(pAiqCore, buffer);
+            is_broadcast = true;
+        }
+        if (_check_stats_valid(buffer, AIQ_STATS_TYPE_AF))
+            handleAfStats(pAiqCore, buffer);
+        if (_check_stats_valid(buffer, AIQ_STATS_TYPE_DHAZ))
+            handleAdehazeStats(pAiqCore, buffer);
 #if RK_GAIN_V2_ENABLE_GAIN2DDR && defined(ISP_HW_V32)
         handleAgainStats(pAiqCore, buffer);
 #endif
 #if defined(RKAIQ_HAVE_BAYERTNR_V30)
 #if (USE_NEWSTRUCT == 0)
-        handleBay3dStats(pAiqCore, buffer);
+        if (_check_stats_valid(buffer, AIQ_STATS_TYPE_BAY3D))
+            handleBay3dStats(pAiqCore, buffer);
 #endif
 #endif
-        aiqCond_broadcast(&pAiqCore->mIspStatsCond);
+        if (is_broadcast) {
+            if (AiqVideoBuffer_getSequence(buffer) != pAiqCore->mCurAeStats->frame_id) {
+                LOGW_ANALYZER("AE stats id %d, AWB stats id %d, Ae stats maybe delay or pre",
+                    AiqVideoBuffer_getSequence(buffer), pAiqCore->mCurAeStats->frame_id);
+            }
+            aiqCond_broadcast(&pAiqCore->mIspStatsCond);
+        }
         AiqStatsTranslator_releaseParams(pAiqCore->mTranslator);
     } else {
         int type = -1;
@@ -2475,23 +2796,29 @@ XCamReturn AiqCore_pushStats(AiqCore_t * pAiqCore, AiqHwEvt_t * evt) {
 
     aiq_VideoBuffer_t* buffer = evt->vb;
     if (buffer && buffer->_buf_type == ISP_POLL_3A_STATS) {
-        uint32_t seq     = AiqVideoBuffer_getSequence(buffer);
-        int32_t delta    = seq - pAiqCore->mLatestEvtsId;
-        int32_t interval = seq - pAiqCore->mLatestStatsId;
+        // just check awb stats now, may add aec stats to check later
+        if (_check_stats_valid(buffer, AIQ_STATS_TYPE_AWB)) {
+            uint32_t seq     = AiqVideoBuffer_getSequence(buffer);
+            int32_t delta    = seq - pAiqCore->mLatestEvtsId;
+            int32_t interval = seq - pAiqCore->mLatestStatsId;
 
-        if (interval == 1) {
-            // do nothing
-        } else if ((interval == 0 && (pAiqCore->mLatestStatsId != 0)) || (interval < 0)) {
-            LOGE_ANALYZER("stats disorder, latest:%u, new:%u", pAiqCore->mLatestStatsId, seq);
-            return XCAM_RETURN_NO_ERROR;
-        } else if (interval > 1) {
-            LOGW_ANALYZER("stats not continuous, latest:%u, new:%u", pAiqCore->mLatestStatsId, seq);
-        }
+            if (interval == 1) {
+                // do nothing
+            } else if ((interval == 0 && (pAiqCore->mLatestStatsId != 0)) || (interval < 0)) {
+                LOGE_ANALYZER("stats disorder, latest:%u, new:%u", pAiqCore->mLatestStatsId, seq);
+                return XCAM_RETURN_NO_ERROR;
+            } else if (interval > 1) {
+                LOGW_ANALYZER("stats not continuous, latest:%u, new:%u", pAiqCore->mLatestStatsId, seq);
+            }
 
-        pAiqCore->mLatestStatsId = seq;
-        if (delta > 3) {
-            LOGW_ANALYZER("stats delta: %d, skip stats %u", delta, seq);
-            return XCAM_RETURN_NO_ERROR;
+#if RKAIQ_HAVE_DUMPSYS
+            pAiqCore->mStatsLoss += seq > 1 ? seq - pAiqCore->mLatestStatsId - 1 : 0;
+#endif
+            pAiqCore->mLatestStatsId = seq;
+            if (delta > 3) {
+                LOGW_ANALYZER("stats delta: %d, skip stats %u", delta, seq);
+                return XCAM_RETURN_NO_ERROR;
+            }
         }
     }
     XCamReturn ret = RkAiqCore_analyze(pAiqCore, evt);
@@ -2538,6 +2865,9 @@ static XCamReturn events_analyze(AiqCore_t* pAiqCore, const AiqHwEvt_t* evts) {
         if (!pItem) {
             LOGW("cid:%d, fid:%d no free sof buffer!", pAiqCore->mAlogsComSharedParams.mCamPhyId,
                  id);
+#if RKAIQ_HAVE_DUMPSYS
+            pAiqCore->mNoFreeBufCnt.sofInfo++;
+#endif
             ret = XCAM_RETURN_BYPASS;
             goto out;
         }
@@ -2651,6 +2981,10 @@ XCamReturn AiqCore_pushEvts(AiqCore_t* pAiqCore, AiqHwEvt_t* evts) {
         int32_t delta    = seq - pAiqCore->mLatestStatsId;
         int32_t interval = seq - pAiqCore->mLatestEvtsId;
 
+#if RKAIQ_HAVE_DUMPSYS
+        pAiqCore->mSofLoss += seq ? interval - 1 : 0;
+#endif
+
         if (interval == 1) {
             // do nothing
         } else if ((interval == 0 && (pAiqCore->mLatestEvtsId != 0)) || (interval < 0)) {
@@ -2662,7 +2996,7 @@ XCamReturn AiqCore_pushEvts(AiqCore_t* pAiqCore, AiqHwEvt_t* evts) {
 
         pAiqCore->mLatestEvtsId = evts->frame_id;
 
-        if (delta > 3) {
+        if (delta > (pAiqCore->mDefaultDelayCnt + 1)) {
             LOGW_ANALYZER("sof delta: %d, skip sof %u", delta, seq);
             return XCAM_RETURN_NO_ERROR;
         }
@@ -2672,131 +3006,43 @@ XCamReturn AiqCore_pushEvts(AiqCore_t* pAiqCore, AiqHwEvt_t* evts) {
     return ret;
 }
 
-static void RkAiqCore_copyIspStats(AiqCore_t* pAiqCore, rk_aiq_isp_stats_t* to) {
+static void RkAiqCore_copyIspStats(AiqCore_t* pAiqCore, rk_aiq_isp_statistics_t* to) {
     aiq_ae_stats_wrapper_t* pAeStats   = NULL;
     aiq_awb_stats_wrapper_t* pAwbStats = NULL;
     aiq_af_stats_wrapper_t* pAfStats   = NULL;
 
     to->bValid_aec_stats = false;
     to->bValid_awb_stats = false;
+#if RKAIQ_HAVE_AF_V33 || RKAIQ_ONLY_AF_STATS_V33
     to->bValid_af_stats  = false;
-
+#endif
     if (pAiqCore->mCurAeStats) {
         pAeStats             = (aiq_ae_stats_wrapper_t*)pAiqCore->mCurAeStats->_data;
-#ifdef USE_NEWSTRUCT
-        to->aec_stats_v25 = pAeStats->aec_stats_v25;
-#else
-        to->aec_stats        = pAeStats->aec_stats;
-#endif
+        to->aec_stats = pAeStats->aec_stats_v25;
         to->frame_id         = pAiqCore->mCurAeStats->frame_id;
         to->bValid_aec_stats = true;
     }
 
-    if (pAiqCore->mIspHwVer == 5) {
-#if defined(ISP_HW_V39) || defined(ISP_HW_V33)
-        to->awb_hw_ver = 5;
-        if (pAiqCore->mCurAwbStats) {
-            pAwbStats            = (aiq_awb_stats_wrapper_t*)pAiqCore->mCurAwbStats->_data;
-            to->awb_stats_v39 = pAwbStats->awb_stats_v39;
-            to->bValid_awb_stats = true;
-        }
-#endif
-    } else if (pAiqCore->mIspHwVer == 4) {
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-        to->awb_hw_ver = 4;
-        if (pAiqCore->mCurAwbStats) {
-            pAwbStats            = (aiq_awb_stats_wrapper_t*)pAiqCore->mCurAwbStats->_data;
-            to->awb_stats_v32 = pAwbStats->awb_stats_v32;
-            to->bValid_awb_stats = true;
-        }
-#endif
-    } else if (pAiqCore->mIspHwVer == 3) {
-#if ISP_HW_V30
-        to->awb_hw_ver = 3;
-        if (pAiqCore->mCurAwbStats) {
-            pAwbStats                     = (aiq_awb_stats_wrapper_t*)pAiqCore->mCurAwbStats->_data;
-            to->bValid_awb_stats          = true;
-            to->awb_stats_v3x.light       = pAwbStats->awb_stats_v3x.light;
-            to->awb_stats_v3x.WpNo2       = pAwbStats->awb_stats_v3x.WpNo2;
-            to->awb_stats_v3x.blockResult = pAwbStats->awb_stats_v3x.blockResult;
-            to->awb_stats_v3x.multiwindowLightResult =
-                pAwbStats->awb_stats_v3x.multiwindowLightResult;
-            to->awb_stats_v3x.excWpRangeResult = pAwbStats->awb_stats_v3x.excWpRangeResult;
-            to->awb_stats_v3x.WpNoHist         = pAwbStats->awb_stats_v3x.WpNoHist;
-        }
-#endif
-    } else if (pAiqCore->mIspHwVer == 1) {
-#if ISP_HW_V21
-        to->awb_hw_ver = 1;
-        if (pAiqCore->mCurAwbStats) {
-            pAwbStats                     = (aiq_awb_stats_wrapper_t*)pAiqCore->mCurAwbStats->_data;
-            to->bValid_awb_stats          = true;
-            to->awb_stats_v21.light       = pAwbStats->awb_stats_v201.light;
-            to->awb_stats_v21.blockResult = pAwbStats->awb_stats_v201.blockResult;
-            to->awb_stats_v21.WpNoHist    = pAwbStats->awb_stats_v201.WpNoHist;
-        }
-#endif
+    if (pAiqCore->mCurAwbStats) {
+        pAwbStats            = (aiq_awb_stats_wrapper_t*)pAiqCore->mCurAwbStats->_data;
+        to->awb_stats        = pAwbStats->awb_stats_v39;
+        to->frame_id         = pAiqCore->mCurAwbStats->frame_id;
+        to->bValid_awb_stats = true;
     }
 
-    if (pAiqCore->mIspHwVer == 5) {
 #if RKAIQ_HAVE_AF_V33 || RKAIQ_ONLY_AF_STATS_V33
-        to->af_hw_ver = RKAIQ_AF_HW_V33;
-#ifdef USE_NEWSTRUCT
-        if (pAiqCore->mCurAfStats) {
-            pAfStats            = (aiq_af_stats_wrapper_t*)pAiqCore->mCurAfStats->_data;
-            to->bValid_af_stats = true;
-            to->afStats_stats   = pAfStats->afStats_stats;
-        }
-#else
-        if (pAiqCore->mCurAfStats) {
-            pAfStats            = (aiq_af_stats_wrapper_t*)pAiqCore->mCurAfStats->_data;
-            to->bValid_af_stats = true;
-            to->af_stats_v3x    = pAfStats->af_stats_v3x;
-        }
-#endif
-#endif
-    } else if (pAiqCore->mIspHwVer == 4) {
-#if RKAIQ_HAVE_AF_V32_LITE || RKAIQ_ONLY_AF_STATS_V32_LITE
-        to->af_hw_ver = RKAIQ_AF_HW_V32_LITE;
-        if (pAiqCore->mCurAfStats) {
-            pAfStats            = (aiq_af_stats_wrapper_t*)pAiqCore->mCurAfStats->_data;
-            to->bValid_af_stats = true;
-            to->af_stats_v3x    = pAfStats->af_stats_v3x;
-        }
-#endif
-#if RKAIQ_HAVE_AF_V31 || RKAIQ_ONLY_AF_STATS_V31
-        to->af_hw_ver = RKAIQ_AF_HW_V31;
-        if (pAiqCore->mCurAfStats) {
-            pAfStats            = (aiq_af_stats_wrapper_t*)pAiqCore->mCurAfStats->_data;
-            to->bValid_af_stats = true;
-            to->af_stats_v3x    = pAfStats->af_stats_v3x;
-        }
-#endif
-    } else if (pAiqCore->mIspHwVer == 3) {
-#if RKAIQ_HAVE_AF_V30 || RKAIQ_ONLY_AF_STATS_V30
-        to->af_hw_ver = RKAIQ_AF_HW_V30;
-        if (pAiqCore->mCurAfStats) {
-            pAfStats            = (aiq_af_stats_wrapper_t*)pAiqCore->mCurAfStats->_data;
-            to->bValid_af_stats = true;
-            to->af_stats_v3x    = pAfStats->af_stats_v3x;
-        }
-#endif
-    } else {
-#if RKAIQ_HAVE_AF_V20 || RKAIQ_HAVE_AF_V21 || RKAIQ_ONLY_AF_STATS_V20
-        to->af_hw_ver = RKAIQ_AF_HW_V20;
-        if (pAiqCore->mCurAfStats) {
-            pAfStats            = (aiq_af_stats_wrapper_t*)pAiqCore->mCurAfStats->_data;
-            to->bValid_af_stats = true;
-            to->af_stats        = pAfStats->af_stats;
-        }
-#endif
+    if (pAiqCore->mCurAfStats) {
+        pAfStats            = (aiq_af_stats_wrapper_t*)pAiqCore->mCurAfStats->_data;
+        to->bValid_af_stats = true;
+        to->afStats_stats   = pAfStats->afStats_stats;
     }
+#endif
 }
 
 /*
  * timeout: -1 next, 0 current, > 0 wait next until timeout
  */
-XCamReturn AiqCore_get3AStats(AiqCore_t* pAiqCore, rk_aiq_isp_stats_t* stats, int timeout_ms) {
+XCamReturn AiqCore_get3AStats(AiqCore_t* pAiqCore, rk_aiq_isp_statistics_t* stats, int timeout_ms) {
     //if (pAiqCore->mState != RK_AIQ_CORE_STATE_RUNNING) return XCAM_RETURN_ERROR_FAILED;
 
     aiqMutex_lock(&pAiqCore->mIspStatsMutex);
@@ -2806,7 +3052,7 @@ XCamReturn AiqCore_get3AStats(AiqCore_t* pAiqCore, rk_aiq_isp_stats_t* stats, in
         aiqCond_wait(&pAiqCore->mIspStatsCond, &pAiqCore->mIspStatsMutex);
     } else if (timeout_ms > 0){
         int ret =
-            aiqCond_timedWait(&pAiqCore->mIspStatsCond, &pAiqCore->mIspStatsMutex, timeout_ms);
+            aiqCond_timedWait(&pAiqCore->mIspStatsCond, &pAiqCore->mIspStatsMutex, timeout_ms*1000);
         if (ret == ETIMEDOUT) {
             aiqMutex_unlock(&pAiqCore->mIspStatsMutex);
             return XCAM_RETURN_ERROR_TIMEOUT;
@@ -2903,8 +3149,6 @@ static struct iqModStrToAlgoMap_s iqModuleStrToAlgoEnumMap[] = {
     {"hsv", RK_AIQ_ALGO_TYPE_AHSV},
     {"adpcc", RK_AIQ_ALGO_TYPE_ADPCC},
     {"dpc", RK_AIQ_ALGO_TYPE_ADPCC},
-    {"aldch", RK_AIQ_ALGO_TYPE_ALDCH},
-    {"ldch", RK_AIQ_ALGO_TYPE_ALDCH},
     {"cproc", RK_AIQ_ALGO_TYPE_ACP},
     {"cp", RK_AIQ_ALGO_TYPE_ACP},
     {"ie", RK_AIQ_ALGO_TYPE_AIE},
@@ -2924,6 +3168,8 @@ static struct iqModStrToAlgoMap_s iqModuleStrToAlgoEnumMap[] = {
 	{"argbir", RK_AIQ_ALGO_TYPE_ARGBIR},
 	{"rgbir", RK_AIQ_ALGO_TYPE_ARGBIR},
 	{"ldc", RK_AIQ_ALGO_TYPE_ALDC},
+    {"aibnr", RK_AIQ_ALGO_TYPE_AIBNR},
+    {"airms", RK_AIQ_ALGO_TYPE_AIRMS},
 };
 
 static void mapModStrListToEnum(AiqCore_t* pAiqCore, TuningCalib* change_name_list) {
@@ -2967,7 +3213,7 @@ static void mapModStrListToEnum(AiqCore_t* pAiqCore, TuningCalib* change_name_li
 }
 
 static XCamReturn notifyUpdate(AiqCore_t* pAiqCore, uint64_t mask) {
-    aiqMutex_unlock(&pAiqCore->_update_mutex);
+    aiqMutex_lock(&pAiqCore->_update_mutex);
     pAiqCore->groupUpdateMask |= mask;
     aiqMutex_unlock(&pAiqCore->_update_mutex);
 
@@ -2975,11 +3221,17 @@ static XCamReturn notifyUpdate(AiqCore_t* pAiqCore, uint64_t mask) {
 }
 
 static XCamReturn waitUpdateDone(AiqCore_t* pAiqCore) {
-    aiqMutex_unlock(&pAiqCore->_update_mutex);
+    aiqMutex_lock(&pAiqCore->_update_mutex);
 
-    while (pAiqCore->groupUpdateMask != 0) {
-        aiqCond_timedWait(&pAiqCore->_update_done_cond, &pAiqCore->_update_mutex, 100000ULL);
+    int times = 12;
+    while (times-- > 0 && pAiqCore->groupUpdateMask != 0) {
+        aiqCond_timedWait(&pAiqCore->_update_done_cond, &pAiqCore->_update_mutex, 10000ULL);
     }
+
+    if (pAiqCore->groupUpdateMask != 0) {
+        LOGW_ANALYZER("calib not updated completely !");
+    }
+
     aiqMutex_unlock(&pAiqCore->_update_mutex);
 
     return XCAM_RETURN_NO_ERROR;
@@ -3089,7 +3341,7 @@ XCamReturn AiqCore_calibTuning(AiqCore_t* pAiqCore, const CamCalibDbV2Context_t*
     }
 
     notifyUpdate(pAiqCore, grpMask);
-    if (pAiqCore->mState != RK_AIQ_CORE_STATE_RUNNING)
+    if (pAiqCore->mState != RK_AIQ_CORE_STATE_RUNNING || pAiqCore->mIsAovMode)
         AiqCore_updateCalib(pAiqCore, RK_AIQ_CORE_ANALYZE_ALL);
     else {
         waitUpdateDone(pAiqCore);
@@ -3138,12 +3390,24 @@ XCamReturn AiqCore_groupAnalyze(AiqCore_t * pAiqCore, uint64_t grpId,
 												(void*)(intptr_t)fullParam->_base.frame_id);
 					rm    = true;
 					pAiqCore->mLatestParamsDoneId = fullParam->_base.frame_id;
+                    if (fullParam->_base.frame_id < shared->frameId) {
+#ifdef RKAIQ_ENABLE_CAMGROUP
+                        if (!pAiqCore->mCamGroupCoreManager && pAiqCore->mCb)
+#else
+                        if (pAiqCore->mCb)
+#endif
+                            pAiqCore->mCb->rkAiqCalcExpDone(pAiqCore->mCb->pCtx, fullParam->pParamsArray[RESULT_TYPE_EXPOSURE_PARAM]);
+
+                        LOGD_ANALYZER("[%d]:%p fullParam discard, shared->frame %d, just set exp param",
+                                      fullParam->_base.frame_id, fullParam, shared->frameId);
+                    }
 					LOGD_ANALYZER("[%d]:%p fullParams done !", fullParam->_base.frame_id,
 								  fullParam);
 				} else
 					break;
 			}
         } else {
+            uint16_t FULLPARMAS_MAX_PENDING_SIZE = pAiqCore->mDefaultDelayCnt;
             uint16_t counts = aiqMap_size(pAiqCore->mFullParamsPendingMap);
             if (counts > FULLPARMAS_MAX_PENDING_SIZE) {
                 pItem                     = aiqMap_begin(pAiqCore->mFullParamsPendingMap);
@@ -3152,8 +3416,18 @@ XCamReturn AiqCore_groupAnalyze(AiqCore_t * pAiqCore, uint64_t grpId,
                 LOGW_ANALYZER("force [%d]:%p fullParams done ! new param id %d",
                               (uint32_t)(long)pItem->_key, fullParam, shared->frameId);
                 fullParam->_base.frame_id = (uint32_t)(long)pItem->_key;
+                for (int i = 0; i < RESULT_TYPE_MAX_PARAM; i++) {
+                    if (fullParam->pParamsArray[i] &&
+                        fullParam->pParamsArray[i]->frame_id != fullParam->_base.frame_id) {
+                        fullParam->pParamsArray[i]->frame_id = fullParam->_base.frame_id;
+                    }
+                }
                 aiqMap_erase_locked(pAiqCore->mFullParamsPendingMap, (void*)(intptr_t)fullParam->_base.frame_id);
                 pAiqCore->mLatestParamsDoneId = fullParam->_base.frame_id;
+#if RKAIQ_HAVE_DUMPSYS
+                pAiqCore->mForceDoneCnt++;
+                pAiqCore->mForceDoneId = pAiqCore->mLatestParamsDoneId;
+#endif
             }
         }
         aiqMutex_unlock(&pAiqCore->_mFullParam_mutex);
@@ -3161,6 +3435,9 @@ XCamReturn AiqCore_groupAnalyze(AiqCore_t * pAiqCore, uint64_t grpId,
 
     if (fullParam) {
         LOG1_ANALYZER("cb [%d] fullParams done !", pAiqCore->mLatestParamsDoneId);
+#ifdef RKAIQ_ENABLE_CAMGROUP
+        if (!pAiqCore->mCamGroupCoreManager)
+#endif
         fixAiqParamsIsp(pAiqCore, fullParam);
 #ifdef RKAIQ_ENABLE_CAMGROUP
         if (pAiqCore->mCamGroupCoreManager) {
@@ -3308,50 +3585,7 @@ XCamReturn AiqCore_setAOVForAE(AiqCore_t* pAiqCore, bool en) {
 }
 
 static XCamReturn fixAiqParamsIsp(AiqCore_t* pAiqCore, AiqFullParams_t* aiqParams) {
-#if USE_NEWSTRUCT
-#if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
-    bool ynr_en   = false;
-    bool sharp_en = false;
-    bool cnr_en   = false;
-
-    aiq_params_base_t* pYnrBase   = aiqParams->pParamsArray[RESULT_TYPE_YNR_PARAM];
-    rk_aiq_isp_ynr_params_t* pYnr = NULL;
-    if (pYnrBase) {
-        pYnr   = (rk_aiq_isp_ynr_params_t*)pYnrBase->_data;
-        ynr_en = pYnr->en;
-    }
-
-    aiq_params_base_t* pSharpBase     = aiqParams->pParamsArray[RESULT_TYPE_SHARPEN_PARAM];
-    rk_aiq_isp_sharp_params_t* pSharp = NULL;
-    if (pSharpBase) {
-        pSharp   = (rk_aiq_isp_sharp_params_t*)pSharpBase->_data;
-        sharp_en = pSharp->en;
-    }
-
-    aiq_params_base_t* pCnrBase     = aiqParams->pParamsArray[RESULT_TYPE_UVNR_PARAM];
-    rk_aiq_isp_sharp_params_t* pCnr = NULL;
-    if (pCnrBase) {
-        pCnr   = (rk_aiq_isp_sharp_params_t*)pCnrBase->_data;
-        cnr_en = pCnr->en;
-    }
-
-    if (ynr_en || sharp_en || cnr_en) {
-        if (!ynr_en && pYnr) {
-            pYnr->en     = true;
-            pYnr->bypass = true;
-        }
-        if (!sharp_en && pSharp) {
-            pSharp->en     = true;
-            pSharp->bypass = true;
-        }
-        if (!cnr_en && pCnr) {
-            pCnr->en     = true;
-            pCnr->bypass = true;
-        }
-    }
-#endif
-
-#if defined(ISP_HW_V39)
+#if ISP_HW_V39
     aiq_params_base_t* pYnrBase    = aiqParams->pParamsArray[RESULT_TYPE_YNR_PARAM];
     aiq_params_base_t* pHisteqBase = aiqParams->pParamsArray[RESULT_TYPE_HISTEQ_PARAM];
     aiq_params_base_t* pDhzeBase   = aiqParams->pParamsArray[RESULT_TYPE_DEHAZE_PARAM];
@@ -3366,11 +3600,32 @@ static XCamReturn fixAiqParamsIsp(AiqCore_t* pAiqCore, AiqFullParams_t* aiqParam
         pDhzeBase->is_update   = true;
         pHisteqBase->is_update = true;
     }
+#endif
+
+#if defined(ISP_HW_V35)
+    aiq_params_base_t* pIeBase    = aiqParams->pParamsArray[RESULT_TYPE_IE_PARAM];
+    aiq_params_base_t* pCnrBase   = aiqParams->pParamsArray[RESULT_TYPE_UVNR_PARAM];
+    aiq_params_base_t* pEnhBase   = aiqParams->pParamsArray[RESULT_TYPE_ENH_PARAM];
+    aiq_params_base_t* pYnrBase   = aiqParams->pParamsArray[RESULT_TYPE_YNR_PARAM];
+    if (pIeBase && pIeBase->is_update) {
+        if (pCnrBase && !pCnrBase->is_update) {
+            pCnrBase->is_update = true;
+        }
+        if (pEnhBase && !pEnhBase->is_update) {
+            pEnhBase->is_update = true;
+        }
+        if (pYnrBase && !pYnrBase->is_update) {
+            pYnrBase->is_update = true;
+        }
+    }
+#endif
 
     aiq_params_base_t* pDrcBase  = aiqParams->pParamsArray[RESULT_TYPE_DRC_PARAM];
     aiq_params_base_t* pAwbBase  = aiqParams->pParamsArray[RESULT_TYPE_AWB_PARAM];
     aiq_params_base_t* pBlcBase  = aiqParams->pParamsArray[RESULT_TYPE_BLC_PARAM];
     aiq_params_base_t* pBtnrBase = aiqParams->pParamsArray[RESULT_TYPE_TNR_PARAM];
+    aiq_params_base_t* pGainBase = aiqParams->pParamsArray[RESULT_TYPE_GAIN_PARAM];
+    aiq_params_base_t* pCacBase = aiqParams->pParamsArray[RESULT_TYPE_CAC_PARAM];
 
     // drc update, maybe predgain update
     if (pDrcBase && pDrcBase->is_update ) {
@@ -3385,10 +3640,45 @@ static XCamReturn fixAiqParamsIsp(AiqCore_t* pAiqCore, AiqFullParams_t* aiqParam
         if (pBtnrBase && !pBtnrBase->is_update) {
             pBtnrBase->is_update = true;
         }
-    }
-#endif
 
+        if (pCacBase && !pCacBase->is_update) {
+            pCacBase->is_update = true;
+        }
+    }
+
+    // TODO: TNR/SHARP need update HWI params for each frame now
+    aiq_params_base_t* psharpBase = aiqParams->pParamsArray[RESULT_TYPE_SHARPEN_PARAM];
+    aiq_params_base_t* pGicBase   = aiqParams->pParamsArray[RESULT_TYPE_GIC_PARAM];
+    aiq_params_base_t* pCcmBase   = aiqParams->pParamsArray[RESULT_TYPE_CCM_PARAM];
+    if (psharpBase && !psharpBase->is_update) {
+        psharpBase->is_update = true;
+    }
+
+    if (pGicBase && !pGicBase->is_update) {
+        pGicBase->is_update = true;
+    }
+
+    if (pBtnrBase && !pBtnrBase->is_update) {
+        pBtnrBase->is_update = true;
+    }
+
+    if (pGainBase && !pGainBase->is_update) {
+        pGainBase->is_update = true;
+    }
+
+    if (pBlcBase && pBlcBase->is_update) {
+#if RKAIQ_HAVE_AIBNR
+        aiq_params_base_t* pAibnrBase = aiqParams->pParamsArray[RESULT_TYPE_AIBNR_PARAM];
+        if (pAibnrBase && !pAibnrBase->is_update) {
+            pAibnrBase->is_update = true;
+        }
 #endif
+    }
+
+    if (pCcmBase && !pCcmBase->is_update) {
+        pCcmBase->is_update = true;
+    }
+
     return XCAM_RETURN_NO_ERROR;
 }
 
@@ -3421,6 +3711,12 @@ AiqCore_register3Aalgo(AiqCore_t* pAiqCore, void* algoDes, void *cbs)
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
     struct RkAiqAlgoDesCommExt *algoDesArray = (struct RkAiqAlgoDesCommExt*)algoDes;
 
+    for (size_t i = 0; algoDesArray[i].des != NULL; i++) {
+        int algo_type = algoDesArray[i].des->type;
+		if (algo_type == algoDesArray->des->type)
+			pAiqCore->mAlogsComSharedParams.ctxCfigs[algo_type].cbs = cbs;
+    }
+
     addDefaultAlgos(pAiqCore, algoDesArray);
     ret = newAllAiqParamPool(pAiqCore);
     if (ret != XCAM_RETURN_NO_ERROR) {
@@ -3428,12 +3724,6 @@ AiqCore_register3Aalgo(AiqCore_t* pAiqCore, void* algoDes, void *cbs)
         return XCAM_RETURN_ERROR_ANALYZER;
     }
     newAiqGroupAnayzer(pAiqCore, algoDesArray);
-
-    for (size_t i = 0; algoDesArray[i].des != NULL; i++) {
-        int algo_type = algoDesArray[i].des->type;
-		if (algo_type == algoDesArray->des->type)
-			pAiqCore->mAlogsComSharedParams.ctxCfigs[algo_type].cbs = cbs;
-	}
 
     return ret;
 }
@@ -3447,14 +3737,258 @@ AiqCore_unregister3Aalgo(AiqCore_t* pAiqCore, int algoType)
         return XCAM_RETURN_ERROR_ANALYZER;
 	}
 
-	if (algoType != RK_AIQ_ALGO_TYPE_AE || algoType != RK_AIQ_ALGO_TYPE_AWB) return XCAM_RETURN_ERROR_ANALYZER;
+	if (algoType != RK_AIQ_ALGO_TYPE_AE && algoType != RK_AIQ_ALGO_TYPE_AWB) return XCAM_RETURN_ERROR_ANALYZER;
+
+	AiqAnalyzeGroupManager_rmAlgoHandle(&pAiqCore->mRkAiqCoreGroupManager, algoType);
 
 	if (pAiqCore->mAlgoHandleMaps[algoType]) destroyAlgoHandler(pAiqCore->mAlgoHandleMaps[algoType]);
 	pAiqCore->mAlgoHandleMaps[algoType] = NULL;
-
-	AiqAnalyzeGroupManager_rmAlgoHandle(&pAiqCore->mRkAiqCoreGroupManager, algoType);
 
     EXIT_ANALYZER_FUNCTION();
 
     return XCAM_RETURN_NO_ERROR;
 }
+
+XCamReturn AiqCore_setTranslaterIspUniteMode(AiqCore_t* pAiqCore, RkAiqIspUniteMode mode) {
+
+    if (pAiqCore->mTranslator)
+        pAiqCore->mTranslator->mIspUniteMode = mode;
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+
+#if RKAIQ_HAVE_DUMPSYS
+static int __dump(void* self, st_string* result, int argc, void* argv[]) {
+    core_dump_mod_param((AiqCore_t*)self, result);
+    core_dump_mod_attr((AiqCore_t*)self, result);
+    core_dump_mod_status((AiqCore_t*)self, result);
+    core_dump_mod_3a_stats((AiqCore_t*)self, result);
+
+    return 0;
+}
+
+static void AiqCore_initNotifier(AiqCore_t* pAiqCore) {
+    aiq_notifier_init(&pAiqCore->notifier);
+
+    {
+        pAiqCore->sub_core.match_type     = AIQ_NOTIFIER_MATCH_CORE;
+        pAiqCore->sub_core.name           = "CORE -> core";
+        pAiqCore->sub_core.dump.dump_fn_t = __dump;
+        pAiqCore->sub_core.dump.dumper    = pAiqCore;
+
+        aiq_notifier_add_subscriber(&pAiqCore->notifier, &pAiqCore->sub_core);
+    }
+
+    {
+        pAiqCore->sub_buf_mgr.match_type     = AIQ_NOTIFIER_MATCH_CORE_BUF_MGR;
+        pAiqCore->sub_buf_mgr.name           = "CORE -> buf_manager";
+        pAiqCore->sub_buf_mgr.dump.dump_fn_t = core_buf_mgr_dump;
+        pAiqCore->sub_buf_mgr.dump.dumper    = pAiqCore;
+
+        aiq_notifier_add_subscriber(&pAiqCore->notifier, &pAiqCore->sub_buf_mgr);
+    }
+
+    {
+        pAiqCore->sub_grp_analyzer.match_type     = AIQ_NOTIFIER_MATCH_CORE_GRP_ANALYZER;
+        pAiqCore->sub_grp_analyzer.name           = "CORE -> group_analyzer";
+        pAiqCore->sub_grp_analyzer.dump.dump_fn_t = AiqAnalyzerGroup_dump;
+        pAiqCore->sub_grp_analyzer.dump.dumper    = (void*)&pAiqCore->mRkAiqCoreGroupManager;
+
+        aiq_notifier_add_subscriber(&pAiqCore->notifier, &pAiqCore->sub_grp_analyzer);
+    }
+
+    core_isp_mods_add_subscriber(pAiqCore);
+}
+
+static const char* const usages[] = {
+    "./dumpcam core cmd [args]",
+    NULL,
+};
+
+static int _gHelp = 0;
+static int dbg_help_cb(struct argparse* self, const struct argparse_option* option) {
+    _gHelp = 1;
+
+    return 0;
+}
+
+static int AiqCore_dump(void* self, st_string* result, int argc, void* argv[]) {
+    char buffer[MAX_LINE_LENGTH]                   = {0};
+    int dump_args[AIQ_NOTIFIER_MATCH_CORE_ALL + 1] = {0};
+
+    if (argc < 2) {
+        dump_args[AIQ_NOTIFIER_MATCH_CORE_ALL] = 1;
+    } else {
+        struct argparse_option options[] = {
+            OPT_GROUP("basic options:"),
+            OPT_BOOLEAN('A', "all", &dump_args[AIQ_NOTIFIER_MATCH_CORE_ALL], "dump core all", NULL,
+                        0, 0),
+            OPT_BOOLEAN('b', "buf", &dump_args[AIQ_NOTIFIER_MATCH_CORE_BUF_MGR],
+                        "dump core buffer manager info", NULL, 0, 0),
+            OPT_BOOLEAN('c', "core", &dump_args[AIQ_NOTIFIER_MATCH_CORE], "dump core info", NULL, 0,
+                        0),
+            OPT_BOOLEAN('n', "analyzer", &dump_args[AIQ_NOTIFIER_MATCH_CORE_GRP_ANALYZER],
+                        "dump group analyzer info", NULL, 0, 0),
+            OPT_BOOLEAN('\0', "help", NULL, "show this help message and exit", dbg_help_cb, 0,
+                        OPT_NONEG),
+            OPT_END(),
+        };
+
+        struct argparse argparse;
+        argparse_init(&argparse, options, usages, 0);
+        argparse_describe(&argparse, "\nselect a test case to run.", "\nuse --help for details.");
+
+        argc = argparse_parse(&argparse, argc, (const char**)argv);
+        if (_gHelp || argc < 0) {
+            _gHelp = 0;
+            argparse_usage_string(&argparse, buffer);
+            aiq_string_printf(result, buffer);
+        }
+    }
+
+    if (dump_args[AIQ_NOTIFIER_MATCH_CORE_ALL]) {
+        for (int32_t i = AIQ_NOTIFIER_MATCH_CORE; i <= AIQ_NOTIFIER_MATCH_CORE_ALL; i++)
+            aiq_notifier_notify_dumpinfo(&((AiqCore_t*)self)->notifier, i, result, argc, argv);
+
+        return true;
+    }
+
+    for (int32_t i = AIQ_NOTIFIER_MATCH_CORE; i <= AIQ_NOTIFIER_MATCH_CORE_ALL; i++) {
+        if (dump_args[i])
+            aiq_notifier_notify_dumpinfo(&((AiqCore_t*)self)->notifier, i, result, argc, argv);
+    }
+
+    return true;
+}
+
+static const char* const algos_usages[] = {
+    "./dumpcam algo cmd [args]",
+    NULL,
+};
+
+static int _gAlgosHelp = 0;
+static int algos_dbg_help_cb(struct argparse* self, const struct argparse_option* option) {
+    _gAlgosHelp = 1;
+
+    return 0;
+}
+static int AiqCore_algosDump(void* self, st_string* result, int argc, void* argv[]) {
+    char buffer[MAX_LINE_LENGTH * 4]               = {0};
+    int dump_args[AIQ_NOTIFIER_MATCH_MODS_ALL + 1] = {0};
+
+    if (argc < 2) {
+        dump_args[AIQ_NOTIFIER_MATCH_MODS_ALL] = 1;
+    } else {
+        struct argparse_option options[] = {
+            OPT_GROUP("isp modules options:"),
+            OPT_BOOLEAN('A', "all", &dump_args[AIQ_NOTIFIER_MATCH_MODS_ALL], "dump all info", NULL,
+                        0, 0),
+            OPT_BOOLEAN('e', "ae", &dump_args[AIQ_NOTIFIER_MATCH_AEC], "dump ae module info", NULL,
+                        0, 0),
+            OPT_BOOLEAN('f', "hist", &dump_args[AIQ_NOTIFIER_MATCH_HIST], "dump hist module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('i', "awb", &dump_args[AIQ_NOTIFIER_MATCH_AWB], "dump awb module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('j', "wbgain", &dump_args[AIQ_NOTIFIER_MATCH_AWB],
+                        "dump awb gain module info ", NULL, 0, 0),
+            OPT_BOOLEAN('k', "af", &dump_args[AIQ_NOTIFIER_MATCH_AF], "dump af module info", NULL,
+                        0, 0),
+            OPT_BOOLEAN('m', "dpc", &dump_args[AIQ_NOTIFIER_MATCH_DPCC], "dump dpcc module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('n', "merge", &dump_args[AIQ_NOTIFIER_MATCH_MERGE],
+                        "dump merge module info ", NULL, 0, 0),
+            OPT_BOOLEAN('o', "ccm", &dump_args[AIQ_NOTIFIER_MATCH_CCM], "dump ccm module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('p', "lsc", &dump_args[AIQ_NOTIFIER_MATCH_LSC], "dump lsc module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('r', "blc", &dump_args[AIQ_NOTIFIER_MATCH_BLC], "dump blc module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('V', "rawnr", &dump_args[AIQ_NOTIFIER_MATCH_RAWNR],
+                        "dump rawnr module info ", NULL, 0, 0),
+            OPT_BOOLEAN('t', "gic", &dump_args[AIQ_NOTIFIER_MATCH_GIC], "dump gic module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('u', "debayer", &dump_args[AIQ_NOTIFIER_MATCH_DEBAYER],
+                        "dump debayer module info ", NULL, 0, 0),
+            OPT_BOOLEAN('v', "lut3d", &dump_args[AIQ_NOTIFIER_MATCH_LUT3D],
+                        "dump lut3d module info ", NULL, 0, 0),
+            OPT_BOOLEAN('w', "dehaz", &dump_args[AIQ_NOTIFIER_MATCH_DEHAZE],
+                        "dump dehaze module info ", NULL, 0, 0),
+            OPT_BOOLEAN('x', "gamma", &dump_args[AIQ_NOTIFIER_MATCH_AGAMMA],
+                        "dump gamma module info ", NULL, 0, 0),
+            OPT_BOOLEAN('y', "degamma", &dump_args[AIQ_NOTIFIER_MATCH_ADEGAMMA],
+                        "dump degamma module info ", NULL, 0, 0),
+            OPT_BOOLEAN('z', "csm", &dump_args[AIQ_NOTIFIER_MATCH_CSM], "dump csm module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('B', "cgc", &dump_args[AIQ_NOTIFIER_MATCH_CGC], "dump cgc module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('C', "gain", &dump_args[AIQ_NOTIFIER_MATCH_GAIN], "dump gain module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('D', "cp", &dump_args[AIQ_NOTIFIER_MATCH_CP], "dump cproc module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('E', "ie", &dump_args[AIQ_NOTIFIER_MATCH_IE], "dump ie module info", NULL,
+                        0, 0),
+            OPT_BOOLEAN('F', "tnr", &dump_args[AIQ_NOTIFIER_MATCH_TNR], "dump tnr module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('G', "ynr", &dump_args[AIQ_NOTIFIER_MATCH_YNR], "dump ynr module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('H', "cnr", &dump_args[AIQ_NOTIFIER_MATCH_CNR], "dump uvnr module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('I', "sharp", &dump_args[AIQ_NOTIFIER_MATCH_SHARPEN],
+                        "dump sharp module info ", NULL, 0, 0),
+            OPT_BOOLEAN('J', "drc", &dump_args[AIQ_NOTIFIER_MATCH_DRC], "dump drc module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('K', "cac", &dump_args[AIQ_NOTIFIER_MATCH_CAC], "dump cac module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('M', "afd", &dump_args[AIQ_NOTIFIER_MATCH_AFD], "dump afd module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('N', "rgbir", &dump_args[AIQ_NOTIFIER_MATCH_RGBIR],
+                        "dump rgbir module info ", NULL, 0, 0),
+            OPT_BOOLEAN('O', "ldc", &dump_args[AIQ_NOTIFIER_MATCH_LDC], "dump ldc module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('P', "aestats", &dump_args[AIQ_NOTIFIER_MATCH_AESTATS],
+                        "dump ae stats module info ", NULL, 0, 0),
+            OPT_BOOLEAN('R', "histeq", &dump_args[AIQ_NOTIFIER_MATCH_HISTEQ],
+                        "dump histeq module info ", NULL, 0, 0),
+            OPT_BOOLEAN('S', "enhaz", &dump_args[AIQ_NOTIFIER_MATCH_ENH],
+                        "dump enhance module info", NULL, 0, 0),
+            OPT_BOOLEAN('T', "texest", &dump_args[AIQ_NOTIFIER_MATCH_TEXEST],
+                        "dump texest module info ", NULL, 0, 0),
+            OPT_BOOLEAN('U', "hsv", &dump_args[AIQ_NOTIFIER_MATCH_HSV], "dump hsv module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('V', "aibnr", &dump_args[AIQ_NOTIFIER_MATCH_AIBNR], "dump aibnr module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('\0', "help", NULL, "show this help message and exit", dbg_help_cb, 0,
+                        OPT_NONEG),
+            OPT_END(),
+        };
+
+        struct argparse argparse;
+        argparse_init(&argparse, options, usages, 0);
+        argparse_describe(&argparse, "\nselect a test case to run.", "\nuse --help for details.");
+
+        argc = argparse_parse(&argparse, argc, (const char**)argv);
+        if (_gHelp || argc < 0) {
+            _gHelp = 0;
+
+            argparse_usage_string(&argparse, buffer);
+            aiq_string_printf(result, buffer);
+        }
+    }
+
+    if (dump_args[AIQ_NOTIFIER_MATCH_MODS_ALL]) {
+        for (int32_t i = _MODS_NUM_OFFSET; i < AIQ_NOTIFIER_MATCH_MODS_ALL; i++)
+            aiq_notifier_notify_dumpinfo(&((AiqCore_t*)self)->notifier, i, result, argc, argv);
+
+        return true;
+    }
+
+    for (int32_t i = _MODS_NUM_OFFSET; i < AIQ_NOTIFIER_MATCH_MODS_ALL; i++) {
+        if (dump_args[i])
+            aiq_notifier_notify_dumpinfo(&((AiqCore_t*)self)->notifier, i, result, argc, argv);
+    }
+
+    return true;
+}
+
+#endif

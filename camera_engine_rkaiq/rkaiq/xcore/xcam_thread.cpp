@@ -156,6 +156,7 @@ bool Thread::start ()
 
     if (pthread_create(&_thread_id, &attr, (void* (*)(void*))thread_func, this) != 0) {
         pthread_attr_destroy(&attr);
+        XCAM_LOG_ERROR("Thread(%s) create fail !", XCAM_STR(_name));
         return false;
     }
 

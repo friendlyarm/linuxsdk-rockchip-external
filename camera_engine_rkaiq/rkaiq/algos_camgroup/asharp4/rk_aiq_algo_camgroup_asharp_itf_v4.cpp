@@ -114,6 +114,7 @@ static XCamReturn groupAsharpV4Prepare(RkAiqAlgoCom* params)
 
     if(CHECK_ISP_HW_V30()) {
         Asharp_Context_V4_t * asharp_contex_v4 = asharp_group_contex->asharp_contex_v4;
+        asharp_contex_v4->prepare_type = params->u.prepare.conf_type;
         if(!!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB )) {
             // todo  update calib pars for surround view
 #if ASHARP_USE_JSON_FILE_V4
@@ -271,6 +272,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAsharpV4 = {
     .pre_process = NULL,
     .processing = groupAsharpV4Processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

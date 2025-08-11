@@ -17,17 +17,13 @@
 #include "aiq_algogroups_manager.h"
 #include "aiq_core_c/aiq_core.h"
 #include "aiq_core_c/aiq_algo_handler.h"
+#if RKAIQ_HAVE_DUMPSYS
+#include "info/aiq_groupAnalyzerInfo.h"
+#endif
 
 #define GROUP_MSG_CNT_MAX     5
-#define GROUP_MSG_OVERFLOW_TH 2
 #define MSGHDL_MSGQ_MAX       100
 #define ANALYZER_SUBM (0x1)
-
-typedef struct GroupMessage_s {
-    AiqCoreMsg_t msgList[MAX_MESSAGES];
-    uint64_t msg_flags;
-    int msg_cnts;
-} GroupMessage_t;
 
 static void clearAiqCoreMsg(AiqCoreMsg_t* vdBufMsg, RkAiqAlgosGroupShared_t* shared) {
     switch (vdBufMsg->msg_id) {
@@ -205,7 +201,7 @@ static void deepCpyAiqCoreMsg(AiqCoreMsg_t* vdBufMsg) {
 static void msgReduction(AiqAnalyzerGroup_t* pGroup, AiqMap_t* msgMap) {
     if (aiqMap_size(msgMap) > 0) {
         const int originalSize = aiqMap_size(msgMap);
-        int numToErase    = originalSize - GROUP_MSG_OVERFLOW_TH;
+        int numToErase    = originalSize - pGroup->mGrpMsgOverflowCnt;
         if (numToErase > 0) {
             AiqMapItem_t* pItem  = aiqMap_begin(msgMap);
             GroupMessage_t* pMsg = (GroupMessage_t*)(pItem->_pData);
@@ -240,6 +236,9 @@ static void msgReduction(AiqAnalyzerGroup_t* pGroup, AiqMap_t* msgMap) {
                 rm             = true;
                 if (--numToErase <= 0) break;
             }
+#if RKAIQ_HAVE_DUMPSYS
+            pGroup->mMsgReduceCnt++;
+#endif
         }
     }
 }
@@ -297,11 +296,15 @@ XCamReturn AiqAnalyzerGroup_init(AiqAnalyzerGroup_t* pGroup, AiqCore_t* aiqCore,
                                  enum rk_aiq_core_analyze_type_e type, const uint64_t flag,
                                  const RkAiqGrpConditions_t* grpConds, const bool singleThrd) {
     ENTER_ANALYZER_FUNCTION();
-    pGroup->mAiqCore          = aiqCore;
-    pGroup->mGroupType        = type;
-    pGroup->mDepsFlag         = flag;
-    pGroup->mUserSetDelayCnts = INT8_MAX;
-    pGroup->mAwakenId         = (uint32_t)-1;
+    pGroup->mAiqCore           = aiqCore;
+    pGroup->mGroupType         = type;
+    pGroup->mDepsFlag          = flag;
+    pGroup->mUserSetDelayCnts  = INT8_MAX;
+    pGroup->mAwakenId          = (uint32_t)-1;
+    pGroup->mGrpMsgOverflowCnt = GROUP_MSG_OVERFLOW_TH;
+#if RKAIQ_HAVE_DUMPSYS
+    pGroup->mMsgReduceCnt = 0;
+#endif
     if (grpConds) pGroup->mGrpConds = *grpConds;
     if (!singleThrd) {
         char name[64];
@@ -349,6 +352,10 @@ XCamReturn AiqAnalyzerGroup_start(AiqAnalyzerGroup_t* pGroup) {
 XCamReturn AiqAnalyzerGroup_stop(AiqAnalyzerGroup_t* pGroup) {
     ENTER_ANALYZER_FUNCTION();
     if (pGroup->mRkAiqGroupMsgHdlTh) AiqAnalyzeGroupMsgHdlThread_stop(pGroup->mRkAiqGroupMsgHdlTh);
+
+#if RKAIQ_HAVE_DUMPSYS
+    pGroup->mMsgReduceCnt = 0;
+#endif
 
     EXIT_ANALYZER_FUNCTION();
 
@@ -549,7 +556,9 @@ void AiqAnalyzeGroupMsgHdlThread_start(AiqAnalyzeGroupMsgHdlThread_t* pHdlTh) {
 
 void AiqAnalyzeGroupMsgHdlThread_stop(AiqAnalyzeGroupMsgHdlThread_t* pHdlTh) {
     ENTER_ANALYZER_FUNCTION();
+    aiqMutex_lock(&pHdlTh->_mutex);
     pHdlTh->bQuit = true;
+    aiqMutex_unlock(&pHdlTh->_mutex);
     aiqCond_broadcast(&pHdlTh->_cond);
     aiqThread_stop(pHdlTh->_base);
     EXIT_ANALYZER_FUNCTION();
@@ -568,7 +577,9 @@ bool AiqAnalyzeGroupMsgHdlThread_push_msg(AiqAnalyzeGroupMsgHdlThread_t* pHdlTh,
         return false;
 	}
 
+    aiqMutex_lock(&pHdlTh->_mutex);
 	aiqCond_broadcast(&pHdlTh->_cond);
+    aiqMutex_unlock(&pHdlTh->_mutex);
 
     return true;
 }
@@ -578,6 +589,7 @@ XCamReturn AiqAnalyzeGroupManager_init(AiqAnalyzeGroupManager_t* pGroupMan, AiqC
     ENTER_ANALYZER_FUNCTION();
     pGroupMan->mSingleThreadMode = single_thread;
     pGroupMan->mAiqCore          = aiqCore;
+    pGroupMan->mDefaultDelayCnt  = ISP_PARAMS_EFFECT_DELAY_CNT;
     EXIT_ANALYZER_FUNCTION();
     return XCAM_RETURN_NO_ERROR;
 }
@@ -913,6 +925,7 @@ void AiqAnalyzeGroupManager_rmAlgoHandle(AiqAnalyzeGroupManager_t* pGroupMan, in
 void AiqAnalyzeGroupManager_awakenClean(AiqAnalyzeGroupManager_t* pGroupMan, uint32_t sequence)
 {
 	AiqAnalyzeGroupManager_stop(pGroupMan);
+    AiqAnalyzeGroupManager_clean(pGroupMan);
     for (int i = 0; i < RK_AIQ_CORE_ANALYZE_MAX; i++) {
 		if (pGroupMan->mGroupMap[i]) {
 			AiqAnalyzerGroup_setWakenId(pGroupMan->mGroupMap[i], sequence);
@@ -920,3 +933,45 @@ void AiqAnalyzeGroupManager_awakenClean(AiqAnalyzeGroupManager_t* pGroupMan, uin
     }
 	AiqAnalyzeGroupManager_start(pGroupMan);
 }
+
+XCamReturn AiqAnalyzeGroupManager_resetDelayCnt(AiqAnalyzeGroupManager_t* pGroupMan, int delayCnt)
+{
+	if (pGroupMan->mDefaultDelayCnt == delayCnt) {
+        return XCAM_RETURN_NO_ERROR;
+    }
+
+    pGroupMan->mDefaultDelayCnt = delayCnt;
+    for (int i = 0; i < RK_AIQ_CORE_ANALYZE_MAX; i++) {
+        if (pGroupMan->mGroupMap[i]) {
+            for (int j = 0; j < pGroupMan->mGroupMap[i]->mGrpConds.size; j++) {
+                switch (pGroupMan->mGroupMap[i]->mGrpConds.conds[j].cond) {
+                    case XCAM_MESSAGE_AEC_STATS_OK:
+                    case XCAM_MESSAGE_AWB_STATS_OK:
+                    case XCAM_MESSAGE_AF_STATS_OK:
+                    case XCAM_MESSAGE_PDAF_STATS_OK:
+                    case XCAM_MESSAGE_AGAIN_STATS_OK:
+                    case XCAM_MESSAGE_ADEHAZE_STATS_OK:
+                        pGroupMan->mGroupMap[i]->mGrpConds.conds[j].delay = delayCnt;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            pGroupMan->mGroupMap[i]->mGrpMsgOverflowCnt = delayCnt;
+        }
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+#if RKAIQ_HAVE_DUMPSYS
+int AiqAnalyzerGroup_dump(void* self, st_string* result, int argc, void* argv[]) {
+    group_analyzer_dump_mod_param((AiqAnalyzeGroupManager_t*)self, result);
+    group_analyzer_dump_attr((AiqAnalyzeGroupManager_t*)self, result);
+    group_analyzer_dump_msg_hdl_status((AiqAnalyzeGroupManager_t*)self, result);
+    group_analyzer_dump_msg_map_status1((AiqAnalyzeGroupManager_t*)self, result);
+    group_analyzer_dump_msg_map_status2((AiqAnalyzeGroupManager_t*)self, result);
+
+    return 0;
+}
+#endif

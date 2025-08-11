@@ -368,6 +368,9 @@ Aynr_result_V24_t ynr_fix_transfer_V24(RK_YNR_Params_V24_Select_t* pSelect, RK_Y
 
     // YNR_2700_LOWNR_CTRL3 (0x001c)
     pFix->lospnr_center_wgt = ynrClipFloatValueV24(pSelect->sw_ynr_loSpnr_centerWgt, 2, 10);
+    if( pFix->lospnr_center_wgt < 1) {
+        pFix->lospnr_center_wgt = 1;
+    }
     pFix->lospnr_strg       = ynrClipFloatValueV24(pSelect->sw_ynr_loSpnr_strg * fLoStrength, 5, 7);
 
     // YNR_2700_LOWNR_CTRL4 (0x002c)
@@ -462,6 +465,9 @@ Aynr_result_V24_t ynr_fix_transfer_V24(RK_YNR_Params_V24_Select_t* pSelect, RK_Y
         ynrClipFloatValueV24(pSelect->sw_ynr_hiSpnrFilt_wgtOffset, 0, 10);
     pFix->hispnr_filt_center_wgt =
         LIMIT_VALUE(pSelect->sw_ynr_hiSpnrFilt_centerWgt / fStrength * 1024.0f, BIT_17_MAX + 1, BIT_MIN);
+    if( pFix->hispnr_filt_center_wgt < 1) {
+        pFix->hispnr_filt_center_wgt = 1;
+    }
 
     // YNR_2700_NLM_NR_WEIGHT (0x00fc)
     pFix->hispnr_filt_wgt =

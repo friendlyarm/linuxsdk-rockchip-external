@@ -85,6 +85,7 @@ static XCamReturn AwbDemoPrepare(RkAiqAlgoCom* params)
     LOGD_AWB_SUBM(0xff, "%s ENTER", __func__);
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
     RkAiqAwbAlgoContext2* algo_ctx = (RkAiqAwbAlgoContext2*)params->ctx;
+    algo_ctx->camId = params->cid;
     ret = awb_prepare(params);
     RETURN_RESULT_IF_DIFFERENT(ret, XCAM_RETURN_NO_ERROR);
     if ((!algo_ctx->isRkCb)&&(!algo_ctx->cutomAwbInit)){
@@ -133,8 +134,8 @@ void _customAwbRes2rkAwbRes( RkAiqAlgoProcResAwb* rkAwbProcRes,rk_aiq_customeAwb
     rkAwbProcRes->awbConverged = customAwbProcRes->IsConverged;
     memcpy(rkAwbProcRes->awb_gain_algo, &customAwbProcRes->awb_gain_algo, sizeof(rk_aiq_wb_gain_t));
     rkAwbProcRes->awb_smooth_factor = customAwbProcRes->awb_smooth_factor;
-    rkAwbProcRes->awb_hw39_para->com=  customAwbProcRes->awbHwConfig;
-    rkAwbProcRes->awb_hw39_para->mode = AWB_CFG_MODE_ThP;
+    rkAwbProcRes->awb_hw_cfg_priv->com=  customAwbProcRes->awbHwConfig;
+    rkAwbProcRes->awb_hw_cfg_priv->mode = AWB_CFG_MODE_ThP;
     rkAwbProcRes->awb_cfg_update = true;
     rkAwbProcRes->awb_gain_update= true;
 }
@@ -153,7 +154,8 @@ static XCamReturn AwbDemoProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCo
     RkAiqAlgoProcAwb* AwbProcParams = (RkAiqAlgoProcAwb*)inparams;
     RkAiqAlgoProcResAwb* AwbProcResParams = (RkAiqAlgoProcResAwb*)outparams;
     RkAiqAwbAlgoContext2* algo_ctx = (RkAiqAwbAlgoContext2*)inparams->ctx;
-    LOGI_AWB("----------------------------------------------frame_id (%d)----------------------------------------------\n", inparams->frame_id);
+    LOGI_AWB("cid(%d)----------------------------------------------frame_id (%d)----------------------------------------------\n",
+     inparams->cid, inparams->frame_id);
     if(algo_ctx->isRkCb){
         ret= awb_processing2(inparams, outparams);
         return ret;
@@ -337,6 +339,19 @@ static XCamReturn AwbDemoPostProcess(const RkAiqAlgoCom* inparams, RkAiqAlgoResC
 }
 
 //static std::map<rk_aiq_sys_ctx_t*, RkAiqAlgoDescription*> g_customAwb_desc_map;
+#if RKAIQ_HAVE_DUMPSYS
+static int dump(const RkAiqAlgoCom* inparams, st_string* result)
+{
+
+    //aiq_info_dump_title(result, "awb status");
+    RkAiqAwbAlgoContext2* algo_ctx = (RkAiqAwbAlgoContext2*)inparams->ctx;
+    if(algo_ctx->isRkCb){
+        return (awb_dump(inparams, result));
+    }
+
+    return 0;
+}
+#endif
 
 XCamReturn
 rk_aiq_uapi2_awb_register(const rk_aiq_sys_ctx_t* ctx, rk_aiq_customeAwb_cbs_t* cbs)
@@ -353,7 +368,12 @@ rk_aiq_uapi2_awb_register(const rk_aiq_sys_ctx_t* ctx, rk_aiq_customeAwb_cbs_t* 
         LOGI_AWB_SUBM(0xff, "group awb");
 #ifdef RKAIQ_ENABLE_CAMGROUP
         group_ctx  = (const rk_aiq_camgroup_ctx_t*)ctx;
-        single_ctx = group_ctx->cam_ctxs_array[0];
+        for (int i = 0; i < RK_AIQ_CAM_GROUP_MAX_CAMS; i++) {
+            if (!single_ctx && group_ctx->cam_ctxs_array[i]) {
+                single_ctx = group_ctx->cam_ctxs_array[i];
+                break;
+            }
+        }
         algoType   = g_RkIspAlgoDescCamgroupAwb.common.type;
         algoId     = g_RkIspAlgoDescCamgroupAwb.common.id;
 #endif
@@ -403,7 +423,9 @@ rk_aiq_uapi2_awb_register(const rk_aiq_sys_ctx_t* ctx, rk_aiq_customeAwb_cbs_t* 
     desc->pre_process = AwbDemoPreProcess;
     desc->processing = AwbDemoProcessing;
     desc->post_process = AwbDemoPostProcess;
-
+#if RKAIQ_HAVE_DUMPSYS
+    desc->dump= dump;
+#endif
     static RkAiqGrpCondition_t awbGrpCond[] = {
         [0] = {XCAM_MESSAGE_SOF_INFO_OK, 0},
         [1] = {XCAM_MESSAGE_AE_PRE_RES_OK, 0},
@@ -419,20 +441,22 @@ rk_aiq_uapi2_awb_register(const rk_aiq_sys_ctx_t* ctx, rk_aiq_customeAwb_cbs_t* 
 
     if (group_ctx) {
 #ifdef RKAIQ_ENABLE_CAMGROUP
-        for (int i = 0; i < group_ctx->cam_ctxs_num; i++) {
-            isAwbRgst = rk_aiq_uapi2_sysctl_getAxlibStatus(group_ctx->cam_ctxs_array[i],
-                                                           algoType, algoId);
-            if (isAwbRgst) {
-                continue;
-            }
+        for (int i = 0; i < RK_AIQ_CAM_GROUP_MAX_CAMS; i++) {
+            if (group_ctx->cam_ctxs_array[i]) {
+                isAwbRgst = rk_aiq_uapi2_sysctl_getAxlibStatus(group_ctx->cam_ctxs_array[i],
+                                                               algoType, algoId);
+                if (isAwbRgst) {
+                    continue;
+                }
 
-            ret = rk_aiq_uapi2_sysctl_register3Aalgo(group_ctx->cam_ctxs_array[i], &algoDes, NULL);
-            if (ret == XCAM_RETURN_ERROR_ANALYZER) {
-                LOGE_AWB_SUBM(0xff, "no current aiq core status, please stop aiq before register custome awb!");
-                return ret;
-            } else if (ret != XCAM_RETURN_NO_ERROR) {
-                LOGE_AWB_SUBM(0xff, "awb register error, ret %d", ret);
-                return ret;
+                ret = rk_aiq_uapi2_sysctl_register3Aalgo(group_ctx->cam_ctxs_array[i], &algoDes, NULL);
+                if (ret == XCAM_RETURN_ERROR_ANALYZER) {
+                    LOGE_AWB_SUBM(0xff, "no current aiq core status, please stop aiq before register custome awb!");
+                    return ret;
+                } else if (ret != XCAM_RETURN_NO_ERROR) {
+                    LOGE_AWB_SUBM(0xff, "awb register error, ret %d", ret);
+                    return ret;
+                }
             }
         }
 #endif
@@ -487,7 +511,9 @@ rk_aiq_uapi2_awb_register(const rk_aiq_sys_ctx_t* ctx, rk_aiq_customeAwb_cbs_t* 
     desc->pre_process = AwbDemoPreProcess;
     desc->processing = AwbDemoGroupProcessing;
     desc->post_process = AwbDemoPostProcess;
-
+#if RKAIQ_HAVE_DUMPSYS
+    desc->dump= dump;
+#endif
     struct RkAiqAlgoDesCommExt algoDes_camgroup[] = {
         { &desc->common, RK_AIQ_CORE_ANALYZE_AWB,  1, 2, 32, {0, 0}},
         { NULL, RK_AIQ_CORE_ANALYZE_ALL, 0,  0,  0, {0, 0} },

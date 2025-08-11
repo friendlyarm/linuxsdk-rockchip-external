@@ -14,7 +14,7 @@ static void cac21_multi_cvt(struct isp32_cac_cfg* phwcfg, cac_params_dyn_t* pdyn
 
 static const uint32_t IspBigModeWidthLimit = 1536;
 static const uint32_t IspBigModeSizeLimit  = IspBigModeWidthLimit * 864;
-static const uint32_t CacPsfCountLimit     = 336;
+static const uint32_t CacPsfCountLimit     = 408;
 static const uint8_t CacChannelCount       = 2;
 static const uint8_t CacScaleFactorDefault = 64;
 static const uint8_t CacScaleFactorBigMode = 128;
@@ -47,7 +47,7 @@ static void LutBufferManagerImportHwBuffers(LutBufferManager *man, uint8_t isp_i
     hw_config.mem_type             = MEM_TYPE_CAC;
     hw_config.alloc_param.width  = man->config_.Width;
     hw_config.alloc_param.height = man->config_.Height;
-    hw_config.alloc_param.reserved[0] = 1;
+    hw_config.alloc_param.reserved[0] = 2;
 
     man->mem_ops_->alloc_mem(isp_id, (void*)(man->mem_ops_), &hw_config, &man->mem_ctx_);
 }
@@ -74,10 +74,11 @@ static LutBuffer* LutBufferManagerGetFreeHwBuffer(LutBufferManager *man, uint8_t
     return NULL;
 }
 
-static void LutBufferManagerDeinit(LutBufferManager *man)
+void LutBufferManagerDeinit(cac_cvt_info_t *cacInfo, LutBufferManager *man)
 {
     LutBufferManagerReleaseHwBuffers(man, 0);
-    LutBufferManagerReleaseHwBuffers(man, 1);
+    if (cacInfo->is_multi_isp && cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID)
+        LutBufferManagerReleaseHwBuffers(man, 1);
 }
 
 static inline bool IsIspBigMode(uint32_t width, uint32_t height, bool is_multi_sensor) {
@@ -90,7 +91,7 @@ static inline bool IsIspBigMode(uint32_t width, uint32_t height, bool is_multi_s
 
 #if RKAIQ_HAVE_CAC_V12
 static inline void CalcCacLutConfig(uint32_t width, uint32_t height, bool is_big_mode,
-                                    LutBufferConfig* config) {
+                                    LutBufferConfig* config, bool is_asset) {
     //is_big_mode is useless;
     config->Width     = width;
     config->Height    = height;
@@ -104,7 +105,8 @@ static inline void CalcCacLutConfig(uint32_t width, uint32_t height, bool is_big
     config->LutHCount   =(width + 254) >> 8 ;
     config->LutVCount   = (height  + 254) >> 8;
     config->PsfCfgCount = config->LutHCount * config->LutVCount;
-    XCAM_ASSERT(config->PsfCfgCount <= CacPsfCountLimit);
+    if (is_asset)
+        XCAM_ASSERT(config->PsfCfgCount <= CacPsfCountLimit);
     /**
      * CAC stores one PSF point's kernel in 9 words, one kernel size is 8 bytes.
      * (8bytes*8bits/byte + 32 - 1) / 32bits/word = 9 words.
@@ -112,7 +114,7 @@ static inline void CalcCacLutConfig(uint32_t width, uint32_t height, bool is_big
 }
 #else
 static inline void CalcCacLutConfig(uint32_t width, uint32_t height, bool is_big_mode,
-                                    LutBufferConfig* config) {
+                                    LutBufferConfig* config, bool is_asset) {
     config->Width     = width;
     config->Height    = height;
     config->IsBigMode = is_big_mode;
@@ -129,7 +131,8 @@ static inline void CalcCacLutConfig(uint32_t width, uint32_t height, bool is_big
     config->LutHCount   = is_big_mode ? (width + 126) >> 7 : (width + 62) >> 6;
     config->LutVCount   = is_big_mode ? (height + 126) >> 7 : (height + 62) >> 6;
     config->PsfCfgCount = config->LutHCount * config->LutVCount;
-    XCAM_ASSERT(config->PsfCfgCount <= CacPsfCountLimit);
+    if (is_asset)
+        XCAM_ASSERT(config->PsfCfgCount <= CacPsfCountLimit);
     /**
      * CAC stores one PSF point's kernel in 9 words, one kernel size is 8 bytes.
      * (8bytes*8bits/byte + 32 - 1) / 32bits/word = 9 words.
@@ -147,12 +150,12 @@ static XCamReturn rk_aiq_cac21_update_lut(cac_cvt_info_t *cacInfo, char *sw_cacT
 
     memset(&lut_config, 0, sizeof(lut_config));
     memset(&full_lut_config, 0, sizeof(full_lut_config));
-    if (cacInfo->is_multi_isp) {
-        CalcCacLutConfig(width, height, is_big_mode, &full_lut_config);
+    if (cacInfo->is_multi_isp && cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
+        CalcCacLutConfig(width, height, is_big_mode, &full_lut_config, false);
         width = width / 2 + cacInfo->multi_isp_extended_pixel;
-        CalcCacLutConfig(width, height, is_big_mode, &lut_config);
+        CalcCacLutConfig(width, height, is_big_mode, &lut_config, true);
     } else {
-        CalcCacLutConfig(width, height, is_big_mode, &lut_config);
+        CalcCacLutConfig(width, height, is_big_mode, &lut_config, true);
     }
     if (cacInfo->lut_manger_ == NULL) {
         cacInfo->lut_manger_ = aiq_mallocz(sizeof(LutBufferManager));
@@ -163,7 +166,7 @@ static XCamReturn rk_aiq_cac21_update_lut(cac_cvt_info_t *cacInfo, char *sw_cacT
 
         LutBufferManagerInit(cacInfo->lut_manger_, &lut_config, cacInfo->mem_ops);
         LutBufferManagerImportHwBuffers(cacInfo->lut_manger_, 0);
-        if (cacInfo->is_multi_isp) {
+        if (cacInfo->is_multi_isp && cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
             LutBufferManagerImportHwBuffers(cacInfo->lut_manger_, 1);
         }
     }
@@ -173,22 +176,24 @@ static XCamReturn rk_aiq_cac21_update_lut(cac_cvt_info_t *cacInfo, char *sw_cacT
         return XCAM_RETURN_NO_ERROR;
     }
     cacInfo->current_lut_size = 0;
+    aiq_free(cacInfo->current_lut_[0]);
     cacInfo->current_lut_[0] = buf;
     cacInfo->current_lut_size++;
     if (buf->State != kInitial) {
         LOGW_ACAC("Buffer in use, will not update lut!");
         return XCAM_RETURN_NO_ERROR;
     }
-    if (cacInfo->is_multi_isp) {
+    if (cacInfo->is_multi_isp && cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         LutBuffer* buf2 = LutBufferManagerGetFreeHwBuffer(cacInfo->lut_manger_, 1);
         if (buf2 == NULL) {
             LOGW_ACAC("No buffer available, maybe only one buffer ?!");
             return XCAM_RETURN_NO_ERROR;
         }
+        aiq_free(cacInfo->current_lut_[1]);
         cacInfo->current_lut_[1] = buf2;
         cacInfo->current_lut_size++;
     }
-    XCAM_ASSERT(cacInfo->current_lut_size == (uint32_t)(cacInfo->is_multi_isp + 1));
+    XCAM_ASSERT(cacInfo->current_lut_size == (uint32_t)(cacInfo->isp_unite_mode + 1));
 
     if (sw_cacT_psfMap_path[0] != '/') {
         strcpy(cac_map_path, cacInfo->iqpath);
@@ -202,7 +207,7 @@ static XCamReturn rk_aiq_cac21_update_lut(cac_cvt_info_t *cacInfo, char *sw_cacT
         return XCAM_RETURN_ERROR_FILE;
     }
 
-    if (!cacInfo->is_multi_isp) {
+    if (cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_NORMAL) {
         uint32_t line_offset = lut_config.LutHCount * CacPsfKernelWordSizeInMemory * BYTES_PER_WORD;
         uint32_t size = lut_config.LutHCount * lut_config.LutVCount * CacPsfKernelWordSizeInMemory *
                         BYTES_PER_WORD;
@@ -210,7 +215,7 @@ static XCamReturn rk_aiq_cac21_update_lut(cac_cvt_info_t *cacInfo, char *sw_cacT
             char* addr0 = (char*)(cacInfo->current_lut_[0]->Addr) + ch * size;
             fread(addr0, 1, size, fp);
         }
-    } else {
+    } else if (cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         XCAM_ASSERT(cacInfo->current_lut_size > 1);
         // Read and Split Memory
         //   a == line_size - line_offset
@@ -244,6 +249,8 @@ static XCamReturn rk_aiq_cac21_update_lut(cac_cvt_info_t *cacInfo, char *sw_cacT
                 fread(addr1 + (i * line_size) + line_offset, 1, line_size - line_offset, fp);
             }
         }
+    } else if (cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
+        LOGE_ACAC("don't support %d mode", cacInfo->isp_unite_mode);
     }
     fclose(fp);
 
@@ -285,7 +292,7 @@ void rk_aiq_cac21_params_cvt(void* attr, isp_params_t* isp_params,
     cacInfo->rawWidth = cvtinfo->rawWidth;
     cacInfo->rawHeight = cvtinfo->rawHeight;
     cac21_multi_cvt(phwcfg, pdyn, psta, cacInfo, false);
-    if (cacInfo->is_multi_isp) {
+    if (cacInfo->is_multi_isp && cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         phwcfg = &(isp_params->isp_cfg + 1)->others.cac_cfg;
         cac21_multi_cvt(phwcfg, pdyn, psta, cacInfo, cacInfo->is_multi_isp);
     }
@@ -307,7 +314,7 @@ static void cac21_multi_cvt(struct isp32_cac_cfg* phwcfg, cac_params_dyn_t* pdyn
     }
 
     phwcfg->center_en = psta->strgCenter.hw_cacT_strgCenter_en;
-    if (is_multi_isp && psta->strgCenter.hw_cacT_strgCenter_en) {
+    if (cacInfo->isp_unite_mode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID && psta->strgCenter.hw_cacT_strgCenter_en) {
             uint16_t w                     = cacInfo->rawWidth / 4;
             uint16_t e                     = cacInfo->multi_isp_extended_pixel / 4;
             uint16_t x                     = psta->strgCenter.hw_cacT_strgCenter_x;

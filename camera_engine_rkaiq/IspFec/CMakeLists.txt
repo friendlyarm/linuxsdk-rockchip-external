@@ -10,15 +10,25 @@ PROJECT(IspFec)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+include(CheckGlibc)
+CHECK_GLIBC_VERSION()
+
 include(BuildOptions)
 include(CompileOptions)
 include(GNUInstallDirs)
+
+configure_file(
+    "${PROJECT_SOURCE_DIR}/cmake/rkfec_config.h.in"
+    "${PROJECT_BINARY_DIR}/rkfec_config.h"
+    )
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMakeTargets")
 
 set(RK_ISPFEC_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 message("rkIspFec src path" ${RK_ISPFEC_SOURCE_DIR})
+
+# add_compile_options(${RKFEC_HW_VERSION})
 
 add_compile_options(-Os)
 add_compile_options(-fstack-protector-strong -D_FORTIFY_SOURCE=2)
@@ -27,16 +37,26 @@ set(RK_ISPFEC_LIB_DIR ${RK_ISPFEC_INSTALLED_DIR}/lib)
 message("rkIspFec lib path" ${RK_ISPFEC_LIB_DIR})
 
 include_directories(
+    ${PROJECT_BINARY_DIR}
     ./
     include/
     include_prv/
+    src/param_parser/
     )
 
 set (IspFec_SRC
 	src/rk_ispfec.cpp
 	src/RkIspFecHw.cpp
 	src/RkIspFecHwMgr.cpp
+	src/RkIspFecComm.c
+	src/param_parser/dictionary.c
+	src/param_parser/iniparser.c
+	src/param_parser/param.c
 	)
+
+if (RKFEC_VERSION STREQUAL "20")
+    list(APPEND IspFec_SRC src/rk_ispfec_videobuf.c)
+endif()
 
 set(ISP_FEC_STATIC_LIB_ARS)
 set(STATIC_LIB_PREFIX $<TARGET_FILE:)
@@ -44,7 +64,6 @@ set(STATIC_LIB_SUFFIX >)
 
 if(RK_GDC_GEN_MESH_ONLINE)
 	list(APPEND IspFec_SRC
-	     src/gen_mesh/genMesh.cpp
 	     src/RkIspFecGenMesh.cpp
 	     )
 
@@ -104,6 +123,10 @@ add_custom_command (TARGET IspFec_static POST_BUILD
         COMMAND rm *.o
         )
 
+install(FILES ${PROJECT_BINARY_DIR}/rkfec_config.h DESTINATION include/IspFec)
 install(DIRECTORY include/ DESTINATION include/IspFec FILES_MATCHING PATTERN "*.h")
 install(FILES ${CMAKE_LIBRARY_PATH}/libIspFec.so DESTINATION lib)
 install(FILES ${CMAKE_LIBRARY_PATH}/libIspFec_static.a DESTINATION lib RENAME libIspFec.a)
+install(DIRECTORY fec_calib/ DESTINATION usr/share/fec_calib FILES_MATCHING PATTERN "*.ini")
+
+add_subdirectory(sample)

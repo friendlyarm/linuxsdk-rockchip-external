@@ -1,32 +1,48 @@
 #include"interpolation.h"
 #include "math.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
 
 #define DEFAULT_ISO_STEP_MAX 13
-const int default_iso_list[] = {50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 16300, 51200, 102400, 204800};
+int default_iso_list[] = {50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200, 102400, 204800};
 
-void pre_interp(int iso, int *iso_list, int num, int *lo, int *hi, float *ratio)
+void interpolation_set_iso_list(const uint32_t *iso_list)
+{
+    bool valid = iso_list[1] > 0 ? true: false;
+
+    if (valid) {
+        for (int i=0; i<DEFAULT_ISO_STEP_MAX; i++) {
+            default_iso_list[i] = iso_list[i];
+        }
+    }
+}
+
+void interpolation_get_iso_list(uint32_t *iso_list)
+{
+    for (int i=0; i<DEFAULT_ISO_STEP_MAX; i++) {
+        iso_list[i] = default_iso_list[i];
+    }
+}
+
+void pre_interp(int iso, uint32_t *iso_list, int num, int *lo, int *hi, float *ratio)
 {
     int i,iso_lo, iso_hi;
     if (iso_list == NULL) {
-        iso_list = (int *)default_iso_list;
+        iso_list = (uint32_t *)default_iso_list;
+        num = DEFAULT_ISO_STEP_MAX;
+    } else if (iso_list[1] == 0) {
+        iso_list = (uint32_t *)default_iso_list;
         num = DEFAULT_ISO_STEP_MAX;
     }
-    if (iso <= iso_list[0]) {
+    if (iso <= (int)iso_list[0]) {
         *lo = 0;
         *hi = 0;
         *ratio = 0.0f;
         return;
     }
-    if (iso >= iso_list[num - 1]) {
-        *lo = num - 1;
-        *hi = num - 1;
-        *ratio = 0.0f;
-        return;
-    }
-
     for (i = 1; i < num; i++) {
-        if (iso < iso_list[i])
+        if (iso < (int)iso_list[i])
         {
             *lo = i - 1;
             *hi = i;
@@ -37,6 +53,10 @@ void pre_interp(int iso, int *iso_list, int num, int *lo, int *hi, float *ratio)
             return;
         }
     }
+    // iso >= max_iso
+    *lo = num - 1;
+    *hi = num - 1;
+    *ratio = 0.0f;
 }
 
 void interpolation_f(const float *x, const float *y, int Num, float x0, float*y0)
@@ -69,6 +89,51 @@ void interpolation_f(const float *x, const float *y, int Num, float x0, float*y0
     }
 
     *y0 = k;
+}
+
+void get_interpolationf_wgt(const float *x, const float *y, int Num, float x0, int *idxS, int *idxE, float *wgtS, float *wgtE)
+{
+    int i ;
+    float k;
+    if (x0 <= x[0])
+    {
+        k = y[0];
+        *idxS=0;
+        *idxE=0;
+        *wgtS=1;
+        *wgtE=0;
+    }
+    else if (x0 >= x[Num - 1])
+    {
+        k = y[Num - 1];
+        *idxS=Num-1;
+        *idxE=Num-1;
+        *wgtS=0;
+        *wgtE=1;
+    }
+    else
+    {
+        for (i = 0; i < Num; i++)
+        {
+            if (x0 < x[i])
+                break;
+        }
+        *idxS = i - 1;
+        *idxE=*idxS+1;
+        if ((float)x[*idxE] - (float)x[*idxS] < 0.001){
+            *wgtS=1;
+            *wgtE=0;
+        }else{
+            *wgtE = ((float)x0 - (float)x[*idxS]) / ((float)x[*idxE] - (float)x[*idxS]);
+            *wgtS=1-*wgtE;
+        }
+    }
+
+}
+
+void interpolation_with_wgt(float valueS,float valueE,float wgtS,float wgtE,float *value)
+{
+    *value = valueS*wgtS + valueE*wgtE;
 }
 
 void interpolation_s(const float *x, const unsigned short *y, int Num, float x0, unsigned short *y0)

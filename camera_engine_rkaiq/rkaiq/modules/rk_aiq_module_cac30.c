@@ -27,10 +27,10 @@
 static void cac30_multi_cvt(struct isp33_cac_cfg* phwcfg, cac_params_dyn_t* pdyn,
     cac_params_static_t* psta,int maxValue, bool is_multi_isp);
 
-void rk_aiq_cac30_params_cvt(void* attr, struct isp33_isp_params_cfg* isp_cfg,
-    struct isp33_isp_params_cfg* isp_cfg_right, bool is_multi_isp, common_cvt_info_t* cvtinfo)
+void rk_aiq_cac30_params_cvt(void* attr, struct isp33_cac_cfg* cac_cfg,
+    struct isp33_cac_cfg* cac_cfg_right, bool is_multi_isp, common_cvt_info_t* cvtinfo)
 {
-    struct isp33_cac_cfg* phwcfg = &isp_cfg->others.cac_cfg;
+    struct isp33_cac_cfg* phwcfg = cac_cfg;
     cac_param_t *cac_param = (cac_param_t*)attr;
     cac_params_dyn_t* pdyn = &cac_param->dyn;
     cac_params_static_t* psta = &cac_param->sta;
@@ -38,6 +38,12 @@ void rk_aiq_cac30_params_cvt(void* attr, struct isp33_isp_params_cfg* isp_cfg,
     int maxValue = (1<<12)-1; //to do hdr ratio predgain
     RKAiqAecExpInfo_t *ae_exp = cvtinfo->ae_exp;
     float hdrmge_gain0_1 = 1;
+    float isp_ob_predgain = 1;
+    float preDGain_cac = cvtinfo->preDGain_drc;
+    if (cvtinfo->frameNum <= 1) {
+        isp_ob_predgain = preDGain_cac>1?preDGain_cac:1;
+    }
+
     if(ae_exp!=NULL){
         if(cvtinfo->frameNum > 1){
             float sExpo = ae_exp->HdrExp[0].exp_real_params.analog_gain *
@@ -52,15 +58,16 @@ void rk_aiq_cac30_params_cvt(void* attr, struct isp33_isp_params_cfg* isp_cfg,
             }
 
         }
-        LOGD_ACAC("hdrmge_gain0_1(%f)",hdrmge_gain0_1);
+        //LOGD_ACAC("hdrmge_gain0_1(%f)",hdrmge_gain0_1);
     }else{
        LOGD_ACAC("%s ae_exp is null",__FUNCTION__);
     }
-    maxValue*=hdrmge_gain0_1;
+    maxValue*=hdrmge_gain0_1*isp_ob_predgain;
+    LOGD_ACAC("isp_ob_predgain(%f),hdrmge_gain0_1(%f),maxValue(%d)",isp_ob_predgain,hdrmge_gain0_1,maxValue);
 
     cac30_multi_cvt(phwcfg, pdyn, psta, maxValue, is_multi_isp);
     if (is_multi_isp) {
-        phwcfg = &isp_cfg_right->others.cac_cfg;
+        phwcfg = cac_cfg_right;
         cac30_multi_cvt(phwcfg, pdyn, psta, maxValue, is_multi_isp);
     }
 }

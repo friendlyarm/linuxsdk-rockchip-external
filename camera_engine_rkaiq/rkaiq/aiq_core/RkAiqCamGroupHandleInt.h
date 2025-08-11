@@ -121,6 +121,8 @@ public:
 
     XCamReturn setAecStatsCfg(Uapi_AecStatsCfg_t AecStatsCfg);
     XCamReturn getAecStatsCfg(Uapi_AecStatsCfg_t* pAecStatsCfg);
+    XCamReturn setFrameHdrAttr(Uapi_FrameHdrAttr_t FrameHdrAttr);
+    XCamReturn getFrameHdrAttr(Uapi_FrameHdrAttr_t* pFrameHdrAttr);
 
 protected:
 
@@ -142,6 +144,8 @@ private:
     Uapi_AecSyncTest_t    mNewAecSyncTestAttr;
     Uapi_AecStatsCfg_t    mCurAecStatsCfg;
     Uapi_AecStatsCfg_t    mNewAecStatsCfg;
+    Uapi_FrameHdrAttr_t    mCurFrameHdrAttr;
+    Uapi_FrameHdrAttr_t    mNewFrameHdrAttr;
 
     mutable std::atomic<bool> updateExpSwAttrV2;
     mutable std::atomic<bool> updateLinExpAttrV2;
@@ -151,6 +155,7 @@ private:
     mutable std::atomic<bool> updateHdrAeRouteAttr;
     mutable std::atomic<bool> updateSyncTestAttr;
     mutable std::atomic<bool> updateAecStatsCfg;
+    mutable std::atomic<bool> updateFrameHdrAttr;
 };
 
 // awb

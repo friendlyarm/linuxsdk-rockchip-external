@@ -41,8 +41,10 @@ static XCamReturn _handlerGamma_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "gamma handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "gamma algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();
@@ -77,6 +79,17 @@ AiqAlgoHandler_t* AiqAlgoHandlerGamma_constructor(RkAiqAlgoDesComm* des, AiqCore
     pHdl->prepare      = _handlerGamma_prepare;
     pHdl->init         = _handlerGamma_init;
 	return pHdl;
+}
+
+XCamReturn AiqGammaHandler_setStrength(AiqGammaHandler_t* pHdlGamma, int strg)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    aiqMutex_lock(&pHdlGamma->mCfgMutex);
+    ret = algo_gamma_SetStrength(pHdlGamma->mAlgoCtx, strg);
+    aiqMutex_unlock(&pHdlGamma->mCfgMutex);
+
+    EXIT_ANALYZER_FUNCTION();
+	return ret;
 }
 
 #if 0

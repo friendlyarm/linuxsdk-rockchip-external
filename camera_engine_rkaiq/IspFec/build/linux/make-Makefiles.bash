@@ -7,7 +7,7 @@ export AIQ_BUILD_SYSROOT=libc
 export AIQ_BUILD_ARCH=arm
 TOOLCHAIN_FILE=$(pwd)/../../cmake/toolchains/gcc.cmake
 OUTPUT=$(pwd)/output/${AIQ_BUILD_ARCH}
-SOURCE_PATH=$$(pwd)/../../
+SOURCE_PATH=$(pwd)/../../
 
 mkdir -p $OUTPUT
 pushd $OUTPUT
@@ -19,8 +19,12 @@ cmake -G "Ninja" \
     -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
     -DCMAKE_SKIP_RPATH=TRUE \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=YES \
-    -DISP_HW_VERSION=${ISP_HW_VERSION} \
+    -DRKFEC_TARGET_SOC=${RKFEC_TARGET_SOC} \
+    -DRKFEC_HW_VERSION=${RKFEC_HW_VERSION} \
     -DCMAKE_INSTALL_PREFIX="installed" \
+    -DENABLE_SAMPLE_ISPFEC=ON \
+    -DENABLE_SAMPLE_ISPFEC_MULTI=ON \
+    -DRK_GDC_GEN_MESH_ONLINE=ON \
     $SOURCE_PATH \
 && ninja -j$(nproc) \
 && ninja install

@@ -37,6 +37,8 @@ typedef struct CalibDb_Sensor_Module_s {
     float LensT;
     // M4_NUMBER_DESC("IRCutT", "f32", M4_RANGE(0,100), "90", M4_DIGIT(2),M4_HIDE(0))
     float IRCutT;
+    // M4_NUMBER_DESC("PixelSize", "f32", M4_RANGE(0,20), "2", M4_DIGIT(3),M4_HIDE(0))
+    float PixelSize;
 } CalibDb_Sensor_Module_t;
 
 typedef struct CalibDb_Module_ParaV2_s {

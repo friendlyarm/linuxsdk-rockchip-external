@@ -47,6 +47,7 @@ XCamReturn AiqAlgoHandlerAwb_unlock(AiqAlgoHandlerAwb_t* pAwbHdl);
 XCamReturn AiqAlgoHandlerAwb_setFFWbgainAttrib(AiqAlgoHandlerAwb_t* pAwbHdl, rk_aiq_uapiV2_awb_ffwbgain_attr_t att);
 XCamReturn AiqAlgoHandlerAwb_getAlgoStat(AiqAlgoHandlerAwb_t* pAwbHdl, rk_tool_awb_stat_res_full_t *awb_stat_algo);
 XCamReturn AiqAlgoHandlerAwb_getStrategyResult(AiqAlgoHandlerAwb_t* pAwbHdl, rk_tool_awb_strategy_result_t *awb_strategy_result);
+XCamReturn AiqAlgoHandlerAwb_SetNNres(AiqAlgoHandlerAwb_t* pAwbHdl, const awb_ai_res_t *att);
 RKAIQ_END_DECLARE
 
 #endif

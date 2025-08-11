@@ -26,6 +26,11 @@
 #include "interpolation.h"
 #include "c_base/aiq_base.h"
 
+#if RKAIQ_HAVE_DUMPSYS
+#include "include/algo_3dlut_info.h"
+#include "rk_info_utils.h"
+#endif
+
 static int illu_estm_once(alut3d_param_illuLink_t *illuLinks, uint8_t illuLink_len, float awbGain[2]) {
     int ret = -1;
     uint8_t case_id = 0;
@@ -150,6 +155,7 @@ XCamReturn A3dlut_prepare(RkAiqAlgoCom* params)
     pLut3dCtx->pre_lutSum[0] = 0;
     pLut3dCtx->pre_lutSum[1] = 0;
     pLut3dCtx->pre_lutSum[2] = 0;
+    pLut3dCtx->is_calib_update = true;
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -298,6 +304,17 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
     return XCAM_RETURN_NO_ERROR;
 }
 
+#if RKAIQ_HAVE_DUMPSYS
+static int dump(const RkAiqAlgoCom* config, st_string* result)
+{
+    // lut3d_dump_mod_param(config, result);
+    // lut3d_dump_mod_attr(config, result);
+    lut3d_dump_mod_status(config, result);
+
+    return 0;
+}
+#endif
+
 XCamReturn
 algo_lut3d_queryalut3dStatus
 (
@@ -386,4 +403,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescLut3d = {
     .pre_process = NULL,
     .processing = processing,
     .post_process = NULL,
+#if RKAIQ_HAVE_DUMPSYS
+    .dump = dump,
+#endif
 };

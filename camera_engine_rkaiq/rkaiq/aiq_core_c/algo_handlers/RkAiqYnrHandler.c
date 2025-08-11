@@ -41,8 +41,10 @@ static XCamReturn _handlerYnr_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "ynr handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "ynr algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();
@@ -86,7 +88,10 @@ static XCamReturn _handlerYnr_processing(AiqAlgoHandler_t* pAlgoHandler) {
 		AIQ_REF_BASE_UNREF(&pShared->_ref_base);
 	} else {
 		LOGW_ANR("no ynr_proc_res buf !");
-	}
+#if RKAIQ_HAVE_DUMPSYS
+                pAlgoHandler->mAiqCore->mNoFreeBufCnt.ynrProcRes++;
+#endif
+        }
     RKAIQCORE_CHECK_RET(ret, "ynr algo processing failed");
 
     EXIT_ANALYZER_FUNCTION();

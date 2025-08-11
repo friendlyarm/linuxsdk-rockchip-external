@@ -41,7 +41,7 @@ XCamReturn
 awb_processing2(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams);
 void
 initCustAwbHwConfig(RkAiqAlgoContext *context, void  *custAwbHwConfig);
-
+int awb_dump(const RkAiqAlgoCom* inparams, st_string* result);
 
 XCAM_END_DECLARE
 

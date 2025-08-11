@@ -54,8 +54,10 @@ static XCamReturn _handlerAfd_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     afd_config->RawWidth  = sharedCom->snsDes.isp_acq_width;
     afd_config->RawHeight = sharedCom->snsDes.isp_acq_height;
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "afd algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

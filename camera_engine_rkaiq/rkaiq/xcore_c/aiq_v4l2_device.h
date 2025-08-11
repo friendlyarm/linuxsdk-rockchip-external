@@ -73,6 +73,8 @@ XCamReturn AiqV4l2Device_close(AiqV4l2Device_t* v4l2_dev);
 int AiqV4l2Device_ioctl(AiqV4l2Device_t* v4l2_dev, unsigned long cmd, void* arg);
 XCamReturn AiqV4l2Device_subscribeEvt(AiqV4l2Device_t* v4l2_dev, int event);
 XCamReturn AiqV4l2Device_unsubscribeEvt(AiqV4l2Device_t* v4l2_dev, int event);
+XCamReturn AiqV4l2Device_subscribeEvt2(AiqV4l2Device_t* v4l2_dev, int event, int id);
+XCamReturn AiqV4l2Device_unsubscribeEvt2(AiqV4l2Device_t* v4l2_dev, int event, int id);
 XCamReturn AiqV4l2Device_dqEvt(AiqV4l2Device_t* v4l2_dev, struct v4l2_event* event);
 /* end: following functions are used for both v4l2Device and v4l2SubDevice */
 
@@ -124,6 +126,7 @@ bool AiqV4l2Device_setFramerate(AiqV4l2Device_t* v4l2_dev, uint32_t n, uint32_t 
 XCamReturn AiqV4l2Device_getCrop(AiqV4l2Device_t* v4l2_dev, struct v4l2_crop* crop);
 XCamReturn AiqV4l2Device_setCrop(AiqV4l2Device_t* v4l2_dev, struct v4l2_crop* crop);
 XCamReturn AiqV4l2Device_setSelection(AiqV4l2Device_t* v4l2_dev, struct v4l2_selection* select);
+XCamReturn AiqV4l2Device_getSelection(AiqV4l2Device_t* v4l2_dev, struct v4l2_selection* select);
 XCamReturn AiqV4l2Device_getV4lFmt(AiqV4l2Device_t* v4l2_dev, struct v4l2_format* format);
 XCamReturn AiqV4l2Device_setV4lFmt(AiqV4l2Device_t* v4l2_dev, struct v4l2_format* format);
 XCamReturn AiqV4l2Device_setFmt(AiqV4l2Device_t* v4l2_dev, uint32_t width, uint32_t height,

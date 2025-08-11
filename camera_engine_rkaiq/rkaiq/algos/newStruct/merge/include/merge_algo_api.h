@@ -3,7 +3,14 @@
 
 #include "rk_aiq_algo_des.h"
 
+#if RKAIQ_HAVE_MERGE_V12
 #include "isp/rk_aiq_isp_merge22.h"
+#elif RKAIQ_HAVE_MERGE_V13
+#include "isp/rk_aiq_isp_merge23.h"
+#else
+#error "wrong mge hw version !"
+#endif
+
 #include "algos/rk_aiq_api_types_merge.h"
 
 typedef enum MergeHwVersion_e

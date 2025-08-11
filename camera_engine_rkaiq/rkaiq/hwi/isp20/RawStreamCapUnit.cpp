@@ -578,7 +578,7 @@ RawStreamCapUnit::setVicapStreamMode(int mode, uint32_t *frameId, bool isSingleM
         info.resume_mode = RKISP_RTT_MODE_MULTI_FRAME;
 
     if (_dev[0]->io_control(RKCIF_CMD_SET_QUICK_STREAM, &info) < 0) {
-        LOGE_CAMHW("dev(%s) ioctl faile, set vicap %s faile", _dev[0]->get_device_name(), mode ? "pause" : "resume");
+        LOGE_CAMHW("dev(%s) ioctl faile, set vicap %s faile", _dev[0]->get_device_name(), mode ? "resume" : "pause");
         ret = XCAM_RETURN_ERROR_IOCTL;
     }
     if (frameId)

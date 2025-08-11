@@ -8,6 +8,8 @@
 #include "isp/rk_aiq_isp_ynr34.h"
 #elif RKAIQ_HAVE_YNR_V40
 #include "isp/rk_aiq_isp_ynr40.h"
+#elif RKAIQ_HAVE_YNR_V41
+#include "isp/rk_aiq_isp_ynr41.h"
 #else
 #error "wrong ynr hw version !"
 #endif

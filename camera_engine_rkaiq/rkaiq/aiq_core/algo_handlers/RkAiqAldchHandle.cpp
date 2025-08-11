@@ -55,8 +55,14 @@ XCamReturn RkAiqAldchHandleInt::prepare() {
     aldch_config_int->mem_ops_ptr   = mAiqCore->mShareMemOps;
     aldch_config_int->is_multi_isp = sharedCom->is_multi_isp_mode;
     aldch_config_int->multi_isp_extended_pixel = sharedCom->multi_isp_extended_pixels;
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des       = (RkAiqAlgoDescription*)mDes;
     ret                             = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "aldch algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

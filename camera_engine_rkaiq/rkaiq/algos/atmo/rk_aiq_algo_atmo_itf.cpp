@@ -241,6 +241,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescAtmo = {
     .pre_process = AtmoPreProcess,
     .processing = AtmoProcess,
     .post_process = AtmoPostProcess,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

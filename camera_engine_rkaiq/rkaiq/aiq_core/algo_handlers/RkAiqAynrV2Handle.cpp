@@ -195,8 +195,14 @@ XCamReturn RkAiqAynrV2HandleInt::prepare() {
 
     aynr_config_int->stAynrConfig.rawWidth  = sharedCom->snsDes.isp_acq_width;
     aynr_config_int->stAynrConfig.rawHeight = sharedCom->snsDes.isp_acq_height;
+    #ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des               = (RkAiqAlgoDescription*)mDes;
     ret                                     = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "aynr algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

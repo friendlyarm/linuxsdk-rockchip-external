@@ -40,6 +40,7 @@ typedef struct Rectangle_s {
 
 typedef struct aeAlgoStatsCfg_s {
     bool UpdateStats;      /* update stats every frame */
+    bool UseSubWinStats;
     int8_t RawStatsChnSel; /* RawStatsChnEn_t */
     int8_t YRangeMode;     /* CalibDb_CamYRangeModeV2_t */
     unsigned char BigWeight[RAWHISTBIG_WIN_NUM];
@@ -72,7 +73,7 @@ struct AiqStatsTranslator_s {
     XCamReturn (*translateMultiAfStats)(AiqStatsTranslator_t* pStatsTrans,
                                         const aiq_VideoBuffer_t* from, aiq_stats_base_t* to);
     XCamReturn (*translateMultiAdehazeStats)(AiqStatsTranslator_t* pStatsTrans,
-                                             const aiq_VideoBuffer_t* from, aiq_stats_base_t* to);
+            const aiq_VideoBuffer_t* from, aiq_stats_base_t* to);
 #endif
 
     aiq_isp_effect_params_t* _ispParams;
@@ -96,7 +97,7 @@ struct AiqStatsTranslator_s {
     Rectangle_t right_isp_rect_;
     Rectangle_t bottom_left_isp_rect_;
     Rectangle_t bottom_right_isp_rect_;
-    RkAiqIspUnitedMode mIspUnitedMode;
+    RkAiqIspUniteMode mIspUniteMode;
     AiqCamHwBase_t* mCamHw;
     AiqLensHw_t* mFocusLensHw;
     AiqLensHw_t* mIrishw;
@@ -116,30 +117,30 @@ void AiqStatsTranslator_setModuleRot(AiqStatsTranslator_t* pStatsTrans, int rot)
 void AiqStatsTranslator_setWorkingMode(AiqStatsTranslator_t* pStatsTrans, int working_mode);
 int AiqStatsTranslator_getWorkingMode(AiqStatsTranslator_t* pStatsTrans);
 void AiqStatsTranslator_setAeAlgoStatsCfg(AiqStatsTranslator_t* pStatsTrans,
-                                          const RkAiqSetStatsCfg* cfg);
+        const RkAiqSetStatsCfg* cfg);
 bool AiqStatsTranslator_getAeStatsRunFlag(AiqStatsTranslator_t* pStatsTrans, uint16_t* HistMean);
 
 XCamReturn AiqStatsTranslator_translatePdafStats(AiqStatsTranslator_t* pStatsTrans,
-                                                 const rk_aiq_isp_pdaf_meas_t* pdaf_meas,
-                                                 const aiq_VideoBuffer_t* from,
-                                                 aiq_stats_base_t* to, bool sns_mirror);
+        const rk_aiq_isp_pdaf_meas_t* pdaf_meas,
+        const aiq_VideoBuffer_t* from,
+        aiq_stats_base_t* to, bool sns_mirror);
 
 AiqStatsTranslator_t* AiqStatsTranslator_SetMultiIspMode(AiqStatsTranslator_t* pStatsTrans,
-                                                         bool isMultiIsp);
-AiqStatsTranslator_t* AiqStatsTranslator_SetIspUnitedMode(AiqStatsTranslator_t* pStatsTrans,
-                                                          RkAiqIspUnitedMode mode);
+        bool isMultiIsp);
+AiqStatsTranslator_t* AiqStatsTranslator_SetIspUniteMode(AiqStatsTranslator_t* pStatsTrans,
+        RkAiqIspUniteMode mode);
 AiqStatsTranslator_t* AiqStatsTranslator_SetPicInfo(AiqStatsTranslator_t* pStatsTrans,
-                                                    Rectangle_t* pic_rect);
+        Rectangle_t* pic_rect);
 AiqStatsTranslator_t* AiqStatsTranslator_SetLeftIspRect(AiqStatsTranslator_t* pStatsTrans,
-                                                        Rectangle_t* left_isp_rect);
+        Rectangle_t* left_isp_rect);
 AiqStatsTranslator_t* AiqStatsTranslator_SetRightIspRect(AiqStatsTranslator_t* pStatsTrans,
-                                                         Rectangle_t* right_isp_rect);
+        Rectangle_t* right_isp_rect);
 AiqStatsTranslator_t* AiqStatsTranslator_SetBottomLeftIspRect(AiqStatsTranslator_t* pStatsTrans,
-                                                              Rectangle_t* left_isp_rect);
+        Rectangle_t* left_isp_rect);
 AiqStatsTranslator_t* AiqStatsTranslator_SetBottomRightIspRect(AiqStatsTranslator_t* pStatsTrans,
-                                                               Rectangle_t* right_isp_rect);
+        Rectangle_t* right_isp_rect);
 bool AiqStatsTranslator_IsMultiIspMode(AiqStatsTranslator_t* pStatsTrans);
-RkAiqIspUnitedMode AiqStatsTranslator_GetIspUnitedMode(AiqStatsTranslator_t* pStatsTrans);
+RkAiqIspUniteMode AiqStatsTranslator_GetIspUniteMode(AiqStatsTranslator_t* pStatsTrans);
 Rectangle_t AiqStatsTranslator_GetPicInfo(AiqStatsTranslator_t* pStatsTrans);
 Rectangle_t AiqStatsTranslator_GetLeftIspRect(AiqStatsTranslator_t* pStatsTrans);
 Rectangle_t AiqStatsTranslator_GetRightIspRect(AiqStatsTranslator_t* pStatsTrans);

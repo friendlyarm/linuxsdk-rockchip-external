@@ -23,4 +23,8 @@ cmake -G "Ninja" \
     $SOURCE_PATH \
 && ninja -j$(nproc)
 
+status_code=$?
+
 popd
+
+exit $status_code

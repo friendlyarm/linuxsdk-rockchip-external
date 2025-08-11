@@ -64,6 +64,9 @@ RawStreamCapUnit::RawStreamCapUnit (const rk_sensor_full_info_t *s_info)
 
     strncpy(_sns_name, s_info->sensor_name.c_str(), 32);
 
+    if (linked_to_isp && !s_info->isp_info)
+        LOGE_RKSTREAM("enum pipeline maybe error, %s link to isp, but isp info ptr %p", _sns_name, s_info->isp_info);
+
     /*
      * for _mipi_tx_devs, index 0 refer to short frame always, inedex 1 refer
      * to middle frame always, index 2 refert to long frame always.
@@ -76,49 +79,46 @@ RawStreamCapUnit::RawStreamCapUnit (const rk_sensor_full_info_t *s_info)
      * connected to _mipi_tx_devs[0]
      */
     //short frame
-    if (strlen(s_info->isp_info->rawrd2_s_path)) {
-        if (linked_to_isp)
-            _dev[0] = new V4l2Device (s_info->isp_info->rawwr2_path);//rkisp_rawwr2
-        else {
-            if (s_info->dvp_itf) {
-                if (strlen(s_info->cif_info->stream_cif_path))
-                    _dev[0] = new V4l2Device (s_info->cif_info->stream_cif_path);
-                else
-                    _dev[0] = new V4l2Device (s_info->cif_info->dvp_id0);
-            } else{
-                _dev[0] = new V4l2Device (s_info->cif_info->mipi_id0);
-            }
+    if (linked_to_isp)
+        _dev[0] = new V4l2Device (s_info->isp_info->rawwr2_path);//rkisp_rawwr2
+    else {
+        if (s_info->dvp_itf) {
+            if (strlen(s_info->cif_info->stream_cif_path))
+                _dev[0] = new V4l2Device (s_info->cif_info->stream_cif_path);
+            else
+                _dev[0] = new V4l2Device (s_info->cif_info->dvp_id0);
+        } else{
+            _dev[0] = new V4l2Device (s_info->cif_info->mipi_id0);
         }
-        _dev[0]->open();
-        _dev[0]->set_mem_type(_memory_type);
     }
-    //mid frame
-    if (strlen(s_info->isp_info->rawrd0_m_path)) {
-        if (linked_to_isp)
-            _dev[1] = new V4l2Device (s_info->isp_info->rawwr0_path);//rkisp_rawwr0
-        else {
-            if (!s_info->dvp_itf)
-                _dev[1] = new V4l2Device (s_info->cif_info->mipi_id1);
-        }
+    _dev[0]->open();
+    _dev[0]->set_mem_type(_memory_type);
 
-        if (_dev[1].ptr()){
-            _dev[1]->open();
-            _dev[1]->set_mem_type(_memory_type);
-        }
+    //mid frame
+    if (linked_to_isp)
+        _dev[1] = new V4l2Device (s_info->isp_info->rawwr0_path);//rkisp_rawwr0
+    else {
+        if (!s_info->dvp_itf)
+            _dev[1] = new V4l2Device (s_info->cif_info->mipi_id1);
     }
+
+    if (_dev[1].ptr()){
+        _dev[1]->open();
+        _dev[1]->set_mem_type(_memory_type);
+    }
+
     //long frame
-    if (strlen(s_info->isp_info->rawrd1_l_path)) {
-        if (linked_to_isp)
-            _dev[2] = new V4l2Device (s_info->isp_info->rawwr1_path);//rkisp_rawwr1
-        else {
-            if (!s_info->dvp_itf)
-                _dev[2] = new V4l2Device (s_info->cif_info->mipi_id2);//rkisp_rawwr1
-        }
-        if (_dev[2].ptr()){
-            _dev[2]->open();
-            _dev[2]->set_mem_type(_memory_type);
-        }
+    if (linked_to_isp)
+        _dev[2] = new V4l2Device (s_info->isp_info->rawwr1_path);//rkisp_rawwr1
+    else {
+        if (!s_info->dvp_itf)
+            _dev[2] = new V4l2Device (s_info->cif_info->mipi_id2);//rkisp_rawwr1
     }
+    if (_dev[2].ptr()){
+        _dev[2]->open();
+        _dev[2]->set_mem_type(_memory_type);
+    }
+
     for (int i = 0; i < 3; i++) {
         if (_dev[i].ptr())
             _dev[i]->set_buffer_count(_buffer_count);
@@ -137,7 +137,8 @@ RawStreamCapUnit::RawStreamCapUnit (const rk_sensor_full_info_t *s_info)
     _sensor_dev->open();
     _state = RAW_CAP_STATE_INITED;
 
-    is_multi_isp_mode = s_info->isp_info->is_multi_isp_mode;
+    if (s_info->isp_info)
+        is_multi_isp_mode = s_info->isp_info->is_multi_isp_mode;
 }
 
 void

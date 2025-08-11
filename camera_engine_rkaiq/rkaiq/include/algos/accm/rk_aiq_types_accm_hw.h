@@ -55,7 +55,7 @@ typedef struct rk_aiq_ccm_cfg_v2_s {
     float rgb2y_para[3];
     unsigned char enh_rgb2y_para[3];
     float enh_rat_max;
-#if ISP_HW_V39 || ISP_HW_V33
+#if ISP_HW_V39 || ISP_HW_V33 || ISP_HW_V35
     uint8_t sat_decay_en;
 	uint8_t hf_low;
 	uint8_t hf_up;

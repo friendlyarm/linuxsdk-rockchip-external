@@ -24,7 +24,7 @@ static void _handlerBlc_init(AiqAlgoHandler_t* pHdl) {
 
     AiqAlgoHandler_deinit(pHdl);
     pHdl->mConfig       = (RkAiqAlgoCom*)(aiq_mallocz(sizeof(RkAiqAlgoCom)));
-    pHdl->mProcInParam  = (RkAiqAlgoCom*)(aiq_mallocz(sizeof(RkAiqAlgoCom)));
+    pHdl->mProcInParam  = (RkAiqAlgoCom*)(aiq_mallocz(sizeof(RkAiqAlgoProcBlc)));
     pHdl->mProcOutParam = (RkAiqAlgoResCom*)(aiq_mallocz(sizeof(RkAiqAlgoProcResBlc)));
 
     pHdl->mResultType = RESULT_TYPE_BLC_PARAM;
@@ -41,8 +41,10 @@ static XCamReturn _handlerBlc_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "blc handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "blc algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();
@@ -55,23 +57,42 @@ static XCamReturn _handlerBlc_processing(AiqAlgoHandler_t* pAlgoHandler) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     RkAiqAlgoProcResBlc* blc_proc_res_int = (RkAiqAlgoProcResBlc*)pAlgoHandler->mProcOutParam;
+    RkAiqAlgoProcBlc* blc_proc_param = (RkAiqAlgoProcBlc*)pAlgoHandler->mProcInParam;
     RkAiqAlgosGroupShared_t* shared =
         (RkAiqAlgosGroupShared_t*)(pAlgoHandler->mAlogsGroupSharedParams);
+    RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
+    if (sharedCom->working_mode < RK_AIQ_WORKING_MODE_ISP_HDR2)
+        blc_proc_param->ishdr = 0;
+    else
+        blc_proc_param->ishdr = 1;
 
     ret = AiqAlgoHandler_processing(pAlgoHandler);
     if (ret) {
         RKAIQCORE_CHECK_RET(ret, "blc handle processing failed");
     }
 
+    AiqAlgoHandlerBlc_t* pblcHandler     = (AiqAlgoHandlerBlc_t*)pAlgoHandler;
     aiq_params_base_t* pBase = shared->fullParams->pParamsArray[RESULT_TYPE_BLC_PARAM];
     if (!pBase) {
         LOGW_ABLC("no blc params buf !");
         return XCAM_RETURN_BYPASS;
     }
 
+    blc_proc_param->aeIsConverged = pblcHandler->mAeProcRes.IsConverged;
+    rk_aiq_isp_blc_v33_t* blcRes = (rk_aiq_isp_blc_params_t*)pBase->_data;
+    blcRes->aeIsConverged = &pblcHandler->aeIsConverged;
+    blcRes->damping = &pblcHandler->damping;
+    pblcHandler->aeIsConverged = pblcHandler->mAeProcRes.IsConverged;
+    if (pblcHandler->damping && !blc_proc_param->ishdr) {
+        blc_proc_param->damping = true;
+    }
+    else {
+        blc_proc_param->damping = false;
+    }
+
     ret = AiqAlgoHandler_do_processing_common(pAlgoHandler);
 
-    blc_proc_res_int->blcRes = (rk_aiq_isp_blc_params_t*)pBase->_data;
+    blc_proc_res_int->blcRes = (blc_param_t*)pBase->_data;
     if (blc_proc_res_int->res_com.cfg_update) {
         if (!blc_proc_res_int->res_com.en) {
             blc_proc_res_int->blcRes->dyn.obcPostTnr.sw_blcT_obcPostTnr_en = false;
@@ -83,7 +104,7 @@ static XCamReturn _handlerBlc_processing(AiqAlgoHandler_t* pAlgoHandler) {
         shared->res_comb.blc_proc_res = ((AiqAlgoHandlerBlc_t*)pAlgoHandler)->mLatestparam;
     }
 
-    RKAIQCORE_CHECK_RET(ret, "adebayer algo processing failed");
+    RKAIQCORE_CHECK_RET(ret, "blc algo processing failed");
 
     EXIT_ANALYZER_FUNCTION();
     return ret;
@@ -98,7 +119,7 @@ static XCamReturn _handlerBlc_genIspResult(AiqAlgoHandler_t* pAlgoHandler, AiqFu
         LOGW_ABLC("no blc params buf !");
         return XCAM_RETURN_BYPASS;
     }
-    rk_aiq_isp_blc_params_t* blc_param     = (rk_aiq_isp_blc_params_t*)pBase->_data;
+    blc_param_t* blc_param     = (blc_param_t*)pBase->_data;
     if (pAlgoHandler->mProcOutParam->cfg_update) {
 		pHdlBlc->mLatestparam                           = blc_param;
 		pHdlBlc->mLatesten                              = pBase->en;

@@ -18,8 +18,8 @@
 #ifndef RK_AIQ_USER_API_SYSCTL_H
 #define RK_AIQ_USER_API_SYSCTL_H
 
-#include "rk_aiq.h"
-#include "rk_aiq_algo_des.h"
+#include "common/rk_aiq.h"
+#include "algos/rk_aiq_algo_des.h"
 
 RKAIQ_BEGIN_DECLARE
 

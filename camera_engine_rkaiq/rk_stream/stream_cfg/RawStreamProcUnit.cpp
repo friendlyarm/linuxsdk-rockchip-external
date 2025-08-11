@@ -208,7 +208,7 @@ int _parse_rk_rawdata(void *rawdata, rkrawstream_rkraw2_t *rkraw2)
     return 0;
 }
 
-RawStreamProcUnit::RawStreamProcUnit (const rk_sensor_full_info_t *s_info, uint8_t is_offline)
+RawStreamProcUnit::RawStreamProcUnit (const rk_aiq_isp_t *isp_info, uint8_t is_offline)
     : _first_trigger(true)
     , _mipi_dev_max(0)
     , _is_multi_cam_conc(false)
@@ -220,26 +220,23 @@ RawStreamProcUnit::RawStreamProcUnit (const rk_sensor_full_info_t *s_info, uint8
     _raw_proc_thread = new RawProcThread(this);
     _PollCallback = NULL;
 
-    bool linked_to_isp = s_info->linked_to_isp;
-
     _is_offline_mode = is_offline;
 
-    strncpy(_sns_name, s_info->sensor_name.c_str(), 32);
     //short frame
-    if (strlen(s_info->isp_info->rawrd2_s_path)) {
-        _dev[0] = new V4l2Device (s_info->isp_info->rawrd2_s_path);//rkisp_rawrd2_s
+    if (strlen(isp_info->rawrd2_s_path)) {
+        _dev[0] = new V4l2Device (isp_info->rawrd2_s_path);//rkisp_rawrd2_s
         _dev[0]->open();
         _dev[0]->set_mem_type(_memory_type);
     }
     //mid frame
-    if (strlen(s_info->isp_info->rawrd0_m_path)) {
-        _dev[1] = new V4l2Device (s_info->isp_info->rawrd0_m_path);//rkisp_rawrd0_m
+    if (strlen(isp_info->rawrd0_m_path)) {
+        _dev[1] = new V4l2Device (isp_info->rawrd0_m_path);//rkisp_rawrd0_m
         _dev[1]->open();
         _dev[1]->set_mem_type(_memory_type);
     }
     //long frame
-    if (strlen(s_info->isp_info->rawrd1_l_path)) {
-        _dev[2] = new V4l2Device (s_info->isp_info->rawrd1_l_path);//rkisp_rawrd1_l
+    if (strlen(isp_info->rawrd1_l_path)) {
+        _dev[2] = new V4l2Device (isp_info->rawrd1_l_path);//rkisp_rawrd1_l
         _dev[2]->open();
         _dev[2]->set_mem_type(_memory_type);
     }
@@ -254,13 +251,13 @@ RawStreamProcUnit::RawStreamProcUnit (const rk_sensor_full_info_t *s_info, uint8
 
     }
 
-    _isp_core_dev = new V4l2SubDevice(s_info->isp_info->isp_dev_path);
+    _isp_core_dev = new V4l2SubDevice(isp_info->isp_dev_path);
     _isp_core_dev->open();
 
     _offline_index = 0;
     _offline_seq = 0;
 
-    is_multi_isp_mode = s_info->isp_info->is_multi_isp_mode;
+    is_multi_isp_mode = isp_info->is_multi_isp_mode;
 
     _rawbuffer[0] = NULL;
     _rawbuffer[1] = NULL;
@@ -422,6 +419,16 @@ RawStreamProcUnit::set_rx_format(uint32_t width, uint32_t height, uint32_t pix_f
 void
 RawStreamProcUnit::setup_pipeline_fmt(uint32_t width, uint32_t height, uint32_t pixfmt)
 {
+    if (width == 0) {
+        LOGE_RKSTREAM("%s: input param width is 0");
+        return;
+    }
+
+    if (height == 0) {
+        LOGE_RKSTREAM("%s: input param height is 0");
+        return;
+    }
+
     int ret;
     // set isp sink fmt, same as sensor bounds - crop
     struct v4l2_subdev_format isp_sink_fmt;
@@ -436,7 +443,9 @@ RawStreamProcUnit::setup_pipeline_fmt(uint32_t width, uint32_t height, uint32_t 
     }
     isp_sink_fmt.format.width = width;
     isp_sink_fmt.format.height = height;
-    isp_sink_fmt.format.code = pixfmt;
+    if (pixfmt > 0) {
+        isp_sink_fmt.format.code = pixfmt;
+    }
 
     ret = _isp_core_dev->setFormat(isp_sink_fmt);
     if (ret) {

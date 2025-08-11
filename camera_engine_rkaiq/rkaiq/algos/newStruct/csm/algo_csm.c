@@ -32,7 +32,6 @@
 // RKAIQ_BEGIN_DECLARE
 
 static csm_param_t g_csm_def = {
-    .en = true,
     .sta = {
         .hw_csmT_full_range = true,
         .hw_csmT_y_offset = 0, // 0:Y = f(coe_x) + 0/16 else Y = f(coe_x) + y_offset
@@ -101,6 +100,10 @@ prepare(RkAiqAlgoCom* params)
             return XCAM_RETURN_NO_ERROR;
         }
     }
+
+    pCsmCtx->csm_attrib =
+        (csm_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(params->u.prepare.calibv2, csm));
+    pCsmCtx->isReCal_ = true;
 
     LOG1_ACSM("%s: (exit)\n", __FUNCTION__ );
     return result;

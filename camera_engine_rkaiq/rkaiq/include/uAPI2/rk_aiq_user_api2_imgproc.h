@@ -64,6 +64,7 @@
 #include "uAPI2/rk_aiq_user_api2_aynr_v24.h"
 #include "uAPI2/rk_aiq_user_api_common.h"
 #include "uAPI2/rk_aiq_user_api2_ayuvme_v1.h"
+#include "uAPI2/rk_aiq_user_api2_ldc.h"
 
 RKAIQ_BEGIN_DECLARE
 
@@ -94,6 +95,60 @@ XCamReturn rk_aiq_uapi2_setAeLock(const rk_aiq_sys_ctx_t* ctx, bool on);
 */
 XCamReturn rk_aiq_uapi2_setExpMode(const rk_aiq_sys_ctx_t* ctx, opMode_t mode);
 XCamReturn rk_aiq_uapi2_getExpMode(const rk_aiq_sys_ctx_t* ctx, opMode_t *mode);
+
+/*
+*****************************
+*
+* Desc: set exp time mode
+* Argument:
+*   mode contains: auto & manual
+*
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setExpTimeMode(const rk_aiq_sys_ctx_t* ctx, opMode_t mode);
+XCamReturn rk_aiq_uapi2_getExpTimeMode(const rk_aiq_sys_ctx_t* ctx, opMode_t *mode);
+
+/*
+*****************************
+*
+* Desc: set exp gain mode
+* Argument:
+*   mode contains: auto & manual
+*
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setExpGainMode(const rk_aiq_sys_ctx_t* ctx, opMode_t mode);
+XCamReturn rk_aiq_uapi2_getExpGainMode(const rk_aiq_sys_ctx_t* ctx, opMode_t *mode);
+
+/*
+*****************************
+* Desc: set manual gain value
+* Argument:
+*   gain > 1.0
+*
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setExpManualGain(const rk_aiq_sys_ctx_t* ctx, float gain);
+
+/*
+*****************************
+* Desc: set manual time value
+* Argument:
+*   time
+*
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setExpManualTime(const rk_aiq_sys_ctx_t* ctx, float time);
+
+/*
+*****************************
+* Desc: set frame rate
+* Argument:
+*   info.mode OP_AUTO or OP_MANUAL
+*
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setFrameRate(const rk_aiq_sys_ctx_t* ctx, frameRateInfo_t info);
 
 /*
 *****************************
@@ -354,8 +409,8 @@ XCamReturn rk_aiq_uapi2_setGammaCoef(const rk_aiq_sys_ctx_t* ctx, float GammaCoe
 * Desc: set/get dark area boost strength
 *    this function is active for normal mode
 * Argument:
-*   level: [1, 10]
-*   only valid in RV1109/RV1126
+*   level: [0, 100]
+* 
 *****************************
 */
 XCamReturn rk_aiq_uapi2_setDarkAreaBoostStrth(const rk_aiq_sys_ctx_t* ctx, unsigned int level);
@@ -373,6 +428,19 @@ XCamReturn rk_aiq_uapi2_getDarkAreaBoostStrth(const rk_aiq_sys_ctx_t* ctx, unsig
 */
 XCamReturn rk_aiq_uapi2_setMHDRStrth(const rk_aiq_sys_ctx_t* ctx, bool on, unsigned int level);
 XCamReturn rk_aiq_uapi2_getMHDRStrth(const rk_aiq_sys_ctx_t* ctx, bool *on, unsigned int *level);
+
+/*
+*****************************
+*
+* Desc: set hdr strength
+*    this function is active for HDR is manual mode
+* Argument:
+*   level: [0, 100]
+*
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setHDRStrth(const rk_aiq_sys_ctx_t* ctx, bool on, unsigned int level);
+XCamReturn rk_aiq_uapi2_getHDRStrth(const rk_aiq_sys_ctx_t* ctx, bool *on, unsigned int *level);
 
 /*
 *****************************
@@ -481,17 +549,23 @@ XCamReturn rk_aiq_uapi2_getDrcLocalData(const rk_aiq_sys_ctx_t* ctx, float* Loca
 *     use in RK3576, rv1103b
 * Argument:
 *   hw_drcT_bifiltOut_alpha: [0, 16]
-*   hw_drcT_loDetail_strg: [0, 4095]
-*   hw_drcT_drcStrg_alpha: [0, 4095]
+*   hw_drcT_locDetail_strg: [0, 4095]
+*   hw_drcT_hfDarkRegion_strg: [0, 4095]
 *   hw_drcT_softThd_en: [0, 1]
 *   hw_drcT_softThd_thred: [0, 2047]
 *
 *****************************
 */
-XCamReturn rk_aiq_uapi2_setDrcLocalDataV2(const rk_aiq_sys_ctx_t* ctx, float hw_drcT_bifiltOut_alpha, float hw_drcT_loDetail_strg,
-        float hw_drcT_drcStrg_alpha, int hw_drcT_softThd_en, float hw_drcT_softThd_thred);
-XCamReturn rk_aiq_uapi2_getDrcLocalDataV2(const rk_aiq_sys_ctx_t* ctx, float* hw_drcT_bifiltOut_alpha, float* hw_drcT_loDetail_strg,
-        float* hw_drcT_drcStrg_alpha, int* hw_drcT_softThd_en, float* hw_drcT_softThd_thred);
+XCamReturn rk_aiq_uapi2_setDrcLocalDataV2(const rk_aiq_sys_ctx_t* ctx,
+                                          float hw_drcT_bifiltOut_alpha,
+                                          float hw_drcT_locDetail_strg,
+                                          float hw_drcT_hfDarkRegion_strg, int hw_drcT_softThd_en,
+                                          float hw_drcT_softThd_thred);
+XCamReturn rk_aiq_uapi2_getDrcLocalDataV2(const rk_aiq_sys_ctx_t* ctx,
+                                          float* hw_drcT_bifiltOut_alpha,
+                                          float* hw_drcT_locDetail_strg,
+                                          float* hw_drcT_hfDarkRegion_strg, int* hw_drcT_softThd_en,
+                                          float* hw_drcT_softThd_thred);
 /*
 *****************************
 *
@@ -1077,5 +1151,22 @@ XCamReturn rk_aiq_uapi2_setGrayMode(const rk_aiq_sys_ctx_t* ctx, rk_aiq_gray_mod
 *****************************
 */
 rk_aiq_gray_mode_t rk_aiq_uapi2_getGrayMode(const rk_aiq_sys_ctx_t* ctx);
+
+/*
+*****************************
+*
+* Desc:
+* Argument:
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setLdchLdcvEn(const rk_aiq_sys_ctx_t* ctx, bool en);
+/*
+*****************************
+*
+* Desc: the adjustment range of distortion intensity is 0~255
+* Argument:
+*****************************
+*/
+XCamReturn rk_aiq_uapi2_setLdchLdcvCorrectLevel(const rk_aiq_sys_ctx_t* ctx, int correctLevel);
 RKAIQ_END_DECLARE
 #endif

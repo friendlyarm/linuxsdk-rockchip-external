@@ -24,7 +24,7 @@ static void _handlerGain_init(AiqAlgoHandler_t* pHdl) {
 
     AiqAlgoHandler_deinit(pHdl);
     pHdl->mConfig       = (RkAiqAlgoCom*)(aiq_mallocz(sizeof(RkAiqAlgoCom)));
-    pHdl->mProcInParam  = (RkAiqAlgoCom*)(aiq_mallocz(sizeof(RkAiqAlgoProcGain)));
+    pHdl->mProcInParam  = (RkAiqAlgoCom*)(aiq_mallocz(sizeof(RkAiqAlgoCom)));
     pHdl->mProcOutParam = (RkAiqAlgoResCom*)(aiq_mallocz(sizeof(RkAiqAlgoResCom)));
 
     pHdl->mResultType = RESULT_TYPE_GAIN_PARAM;
@@ -41,8 +41,10 @@ static XCamReturn _handlerGain_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "gain handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "gain algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

@@ -26,7 +26,16 @@ RKAIQ_BEGIN_DECLARE
 
 typedef struct gic_param_auto_s {
     /* M4_GENERIC_DESC(
-        M4_ALIAS(dynamic_param),
+        M4_ALIAS(sta),
+        M4_TYPE(struct),
+        M4_UI_MODULE(static_ui),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(1),
+        M4_NOTES(The static params of gic module))  */
+    gic_params_static_t sta;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(dyn),
         M4_TYPE(struct_list),
         M4_SIZE_EX(1,13),
         M4_UI_MODULE(dynamic_ui),

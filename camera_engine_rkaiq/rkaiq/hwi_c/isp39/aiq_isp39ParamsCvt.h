@@ -40,4 +40,16 @@ void convertAiqCgcToIsp21Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBas
 void convertAiqGainToIsp3xParams(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase);
 void convertAiqCpToIsp20Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase);
 void convertAiqIeToIsp20Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase);
+void convertAiqAldcToIsp39Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase,
+                                 bool is_multi_isp);
+#if RKAIQ_HAVE_RGBIR_REMOSAIC_V10
+void convertAiqRgbirToIsp39Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase);
+#endif
+#if RKAIQ_HAVE_AF_V33 || RKAIQ_ONLY_AF_STATS_V33
+void convertAiqAfToIsp39Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase);
+#endif
+#if RKAIQ_HAVE_DUMPSYS
+void AiqIspParamsCvt_updIsp39Params(void* src, void* dst);
+#endif
+
 #endif

@@ -204,8 +204,14 @@ XCamReturn RkAiqAbayertnrV30HandleInt::prepare() {
     abayertnr_config_int->stAbayertnrConfig.rawWidth  = sharedCom->snsDes.isp_acq_width;
     abayertnr_config_int->stAbayertnrConfig.rawHeight = sharedCom->snsDes.isp_acq_height;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "arawnr algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

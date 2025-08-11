@@ -300,6 +300,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAsharpV33 = {
     .pre_process = NULL,
     .processing = groupAsharpV33Processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

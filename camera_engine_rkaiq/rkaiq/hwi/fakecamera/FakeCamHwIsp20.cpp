@@ -103,6 +103,18 @@ FakeCamHwIsp20::prepare(uint32_t width, uint32_t height, int mode, int t_delay, 
     if (!use_rkrawstream) {
         setupOffLineLink(isp_index, true);
         prepare_mipi_devices(s_info);
+    } else {
+        struct v4l2_subdev_format isp_sink_fmt;
+
+        memset(&isp_sink_fmt, 0, sizeof(isp_sink_fmt));
+        isp_sink_fmt.pad = 0;
+        isp_sink_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+        ret = mIspCoreDev->getFormat(isp_sink_fmt);
+        if (ret) {
+            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "get mIspCoreDev fmt failed to set fake sensor!\n");
+        }
+        SmartPtr<FakeSensorHw> fakeSensor = mSensorDev.dynamic_cast_ptr<FakeSensorHw>();
+        fakeSensor->set_fake_sensor_format(isp_sink_fmt.format.width, isp_sink_fmt.format.height, isp_sink_fmt.format.code);
     }
 
     ret = CamHwIsp20::prepare(width, height, mode, t_delay, g_delay);

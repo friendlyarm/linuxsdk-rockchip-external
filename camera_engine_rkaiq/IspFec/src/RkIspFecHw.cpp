@@ -16,25 +16,27 @@
  */
 
 #include "RkIspFecHw.h"
+
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/videodev2.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
-#include <string.h>
 #include <unistd.h>
-#include <linux/videodev2.h>
+
+#include "RkIspFecComm.h"
 
 namespace RKISPFEC {
 
 RkIspFecHw::RkIspFecHw(const char* dev)
 {
-    printf("I: open fec dev %s\n", dev);
     mFd = ::open(dev, O_RDWR | O_CLOEXEC);
-    if (mFd == -1)
-        printf("E: open %s failed %s !", dev, strerror(errno));
-    printf("I: open fec dev %s done !\n", dev);
+    if (mFd == -1) rkfec_err("open %s failed %s !", dev, strerror(errno));
+
+    rkfec_info("open fec dev %s done !", dev);
 }
 
 RkIspFecHw::~RkIspFecHw()
@@ -43,20 +45,42 @@ RkIspFecHw::~RkIspFecHw()
         ::close(mFd);
 }
 
-int
-RkIspFecHw::process(struct rkispp_fec_in_out& param)
-{
+int RkIspFecHw::process(RKFecInOut& param) {
     if (mFd < 0) {
-        printf("E: wrong fec fd \n");
+        rkfec_err("E: wrong fec fd ");
         return -1;
     }
 
-    int ret = ioctl(mFd, RKISPP_CMD_FEC_IN_OUT, &param);
+#ifdef RKFEC_HW_V20
+    unsigned long int cmd = RKFEC_CMD_IN_OUT;
+#else
+    unsigned long int cmd = RKISPP_CMD_FEC_IN_OUT;
+#endif
+
+    Profiler prof = {0};
+    if (rkfec_debug > 4) rkfec_profiling_start(&prof);
+
+    int ret = ioctl(mFd, cmd, &param);
+
+    if (rkfec_debug > 4) rkfec_profiling_end(&prof, "RkIspFecHw::process", 30);
 
     if (ret == -EAGAIN) // try again
-        ret = ioctl(mFd, RKISPP_CMD_FEC_IN_OUT, &param);
+        ret = ioctl(mFd, cmd, &param);
 
     return ret;
 }
 
+int RkIspFecHw::detach_dma_buffer(int dma_fd) {
+    if (mFd < 0) {
+        rkfec_err("E: invalid fec fd");
+        return -EBADF;
+    }
+
+#ifdef RKFEC_HW_V20
+    unsigned long int cmd = RKFEC_CMD_BUF_DEL;
+#else
+    unsigned long int cmd = RKISPP_CMD_FEC_BUF_DEL;
+#endif
+    return ioctl(mFd, cmd, &dma_fd);
+}
 };

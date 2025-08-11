@@ -341,6 +341,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescAsharpV33 = {
     .pre_process  = NULL,
     .processing   = processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

@@ -13,8 +13,14 @@
 
 #define RKMODULE_API_VERSION		KERNEL_VERSION(0, 1, 0x2)
 
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
+/* using for rk1103b dual isp unite */
+#define RKMOUDLE_UNITE_EXTEND_PIXEL 512
+#else
 /* using for rk3588 dual isp unite */
-#define RKMOUDLE_UNITE_EXTEND_PIXEL	128
+#define RKMOUDLE_UNITE_EXTEND_PIXEL 128
+#endif
+
 /* using for rv1109 and rv1126 */
 #define RKMODULE_EXTEND_LINE		24
 
@@ -38,6 +44,7 @@
 #define RKMODULE_INTERNAL_MASTER_MODE	"internal_master"
 #define RKMODULE_EXTERNAL_MASTER_MODE	"external_master"
 #define RKMODULE_SLAVE_MODE		"slave"
+#define RKMODULE_SOFT_SYNC_MODE     "soft_sync"
 
 /* BT.656 & BT.1120 multi channel
  * On which channels it can send video data
@@ -183,6 +190,9 @@
 
 #define RKMODULE_SET_CAPTURE_MODE  \
     _IOW('V', BASE_VIDIOC_PRIVATE + 40, struct rkmodule_capture_info)
+
+#define RKMODULE_GET_BAYER_MODE       \
+    _IOR('V', BASE_VIDIOC_PRIVATE + 52, __u32)
 
 struct rkmodule_i2cdev_info {
 	u8 slave_addr;
@@ -662,6 +672,7 @@ struct rkmodule_channel_info {
 	__u32 bus_fmt;
 	__u32 data_type;
 	__u32 data_bit;
+	__u32 field;
 } __attribute__ ((packed));
 
 /*
@@ -695,6 +706,7 @@ enum rkmodule_sync_mode {
 	EXTERNAL_MASTER_MODE,
 	INTERNAL_MASTER_MODE,
 	SLAVE_MODE,
+    SOFT_SYNC_MODE,
 };
 
 struct rkmodule_mclk_data {
@@ -806,5 +818,9 @@ struct rkmodule_capture_info {
     };
  };
 
+enum rkmodule_bayer_mode {
+    RKMODULE_NORMAL_BAYER,
+    RKMODULE_QUARD_BAYER,
+};
 
 #endif /* _UAPI_RKMODULE_CAMERA_H */

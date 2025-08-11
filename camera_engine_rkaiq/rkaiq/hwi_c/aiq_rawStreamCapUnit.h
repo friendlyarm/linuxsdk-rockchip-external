@@ -17,7 +17,11 @@
 #ifndef _AIQ_RAW_STREAM_CAP_UNIT_H_
 #define _AIQ_RAW_STREAM_CAP_UNIT_H_
 
+#if RKAIQ_HAVE_DUMPSYS
+#include "dumpcam_server/info/include/st_string.h"
+#endif
 #include "hwi_c/aiq_stream.h"
+#include "hwi_c/aiq_AiRmsStreamProcUnit.h"
 #include "xcore_c/aiq_v4l2_device.h"
 
 typedef struct rk_sensor_full_info_s rk_sensor_full_info_t;
@@ -54,6 +58,12 @@ typedef struct AiqRawStreamCapUnit_s {
     AiqCamHwBase_t* _camHw;
     AiqV4l2SubDevice_t* _isp_core_dev;
     AiqRawStreamProcUnit_t* _proc_stream;
+    AiqAiRmsStreamProcUnit_t* _pAirmsStream;
+
+#if RKAIQ_HAVE_DUMPSYS
+    FrameDumpInfo_t fe;
+    int data_mode;
+#endif
 } AiqRawStreamCapUnit_t;
 
 XCamReturn AiqRawStreamCapUnit_init(AiqRawStreamCapUnit_t* pRawStrCapUnitconst,
@@ -65,7 +75,7 @@ XCamReturn AiqRawStreamCapUnit_stop(AiqRawStreamCapUnit_t* pRawStrCapUnit);
 void AiqRawStreamCapUnit_set_working_mode(AiqRawStreamCapUnit_t* pRawStrCapUnit, int mode);
 void AiqRawStreamCapUnit_set_devices(AiqRawStreamCapUnit_t* pRawStrCapUnit,
                                      AiqV4l2SubDevice_t* ispdev, AiqCamHwBase_t* handle,
-                                     AiqRawStreamProcUnit_t* proc);
+                                     AiqRawStreamProcUnit_t* proc, AiqAiRmsStreamProcUnit_t* pAirmsStream);
 void AiqRawStreamCapUnit_set_tx_devices(AiqRawStreamCapUnit_t* pRawStrCapUnit,
                                         AiqV4l2Device_t* mipi_tx_devs[3]);
 AiqV4l2Device_t* AiqRawStreamCapUnit_get_tx_device(AiqRawStreamCapUnit_t* pRawStrCapUnit,
@@ -94,4 +104,13 @@ void AiqRawStreamCapUnit_setPollCallback(AiqRawStreamCapUnit_t* pRawStrCapUnit,
 XCamReturn sync_raw_buf(AiqRawStreamCapUnit_t* pRawStrCapUnit, AiqV4l2Buffer_t** buf_s,
                         AiqV4l2Buffer_t** buf_m, AiqV4l2Buffer_t** buf_l);
 bool check_skip_frame(AiqRawStreamCapUnit_t* pRawStrCapUnit, int32_t buf_seq);
+
+void AiqRawStreamCapUnit_stop_vicap_stream_only(AiqRawStreamCapUnit_t* pRawStrCapUnit);
+void AiqRawStreamCapUnit_skip_frame_and_restart_vicap_stream(AiqRawStreamCapUnit_t* pRawStrCapUnit, int skip_frm_cnt);
+void AiqRawStreamCapUnit_setTxBufferCnt(AiqRawStreamCapUnit_t* pRawStrCapUnit, uint16_t buf_num);
+
+#if RKAIQ_HAVE_DUMPSYS
+int AiqRawStreamCapUnit_dump(void* dumper, st_string* result, int argc, void* argv[]);
+#endif
+
 #endif

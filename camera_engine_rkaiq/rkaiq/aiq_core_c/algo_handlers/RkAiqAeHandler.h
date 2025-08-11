@@ -16,6 +16,9 @@
 #ifndef _AIQ_ALGO_HANDLE_AE_C_H_
 #define _AIQ_ALGO_HANDLE_AE_C_H_
 
+#include "aiq_pool.h"
+#include "aiq_list.h"
+
 #include "aiq_algo_handler.h"
 #include "algos/ae/rk_aiq_uapi_ae_int_types_v2.h"
 
@@ -36,6 +39,7 @@ typedef struct AiqAlgoHandlerAe_s {
 #endif
     AiqAlgoHandler_t* mAmerge_handle;
     AiqAlgoHandler_t* mAdrc_handle;
+    AiqAlgoHandler_t* mAblc_handle;
     uint32_t mMeasSyncFlag;
     uint32_t mHistSyncFlag;
     bool useStatsApiCfg;
@@ -85,6 +89,12 @@ XCamReturn AiqAlgoHandlerAe_setLockAeForAf(AiqAlgoHandlerAe_t* pAeHdl, bool lock
 XCamReturn AiqAlgoHandlerAe_getAfdResForAE(AiqAlgoHandlerAe_t* pAeHdl, AfdPeakRes_t AfdRes);
 XCamReturn AiqAlgoHandlerAe_setExpWinAttr(AiqAlgoHandlerAe_t* pAeHdl, Uapi_ExpWin_t ExpWinAttr);
 XCamReturn AiqAlgoHandlerAe_getExpWinAttr(AiqAlgoHandlerAe_t* pAeHdl, Uapi_ExpWin_t* pExpWinAttr);
+XCamReturn AiqAlgoHandlerAe_setExpSubWinAttr(AiqAlgoHandlerAe_t* pAeHdl, Uapi_ExpSubWin_t ExpSubWinAttr);
+XCamReturn AiqAlgoHandlerAe_getExpSubWinAttr(AiqAlgoHandlerAe_t* pAeHdl, Uapi_ExpSubWin_t* pExpSubWinAttr);
+
+XCamReturn AiqAlgoHandlerAe_setFrameHdrAttr(AiqAlgoHandlerAe_t* pAeHdl, Uapi_FrameHdrAttr_t FrameHdrAttr);
+XCamReturn AiqAlgoHandlerAe_getFrameHdrAttr(AiqAlgoHandlerAe_t* pAeHdl, Uapi_FrameHdrAttr_t* pFrameHdrAttr);
+
 XCamReturn AiqAlgoHandlerAe_setAecStatsCfg(AiqAlgoHandlerAe_t* pAeHdl, Uapi_AecStatsCfg_t AecStatsCfg);
 XCamReturn AiqAlgoHandlerAe_getAecStatsCfg(AiqAlgoHandlerAe_t* pAeHdl, Uapi_AecStatsCfg_t* pAecStatsCfg);
 XCamReturn AiqAlgoHandlerAe_setAOVForAE(AiqAlgoHandlerAe_t* pAeHdl, bool en);

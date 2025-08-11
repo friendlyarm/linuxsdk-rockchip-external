@@ -309,15 +309,19 @@ typedef enum aeStats_srcEntity0_mode_e {    // Domain,        linear
     /*
     reg: (sw_rawae0_sel == 0) && (sw_bnr2ae0_sel == 0) && (sw_rawae_from_vicap == 0)
     */
-    aeStats_entity0_chl0Wb0Out_mode = 1,           //Raw12,         Y
+    aeStats_entity0_chl0DpcOut_mode = 1,           //Raw12,         Y
     /*
     reg: (sw_rawae0_sel == 1) && (sw_bnr2ae0_sel == 0) && (sw_rawae_from_vicap == 0)
     */
-    aeStats_entity0_chl1Wb0Out_mode = 2,           //Raw12,         Y
+    aeStats_entity0_chl1DpcOut_mode = 2,           //Raw12,         Y
     /*
     reg: (sw_bnr2ae0_sel == 1) && (sw_rawae_from_vicap == 0)
     */
-    aeStats_btnrOutLow_mode = 3                  //Raw20[9:0],    Y
+    aeStats_btnrOutLow_mode = 3,                  //Raw20[9:0],    Y
+    /*
+    reg: (sw_bnr2ae0_sel == 1) && (sw_aemeas_brn_be_sel == 1)
+    */
+    aeStats_btnrBeOutLow_mode = 4                 //Raw20[9:0],    Y
 } aeStats_srcEntity0_mode_t;
 
 typedef struct aeStats_entity0_s {
@@ -368,11 +372,11 @@ typedef enum aeStats_srcEntity3_mode_e {    // Domain,        linear
     /*
     reg: (sw_rawae_sel == 0) && (sw_bnr2aebig_sel == 0)
     */
-    aeStats_entity3_chl0Wb0Out_mode = 0,           //Raw12bit,         Y
+    aeStats_entity3_chl0DpcOut_mode = 0,           //Raw12bit,         Y
     /*
     reg: (sw_rawae_sel == 1) && (sw_bnr2aebig_sel == 0)
     */
-    aeStats_entity3_chl1Wb0Out_mode = 1,           //Raw12bit,         Y
+    aeStats_entity3_chl1DpcOut_mode = 1,           //Raw12bit,         Y
     /*
     reg: (sw_rawae_sel == 3)
     */
@@ -380,7 +384,11 @@ typedef enum aeStats_srcEntity3_mode_e {    // Domain,        linear
     /*
     reg: (sw_bnr2aebig_sel == 1)
     */
-    aeStats_btnrOutHigh_mode = 3                 //Raw20bit[10:19],    Y
+    aeStats_btnrOutHigh_mode = 3,                 //Raw20bit[10:19],    Y
+    /*
+    reg: (sw_bnr2ae0_sel == 1) && (sw_aemeas_brn_be_sel == 1)
+    */
+    aeStats_btnrBeOutHigh_mode = 4               //Raw20bit[10:19],    Y
 } aeStats_srcEntity3_mode_t;
 
 typedef struct aeStats_entity3_s {
@@ -427,8 +435,9 @@ typedef struct aeStats_entity3_s {
     aeStats_hist_t hist;
 } aeStats_entity3_t;
 
-typedef enum aeStats_srcCoWkEnt03_mode_e {    // Domain,           linear
-    aeStats_btnrOut_mode = 0,                         //Raw20[19:10],  Y
+typedef enum aeStats_srcCoWkEnt03_mode_e {
+    aeStats_btnrOut_mode = 0,
+    aeStats_btnrBeOut_mode = 1
 } aeStats_srcCoWkEnt03_mode_t;
 
 typedef struct aeStats_coWkEntity03_s {
@@ -574,7 +583,7 @@ typedef struct aeStats_mainWinStats_s {
         M4_ALIAS(hw_ae_meanBayerR_val),
         M4_TYPE(u16),
         M4_SIZE_EX(1,225),
-        M4_RANGE_EX(0,0xfff),
+        M4_RANGE_EX(0,1023),
         M4_DEFAULT(0),
         M4_HIDE_EX(0),
         M4_RO(1),
@@ -585,7 +594,7 @@ typedef struct aeStats_mainWinStats_s {
         M4_ALIAS(hw_ae_meanBayerGrGb_val),
         M4_TYPE(u16),
         M4_SIZE_EX(1,225),
-        M4_RANGE_EX(0,0xfff),
+        M4_RANGE_EX(0,4095),
         M4_DEFAULT(0),
         M4_HIDE_EX(0),
         M4_RO(1),
@@ -596,7 +605,7 @@ typedef struct aeStats_mainWinStats_s {
         M4_ALIAS(hw_ae_meanBayerB_val),
         M4_TYPE(u16),
         M4_SIZE_EX(1,225),
-        M4_RANGE_EX(0,0xfff),
+        M4_RANGE_EX(0,1023),
         M4_DEFAULT(0),
         M4_HIDE_EX(0),
         M4_RO(1),
@@ -610,7 +619,7 @@ typedef struct aeStats_subWinStats_s {
         M4_ALIAS(hw_ae_meanBayerR_val),
         M4_TYPE(u32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,0xfff),
+        M4_RANGE_EX(0,536870911),
         M4_DEFAULT(0),
         M4_HIDE_EX(0),
         M4_RO(1),
@@ -621,7 +630,7 @@ typedef struct aeStats_subWinStats_s {
         M4_ALIAS(hw_ae_sumBayerGrGb_val),
         M4_TYPE(u32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,0xfff),
+        M4_RANGE_EX(0,4294967295),
         M4_DEFAULT(0),
         M4_HIDE_EX(0),
         M4_RO(1),
@@ -632,7 +641,7 @@ typedef struct aeStats_subWinStats_s {
         M4_ALIAS(hw_ae_sumBayerB_val),
         M4_TYPE(u32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,0xfff),
+        M4_RANGE_EX(0,536870911),
         M4_DEFAULT(0),
         M4_HIDE_EX(0),
         M4_RO(1),
@@ -646,7 +655,7 @@ typedef struct aeStats_histStats_s {
         M4_ALIAS(hw_ae_histBin_val),
         M4_TYPE(u32),
         M4_SIZE_EX(1,256),
-        M4_RANGE_EX(0,0xffffffff),
+        M4_RANGE_EX(0,268435455),
         M4_DEFAULT(0),
         M4_HIDE_EX(0),
         M4_RO(1),

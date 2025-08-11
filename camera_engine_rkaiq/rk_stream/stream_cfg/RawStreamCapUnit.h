@@ -18,6 +18,7 @@
 #define _RAW_STREAM_CAP_UNIT_H_
 #include <map>
 #include <v4l2_device.h>
+#include "rk_aiq_offline_raw.h"
 #include "xcam_thread.h"
 #include "smartptr.h"
 #include "safe_list.h"
@@ -26,7 +27,6 @@
 #include "xcam_log.h"
 #include "Stream.h"
 #include "RawStreamProcUnit.h"
-#include "rk_aiq_offline_raw.h"
 #include "rkrawstream_user_api.h"
 #include "MediaInfo.h"
 

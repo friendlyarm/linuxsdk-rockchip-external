@@ -94,12 +94,25 @@ static void SharpKernelCoeffsNormalization(int *kernel_coeffs, int radius, int c
     kernel_coeffs[0] = kernel_coeffs[0] + offset;
 }
 
-void noiseCurveInterp(uint16_t *noise_curve_stats, int *noise_curve_ext)
+void noiseCurveInterp(uint16_t *noise_curve_stats, int *noise_curve_ext, uint16_t* last_noise_curve)
 {
     int32_t noise_curve_bak[17] = { 0 };
+    int zero_sum = 0;
     for(int k = 0; k < 17; k++) {
         noise_curve_bak[k] = noise_curve_stats[k];
+        if(noise_curve_stats[k] == 0) {
+            zero_sum++;
+        }
     }
+
+    if(zero_sum == 17) {
+        LOGD_ASHARP("warning: sharp noise stats are all zero! use last noise curve instead.\n");
+        for (int i = 0; i < 17; i++) {
+            noise_curve_ext[i] = last_noise_curve[i];
+        }
+        return;
+    }
+
     for (int cur = 0; cur < 17; cur++)
     {
         if (noise_curve_bak[cur] == 0)
@@ -151,10 +164,12 @@ void noiseCurveInterp(uint16_t *noise_curve_stats, int *noise_curve_ext)
                 }
                 int wgt_left  = right_idx - cur;
                 int wgt_right = cur - left_idx;
-                int val_interp = ROUND_F((wgt_left * noise_curve_bak[left_idx] + wgt_right * noise_curve_bak[right_idx]) / (right_idx - left_idx));
+                int val_interp;
                 if (right_idx == 0)
                 {
                     val_interp = noise_curve_bak[left_idx];
+                } else {
+                    val_interp = ROUND_F((wgt_left * noise_curve_bak[left_idx] + wgt_right * noise_curve_bak[right_idx]) / (right_idx - left_idx));
                 }
                 noise_curve_bak[cur] = val_interp;
             }
@@ -173,6 +188,27 @@ void noiseCurveInterp(uint16_t *noise_curve_stats, int *noise_curve_ext)
         */
         noise_curve_ext[i] = noise_curve_modify;
     }
+
+#if 0
+    printf("sharp stats:%u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\n",
+           noise_curve_ext[0],
+           noise_curve_ext[1],
+           noise_curve_ext[2],
+           noise_curve_ext[3],
+           noise_curve_ext[4],
+           noise_curve_ext[5],
+           noise_curve_ext[6],
+           noise_curve_ext[7],
+           noise_curve_ext[8],
+           noise_curve_ext[9],
+           noise_curve_ext[10],
+           noise_curve_ext[11],
+           noise_curve_ext[12],
+           noise_curve_ext[13],
+           noise_curve_ext[14],
+           noise_curve_ext[15],
+           noise_curve_ext[16]);
+#endif
 }
 
 void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_info_t *cvtinfo, btnr_cvt_info_t* pBtnrInfo)
@@ -224,7 +260,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
     } else {
         pCfg->radius_step_mode = 1;
     }
-    if (pTexDyn->noiseEst.hw_texEstT_nsEstThd_mode == texEst_baseNoiseStats_mode) {
+    if (pTexDyn->noiseEst.hw_texEstT_nsEstTexThd_mode == texEst_baseNoiseStats_mode) {
         pCfg->noise_curve_mode = 0;
     } else {
         pCfg->noise_curve_mode = 1;
@@ -245,17 +281,17 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
         case shp_edgeShpStrg_mode:
             pCfg->debug_mode = 3;
             break;
-        case shp_detailLocStrgContrast_mode:
+        case shp_contrastDetailPosStrg_mode:
             pCfg->debug_mode = 4;
             break;
-        case shp_detailClipLimit_mode:
+        case shp_detailPosLimit_mode:
             pCfg->debug_mode = 5;
             break;
         }
     } else {
         pCfg->debug_mode = 0;
     }
-    if (psta->lowPowerCfg.detailShpLP.texRegionShpStrgLP.hw_shpCfg_lp_en) {
+    if (psta->lowPowerCfg.detailShpLP.hw_shpCfg_lp_en) {
         pCfg->detail_lp_en = 1;
     } else {
         pCfg->detail_lp_en = 0;
@@ -309,7 +345,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
             }
         } else {
             for (i = 0; i < 6; i++)
-                coeff[i] = pdyn->eHfDetailShp.detailExtra_hpf.hw_shpT_filtSpatial_wgt[i] * (1 << 7);
+                coeff[i] = ROUND_F(pdyn->eHfDetailShp.detailExtra_hpf.hw_shpT_filtSpatial_wgt[i] * (1 << 7));
         }
 
         for (int k = 0; k < 6; k++) {
@@ -394,7 +430,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
         float constant_coeff                    = sqrt(log2(exp(1)));
         uint16_t *vsigma = pdyn->detailShp.sgmEnv.sw_shpC_luma2Sigma_curve.val;
         float preBifilt_scale = pdyn->detailShp.detailExtra_preBifilt.sw_shpT_rgeSgm_scale;
-        uint8_t preBifilt_offset = pdyn->detailShp.detailExtra_preBifilt.sw_shpT_rgeSgm_offset;
+        uint16_t preBifilt_offset = pdyn->detailShp.detailExtra_preBifilt.sw_shpT_rgeSgm_offset;
         float preBifilt_slope = pdyn->detailShp.detailExtra_preBifilt.hw_shpT_rgeWgt_slope;
         int preBifilt_vsigma_inv[8];
         for(int i = 0; i < 8; i++) {
@@ -422,7 +458,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
             SharpCreateKernelCoeffs(1, 1, rsigma, coeff, 6, 2);
         } else {
             for (i = 0; i < 3; i++)
-                coeff[i] = pdyn->detailShp.detailExtra_preBifilt.hw_shpT_filtSpatial_wgt[i] * (1 << 6);
+                coeff[i] = ROUND_F(pdyn->detailShp.detailExtra_preBifilt.hw_shpT_filtSpatial_wgt[i] * (1 << 6));
         }
 
         SharpKernelCoeffsNormalization(coeff, 1, (1 << 6), 2);
@@ -441,7 +477,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
             SharpCreateKernelCoeffs(radius, 5 / 2, rsigma, coeff, 7, 2);
         } else {
             for (i = 0; i < 6; i++)
-                coeff[i] = pdyn->detailShp.hiDetailExtra_lpf.hw_shpT_filtSpatial_wgt[i] * (1 << 7);
+                coeff[i] = ROUND_F(pdyn->detailShp.hiDetailExtra_lpf.hw_shpT_filtSpatial_wgt[i] * (1 << 7));
         }
 
         for (int k = 0; k < 6; k++) {
@@ -468,7 +504,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
             SharpCreateKernelCoeffs(radius, 5 / 2, rsigma, coeff, 7, 2);
         } else {
             for (i = 0; i < 6; i++)
-                coeff[i] = pdyn->detailShp.midDetailExtra_lpf.hw_shpT_filtSpatial_wgt[i] * (1 << 7);
+                coeff[i] = ROUND_F(pdyn->detailShp.midDetailExtra_lpf.hw_shpT_filtSpatial_wgt[i] * (1 << 7));
         }
 
         for (int k = 0; k < 6; k++) {
@@ -501,11 +537,11 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
 
         // REG: GAIN_ADJ
         motionStrg1 = &pdyn->edgeShp.locShpStrg_motionStrg1;
-        minLimit = motionStrg1->hw_shpT_motRegionShp_strg;
-        maxLimit = motionStrg1->hw_shpT_statRegionShp_strg;
+        minLimit = MIN(motionStrg1->hw_shpT_motRegionShp_strg, motionStrg1->hw_shpT_statRegionShp_strg);
+        maxLimit = MAX(motionStrg1->hw_shpT_motRegionShp_strg, motionStrg1->hw_shpT_statRegionShp_strg);
         staticRegion_thred = motionStrg1->sw_shpT_locSgmStrgStat_maxThred;
         motionRegion_thred = motionStrg1->sw_shpT_locSgmStrgMot_minThred;
-        if (motionStrg1->sw_shpT_motionStrg_mode == shp_baseStatThd_posCorr_mode) {
+        if (motionStrg1->hw_shpT_statRegionShp_strg < motionStrg1->hw_shpT_motRegionShp_strg) {
             slope = (maxLimit - minLimit) / (motionRegion_thred - staticRegion_thred);
             x_offset = staticRegion_thred;
         } else {
@@ -522,11 +558,11 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
         pCfg->edge_gain_offset = CLIP(tmp, 0, 0x3ff);
 
         motionStrg1 = &pdyn->detailShp.locShpStrg_motionStrg1;
-        minLimit = motionStrg1->hw_shpT_motRegionShp_strg;
-        maxLimit = motionStrg1->hw_shpT_statRegionShp_strg;
+        minLimit = MIN(motionStrg1->hw_shpT_motRegionShp_strg, motionStrg1->hw_shpT_statRegionShp_strg);
+        maxLimit = MAX(motionStrg1->hw_shpT_motRegionShp_strg, motionStrg1->hw_shpT_statRegionShp_strg);
         staticRegion_thred = motionStrg1->sw_shpT_locSgmStrgStat_maxThred;
         motionRegion_thred = motionStrg1->sw_shpT_locSgmStrgMot_minThred;
-        if (motionStrg1->sw_shpT_motionStrg_mode == shp_baseStatThd_posCorr_mode) {
+        if (motionStrg1->hw_shpT_statRegionShp_strg < motionStrg1->hw_shpT_motRegionShp_strg) {
             slope = (maxLimit - minLimit) / (motionRegion_thred - staticRegion_thred);
             x_offset = staticRegion_thred;
         } else {
@@ -543,11 +579,11 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
         pCfg->detail_gain_offset = CLIP(tmp, 0, 0x3ff);
 
         motionStrg1 = &pdyn->dHfDetailShp.locShpStrg_motionStrg1;
-        minLimit = motionStrg1->hw_shpT_motRegionShp_strg;
-        maxLimit = motionStrg1->hw_shpT_statRegionShp_strg;
+        minLimit = MIN(motionStrg1->hw_shpT_motRegionShp_strg, motionStrg1->hw_shpT_statRegionShp_strg);
+        maxLimit = MAX(motionStrg1->hw_shpT_motRegionShp_strg, motionStrg1->hw_shpT_statRegionShp_strg);
         staticRegion_thred = motionStrg1->sw_shpT_locSgmStrgStat_maxThred;
         motionRegion_thred = motionStrg1->sw_shpT_locSgmStrgMot_minThred;
-        if (motionStrg1->sw_shpT_motionStrg_mode == shp_baseStatThd_posCorr_mode) {
+        if (motionStrg1->hw_shpT_statRegionShp_strg < motionStrg1->hw_shpT_motRegionShp_strg) {
             slope = (maxLimit - minLimit) / (motionRegion_thred - staticRegion_thred);
             x_offset = staticRegion_thred;
         } else {
@@ -592,7 +628,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
             SharpCreateKernelCoeffs(radius, 7 / 2, rsigma, coeff, 7, 2);
         } else {
             for (i = 0; i < 10; i++)
-                coeff[i] = pdyn->edgeShp.edgeExtra.hw_shpT_filtSpatial_wgt[i] * (1 << 7);
+                coeff[i] = ROUND_F(pdyn->edgeShp.edgeExtra.hw_shpT_filtSpatial_wgt[i] * (1 << 7));
         }
 
         for (int k = 0; k < 10; k++) {
@@ -620,10 +656,14 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
         int edgeWgt_val[17];
         if (pdyn->edgeShp.locShpStrg_edge.sw_shpT_edgeStrgCurve_mode == shp_cfgCurveDirect_mode) {
             for (i = 0; i < 17; i++) {
-                edgeWgt_val[i] = pdyn->edgeShp.locShpStrg_edge.hw_shpT_edgeStrg_val[i];
+                edgeWgt_val[i] = pdyn->edgeShp.locShpStrg_edge.hw_shpT_edge2ShpStrg_val[i];
             }
         } else {
-            // TODO:
+            float power                         = pdyn->edgeShp.locShpStrg_edge.edgeStrgCurveCtrl.sw_shpT_curvePower_val;
+            float edgeWgt_minLimit              = pdyn->edgeShp.locShpStrg_edge.edgeStrgCurveCtrl.sw_shpT_edgeStrg_minLimit;
+            for (i = 0; i < 17; i++) {
+                edgeWgt_val[i] = MIN(1023, edgeWgt_minLimit + ROUND_F(1024 * (1 - pow(1 - pow(i * 0.0625f, power), power))));
+            }
         }
         // REG: EDGE_WGT_VAL0
         pCfg->edge_wgt_val[0] = CLIP(edgeWgt_val[0], 0, 0x3ff);
@@ -674,15 +714,11 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
     }
 
     {
-        int center_h = psta->locShpStrg_radiDist.hw_shpCfg_opticCenter_x;
-        int center_v = psta->locShpStrg_radiDist.hw_shpCfg_opticCenter_y;
-        if (center_h == 0)
-            center_h = cols / 2;
-        if (center_v == 0)
-            center_v = rows / 2;
+        int center_x = convert_coordinate(psta->locShpStrg_radiDist.hw_shpCfg_opticCenter_x, cols);
+        int center_y = convert_coordinate(psta->locShpStrg_radiDist.hw_shpCfg_opticCenter_y, rows);
         // REG: CENTER
-        pCfg->center_x = CLIP(center_h, 0, 0x1fff);
-        pCfg->center_y = CLIP(center_v, 0, 0x1fff);
+        pCfg->center_x = CLIP(center_x, 0, 0x1fff);
+        pCfg->center_y = CLIP(center_y, 0, 0x1fff);
     }
 
     {
@@ -692,6 +728,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
         int edge_minLimit = pdyn->locShpStrg.texRegion_clsfBaseTex.hw_shpT_edgeRegion_minThred;
 
         flat_maxLimit = MAX(flat_maxLimit, 1);
+        flat_maxLimit = MIN(flat_maxLimit, 0x3fe);
         edge_minLimit = MAX(edge_minLimit, flat_maxLimit + 1);
         edge_minLimit = MIN(edge_minLimit, 0x3ff);
         tex_wgt_table_x[0] = 0;
@@ -965,37 +1002,52 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
 
     // REG: LOSSTEXINHINR_STRG
     tmp = (pdyn->dHfDetailShp.glbShpStrg.hw_shpT_dHiDetail_strg) * (1 << 2);
-    pCfg->loss_tex_in_hinr_strg = CLIP(tmp, 0, 0x7f);
+    pCfg->loss_tex_in_hinr_strg = CLIP(tmp, 0, 0x3f);
 
     // REG: NOISE_CURVE8
     tmp = (pTexDyn->noiseEst.hw_texEstT_nsStatsCntThd_ratio) * (1 << 10);
     pCfg->noise_count_thred_ratio = CLIP(tmp, 0, 0xff);
-    tmp = (pTexDyn->noiseEst.hw_texEstT_nsEstThd_scale) * (1 << 4);
+    tmp = (pTexDyn->noiseEst.hw_texEstT_nsEstTexThd_scale) * (1 << 4);
     pCfg->noise_clip_scale = CLIP(tmp, 0, 0xff);
     // REG: NOISE_CLIP
-    tmp = (pTexDyn->noiseEst.hw_texEstT_nsEstThd_minLimit) * (1 << 0);
+    tmp = (pTexDyn->noiseEst.hw_texEstT_nsEstTexThd_minLimit) * (1 << 0);
     pCfg->noise_clip_min_limit = CLIP(tmp, 0, 0x7ff);
-    tmp = (pTexDyn->noiseEst.hw_texEstT_nsEstThd_maxLimit) * (1 << 0);
+    tmp = (pTexDyn->noiseEst.hw_texEstT_nsEstTexThd_maxLimit) * (1 << 0);
     pCfg->noise_clip_max_limit = CLIP(tmp, 0, 0x7ff);
 
-    if (pTexDyn->noiseEst.hw_texEstT_nsEstThd_mode == texEst_baseNoiseStats_mode) {
+    if (!cvtinfo->isFirstFrame) {
         sharp_stats_t *sharp_stats = &pBtnrInfo->mSharpStats[0];
-        if (!cvtinfo->isFirstFrame) {
-            sharp_stats = sharp_get_stats(pBtnrInfo, cvtinfo->frameId);
-            if (cvtinfo->frameId - BAYERTNR_STATS_DELAY != sharp_stats->id) {
-                LOGE_ANR("Sharp stats miss match! (%d %d)", cvtinfo->frameId, sharp_stats->id);
-            }
+        sharp_stats = sharp_get_stats(pBtnrInfo, cvtinfo->frameId);
+        if (cvtinfo->frameId - pBtnrInfo->stats_delay_cnt != sharp_stats->id) {
+            pBtnrInfo->sharp_stats_miss_cnt ++;
+            if ((pBtnrInfo->sharp_stats_miss_cnt > 10) && (pBtnrInfo->sharp_stats_miss_cnt % 30 == 0)) {
+                LOGE_ANR("Sharp stats miss match! frameId: %d stats [%d %d %d]", cvtinfo->frameId,
+                         pBtnrInfo->mSharpStats[0].id, pBtnrInfo->mSharpStats[1].id, pBtnrInfo->mSharpStats[2].id);
+                for (i = 0; i < 17; i++) {
+                    noise_curve_ext[i] = pBtnrInfo->sharp_noise_curve_pre[i];
+                }
 
-            noiseCurveInterp(sharp_stats->noise_curve, noise_curve_ext);
+            }
+        } else {
+            noiseCurveInterp(sharp_stats->noise_curve, noise_curve_ext, pBtnrInfo->sharp_noise_curve_pre);
         }
-    } else {
+    }
+    for (i = 0; i < 17; i++) {
+        pBtnrInfo->sharp_noise_curve_pre[i] = noise_curve_ext[i];
+    }
+
+    // cal noise curve for gic
+    if (pBtnrInfo->gic_noise_auto_mode && !cvtinfo->isFirstFrame) {
+        struct isp33_gic_cfg* gic_cfg = &isp_params->isp_cfg->others.gic_cfg;
         for (i = 0; i < 17; i++) {
-            noise_curve_ext[i] = pTexDyn->noiseEst.hw_texEstT_nsEstManual_thred[i];
+            gic_cfg->bfflt_vsigma_y[i] = CLIP(noise_curve_ext[i], 0, 0x3ff);
         }
     }
 
-    for (i = 0; i < 17; i++) {
-        pBtnrInfo->sharp_noise_curve_pre[i] = noise_curve_ext[i];
+    if (pTexDyn->noiseEst.hw_texEstT_nsEstTexThd_mode != texEst_baseNoiseStats_mode) {
+        for (i = 0; i < 17; i++) {
+            noise_curve_ext[i] = pTexDyn->noiseEst.hw_texEstT_nsEstTexManual_thred[i];
+        }
     }
 
     // REG: NOISE_CURVE0

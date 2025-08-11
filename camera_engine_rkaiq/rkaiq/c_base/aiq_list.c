@@ -368,6 +368,34 @@ int aiqList_size(AiqList_t* list) {
     return size;
 }
 
+int aiqList_num(AiqList_t* list) {
+    int num = 0;
+
+    XCAM_ASSERT(list);
+
+    aiqMutex_lock(&list->_mutex);
+
+    num = list->_item_nums;
+
+    aiqMutex_unlock(&list->_mutex);
+
+    return num;
+}
+
+bool aiqList_empty(AiqList_t* list) {
+    bool empty = true;
+
+    XCAM_ASSERT(list);
+
+    aiqMutex_lock(&list->_mutex);
+
+    empty = !(list->_used_list);
+
+    aiqMutex_unlock(&list->_mutex);
+
+    return empty;
+}
+
 void aiqList_dump(AiqList_t* list) {
     AiqListItem_t* pCurItem;
     int i = 0;

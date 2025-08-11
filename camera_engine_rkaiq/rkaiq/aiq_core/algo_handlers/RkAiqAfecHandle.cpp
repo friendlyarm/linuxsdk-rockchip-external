@@ -46,8 +46,14 @@ XCamReturn RkAiqAfecHandleInt::prepare() {
     /* memcpy(&afec_config_int->afec_calib_cfg, &shared->calib->afec, sizeof(CalibDb_FEC_t)); */
     afec_config_int->resource_path = sharedCom->resourcePath;
     afec_config_int->mem_ops_ptr   = mAiqCore->mShareMemOps;
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des      = (RkAiqAlgoDescription*)mDes;
     ret                            = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "afec algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

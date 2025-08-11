@@ -41,8 +41,10 @@ static XCamReturn _handlerRgbir_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "rgbir handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "rgbir algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

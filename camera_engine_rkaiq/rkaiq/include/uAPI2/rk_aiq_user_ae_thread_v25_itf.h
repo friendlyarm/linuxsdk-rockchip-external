@@ -36,6 +36,7 @@ typedef struct rk_aiq_ae_algo_config_s {
     int          rawWidth;
     int          rawHeight;
 
+    int          camId; //not for group mode
     int          camIdArray[6];
     int          camIdArrayLen;
 

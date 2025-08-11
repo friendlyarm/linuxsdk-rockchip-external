@@ -307,7 +307,7 @@ Aynr_result_V22_t ynr_fix_transfer_V22(RK_YNR_Params_V22_Select_t* pSelect, RK_Y
     tmp = (int)(pSelect->low_weight *  fStrength * (1 << 7));
     pFix->low_weight = CLIP(tmp, 0, 0x80);
     tmp = (int)(pSelect->low_center_weight / fStrength * (1 << 10));
-    pFix->low_center_weight = CLIP(tmp, 0, 0x400);
+    pFix->low_center_weight = CLIP(tmp, 1, 0x400);
 
     // YNR_2700_LOWNR_CTRL4 (0x002c)
     tmp = (int)(0x0000);
@@ -444,7 +444,7 @@ Aynr_result_V22_t ynr_fix_transfer_V22(RK_YNR_Params_V22_Select_t* pSelect, RK_Y
 
     //YNR_NLM_WEIGHT (0x00f8)
     tmp = (int)(pSelect->hi_center_weight / fStrength * (1 << 10));
-    pFix->nlm_center_weight = CLIP(tmp, 0, 0x3ffff);
+    pFix->nlm_center_weight = CLIP(tmp, 1, 0x3ffff);
     tmp = (int)(pSelect->hi_weight_offset * (1 << 10));
     pFix->nlm_weight_offset = CLIP(tmp, 0, 0x3ff);
 

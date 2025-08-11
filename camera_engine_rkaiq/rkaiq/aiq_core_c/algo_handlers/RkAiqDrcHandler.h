@@ -21,6 +21,7 @@
 typedef struct AiqDrcHandler_s {
     AiqAlgoHandler_t _base;
     RkAiqAlgoProcResAeShared_t mAeProcRes;
+    bool damping;
 } AiqDrcHandler_t;
 
 AiqAlgoHandler_t* AiqAlgoHandlerDrc_constructor(RkAiqAlgoDesComm* des, AiqCore_t* aiqCore);
@@ -29,6 +30,9 @@ XCamReturn AiqDrcHandler_setAttrib(AiqDrcHandler_t* pHdlDrc, drc_api_attrib_t* a
 XCamReturn AiqDrcHandler_getAttrib(AiqDrcHandler_t* pHdlDrc, drc_api_attrib_t* attr);
 #endif
 XCamReturn AiqDrcHandler_queryStatus(AiqDrcHandler_t* pHdlDrc, drc_status_t* status);
+XCamReturn AiqDrcHandler_setStrength(AiqDrcHandler_t* pHdlDrc, adrc_strength_t* ctrl);
+XCamReturn AiqDrcHandler_getStrength(AiqDrcHandler_t* pHdlDrc, adrc_strength_t* ctrl);
+XCamReturn AiqDrcHandler_queryTransStatus(AiqDrcHandler_t* pHdlDrc, trans_status_t* status);
 
 #define AiqDrcHandler_setAeProcRes(pHdlDrc, pAeProcRes) \
     (pHdlDrc)->mAeProcRes = *pAeProcRes

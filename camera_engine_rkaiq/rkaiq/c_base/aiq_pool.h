@@ -57,6 +57,8 @@ AiqPool_t* aiqPool_init(AiqPoolConfig_t* config);
 void aiqPool_deinit(AiqPool_t* pool);
 AiqPoolItem_t* aiqPool_getFree(AiqPool_t* pool);
 int aiqPool_freeNums(AiqPool_t* pool);
+int aiqPool_getItemNums(AiqPool_t* pool);
+int aiqPool_getItemSize(AiqPool_t* pool);
 void aiqPool_reset(AiqPool_t* pool);
 void aiqPool_dump(AiqPool_t* pool);
 

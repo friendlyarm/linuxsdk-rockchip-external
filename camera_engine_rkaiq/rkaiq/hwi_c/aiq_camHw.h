@@ -19,6 +19,7 @@
 #define _AIQ_CAMHW_C_H_
 
 #include "rk_aiq_types.h"
+#include "common/rk-aiisp-config.h"
 
 #define ISP20HW_SUBM (0x1)
 
@@ -69,7 +70,7 @@ typedef struct rk_aiq_tx_info_s {
 #define SENSOR_ATTACHED_FLASH_MAX_NUM 2
 #define MAX_CAM_NUM                   8
 
-#define MAX_ISP_LINKED_VICAP_CNT 4
+#define MAX_ISP_LINKED_VICAP_CNT 5
 
 #define ISP_TX_BUF_NUM 4
 // xuhf : temp modify for capturing raw
@@ -77,6 +78,7 @@ typedef struct rk_aiq_tx_info_s {
 #define VIPCAP_TX_BUF_NUM_1608 6  // For mount 3 sensor, is mount 4 sensor, is 7
 
 typedef struct {
+    char driver[16];
     int model_idx;
     int logic_id;
     int phy_id;  // physical isp id
@@ -91,6 +93,7 @@ typedef struct {
     char mpfbc_dev_path[DEV_PATH_LEN];
     char main_path[DEV_PATH_LEN];
     char self_path[DEV_PATH_LEN];
+    char ldc_path[DEV_PATH_LEN];
     char rawwr0_path[DEV_PATH_LEN];
     char rawwr1_path[DEV_PATH_LEN];
     char rawwr2_path[DEV_PATH_LEN];
@@ -128,6 +131,18 @@ typedef struct {
     char pp_fec_params_path[DEV_PATH_LEN];
     char pp_dev_path[DEV_PATH_LEN];
 } rk_aiq_ispp_t;
+
+typedef struct {
+    char driver[16];
+    int model_idx;
+    int logic_id;
+    int phy_id;
+    bool valid;
+    char media_dev_path[DEV_PATH_LEN];
+    char video_path[DEV_PATH_LEN];
+    char model_str[DEV_PATH_LEN];
+    char subdev_path[DEV_PATH_LEN];
+} rk_aiq_aiisp_info_t;
 
 typedef struct {
     int isp_ver;
@@ -183,6 +198,11 @@ typedef struct {
 } rk_aiq_cif_hw_info_t;
 
 typedef struct {
+    rk_aiq_aiisp_info_t aiisp_info[MAX_CAM_NUM];
+    rk_aiq_hw_ver_t hw_ver_info;
+} rk_aiq_aiisp_hw_info_t;
+
+typedef struct {
     char sns_name[32];
     PdafSensorType_t pdaf_type;
     bool pdaf_support;
@@ -224,6 +244,7 @@ typedef struct rk_sensor_full_info_s {
     rk_aiq_isp_t* isp_info;
     rk_aiq_cif_info_t* cif_info;
     rk_aiq_ispp_t* ispp_info;
+    rk_aiq_aiisp_info_t* aiisp_info;
     bool linked_to_isp;
     bool linked_to_1608;
     bool linked_to_serdes;
@@ -260,11 +281,17 @@ typedef struct AiqHwStatsEvt_s {
 typedef struct AiqHwAiispEvt_s {
     AiqHwEvt_t _base;
     int32_t _height;
-    rkisp_bay3dbuf_info_t bay3dbuf;
-    void* iir_address;
-    void* gain_address;
-    void* aiisp_address;
+	int iir_index;
+	int gain_index;
+	int aiisp_index;
 } AiqHwAiispEvt_t;
+
+typedef struct AiqHwAinnEvt_s {
+    AiqHwEvt_t _base;
+    int32_t _height;
+    uint32_t _event_id;
+    union rkaiisp_queue_buf queue_buf;
+} AiqHwAinnEvt_t;
 
 typedef struct AiqHwResListener_s {
     void* _pCtx;

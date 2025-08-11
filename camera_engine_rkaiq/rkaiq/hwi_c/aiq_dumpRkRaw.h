@@ -41,6 +41,9 @@
 #elif defined(ISP_HW_V33)
 #define ISP_REGS_BASE 0xf9010000
 #define ISP_REGS_SIZE 0x7000
+#elif defined(ISP_HW_V35)
+#define ISP_REGS_BASE 0xf9010000
+#define ISP_REGS_SIZE 0x7000
 #else
 #define ISP_REGS_BASE 0x0
 #define ISP_REGS_SIZE 0x0

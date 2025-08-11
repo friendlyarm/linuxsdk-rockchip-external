@@ -294,6 +294,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAyuvmeV1 = {
     .pre_process = NULL,
     .processing = groupAyuvmeV1Processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

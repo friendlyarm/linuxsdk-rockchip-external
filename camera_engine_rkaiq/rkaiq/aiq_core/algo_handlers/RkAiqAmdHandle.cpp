@@ -39,8 +39,14 @@ XCamReturn RkAiqAmdHandleInt::prepare() {
     amd_config_int->spAlignedW = sharedCom->spAlignedWidth;
     amd_config_int->spAlignedH = sharedCom->spAlignedHeight;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "amd algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

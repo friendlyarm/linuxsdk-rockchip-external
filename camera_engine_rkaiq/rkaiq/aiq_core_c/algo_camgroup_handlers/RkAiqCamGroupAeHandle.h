@@ -57,6 +57,8 @@ XCamReturn AiqAlgoCamGroupAeHandler_getRkAeStats(AiqAlgoCamGroupAeHandler_t* pAe
 
 XCamReturn AiqAlgoCamGroupAeHandler_setAecStatsCfg(AiqAlgoCamGroupAeHandler_t* pAeHdl, Uapi_AecStatsCfg_t AecStatsCfg);
 XCamReturn AiqAlgoCamGroupAeHandler_getAecStatsCfg(AiqAlgoCamGroupAeHandler_t* pAeHdl, Uapi_AecStatsCfg_t* pAecStatsCfg);
+XCamReturn AiqAlgoCamGroupAeHandler_setFrameHdrAttr(AiqAlgoCamGroupAeHandler_t* pAeHdl, Uapi_FrameHdrAttr_t FrameHdrAttr);
+XCamReturn AiqAlgoCamGroupAeHandler_getFrameHdrAttr(AiqAlgoCamGroupAeHandler_t* pAeHdl, Uapi_FrameHdrAttr_t* pFrameHdrAttr);
 
 RKAIQ_END_DECLARE
 

@@ -125,7 +125,7 @@ bool CamHwIsp39_processTb(AiqCamHwBase_t* pCamHw, void* params) {
                     *(rk_aiq_isp_awb_meas_cfg_v32_t*)(pCamHw->_mIspParamsCvt->mAwbParams->_data);
             }
             if (!pCamHw->_first_awb_cfg) {
-                pCamHw->_skipped_params = aiq_mallocz(sizeof(struct isp39_rawawb_meas_cfg));
+                pCamHw->_first_awb_cfg = aiq_mallocz(sizeof(struct isp39_rawawb_meas_cfg));
                 *((struct isp39_rawawb_meas_cfg*)pCamHw->_first_awb_cfg) = isp_params->meas.rawawb;
             }
             if (!pCamHw->_skipped_params) {
@@ -229,9 +229,6 @@ bool CamHwIsp39_processTb(AiqCamHwBase_t* pCamHw, void* params) {
 XCamReturn AiqCamHwIsp39_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
     XCamReturn ret                    = AiqCamHwBase_init(pCamHw, sns_ent_name);
     pCamHw->mVicapIspPhyLinkSupported = true;
-    if (g_mIsMultiIspMode) {
-        pCamHw->mNoReadBack = false;
-    }
 
     pCamHw->updateEffParams = CamHwIsp39_updateEffParams;
     pCamHw->processTb       = CamHwIsp39_processTb;

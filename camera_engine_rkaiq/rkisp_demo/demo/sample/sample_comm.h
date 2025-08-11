@@ -24,6 +24,8 @@
 #include "uAPI2/rk_aiq_user_api2_isp33.h"
 #elif ISP_HW_V39
 #include "uAPI2/rk_aiq_user_api2_isp39.h"
+#elif ISP_HW_V35
+#include "uAPI2/rk_aiq_user_api2_isp35.h"
 #endif
 
 #define CLEAR() printf("\x1b[2J\x1b[H");
@@ -54,7 +56,9 @@ enum RK_ISP_HW_MODULE_e {
     RK_ISP_CSM,
     RK_ISP_ABLC,
     RK_ISP_AGIC,
+#ifndef USE_NEWSTRUCT
     RK_ISP_ALDCH,
+#endif
     RK_ISP_ADEBAYER,
     RK_ISP_ACP,
     RK_ISP_AIE,
@@ -62,7 +66,9 @@ enum RK_ISP_HW_MODULE_e {
     RK_ISP_CAC,
     RK_ISP_AGAIN,
     RK_ISP_ACCM_V2,
+#ifndef USE_NEWSTRUCT
     RK_ISP_ALDCH_V21,
+#endif
     RK_SMARTIR,
     RK_ISP_ALDC,
     RK_AINR,
@@ -78,11 +84,18 @@ typedef struct __uapi_case {
     uapi_case_func func;
 } uapi_case_t;
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
 int uapi_usage_show(uapi_case_t* uapi_list);
 
 int uapi_list_count(uapi_case_t* uapi_list);
 
 int uapi_process_loop(const rk_aiq_sys_ctx_t* ctx, uapi_case_t* uapi_list);
+#ifdef  __cplusplus
+}
+#endif
 
 #endif
 

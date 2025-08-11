@@ -94,6 +94,7 @@ typedef enum {
     LDM = 0x10,
     CLM = 0x20,
     ECM = 0x40,
+    FHDR = 0x80,
 } AecLogLevel_t;
 /*****************************************************************************/
 /**
@@ -114,6 +115,8 @@ typedef enum {
     UPDATE_EXPHWATTR = 0x200, //including aec_meas/hist_meas
     UPDATE_RESOLUTION = 0x400,
     UPDATE_AECSTATSCFG = 0x800, //including ae stats channel select, stats update flag
+    UPDATE_EXPSUBWINATTR = 0x1000,
+    UPDATE_FRAMEHDRATTR = 0x2000,
     UPDATE_CALIB = 0xffff,//update iq file
 } AecUpdateAttrMode_t;
 
@@ -406,16 +409,18 @@ typedef enum AecHwVersion_e
        RawAE2 = RawAE big3, addr=0x4700 <=> RawHIST2
        RawAE3 = RawAE big1, addr=0x4400 <=> RawHIST3, extra aebig
 
-    | ISP HW   | RawAE0 | RawAE1 | RawAE2 | RawAE3 | YUVAE | HDR FRAME | NOTES                       | E.G.          |
-    |----------|--------|--------|--------|--------|-------|-----------|-----------------------------|---------------|
-    | V20      | lite   | big    | big    | big    | Y     | 3         | -                           | RV1126/RV1109 |
-    | V21      | lite   | big    | -      | big    | -     | 2         | -                           | RK356X        |
-    | V30      | lite   | big    | big    | big    | -     | 3         | RawAE3 Share with AF        | RK3588        |
-    | V32      | lite   | big    | -      | big    | -     | 2         | RawAE3 Share with AF        | RV1106/RV1103 |
-    | V32_LITE | lite   | -      | -      | big    | -     | 2         | RawAE0/3 can share with AF..| RK3562        |
-    |          |        |        |        |        |       |           | Limit AF only use RAWAE0    |               |
-    | V39      | big    | -      | -      | big    | -     | 2         | RawAE subwin0~4 delete      | RK3576        |
-    | V33      | big    | -      | -      | big    | -     | 2         | -                           | RV1103B       |
+    | ISP HW   | RawAE0 | RawAE1 | RawAE2 | RawAE3 | YUVAE | HDR FRAME | NOTES                                    | E.G.          |
+    |----------|--------|--------|--------|--------|-------|-----------|------------------------------------------|---------------|
+    | V20      | lite   | big    | big    | big    | Y     | 3         | -                                        | RV1126/RV1109 |
+    | V21      | lite   | big    | -      | big    | -     | 2         | -                                        | RK356X        |
+    | V30      | lite   | big    | big    | big    | -     | 3         | RawAE3 Share with AF                     | RK3588        |
+    | V32      | lite   | big    | -      | big    | -     | 2         | RawAE3 Share with AF                     | RV1106/RV1103 |
+    | V32_LITE | lite   | -      | -      | big    | -     | 2         | RawAE0/3 can share with AF..             | RK3562        |
+    |          |        |        |        |        |       |           | Limit AF only use RAWAE0                 |               |
+    | V39      | big    | -      | -      | big    | -     | 2         | only ahb has subwin0/1, support bnr20bit | RK3576        |
+    | V33      | big    | -      | -      | big    | -     | 2         | only subwin0, support bnr20bit           | RV1103B       |
+    | V35      | big    | -      | -      | big    | -     | 2         | only subwin0, support bnr20bit           | RV1126B       |
+    |          |        |        |        |        |       |           | bnr20bit include FE(no aiisp) BE(aiisp)  |               |
     */
     AEC_HARDWARE_V20   = 0,
     AEC_HARDWARE_V21   = 1,
@@ -424,6 +429,7 @@ typedef enum AecHwVersion_e
     AEC_HARDWARE_V32_LITE = 4,
     AEC_HARDWARE_V39   = 5,
     AEC_HARDWARE_V33   = 6,
+    AEC_HARDWARE_V35   = 7,
     AEC_HARDWARE_MAX,
 } AecHwVersion_t;
 
@@ -438,6 +444,13 @@ typedef struct AfdPeakRes_s {
     float                   specMainFreq;
     RKAiqAecExpInfo_t       expinfo[2];
 } AfdPeakRes_t;
+
+typedef struct AiqImuData_s {
+    long long s64Timestamp; // unit: ns
+    double    dTemp;
+    double    dGyroData[3];
+    double    dAccData[3];
+} AiqImuData_t;
 
 typedef enum  RawStatsChnEn_e {
     RAWSTATS_CHN_Y_EN       = 0b0001,
@@ -477,6 +490,7 @@ typedef struct AecConfig_s {
 
     RkAiqAecHwConfig_t            HwCtrl;
     AecHwVersion_t                AecHwVers;
+    bool                          UseSubWinAe;
 
     int                           Workingmode;
     int                           LineHdrMode;
@@ -509,6 +523,7 @@ typedef struct AecConfig_s {
     AecStatsCfg_t                 AecStatsCfg;
     /*for build-in HDR*/
     bool                          BuildInHdr;
+    bool                          BtnrBeUse;
     int                           ComprBit;
 
     /*update attr flag*/

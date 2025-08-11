@@ -28,6 +28,10 @@
 #include "algos/rk_aiq_api_types_btnr41.h"
 #endif
 
+#if defined(ISP_HW_V35)
+#include "algos/rk_aiq_api_types_btnr42.h"
+#endif
+
 #if defined(ISP_HW_V32)
 #include "algos/rk_aiq_api_types_btnr32.h"
 #endif

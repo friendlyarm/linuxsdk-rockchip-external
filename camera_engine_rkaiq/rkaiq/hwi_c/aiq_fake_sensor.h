@@ -46,6 +46,7 @@ struct AiqFakeSensorHw_s {
     XCamReturn (*on_dqueue)(AiqFakeSensorHw_t* pFakeSns, int dev_idx, AiqV4l2Buffer_t* v4l2_buf);
     XCamReturn (*prepare)(AiqSensorHw_t* pBaseSns, rk_aiq_raw_prop_t* prop);
     XCamReturn (*register_rawdata_callback)(AiqFakeSensorHw_t* pFakeSns, void (*callback)(void*));
+    XCamReturn (*set_fake_sensor_format)(AiqFakeSensorHw_t* pFakeSns, int width, int height, uint32_t fmt_core);
 };
 
 void AiqFakeSensorHw_init(AiqFakeSensorHw_t* pFakeSnsHw, const char* name, int cid);

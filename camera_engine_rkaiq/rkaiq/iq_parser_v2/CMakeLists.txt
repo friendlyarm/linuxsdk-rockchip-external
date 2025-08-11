@@ -183,15 +183,20 @@ endif ()
 if (${ISP_HW_VERSION} STREQUAL "-DISP_HW_V33")
     set(IQFILES_DIR_INTERNAL "${rk_aiq_SOURCE_DIR}/iqfiles/isp33")
 endif ()
+if (${ISP_HW_VERSION} STREQUAL "-DISP_HW_V35")
+    set(IQFILES_DIR_INTERNAL "${rk_aiq_SOURCE_DIR}/iqfiles/isp35")
+endif ()
 
 add_custom_target(
     j2s4b
     COMMAND ${CMAKE_COMMAND}
+    -DCMAKE_CXX_FLAGS="-std=c++11"
     -DROOT_PROJ_BIN_DIR:STRING=${rk_aiq_BINARY_DIR}
     -DRKAIQ_IQFILES_DIR:STRING="${IQFILES_DIR_INTERNAL}"
     -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH="${rk_aiq_BINARY_DIR}/bin"
     -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
     -DRKAIQ_TARGET_ARCH=${ARCH}
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=YES
     -B"host_tool"
     -H"${rk_aiq_SOURCE_DIR}/tools/j2s4b"
     COMMAND ${CMAKE_COMMAND} --build host_tool
@@ -236,12 +241,47 @@ add_custom_target(
 endif()
 
 SET(IQ_PARSERV2_SRC
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON_Utils.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s_utils.c
+    #${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON.c
+    #${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON_Utils.c
+    #${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s.c
+    #${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s_utils.c
     ${CMAKE_CURRENT_SOURCE_DIR}/RkAiqCalibDbV2.c
     ${CMAKE_CURRENT_SOURCE_DIR}/scene/scene_manager.c
     )
 
+if (NOT RKAIQ_DISABLE_J2S)
+    list(APPEND IQ_PARSERV2_SRC
+         ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON.c
+         ${CMAKE_CURRENT_SOURCE_DIR}/j2s/cJSON_Utils.c
+         ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s.c
+         ${CMAKE_CURRENT_SOURCE_DIR}/j2s/j2s_utils.c
+         )
+endif()
+
 SET(RK_AIQ_SRC ${RK_AIQ_SRC} ${IQ_PARSERV2_SRC} PARENT_SCOPE)
+
+# if user has not define CMAKE_INSTALL_PREFIX, do not install dev_bin to
+# avoid of compile error for buildroot
+if (${CMAKE_INSTALL_PREFIX} STREQUAL "/usr")
+    set(host_iqBinTool_install_cmd make -C host_iqBinTool)
+else ()
+    set(host_iqBinTool_install_cmd make -C host_iqBinTool install)
+endif()
+
+add_custom_target(
+    iqbin_for_rtt
+    COMMAND ${CMAKE_COMMAND}
+    -DCMAKE_CXX_FLAGS="-std=c++11"
+    -DROOT_PROJ_BIN_DIR:STRING=${rk_aiq_BINARY_DIR}
+    -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH="${rk_aiq_BINARY_DIR}/bin"
+    -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+    -DRKAIQ_TARGET_ARCH=${ARCH}
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=YES
+    -DRKAIQ_NEWSTRUCT_TEST=${RKAIQ_NEWSTRUCT_TEST}
+    -DISP_HW_VERSION=${ISP_HW_VERSION}
+    -B"host_iqBinTool"
+    -H"${rk_aiq_SOURCE_DIR}/tools/iqBinForRtt"
+    COMMAND ${CMAKE_COMMAND} --build host_iqBinTool
+    COMMAND ${host_iqBinTool_install_cmd}
+    DEPENDS j2s_parser
+    )

@@ -1469,6 +1469,7 @@ void _customAwbRes2rkAwbRes( RkAiqAlgoProcResAwb* rkAwbProcRes,
 
     rkAwbProcRes->awbConverged = customAwbProcRes->IsConverged;
     *rkAwbProcRes->awb_gain_algo= customAwbProcRes->awb_gain_algo;
+    rkAwbProcRes->awb_gain_algo_golden = customAwbProcRes->awb_gain_algo;
     rkAwbProcRes->awb_smooth_factor = customAwbProcRes->awb_smooth_factor;
     *rkAwbProcRes->awb_hw1_para=  awbHwConfig;
 }

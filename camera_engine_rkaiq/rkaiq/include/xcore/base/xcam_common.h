@@ -21,6 +21,7 @@
 #ifndef XCAM_COMMON_H
 #define XCAM_COMMON_H
 
+#include <ctype.h>
 #include <string.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -110,6 +111,11 @@ format_angle (float angle)
 
     XCAM_ASSERT (angle >= 0.0f && angle < 360.0f);
     return angle;
+}
+
+static inline void xcam_to_lowercase(const char* src, char* dst) {
+    for (int i = 0; src[i] != '\0'; i++)
+        dst[i] = tolower((unsigned char)src[i]);
 }
 
 XCAM_END_DECLARE

@@ -413,6 +413,34 @@ int aiqMap_size(AiqMap_t* map) {
     return size;
 }
 
+int aiqMap_itemNums(AiqMap_t* map) {
+    int num = 0;
+
+    XCAM_ASSERT(map);
+
+    aiqMutex_lock(&map->_mutex);
+
+    num = map->_item_nums;
+
+    aiqMutex_unlock(&map->_mutex);
+
+    return num;
+}
+
+int aiqMap_itemSize(AiqMap_t* map) {
+    int size = 0;
+
+    XCAM_ASSERT(map);
+
+    aiqMutex_lock(&map->_mutex);
+
+    size = map->_item_size;
+
+    aiqMutex_unlock(&map->_mutex);
+
+    return size;
+}
+
 AiqMapItem_t* aiqMap_begin(AiqMap_t* map) {
     AiqMapItem_t* pCurItem = NULL;
 

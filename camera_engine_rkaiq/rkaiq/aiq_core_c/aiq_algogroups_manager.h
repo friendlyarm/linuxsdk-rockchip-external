@@ -23,6 +23,9 @@
 #include "c_base/aiq_map.h"
 #include "c_base/aiq_thread.h"
 #include "c_base/aiq_list.h"
+#if RKAIQ_HAVE_DUMPSYS
+#include "st_string.h"
+#endif
 
 RKAIQ_BEGIN_DECLARE
 
@@ -37,6 +40,7 @@ typedef XCamReturn (*MessageHandleWrapper)(AiqCore_t* aiqCore,
                                            uint64_t);
 
 #define MAX_MESSAGES 5
+#define GROUP_MSG_OVERFLOW_TH 2
 
 typedef struct AiqAnalyzerGroup_s {
     AiqCore_t* mAiqCore;
@@ -50,6 +54,10 @@ typedef struct AiqAnalyzerGroup_s {
     int8_t mUserSetDelayCnts;
     bool mVicapScaleStart;
     uint32_t mAwakenId;
+    uint8_t mGrpMsgOverflowCnt;
+#if RKAIQ_HAVE_DUMPSYS
+    uint32_t mMsgReduceCnt;
+#endif
 } AiqAnalyzerGroup_t;
 
 XCamReturn AiqAnalyzerGroup_init(AiqAnalyzerGroup_t* pGroup, AiqCore_t* aiqCore,
@@ -103,6 +111,7 @@ typedef struct AiqAnalyzeGroupManager_s {
     int mGroupAlgoListCnts[RK_AIQ_CORE_ANALYZE_MAX + 1];
     AiqAnalyzerGroup_t* mGroupMap[RK_AIQ_CORE_ANALYZE_MAX];
     AiqAnalyzeGroupMsgHdlThread_t* mMsgThrd;
+    int mDefaultDelayCnt;
 } AiqAnalyzeGroupManager_t;
 
 XCamReturn AiqAnalyzeGroupManager_init(AiqAnalyzeGroupManager_t* pGroupMan, AiqCore_t* aiqCore,
@@ -130,6 +139,11 @@ AiqAlgoHandler_t** AiqAnalyzeGroupManager_getGroupAlgoList(AiqAnalyzeGroupManage
 AiqAnalyzerGroup_t** AiqAnalyzeGroupManager_getGroups(AiqAnalyzeGroupManager_t* pGroupMan);
 void AiqAnalyzeGroupManager_rmAlgoHandle(AiqAnalyzeGroupManager_t* pGroupMan, int algoType);
 void AiqAnalyzeGroupManager_awakenClean(AiqAnalyzeGroupManager_t* pGroupMan, uint32_t sequence);
+XCamReturn AiqAnalyzeGroupManager_resetDelayCnt(AiqAnalyzeGroupManager_t* pGroupMan, int delayCnt);
+
+#if RKAIQ_HAVE_DUMPSYS
+int AiqAnalyzerGroup_dump(void* self, st_string* result, int argc, void* argv[]);
+#endif
 
 RKAIQ_END_DECLARE
 

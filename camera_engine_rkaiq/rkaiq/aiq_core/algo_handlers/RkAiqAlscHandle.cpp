@@ -195,8 +195,25 @@ XCamReturn RkAiqAlscHandleInt::prepare() {
         alsc_config_int->alsc_sw_info.otpInfo.flag = 0;
     }
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
+
+    if (alsc_config_int->alsc_sw_info.otpInfo.flag && !sharedCom->otp_lsc_Cfg.flag) {
+        sharedCom->otp_lsc_Cfg.flag = alsc_config_int->alsc_sw_info.otpInfo.flag;
+        sharedCom->otp_lsc_Cfg.width = alsc_config_int->alsc_sw_info.otpInfo.width;
+        sharedCom->otp_lsc_Cfg.height = alsc_config_int->alsc_sw_info.otpInfo.height;
+        sharedCom->otp_lsc_Cfg.table_size = alsc_config_int->alsc_sw_info.otpInfo.table_size;
+        memcpy(sharedCom->otp_lsc_Cfg.lsc_r, alsc_config_int->alsc_sw_info.otpInfo.lsc_r, sizeof(sharedCom->otp_lsc_Cfg.lsc_r));
+        memcpy(sharedCom->otp_lsc_Cfg.lsc_b, alsc_config_int->alsc_sw_info.otpInfo.lsc_b, sizeof(sharedCom->otp_lsc_Cfg.lsc_b));
+        memcpy(sharedCom->otp_lsc_Cfg.lsc_gr, alsc_config_int->alsc_sw_info.otpInfo.lsc_gr, sizeof(sharedCom->otp_lsc_Cfg.lsc_gr));
+        memcpy(sharedCom->otp_lsc_Cfg.lsc_gb, alsc_config_int->alsc_sw_info.otpInfo.lsc_gb, sizeof(sharedCom->otp_lsc_Cfg.lsc_gb));
+    }
     RKAIQCORE_CHECK_RET(ret, "alsc algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

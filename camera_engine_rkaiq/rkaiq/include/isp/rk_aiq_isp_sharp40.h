@@ -43,7 +43,7 @@ typedef struct shp_radiDist_static_s {
         M4_ORDER(1),
         M4_NOTES( The x-coordinates of the optical center in the image\n
         (0,0) is the img center. (-1000,-1000) is the img left top corner. (1000,1000) is the img right bottom corner\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_center_x
     // @para: Center_Mode
     int16_t hw_shpCfg_opticCenter_x;
@@ -59,7 +59,7 @@ typedef struct shp_radiDist_static_s {
         M4_ORDER(1),
         M4_NOTES( The y-coordinates of the optical center in the image\n
         (0,0) is the img center. (-1000,-1000) is the img left top corner. (1000,1000) is the img right bottom corner\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_center_y
     // @para: Center_Mode
     int16_t hw_shpCfg_opticCenter_y;
@@ -84,9 +84,9 @@ typedef enum shp_dbgOutMux_mode_e {
     // @reg: hw_shp_debug_mode == 3
     shp_edgeShpStrg_mode = 3,
     // @reg: hw_shp_debug_mode == 4
-    shp_detailLocStrgContrast_mode = 4,
+    shp_contrastDetailPosStrg_mode = 4,
     // @reg: hw_shp_debug_mode == 5
-    shp_detailClipLimit_mode = 5,
+    shp_detailPosLimit_mode = 5,
 } shp_dbgOutMux_mode_t;
 
 typedef struct shp_debug_static_s {
@@ -116,7 +116,7 @@ typedef struct shp_debug_static_s {
     shp_dbgOutMux_mode_t hw_shpT_dbgOut_mode;
 } shp_debug_static_t;
 
-typedef struct texRegionShpStrgLP_s {
+typedef struct shp_detailLP_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(detail_lp_en),
         M4_TYPE(bool),
@@ -124,24 +124,11 @@ typedef struct texRegionShpStrgLP_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(1),
-        M4_GROUP_CTRL(dbgOut_en_group),
+        M4_GROUP_CTRL(shpCfg_lp_en_group),
         M4_NOTES(IIR frame low freq channel averge low power mode enable.\n
         Freq of use: low))  */
     // reg: sw_detail_lp_en
     bool hw_shpCfg_lp_en;
-} texRegionShpStrgLP_t;
-
-typedef struct shp_detailLP_s {
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(texRegionShpStrgLP),
-        M4_TYPE(struct),
-        M4_UI_MODULE(normal_ui_style),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(TODO.\n
-        Freq of use: low))  */
-    texRegionShpStrgLP_t texRegionShpStrgLP;
 } shp_detailLP_t;
 
 typedef struct shp_cfgLP_s {
@@ -229,7 +216,7 @@ typedef struct shp_texRegionClsf_s {
         M4_RO(0),
         M4_ORDER(1),
         M4_NOTES(the upper limit value of flat area.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_flat_maxLimit
     uint16_t hw_shpT_flatRegion_maxThred;
     /* M4_GENERIC_DESC(
@@ -245,7 +232,7 @@ typedef struct shp_texRegionClsf_s {
         M4_ORDER(1),
         M4_NOTES(the lower limit value of edge area.\n
         The hw_shp_edge_minLimit must be bigger than hw_shp_flat_maxLimit.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_edge_minLimit
     uint16_t hw_shpT_edgeRegion_minThred;
 } shp_texRegionClsf_t;
@@ -299,8 +286,8 @@ typedef struct shp_motionStrg_dyn_s {
         M4_GROUP(localSgmStrg_mode_group:shp_locGlbSgmStrgMix_mode),
         M4_NOTES(The scaling factor of the local input pix sigma.\n
         Higher the value, the higher the local input pix sigma value.\n
-        Freq of use: high))  */
-    // @reg: sw_shp_local_gainscale
+        Freq of use: low))  */
+    // @reg:  hw_sharp_localGain_scale
     // @para: local_gainscale
     float hw_shpT_localSgmStrg_scale;
     /* M4_GENERIC_DESC(
@@ -317,7 +304,7 @@ typedef struct shp_motionStrg_dyn_s {
         M4_NOTES(The value of the global input pix sigma.\n
         Higher the value, the higher the global input pix sigma value.\n
         Freq of use: low))  */
-    // @reg: sw_shp_global_gain
+    // @reg: hw_sharp_global_gain
     // @para: global_gain
     float hw_shpT_glbSgmStrg_val;
     /* M4_GENERIC_DESC(
@@ -335,14 +322,14 @@ typedef struct shp_motionStrg_dyn_s {
         M4_NOTES(The wgt of the global input pix sigma is used in the fusion operation with the local input pix sigma.\n
         The higher the value, the wgt of bifilted pixel is higher.\n
         Freq of use: low))  */
-    // @reg: sw_cnr_global_gain_alpha
+    // @reg: hw_sharp_gainMerge_alpha
     // @para: global_gain_alpha
     float hw_shpT_glbSgmStrg_alpha;
     /* M4_GENERIC_DESC(
         M4_ALIAS(gainWgt_mode),
         M4_TYPE(enum),
         M4_ENUM_DEF(shp_locSgmStrg2Mot_mode_t),
-        M4_DEFAULT(shp_toMotionStrg1_mode),
+        M4_DEFAULT(shp_toMotionStrg2_mode),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
@@ -363,7 +350,7 @@ typedef struct shp_lumaShpStrg_dyn_s {
         M4_ORDER(1),
         M4_GROUP_CTRL(luma_en_group),
         M4_NOTES(Enable the miNr filter for lo freq noise.Turn on by setting this bit to 1.
-        Freq of use: low))  */
+        Freq of use: high))  */
     bool sw_shpT_luma_en;
     /* M4_GENERIC_DESC(
         M4_ALIAS(luma2strg_val),
@@ -380,7 +367,7 @@ typedef struct shp_lumaShpStrg_dyn_s {
         M4_ORDER(0),
         M4_GROUP(luma_en_group),
         M4_NOTES(The brightness weight0 mapped by lo_nr, the x-axis is hw_shp_luma2Table_idx. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_luma2strg_val0~7
     float hw_shpT_luma2ShpStrg_val[8];
 } shp_lumaShpStrg_dyn_t;
@@ -414,7 +401,7 @@ typedef struct shp_radiDistShpWgt_dyn_s {
         M4_ORDER(1),
         M4_GROUP_CTRL(radiDist_en_group),
         M4_NOTES(Enable the miNr filter for lo freq noise.Turn on by setting this bit to 1.
-        Freq of use: low))  */
+        Freq of use: high))  */
     bool sw_shpT_radiDist_en;
     /* M4_GENERIC_DESC(
         M4_ALIAS(distance2strg),
@@ -426,13 +413,14 @@ typedef struct shp_radiDistShpWgt_dyn_s {
         M4_DEFAULT([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]),
         M4_HIDE_EX(0),
         M4_UI_MODULE(curve),
-        M4_DATAX([0, 8, 24, 56, 88, 120, 184, 248, 312, 376, 440]),
+        M4_DATAX([0, 362, 627, 958, 1201, 1402, 1736, 2016, 2261, 2482, 2685]),
         M4_RO(0),
         M4_ORDER(0),
         M4_GROUP(radiDist_en_group),
         M4_NOTES(Radial distance weight based on the distance from the center point. \n
-        distance_power2_ratio = [0, 8, 24, 56, 88, 120, 184, 248, 312, 376, 440].\n
-        Freq of use: low))  */
+        step=128,radia = [0, 362, 627, 958, 1201, 1402, 1736, 2016, 2261, 2482, 2685].\n
+        step=256,radial = [0, 724, 1254, 1916, 2401, 2804, 3473, 4031, 4522, 4964, 5370].\n
+        Freq of use: high))  */
     // @reg: hw_shp_distance2strg_val0~10
     float hw_shpT_radiDist2ShpStrg_val[11];
 } shp_radiDistShpStrg_dyn_t;
@@ -466,7 +454,7 @@ typedef struct shp_hueShpStrg_dyn_s {
         M4_ORDER(1),
         M4_GROUP_CTRL(hue_en_group),
         M4_NOTES(Enable the miNr filter for lo freq noise.Turn on by setting this bit to 1.
-        Freq of use: low))  */
+        Freq of use: high))  */
     bool sw_shpT_hue_en;
     /* M4_GENERIC_DESC(
         M4_ALIAS(luma2strg_val),
@@ -483,7 +471,7 @@ typedef struct shp_hueShpStrg_dyn_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(The brightness weight0 mapped by lo_nr, the x-axis is hw_shp_luma2Table_idx. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_hue2strg_val0~8
     float hw_shpT_hue2ShpStrg_val[9];
 } shp_hueShpStrg_dyn_t;
@@ -524,7 +512,6 @@ typedef struct shp_locShpStrg_dyn_s {
        M4_HIDE_EX(0),
        M4_RO(0),
        M4_ORDER(2),
-       M4_GROUP(shpOpt_mode_group:shp_allShpSclEn_mode|shp_texShpSclDis_othrEn_mode),
        M4_NOTES(TODO))  */
     shp_motionStrg_dyn_t motionStrg;
     /* M4_GENERIC_DESC(
@@ -534,7 +521,6 @@ typedef struct shp_locShpStrg_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(2),
-        M4_GROUP(shpOpt_mode_group:shp_allShpSclEn_mode|shp_texShpSclDis_othrEn_mode),
         M4_NOTES(TODO))  */
     shp_lumaShpStrg_dyn_t luma;
     /* M4_GENERIC_DESC(
@@ -544,7 +530,6 @@ typedef struct shp_locShpStrg_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(2),
-        M4_GROUP(shpOpt_mode_group:shp_allShpSclEn_mode|shp_texShpSclDis_othrEn_mode),
         M4_NOTES(TODO))  */
     shp_radiDistShpStrg_dyn_t radiDist;
     /* M4_GENERIC_DESC(
@@ -554,7 +539,6 @@ typedef struct shp_locShpStrg_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(2),
-        M4_GROUP(shpOpt_mode_group:shp_allShpSclEn_mode|shp_texShpSclDis_othrEn_mode),
         M4_NOTES(TODO))  */
     shp_hueShpStrg_dyn_t hue;
 } shp_locShpStrg_dyn_t;
@@ -622,27 +606,7 @@ typedef struct shp_texRegionShpStrg_s {
     float hw_shpT_edgeRegionR_strg;
 } shp_texRegionShpStrg_t;
 
-typedef enum shp_motionStrg1_mode_e {
-    // line slope is positive, the larger local gain, the larger sharp strength.
-    shp_baseStatThd_posCorr_mode = 0,
-    // line slope is negative, the larger local gain, the smaller sharp strength.
-    shp_baseMotThd_negCorr_mode = 1,
-} shp_motionStrg1_mode_t;
-
 typedef struct shp_motionStrg1_s {
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(shp_motionStrg1_mode),
-        M4_TYPE(enum),
-        M4_ENUM_DEF(shp_motionStrg1_mode_t),
-        M4_DEFAULT(shp_baseMotThd_negCorr_mode),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(The mode of the noise curve. \n
-        Reference enum types.\n
-        Freq of use: low))  */
-    // @para: sw_shp_detailMotionWgt_sel
-    shp_motionStrg1_mode_t sw_shpT_motionStrg_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(sw_shp_detailStaticRegion_thred),
         M4_TYPE(f32),
@@ -710,7 +674,7 @@ typedef struct shp_motionStrg2_s {
         M4_ALIAS(detailGain_sigma),
         M4_TYPE(f32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,2.0),
+        M4_RANGE_EX(0,1.0),
         M4_DEFAULT(0.25),
         M4_DIGIT_EX(2),
         M4_FP_EX(0,1,7),
@@ -718,7 +682,8 @@ typedef struct shp_motionStrg2_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(the sigma of detail gain weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
+    //reg: hw_sharp_edgeGain_sigma
     float hw_shpT_motionStrg_sigma;
 } shp_motionStrg2_t;
 
@@ -751,11 +716,11 @@ typedef struct shp_sigmaCurve_s {
 
 typedef enum shp_edge_filtRadius_mode_e {
     // @note: radius = 1
-    shp_edgeFiltRadius3_mode = 1,
+    shp_edgeFilt3x3_mode = 1,
     // @note: radius = 2
-    shp_edgeFiltRadius5_mode = 2,
+    shp_edgeFilt5x5_mode = 2,
     // @note: radius = 3
-    shp_edgeFiltRadius7_mode = 3
+    shp_edgeFilt7x7_mode = 3
 } shp_edge_filtRadius_mode_t;
 
 typedef struct shp_edge_glbShpStrg_s {
@@ -771,7 +736,7 @@ typedef struct shp_edge_glbShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(positive detail global strength.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_posEdge_strg
     // @para: posEdge_strg
     float hw_shpT_edgePos_strg;
@@ -787,7 +752,7 @@ typedef struct shp_edge_glbShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(negative detail global strength.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_negEdge_strg
     // @para: negEdge_strg
     float hw_shpT_edgeNeg_strg;
@@ -798,13 +763,13 @@ typedef struct shp_edgeExtra_s {
         M4_ALIAS(edgeLpf_radius),
         M4_TYPE(enum),
         M4_ENUM_DEF(shp_edge_filtRadius_mode_t),
-        M4_DEFAULT(shp_edgeFiltRadius7_mode),
+        M4_DEFAULT(shp_edgeFilt7x7_mode),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(The radius of edge low pass filter kernel.\n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     shp_edge_filtRadius_mode_t sw_shpT_filtRadius_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(filtCfg_mode),
@@ -817,7 +782,7 @@ typedef struct shp_edgeExtra_s {
         M4_GROUP_CTRL(edgeLpf_filtCfg_mode_group),
         M4_NOTES(The config mode of lpf used for hi-freq pre filtering processing of input pixels of the sharp module.\n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     shp_filtCfg_mode_t sw_shpT_filtCfg_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(edgeLpf_rsigma),
@@ -850,7 +815,7 @@ typedef struct shp_edgeExtra_s {
         M4_GROUP(edgeLpf_filtCfg_mode_group:shp_cfgByFiltCoeff_mode),
         M4_NOTES(The spatial filter kernel of bifilter . Only valid on shp_cfgByFiltCoeff_mode.\n
         coeff[0] + 4*coeff[1] + 4*coeff[2] == 1.0 .\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_edgeLpf_coeff0~hw_shp_edgeLpf_coeff9
     float hw_shpT_filtSpatial_wgt[10];
 } shp_edgeExtra_t;
@@ -883,7 +848,7 @@ typedef struct shp_edgeStrgCurveCtrl_s {
         M4_ORDER(0),
         M4_NOTES(The edgewgtCurve power value. Only valid on shp_formuleCurve_mode.\n
         Formule: val = MIN(1023, edgeWgt_minLimit + ROUND_F(1024 * (1 - pow(1 - pow(i / 16 , power), power)))).\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     //reg: hw_shp_edgeWgt_val0~16
     //para: edgeWgtCurve_power
     float sw_shpT_curvePower_val;
@@ -900,7 +865,7 @@ typedef struct shp_edgeStrgCurveCtrl_s {
         M4_ORDER(0),
         M4_NOTES(the lower limit for edge weight. Only valid on shp_formuleCurve_mode\n
         Formule: val = MIN(1023, edgeWgt_minLimit + ROUND_F(1024 * (1 - pow(1 - pow(i / 16 , power), power)))).\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     //reg: hw_shp_edgeWgt_val0~16
     //para: edgeWgtCurve_power
     float sw_shpT_edgeStrg_minLimit;
@@ -911,7 +876,7 @@ typedef struct shp_edgeShpStrg_s {
         M4_ALIAS(filtCfg_mode),
         M4_TYPE(enum),
         M4_ENUM_DEF(shp_curveCfg_mode_t),
-        M4_DEFAULT(shp_cfgCurveDirect_mode),
+        M4_DEFAULT(shp_cfgCurveCtrlCoeff_mode),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
@@ -932,7 +897,7 @@ typedef struct shp_edgeShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(The scaling coefficient for the estimated edge probability, as the x-value for the positive edge signal weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_posEdgeWgt_scale
     float hw_shpT_edgePosIdx_scale;
     /* M4_GENERIC_DESC(
@@ -947,7 +912,7 @@ typedef struct shp_edgeShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(The scaling coefficient for the estimated edge probability, as the x-value for the negative edge signal weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_negEdgeWgt_scale
     float hw_shpT_edgeNegIdx_scale;
     /* M4_GENERIC_DESC(
@@ -978,7 +943,7 @@ typedef struct shp_edgeShpStrg_s {
         M4_NOTES(The manual edgeWgt curve value . Only valid on shp_manualCurve_mode.\n
         Freq of use: low))  */
     // @reg: hw_shp_edgeWgt_val0~16
-    uint16_t hw_shpT_edgeStrg_val[17];
+    uint16_t hw_shpT_edge2ShpStrg_val[17];
 } shp_edgeShpStrg_t;
 
 typedef struct shp_edgeShoot_s {
@@ -1008,7 +973,7 @@ typedef struct shp_edgeShoot_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(linear scaling ratio of the difference between edge overshoot signal and local extremum.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     //reg: hw_shp_overshoot_alpha
     float sw_shpT_overShoot_alpha;
     /* M4_GENERIC_DESC(
@@ -1023,7 +988,7 @@ typedef struct shp_edgeShoot_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(linear scaling ratio of the difference between edge undershoot signal and local extremum.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     //reg: hw_shp_undershoot_alpha
     float sw_shpT_underShoot_alpha;
 } shp_edgeShoot_t;
@@ -1218,7 +1183,7 @@ typedef struct shp_detailPreBifilt_dyn_s {
         M4_ORDER(1),
         M4_NOTES(The offset of the range sigma of pre bifilter.\n
         Higher the value, the stronger denoise strength of pre bifilter.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_preBifilt_vsigma_inv0~7
     // @para: sw_shp_preBifiltVsigma_offset
     uint8_t sw_shpT_rgeSgm_offset;
@@ -1272,7 +1237,7 @@ typedef struct shp_detail_lpfSrc_s {
         M4_ORDER(1),
         M4_NOTES(The fusion alpha of pre_y and hi_nr.\n
         The higher value, the bigger weight of hi_nr.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_detailIn_alpha
     // @para: detailLpfData_alpha
     float hw_shpT_detailSrcMf_alpha;
@@ -1297,7 +1262,7 @@ typedef struct shp_hiDetailFilt_dyn_s {
         M4_GROUP_CTRL(hiDetail_filtCfg_mode_group),
         M4_NOTES(The config mode of gaus filter is lpf for input pixels of the sharp module.\n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     shp_filtCfg_mode_t sw_shpT_filtCfg_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(hiDetailLpf_radius),
@@ -1309,7 +1274,7 @@ typedef struct shp_hiDetailFilt_dyn_s {
         M4_ORDER(0),
         M4_NOTES(The radius of hi detail gaus filter .\n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     shp_filtRadius_mode_t sw_shpT_filtRadius_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(hiDetailLpf_rsigma),
@@ -1342,7 +1307,7 @@ typedef struct shp_hiDetailFilt_dyn_s {
         M4_GROUP(hiDetail_filtCfg_mode_group:shp_cfgByFiltCoeff_mode),
         M4_NOTES(The spatial filter kernel of gaus filter . Only valid on shp_cfgByHwLpfCoeff_mode.\n
         coeff[0] + 4*coeff[1] + 4*coeff[2] + 4*coeff[3] + 8*coeff[4] + 4*coeff[5] == 1.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_hiDetailLpf_coeff0~5
     float hw_shpT_filtSpatial_wgt[6];
 } shp_hiDetailFilt_dyn_t;
@@ -1360,7 +1325,7 @@ typedef struct shp_midDetailFilt_dyn_s {
         M4_GROUP_CTRL(miDetail_filtCfg_mode_group),
         M4_NOTES(The config mode of gaus filter is lpf for input pixels of the sharp module.\n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     shp_filtCfg_mode_t sw_shpT_filtCfg_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(hiDetailLpf_radius),
@@ -1372,7 +1337,7 @@ typedef struct shp_midDetailFilt_dyn_s {
         M4_ORDER(0),
         M4_NOTES(The radius of hi detail gaus filter .\n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     shp_filtRadius_mode_t sw_shpT_filtRadius_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(hiDetailLpf_rsigma),
@@ -1405,7 +1370,7 @@ typedef struct shp_midDetailFilt_dyn_s {
         M4_GROUP(miDetail_filtCfg_mode_group:shp_cfgByFiltCoeff_mode),
         M4_NOTES(The spatial filter kernel of gaus filter . Only valid on shp_cfgByHwLpfCoeff_mode.\n
         coeff[0] + 4*coeff[1] + 4*coeff[2] + 4*coeff[3] + 8*coeff[4] + 4*coeff[5] == 1.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_miDetailLpf_coeff0~5
     float hw_shpT_filtSpatial_wgt[6];
 } shp_midDetailFilt_dyn_t;
@@ -1429,7 +1394,7 @@ typedef struct shp_detailAlpha_s {
         M4_ORDER(0),
         M4_NOTES(The mode of the noise curve. \n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @para: freqBlending_mode
     shp_tex2DetailAlpha_mode_t hw_shpT_detailAlpha_mode;
     /* M4_GENERIC_DESC(
@@ -1445,7 +1410,7 @@ typedef struct shp_detailAlpha_s {
         M4_ORDER(1),
         M4_NOTES(the lower limit of detail fusion weight.\n
         Fusion weight is equal to 1024 when this bit set 1.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_fusionWgt_minLimit
     uint8_t hw_shpT_hiDetailAlpha_minLimit;
     /* M4_GENERIC_DESC(
@@ -1461,7 +1426,7 @@ typedef struct shp_detailAlpha_s {
         M4_ORDER(1),
         M4_NOTES(the upper limit of detail fusion weight.\n
         Fusion weight is equal to 0 when this bit set 0.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_fusionWgt_maxLimit
     uint8_t hw_shpT_hiDetailAlpha_maxLimit;
 } shp_detailAlpha_t;
@@ -1482,7 +1447,7 @@ typedef struct shp_detailContrast_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(the scale of detail positive signal based on local dynamic range. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_contrast2posStrg_val0~8
     float hw_shpT_contrast2posStrg_val[9];
     /* M4_GENERIC_DESC(
@@ -1498,7 +1463,7 @@ typedef struct shp_detailContrast_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(the scale0 of detail negative signal based on local dynamic range. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_contrast2negStrg_val0~8
     float hw_shpT_contrast2negStrg_val[9];
 } shp_detailContrast_t;
@@ -1516,7 +1481,7 @@ typedef struct shp_detailShootReduction_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(the clip value of positive detail signals based on texture weight. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_tex2detailPosClip_val0~8
     uint16_t hw_shpT_tex2DetailPosClip_val[9];
     /* M4_GENERIC_DESC(
@@ -1531,7 +1496,7 @@ typedef struct shp_detailShootReduction_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(the clip value of negative  detail signals based on texture weight. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_tex2detailNegClip_val0~8
     uint16_t hw_shpT_tex2DetailNegClip_val[9];
     /* M4_GENERIC_DESC(
@@ -1546,7 +1511,7 @@ typedef struct shp_detailShootReduction_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(the clip value of positive detail signals based on lo_nr. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_luma2detailPosClip_val0~7
     uint16_t hw_shpT_luma2DetailPosClip_val[8];
     /* M4_GENERIC_DESC(
@@ -1561,7 +1526,7 @@ typedef struct shp_detailShootReduction_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(the clip value of negative detail signals based on lo_nr. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_luma2detailNegClip_val0~7
     uint16_t hw_shpT_luma2DetailNegClip_val[8];
 } shp_detailShootReduction_t;
@@ -1579,7 +1544,7 @@ typedef struct shp_detail_glbShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(positive detail global strength.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_posDetail_strg
     float hw_shpT_detailPos_strg;
     /* M4_GENERIC_DESC(
@@ -1594,7 +1559,7 @@ typedef struct shp_detail_glbShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(negative detail global strength.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_negDetail_strg
     float hw_shpT_detailNeg_strg;
 } shp_detail_glbShpStrg_t;
@@ -1670,7 +1635,6 @@ typedef struct shp_detail_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_GROUP(texWgt_mode_group:shp_fstWgt_x_secWgt_mode|shp_fstWgtOnly_mode|shp_secWgtOnly_mode),
         M4_NOTES(TODO))  */
     shp_texRegionShpStrg_t locShpStrg_texRegion;
     /* M4_GENERIC_DESC(
@@ -1759,7 +1723,7 @@ typedef struct shp_dHiDetail_glbShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(positive detail global strength.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_lossTexInHinr_strg
     float hw_shpT_dHiDetail_strg;
 } shp_dHiDetail_glbShpStrg_t;
@@ -1777,7 +1741,7 @@ typedef struct shp_deepHfDetailExtra_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(noise threshold for lossTexInHinr. The scale of ynr_lo_noise_sigma curve.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_hi_tex_threshold0-8
     float hw_shp_noiseThred_scale;
 } shp_deepHfDetailExtra_t;
@@ -1896,7 +1860,7 @@ typedef struct shp_extHfDetail_glbShpStrg_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(positive detail global strength.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_grain_strg
     float hw_shpT_eHfDetail_strg;
 } shp_extHfDetail_glbShpStrg_t;
@@ -1906,7 +1870,7 @@ typedef struct shp_extHfDetailExtra_Hpf_s {
        M4_ALIAS(grainHpf_filtCfg_mode),
        M4_TYPE(enum),
        M4_ENUM_DEF(shp_filtCfg_mode_t),
-       M4_DEFAULT(shp_cfgByFiltStrg_mode),
+       M4_DEFAULT(shp_cfgByFiltCoeff_mode),
        M4_HIDE_EX(0),
        M4_RO(0),
        M4_ORDER(0),
@@ -1929,14 +1893,14 @@ typedef struct shp_extHfDetailExtra_Hpf_s {
         M4_GROUP(extHfDetailExtra_filtCfg_mode_group:shp_cfgByFiltStrg_mode),
         M4_NOTES(The spatial wgt of high-pass filter is operator from the strength value. Only valid on shp_cfgBy2SwLpfStrg_mode.\n
         Higher the value, the higher spatial denoise strength.\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     // @reg: hw_shp_hiDetailLpf_coeff0~5
     float sw_shpT_filtSpatial_strg;
     /* M4_GENERIC_DESC(
         M4_ALIAS(imgHpf_coeff0),
         M4_TYPE(f32),
         M4_SIZE_EX(1,6),
-        M4_RANGE_EX(0,1.0),
+        M4_RANGE_EX(-1.0,1.0),
         M4_DEFAULT([0.6838, -0.1759, -0.0943, 0.0339, 0.0264, 0.0125]),
         M4_DIGIT_EX(4),
         M4_FP_EX(0,0,7),
@@ -1946,7 +1910,7 @@ typedef struct shp_extHfDetailExtra_Hpf_s {
         M4_GROUP(extHfDetailExtra_filtCfg_mode_group:shp_cfgByFiltCoeff_mode),
         M4_NOTES(5*5 high pass filter coefficient . Only valid on shp_cfgByHwLpfCoeff_mode.\n
         coeff[0] + 4*coeff[1] + 4*coeff[2] + 4*coeff[3] + 8*coeff[4] + 4*coeff[5] == 0.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_imgHpf_coeff0~5
     float hw_shpT_filtSpatial_wgt[6];
 } shp_extHfDetailExtra_t;
@@ -1964,7 +1928,7 @@ typedef struct shp_extHfDetail_shoot_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(The clip value of positive grain signals based on texture weight. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_tex2GrainPosClip_val0~8
     uint16_t hw_shpT_tex2DetailPosClip_val[9];
     /* M4_GENERIC_DESC(
@@ -1979,7 +1943,7 @@ typedef struct shp_extHfDetail_shoot_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(The clip value of negative grain signals based on texture weight. \n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_shp_tex2GrainNegClip_val0~8
     uint16_t hw_shpT_tex2DetailNegClip_val[9];
 } shp_extHfDetail_shoot_t;
@@ -2057,6 +2021,7 @@ typedef struct shp_dyn_s {
         M4_UI_MODULE(normal_ui_style),
         M4_HIDE_EX(0),
         M4_RO(0),
+        M4_GROUP(!shpCfg_lp_en_group),
         M4_ORDER(2),
         M4_NOTES(TODO))  */
     shp_detail_dyn_t detailShp;

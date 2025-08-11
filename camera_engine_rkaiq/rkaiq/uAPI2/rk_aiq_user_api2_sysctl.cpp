@@ -492,29 +492,102 @@ void rk_aiq_uapi2_sysctl_rawReproc_genIspParams (rk_aiq_sys_ctx_t* sys_ctx,
 
 const char*
 rk_aiq_uapi2_sysctl_rawReproc_preInit(const char* isp_driver,
-                                           const char* offline_sns_name,
-                                           rk_aiq_frame_info_t two_frm_exp_info[2])
+                                      rk_aiq_control_preinit_t ctrl_info)
 {
     if (!g_rk_aiq_init_lib) {
         rk_aiq_init_lib();
         g_rk_aiq_init_lib = true;
     }
+
+    if (!isp_driver) {
+        LOGE("%s: input isp driver name is NULL, please check input", __FUNCTION__);
+        return NULL;
+    }
+
     const char* sns_name = NULL;
-    sns_name = CamHwIsp20::rawReproc_preInit(isp_driver, offline_sns_name);
+    sns_name = CamHwIsp20::rawReproc_preInit(isp_driver);
     if (sns_name) {
-        rk_aiq_frame_info_t exp_finfo = two_frm_exp_info[0];
-        LOGD("exp_finfo %d, %d, %f, %f\n",
-               exp_finfo.normal_gain_reg,
-               exp_finfo.normal_exp_reg,
-               exp_finfo.normal_exp,
-               exp_finfo.normal_gain);
-        std::string sns_ent_name = std::string(sns_name);
-        rk_aiq_sys_preinit_cfg_t cfg;
-        memcpy(cfg.frame_exp_info, two_frm_exp_info, sizeof(cfg.frame_exp_info));
-        g_rk_aiq_offline_raw_exp_map[sns_ent_name] = cfg;
+
+        if (ctrl_info.mode != RK_AIQ_CONTROL_CIS_ISP_PARAM &&
+            ctrl_info.mode != RK_AIQ_CONTROL_ISP_PARAM_ONLY) {
+            LOGK("%s limit mode to RK_AIQ_CONTROL_CIS_ISP_PARAM or RK_AIQ_CONTROL_ISP_PARAM_ONLY, "
+                 "no support to set mode to %d", __FUNCTION__, ctrl_info.mode);
+            return sns_name;
+        }
+
+        std::string sns_ent_name(sns_name);
+        rk_aiq_sys_preinit_cfg_t* cfg = NULL;
+        cfg = &g_rk_aiq_sys_preinit_cfg_map[sns_ent_name];
+        cfg->ctrl_info = ctrl_info;
+        if (ctrl_info.mode == RK_AIQ_CONTROL_ISP_PARAM_ONLY) {
+            rk_aiq_frame_info_t exp_finfo = ctrl_info.isp_param_only_info.first_exp_info;
+            LOGD("exp_finfo %d, %d, %f, %f\n",
+                 exp_finfo.normal_gain_reg,
+                 exp_finfo.normal_exp_reg,
+                 exp_finfo.normal_exp,
+                 exp_finfo.normal_gain);
+            cfg->is_use_as_fake = true;
+        } else if (ctrl_info.mode == RK_AIQ_CONTROL_ISP_PARAM_AND_RAW) {
+            cfg->is_use_as_fake = true;
+        }
     }
 
     return sns_name;
+}
+
+static const char*
+rk_aiq_uapi2_sysctl_getBindedIspDrvNmBySns(const char *sns_ent_name)
+{
+    if (!g_rk_aiq_init_lib) {
+        rk_aiq_init_lib();
+        g_rk_aiq_init_lib = true;
+    }
+
+    return CamHwIsp20::getBindedIspDrvNmBySns(sns_ent_name);
+}
+
+XCamReturn
+rk_aiq_uapi2_sysctl_preInit_rkrawstream_info(const char* sns_ent_name,
+                           const rk_aiq_rkrawstream_info_t* info)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (!sns_ent_name || !info) {
+        LOGE("Invalid input parameter");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    const char* isp_drv = rk_aiq_uapi2_sysctl_getBindedIspDrvNmBySns(sns_ent_name);
+    if (!isp_drv) {
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+	rk_aiq_control_preinit_t ctr_info;
+    memset(&ctr_info, 0, sizeof(rk_aiq_control_preinit_t));
+
+    switch (info->mode)
+    {
+    case RK_ISP_RKRAWSTREAM_MODE_INVALID:
+        ctr_info.mode = RK_AIQ_CONTROL_DEFAULT;
+        break;
+    case RK_ISP_RKRAWSTREAM_MODE_HALF_ONLINE:
+        ctr_info.mode = RK_AIQ_CONTROL_CIS_ISP_PARAM;
+        break;
+    case RK_ISP_RKRAWSTREAM_MODE_OFFLINE:
+        ctr_info.mode = RK_AIQ_CONTROL_ISP_PARAM_ONLY;
+        break;
+    default:
+        ctr_info.mode = RK_AIQ_CONTROL_DEFAULT;
+        break;
+    }
+
+    const char* sns_ret = NULL;
+    sns_ret = rk_aiq_uapi2_sysctl_rawReproc_preInit(isp_drv, ctr_info);
+    if (!sns_ret) {
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    return (ret);
 }
 
 void rk_aiq_uapi2_sysctl_setIspParamsDelayCnts(const rk_aiq_sys_ctx_t* sys_ctx, int8_t delay_cnts) {
@@ -522,13 +595,6 @@ void rk_aiq_uapi2_sysctl_setIspParamsDelayCnts(const rk_aiq_sys_ctx_t* sys_ctx, 
     // TODO
 #endif
     sys_ctx->_analyzer->setDelayCnts(delay_cnts);
-}
-
-XCamReturn
-rk_aiq_uapi2_sysctl_preInit_rkrawstream_info(const char* sns_ent_name,
-                           const rk_aiq_rkrawstream_info_t* info)
-{
-    return rk_aiq_uapi_sysctl_preInit_rkrawtream_info(sns_ent_name, info);
 }
 
 XCamReturn rk_aiq_uapi2_sysctl_pause(rk_aiq_sys_ctx_t* sys_ctx, bool isSingleMode)
@@ -708,96 +774,13 @@ rk_aiq_uapi2_sysctl_setListenStrmStatus(rk_aiq_sys_ctx_t* sys_ctx, bool isListen
     }
 }
 
-static XCamReturn rk_aiq_aiisp_defaut_cb(rk_aiq_aiisp_t* aiisp_evt, void* ctx) {
-    XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    rk_aiq_sys_ctx_t* aiisp_ctx= (rk_aiq_sys_ctx_t *)ctx;
-    aiisp_ctx->_wr_linecnt_now += aiisp_evt->wr_linecnt;
-    // auto current_time = std::chrono::system_clock::now();
-    // auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(current_time.time_since_epoch());
-    // LOGD("frame_sequence %d cb time %ld: \n", aiisp_evt->sequence, timestamp.count());
-    if (aiisp_ctx->_wr_linecnt_now == aiisp_evt->rd_linecnt) {
-        aiisp_ctx->_wr_linecnt_now = 0;
-        aiisp_ctx->_camHw->aiisp_processing(aiisp_evt);
-        ret = rk_aiq_uapi2_sysctl_ReadAiisp(aiisp_ctx);
-    }
-    // current_time = std::chrono::system_clock::now();
-    // timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(current_time.time_since_epoch());
-    // LOGD("frame_sequence %d finish time %ld: \n", aiisp_evt->sequence, timestamp.count());
-    return ret;
-}
-
+#if 0
 XCamReturn rk_aiq_uapi2_sysctl_initAiisp(rk_aiq_sys_ctx_t* sys_ctx, rk_aiq_aiisp_cfg_t* aiisp_cfg,
                                          rk_aiq_aiisp_cb aiisp_cb)
 {
-    XCamReturn ret = XCAM_RETURN_NO_ERROR;
-#ifdef ISP_HW_V39
-    if (!sys_ctx)
-        return XCAM_RETURN_ERROR_PARAM;
-
-    if (aiisp_cfg == NULL) {
-        rk_aiq_aiisp_cfg_t aiisp_cfg_tmp;
-        rk_aiq_exposure_sensor_descriptor sensor_des;
-        sys_ctx->_camHw->getSensorModeData(sys_ctx->_sensor_entity_name, sensor_des);
-        uint32_t height = sensor_des.isp_acq_height;
-        aiisp_cfg_tmp.wr_mode = 1;
-        aiisp_cfg_tmp.rd_mode = 0;
-        aiisp_cfg_tmp.wr_linecnt = height / 2;
-        aiisp_cfg_tmp.rd_linecnt = height;
-        ret = sys_ctx->_camHw->setAiispMode(&aiisp_cfg_tmp);
-    }
-    else {
-        ret = sys_ctx->_camHw->setAiispMode(aiisp_cfg);
-    }
-    if (ret != XCAM_RETURN_NO_ERROR) {
-        LOGE("Set Aiisp mode failed!");
-        return ret;
-    }
-
-    if (aiisp_cb == NULL) {
-        aiisp_cb = rk_aiq_aiisp_defaut_cb;
-    }
-    rk_aiq_aiispCtx_t aiispCtx;
-    aiispCtx.mAiispEvtcb = aiisp_cb;
-    aiispCtx.ctx = sys_ctx;
-    sys_ctx->_rkAiqManager->setAiispCb(aiispCtx);
-    sys_ctx->_use_aiisp = true;
-
-#ifndef USE_NEWSTRUCT
-    rk_aiq_blc_attrib_V32_t blc_attr;
-    memset(&blc_attr, 0x00, sizeof(blc_attr));
-    ret = rk_aiq_user_api2_ablcV32_GetAttrib(sys_ctx, &blc_attr);
-    blc_attr.sync.sync_mode = RK_AIQ_UAPI_MODE_ASYNC;
-    AblcOPMode_V32_t eMode_tmp = blc_attr.eMode;
-    blc_attr.eMode = ABLC_V32_OP_MODE_MANUAL;
-    blc_attr.stBlcOBManual.isp_ob_predgain = 1;
-    ret = rk_aiq_user_api2_ablcV32_SetAttrib(sys_ctx, &blc_attr);
-
-    ret = rk_aiq_user_api2_ablcV32_GetAttrib(sys_ctx, &blc_attr);
-    blc_attr.sync.sync_mode = RK_AIQ_UAPI_MODE_ASYNC;
-    blc_attr.eMode = ABLC_V32_OP_MODE_AUTO;
-    for (int i = 0; i < ABLCV32_MAX_ISO_LEVEL; i++) 
-        blc_attr.stBlcOBAuto.ob_predgain[i] = 1;
-    ret = rk_aiq_user_api2_ablcV32_SetAttrib(sys_ctx, &blc_attr);
-    blc_attr.eMode = eMode_tmp;
-    ret = rk_aiq_user_api2_ablcV32_SetAttrib(sys_ctx, &blc_attr);
-#endif
-    LOGK("AIISP on");
-#else
-    LOGE("The current platform does not support");
-#endif
     return ret;
 }
-
-
-XCamReturn rk_aiq_uapi2_sysctl_ReadAiisp(rk_aiq_sys_ctx_t* sys_ctx)
-{
-    if (!sys_ctx)
-        return XCAM_RETURN_ERROR_PARAM;
-    XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    ret = sys_ctx->_camHw->read_aiisp_result();
-    LOGD("start to read AIISP result");
-    return ret;
-}
+#endif
 
 XCamReturn
 rk_aiq_uapi2_sysctl_getIspStats(const rk_aiq_sys_ctx_t* ctx,

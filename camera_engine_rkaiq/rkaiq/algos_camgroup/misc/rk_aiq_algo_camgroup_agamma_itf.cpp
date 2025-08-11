@@ -160,6 +160,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescamgroupAgamma = {
     .pre_process = NULL,
     .processing = processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

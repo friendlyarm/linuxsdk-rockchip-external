@@ -44,7 +44,7 @@ static XCamReturn groupSharpProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoRe
 
     outparams->algoRes = procResParaGroup->camgroupParmasArray[0]->sharp;
     Asharp_processing(inparams, outparams, iso);
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40)  || defined(RKAIQ_HAVE_SHARP_V41)
     outparams->algoRes = procResParaGroup->camgroupParmasArray[0]->texEst;
     AtexEst_processing(inparams, outparams, iso);
 #endif
@@ -58,7 +58,7 @@ static XCamReturn groupSharpProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoRe
         algo_camgroup_update_results(inparams, outparams, gp_ptrs, gp_size);
     }
 
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40)  || defined(RKAIQ_HAVE_SHARP_V41)
     {
         void* gp_ptrs[procResParaGroup->arraySize];
         int gp_size = sizeof(*procResParaGroup->camgroupParmasArray[0]->texEst);

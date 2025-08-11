@@ -382,6 +382,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescAmerge = {
     .pre_process = NULL,
     .processing = AmergeProcess,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

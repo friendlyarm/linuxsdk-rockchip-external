@@ -50,8 +50,14 @@ XCamReturn RkAiqAdehazeHandleInt::prepare() {
     adhaz_config_int->working_mode      = sharedCom->working_mode;
     adhaz_config_int->is_multi_isp_mode = sharedCom->is_multi_isp_mode;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "adhaz algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

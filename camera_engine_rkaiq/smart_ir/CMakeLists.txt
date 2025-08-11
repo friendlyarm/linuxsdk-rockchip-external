@@ -21,6 +21,11 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/rk_smart_ir.c")
 	install(DIRECTORY include/ DESTINATION include/rkaiq/smartIr FILES_MATCHING PATTERN "*.h")
 	install(FILES ${CMAKE_LIBRARY_PATH}/libsmartIr.so DESTINATION lib)
 	install(FILES ${CMAKE_LIBRARY_PATH}/libsmartIr.a DESTINATION lib RENAME libsmartIr.a)
+
+	# if (EXISTS ${PROJECT_SOURCE_DIR}/demo)
+		# add_subdirectory(demo)
+	# endif()
+
 	return()
 endif()
 
@@ -46,7 +51,25 @@ endif()
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMakeTargets")
 
-set(RK_AIQ_SOURCE_DIR ${PROJECT_SOURCE_DIR}/../rk_aiq)
+set (GIT_LOG "")
+execute_process(COMMAND git log --oneline -n 5
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        TIMEOUT 5
+        OUTPUT_VARIABLE GIT_LOG)
+
+if (GIT_LOG STREQUAL "")
+        message("failed to run git cmd !")
+else()
+        string(REPLACE "\"" "\\\"" GIT_LOG ${GIT_LOG})
+        string(REPLACE "\n" "\\n" GIT_LOG ${GIT_LOG})
+        add_compile_options(-DGITLOGS="${GIT_LOG}")
+endif()
+
+if (EXISTS ${PROJECT_SOURCE_DIR}/../rk_aiq)
+    set(RK_AIQ_SOURCE_DIR ${PROJECT_SOURCE_DIR}/../rk_aiq)
+else()
+    set(RK_AIQ_SOURCE_DIR ${PROJECT_SOURCE_DIR}/../rkaiq)
+endif()
 message("rkaiq src path" ${RK_AIQ_SOURCE_DIR})
 
 add_compile_options(-Os)
@@ -54,7 +77,8 @@ add_compile_options(-fstack-protector-strong -D_FORTIFY_SOURCE=2)
 add_compile_options(${ISP_HW_VERSION})
 
 if (ISP_HW_VERSION STREQUAL "-DISP_HW_V39"
-		OR ISP_HW_VERSION STREQUAL "-DISP_HW_V33")
+		OR ISP_HW_VERSION STREQUAL "-DISP_HW_V33"
+		OR ISP_HW_VERSION STREQUAL "-DISP_HW_V35")
     add_compile_options(-DUSE_NEWSTRUCT=1)
 endif()
 
@@ -76,6 +100,7 @@ set(RK_AIQ_INSTALLED_DIR "${RK_AIQ_SOURCE_DIR}/build/${OS}/output/${ARCH}/instal
 set(RK_AIQ_LIB_DIR ${RK_AIQ_INSTALLED_DIR}/lib)
 endif()
 message("rkaiq lib path" ${RK_AIQ_LIB_DIR})
+
 set(RK_AIQ_INCLUDE_DIR
 	${RK_AIQ_INSTALLED_DIR}/
 	${RK_AIQ_INSTALLED_DIR}/rkaiq/
@@ -141,3 +166,7 @@ add_library(smartIr_static STATIC ${SMARTIR_SRC})
 install(DIRECTORY include/ DESTINATION include/rkaiq/smartIr FILES_MATCHING PATTERN "*.h")
 install(FILES ${CMAKE_LIBRARY_PATH}/libsmartIr.so DESTINATION lib)
 install(FILES ${CMAKE_LIBRARY_PATH}/libsmartIr_static.a DESTINATION lib RENAME libsmartIr.a)
+
+if (EXISTS ${PROJECT_SOURCE_DIR}/demo)
+	add_subdirectory(demo)
+endif()

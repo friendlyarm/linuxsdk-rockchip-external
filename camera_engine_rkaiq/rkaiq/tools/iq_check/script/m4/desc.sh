@@ -68,6 +68,7 @@ handle_bool() {
 }
 
 handle_generic_desc() {
+	set -f
 	echo -n "@desc: "
 	while [ $# != 0 ]; do
 		echo -n $1
@@ -76,6 +77,7 @@ handle_generic_desc() {
 		fi
 		shift
 	done
+	set +f
 
 	#echo -n @desc: $@
 }

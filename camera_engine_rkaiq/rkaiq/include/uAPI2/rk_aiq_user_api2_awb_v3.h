@@ -71,7 +71,8 @@ XCamReturn
 rk_aiq_user_api2_awb_loadConvertLut(rk_aiq_uapiV2_awb_Gain_Lut_Cfg_t *gain_lut_cfg, char *fullfile);
 XCamReturn
 rk_aiq_user_api2_awb_wbgainConvert2(rk_aiq_wb_gain_t  wbGainIn, rk_aiq_uapiV2_awb_Gain_Lut_Cfg_t *gain_lut_cfg, rk_aiq_wb_gain_t  *wbGainOut);
-
+XCamReturn
+rk_aiq_user_api2_awb_SetNNres(const rk_aiq_sys_ctx_t* sys_ctx, awb_ai_res_t *attr);
 
 RKAIQ_END_DECLARE
 

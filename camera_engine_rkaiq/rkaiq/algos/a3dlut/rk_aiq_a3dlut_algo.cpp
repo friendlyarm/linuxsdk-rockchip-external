@@ -292,7 +292,7 @@ XCamReturn Alut3dAutoConfig
         ret = InterpLutbyAlp(hAlut3d->restinfo.alpha, &hAlut3d->lut0,
                         (const rk_aiq_lut3d_hw_tbl_t *)(&hAlut3d->restinfo.pLutProfile->Table),
                         &hAlut3d->lut3d_hw_conf.tbl);
-    } else if (hAlut3d->calibV2_lut3d->ALut3D.damp_en && ((hAlut3d->swinfo.count <= 1) || (hAlut3d->swinfo.invarMode == 0))) { // first frame or attr mode changed
+    } else if (hAlut3d->calibV2_lut3d->ALut3D.damp_en && ((hAlut3d->swinfo.count <= 1) || (hAlut3d->swinfo.invarMode == 0) || hAlut3d->update)) { // first frame or attr mode changed or switch scene
         hAlut3d->swinfo.lut3dConverged = true;
         ret = InterpLutbyAlp(hAlut3d->restinfo.alpha, &hAlut3d->lut0,
                         (const rk_aiq_lut3d_hw_tbl_t *)(&hAlut3d->restinfo.pLutProfile->Table),
@@ -310,8 +310,13 @@ XCamReturn Alut3dAutoConfig
 
         memcpy(hAlut3d->restinfo.lutSum_last, hAlut3d->restinfo.lutSum, sizeof(int)*3);
 
-        LOGD_A3DLUT("DampCoef = %f, damp lutB[7] = %d, lut converge: %d, count = %d\n", hAlut3d->swinfo.awbIIRDampCoef, hAlut3d->lut3d_hw_conf.tbl.look_up_table_b[7],
-                    hAlut3d->swinfo.lut3dConverged, hAlut3d->swinfo.count);
+        LOGD_A3DLUT("DampCoef = %f, damp lut[721] = (%d, %d, %d), lut converge: %d, count = %d\n",
+                        hAlut3d->swinfo.awbIIRDampCoef,
+                        hAlut3d->lut3d_hw_conf.tbl.look_up_table_r[721],
+                        hAlut3d->lut3d_hw_conf.tbl.look_up_table_g[721],
+                        hAlut3d->lut3d_hw_conf.tbl.look_up_table_b[721],
+                        hAlut3d->swinfo.lut3dConverged,
+                        hAlut3d->swinfo.count);
 
     } else {
         hAlut3d->swinfo.lut3dConverged = true;
@@ -330,8 +335,8 @@ XCamReturn Alut3dManualConfig
     LOGI_A3DLUT("%s: (enter)\n", __FUNCTION__);
 
     memcpy(hAlut3d->lut3d_hw_conf.tbl.look_up_table_r, hAlut3d->mCurAtt.stManual.look_up_table_r, sizeof(unsigned short)*LUT3D_LUT_WSIZE);
-    memcpy(hAlut3d->lut3d_hw_conf.tbl.look_up_table_r, hAlut3d->mCurAtt.stManual.look_up_table_r, sizeof(unsigned short)*LUT3D_LUT_WSIZE);
-    memcpy(hAlut3d->lut3d_hw_conf.tbl.look_up_table_r, hAlut3d->mCurAtt.stManual.look_up_table_r, sizeof(unsigned short)*LUT3D_LUT_WSIZE);
+    memcpy(hAlut3d->lut3d_hw_conf.tbl.look_up_table_g, hAlut3d->mCurAtt.stManual.look_up_table_g, sizeof(unsigned short)*LUT3D_LUT_WSIZE);
+    memcpy(hAlut3d->lut3d_hw_conf.tbl.look_up_table_b, hAlut3d->mCurAtt.stManual.look_up_table_b, sizeof(unsigned short)*LUT3D_LUT_WSIZE);
 
     LOGI_A3DLUT("%s: (exit)\n", __FUNCTION__);
 
@@ -516,9 +521,9 @@ XCamReturn Alut3dInit(alut3d_handle_t *hAlut3d, const CamCalibDbV2Context_t* cal
     alut3d_contex->restinfo.lutSum[0] = 0;
     alut3d_contex->restinfo.lutSum[1] = 0;
     alut3d_contex->restinfo.lutSum[2] = 0;
-    alut3d_contex->restinfo.lutSum_last[0] = 0;
-    alut3d_contex->restinfo.lutSum_last[1] = 0;
-    alut3d_contex->restinfo.lutSum_last[2] = 0;
+    alut3d_contex->restinfo.lutSum_last[0] = -1;
+    alut3d_contex->restinfo.lutSum_last[1] = -1;
+    alut3d_contex->restinfo.lutSum_last[2] = -1;
 #if RKAIQ_A3DLUT_ILLU_VOTE
     INIT_LIST_HEAD(&alut3d_contex->restinfo.dominateIdxList);
 #endif

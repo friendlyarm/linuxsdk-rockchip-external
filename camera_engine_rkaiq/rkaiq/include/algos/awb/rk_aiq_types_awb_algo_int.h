@@ -142,6 +142,7 @@ typedef struct rk_aiq_wb_querry_info_s {
     uint32_t LVValue;
     rk_aiq_wb_gain_t stat_gain_glb;
     rk_aiq_wb_gain_t stat_gain_blk;
+    rk_aiq_op_mode_t opMode;
 } rk_aiq_wb_querry_info_t;
 
 typedef enum rk_aiq_wb_lock_state_s {
@@ -579,6 +580,12 @@ typedef struct rk_aiq_uapiV2_Wb_Awb_IqAtExtPa_V32_s {
     CalibDbV2_Awb_gain_offset_cfg_t wbGainOffset;
     CalibDbV2_Awb_Ava_Site_Rec_t avaSiteRec;
 } rk_aiq_uapiV2_Wb_Awb_IqAtExtPa_V32_t;
+
+typedef struct awb_ai_res_s {
+    rk_aiq_wb_gain_t awb_gain;
+    float   confidence;
+    bool    converged;
+}awb_ai_res_t;
 
 #endif
 

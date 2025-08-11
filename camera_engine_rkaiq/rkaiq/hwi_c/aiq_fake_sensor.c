@@ -264,7 +264,7 @@ static XCamReturn _setExposureParams(AiqSensorHw_t* pBaseSns, AiqAecExpInfoWrapp
 
     ENTER_CAMHW_FUNCTION();
 
-    if (pBaseSns->_first) {
+    if (pBaseSns->_first && !pFakeSnsHw->use_rkrawstream) {
         AiqAecExpInfoWrapper_t* aec_exp = expPar;
         AiqSensorExpInfo_t* pSnsExp     = NULL;
         if (aec_exp->ae_proc_res_rk.exp_set_cnt > 0) {
@@ -386,7 +386,7 @@ static XCamReturn _start(AiqSensorHw_t* pSnsHw, bool prepared) {
     (*v4l2_dev->start)(v4l2_dev, prepared);
 
     if (!pFakeSnsHw->use_rkrawstream) {
-        CTimer_SetTimer(pFakeSnsHw->_timer, 0, 100000);
+        CTimer_SetTimer(pFakeSnsHw->_timer, 0, 5000);
         CTimer_StartTimer(pFakeSnsHw->_timer);
     }
 
@@ -634,13 +634,12 @@ static int _vbuf_list_cb(AiqListItem_t* item, void* args) {
                         buf->buf_info[dev_idx].data_addr, ptr);
         if (buf->buf_info[dev_idx].data_addr == (uint8_t*)ptr) {
             buf->buf_info[dev_idx].valid = false;
-            ret                          = 1;
             cb_args->item                = item;
             goto out;
         }
     } else if (raw_type == RK_AIQ_RAW_ADDR) {
         uintptr_t ptr = AiqV4l2Buffer_getExpbufUsrptr(v4l2_buf);
-        LOGD_CAMHW_SUBM(FAKECAM_SUBM, "rawbuf_type(addr): %p vs 0x%x",
+        LOGD_CAMHW_SUBM(FAKECAM_SUBM, "rawbuf_type(addr): %p vs 0x%lx",
                         buf->buf_info[dev_idx].data_addr, ptr);
         if (buf->buf_info[dev_idx].data_addr == (uint8_t*)ptr) {
             buf->buf_info[dev_idx].valid = false;
@@ -756,6 +755,18 @@ static XCamReturn _set_mipi_tx_devs(AiqFakeSensorHw_t* pFakeSns, AiqV4l2Device_t
     return XCAM_RETURN_NO_ERROR;
 }
 
+static XCamReturn
+_set_fake_sensor_format(AiqFakeSensorHw_t* pFakeSns,
+                    int width, int height, uint32_t fmt_core)
+{
+    ENTER_CAMHW_FUNCTION();
+    pFakeSns->_width = width;
+    pFakeSns->_height = height;
+    pFakeSns->_fmt_code = fmt_core;
+    EXIT_CAMHW_FUNCTION();
+    return XCAM_RETURN_NO_ERROR;
+}
+
 void AiqFakeSensorHw_init(AiqFakeSensorHw_t* pFakeSnsHw, const char* name, int cid) {
     aiq_memset(pFakeSnsHw, 0, sizeof(AiqFakeSensorHw_t));
     AiqSensorHw_t* pSnsHw   = (AiqSensorHw_t*)pFakeSnsHw;
@@ -789,7 +800,11 @@ void AiqFakeSensorHw_init(AiqFakeSensorHw_t* pFakeSnsHw, const char* name, int c
     pFakeSnsHw->set_mipi_tx_devs          = _set_mipi_tx_devs;
     pFakeSnsHw->enqueue_rawbuffer         = _enqueue_rawbuffer;
     pFakeSnsHw->on_dqueue                 = _on_dqueue;
+    pFakeSnsHw->set_fake_sensor_format    = _set_fake_sensor_format;
     pFakeSnsHw->register_rawdata_callback = _register_rawdata_callback;
+#if RKAIQ_HAVE_DUMPSYS
+    pSnsHw->dump = NULL;
+#endif
     {
         // init list
         AiqListConfig_t vBufListCfg;

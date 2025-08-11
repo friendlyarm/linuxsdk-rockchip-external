@@ -68,6 +68,8 @@ typedef struct{
     // TODO
 } awb_status_t;
 
+
+
 RKAIQ_END_DECLARE
 
 #endif

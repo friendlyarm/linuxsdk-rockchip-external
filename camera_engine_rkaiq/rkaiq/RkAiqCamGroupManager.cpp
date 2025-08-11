@@ -1408,13 +1408,17 @@ RkAiqCamGroupManager::reProcess(rk_aiq_groupcam_result_t* gc_res)
                 if (aiqManager->mRkAiqAnalyzer.ptr()) {
                     RkAiqCore::RkAiqAlgosComShared_t& sharedCom = aiqManager->mRkAiqAnalyzer->mAlogsComSharedParams;
                     memcpy(&scam_3a_res->_otp_awb, &sharedCom.snsDes.otp_awb, sizeof(sharedCom.snsDes.otp_awb));
+                    memcpy(&scam_3a_res->_otp_lsc, &sharedCom.otp_lsc_Cfg, sizeof(sharedCom.otp_lsc_Cfg));
 
-                    LOGD_CAMGROUP("camId:%d, user awb otp: flag: %d, r:%d,b:%d,gr:%d,gb:%d, golden r:%d,b:%d,gr:%d,gb:%d\n",
+                    LOGD_CAMGROUP("camId:%d, user awb otp: flag: %d, r:%d,b:%d,gr:%d,gb:%d, golden r:%d,b:%d,gr:%d,gb:%d;\
+                                   user lsc otp: flag: %d, r[0]: %d, gr[0]: %d, gb[0]: %d, b[0]: %d\n",
                                   i, scam_3a_res->_otp_awb.flag,
                                   scam_3a_res->_otp_awb.r_value, scam_3a_res->_otp_awb.b_value,
                                   scam_3a_res->_otp_awb.gr_value, scam_3a_res->_otp_awb.gb_value,
                                   scam_3a_res->_otp_awb.golden_r_value, scam_3a_res->_otp_awb.golden_b_value,
-                                  scam_3a_res->_otp_awb.golden_gr_value, scam_3a_res->_otp_awb.golden_gb_value);
+                                  scam_3a_res->_otp_awb.golden_gr_value, scam_3a_res->_otp_awb.golden_gb_value,
+                                  scam_3a_res->_otp_lsc.flag, scam_3a_res->_otp_lsc.lsc_r[0], scam_3a_res->_otp_lsc.lsc_gr[0],
+                                  scam_3a_res->_otp_lsc.lsc_gb[0], scam_3a_res->_otp_lsc.lsc_b[0]);
                 }
             }
 

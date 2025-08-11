@@ -26,6 +26,7 @@
 #include "interpolation.h"
 #include "RkAiqCalibDbV2Helper.h"
 #include "rk_aiq_alsc_convert_otp.h"
+//#define ARCHER_DEBUG 1
 
 RKAIQ_BEGIN_DECLARE
 
@@ -83,24 +84,79 @@ static void _test_if_hw_lsc_valid(alsc_handle_t hAlsc)
 }
 #endif
 
-static void genLscMatrixToHwConf(lsc_matrix_t *dampedLscMatrixTable, rk_aiq_lsc_cfg_t *lscHwConf, alsc_otp_grad_t *otpGrad)
+#if ARCHER_DEBUG
+static void print_alsc_illu_case(alsc_illu_case_t* illu_case) {
+    if (!illu_case->alsc_cof)
+        return;
+    const CalibDbV2_AlscCof_ill_t *alsc_cof = illu_case->alsc_cof;
+    char tmp[256] = {0};
+    printf("usedForCase: %d\n", alsc_cof->usedForCase);
+    printf("%s\n", alsc_cof->name);
+    printf("[%f, %f]\n", alsc_cof->wbGain[0], alsc_cof->wbGain[1]);
+    for (int i = 0; i < alsc_cof->tableUsed_len; i++) {
+        printf("(%d): %s\n", i, alsc_cof->tableUsed[i].name);
+    }
+    for (int i = 0; i < alsc_cof->gains_len; i++) {
+        printf("%f, ", alsc_cof->gains[i]);
+    }
+    printf("\n");
+    for (int i = 0; i < alsc_cof->vig_len; i++) {
+        printf("%f, ", alsc_cof->vig[i]);
+    }
+    printf("\n\n");
+
+    for (uint32_t i = 0; i < illu_case->res_count; i++) {
+        alsc_illu_case_resolution_t& res = illu_case->res_group[i];
+        printf("%s\n", res.resolution.name);
+        printf("%d\n", res.lsc_table_count);
+        for (int k = 0; k < res.lsc_table_count; k++) {
+            printf("(%d) %s, %s, %s, %f\n", k, res.lsc_table_group[k]->name,
+            res.lsc_table_group[k]->resolution,
+            res.lsc_table_group[k]->illumination,
+            res.lsc_table_group[k]->vignetting);
+        }
+    }
+    printf("current_res_idx: %d \n", illu_case->current_res_idx);
+}
+
+static void print_alsc(alsc_handle_t hAlsc)
+{
+    for (int case_id = 0; case_id < USED_FOR_CASE_MAX; case_id++)
+    {
+        alsc_mode_data_t& mode = hAlsc->alsc_mode[case_id];
+        if (mode.illu_case_count == 0) {
+            continue;
+        }
+        for (uint32_t ill_id = 0; ill_id < mode.illu_case_count; ill_id++)
+        {
+            alsc_illu_case_t* illu_case = mode.illu_case[ill_id];
+            print_alsc_illu_case(illu_case);
+        }
+    }
+    printf("enable %d\n", hAlsc->calibLscV2->common.enable);
+    printf("res length %d\n", hAlsc->calibLscV2->common.resolutionAll_len);
+    printf("damp %d\n", hAlsc->calibLscV2->alscCoef.damp_enable);
+    printf("illAll length %d\n", hAlsc->calibLscV2->alscCoef.illAll_len);
+    printf("tableAll length %d\n", hAlsc->calibLscV2->tbl.tableAll_len);
+}
+#endif
+
+static void genLscMatrixToHwConf(lsc_matrix_t *dampedLscMatrixTable, rk_aiq_lsc_cfg_t *lscHwConf)
 {
     if (!dampedLscMatrixTable || !lscHwConf) {
         LOGE_ALSC("%s: input params is error!\n", __func__);
         return;
     }
 
-    // apply sensor lsc otp
-    for (int32_t i = 0; i < LSC_DATA_TBL_SIZE; i++) {
-        lscHwConf->r_data_tbl[i]    = dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[i] * \
-                                            (float(otpGrad->lsc_r[i]) / 1024) + 0.5;
-        lscHwConf->gr_data_tbl[i]   = dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[i] * \
-                                            (float(otpGrad->lsc_gr[i]) / 1024) + 0.5;
-        lscHwConf->gb_data_tbl[i]   = dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[i] * \
-                                            (float(otpGrad->lsc_gb[i]) / 1024) + 0.5;
-        lscHwConf->b_data_tbl[i]    = dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[i] * \
-                                            (float(otpGrad->lsc_b[i]) / 1024) + 0.5;
-    }
+    memcpy(lscHwConf->r_data_tbl, dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff,
+            sizeof(dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff));
+    memcpy(lscHwConf->gr_data_tbl, dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff,
+            sizeof(dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff));
+    memcpy(lscHwConf->gb_data_tbl, dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff,
+            sizeof(dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff));
+    memcpy(lscHwConf->b_data_tbl, dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff,
+            sizeof(dampedLscMatrixTable->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff));
+
  }
 
 XCamReturn illuminant_index_estimation(alsc_mode_data_t& alsc_mode_data, float awbGain[2], uint32_t& illu_case_id)
@@ -357,114 +413,6 @@ static XCamReturn Damping
                    lscHwConf->b_data_tbl[1],
                    lscHwConf->b_data_tbl[2],
                    lscHwConf->b_data_tbl[3]
-                 );
-
-        *converge = speedDamp;
-        XCamReturn = XCAM_RETURN_NO_ERROR;
-    }
-
-    return (XCamReturn);
-}
-
-static XCamReturn DampingandOtp
-(
-    float     damp,               /**< damping coefficient */
-    lsc_matrix_t*  pMatrixUndamped,   /**< undamped new computed matrices */
-    lsc_matrix_t*  pMatrixDamped,      /**< old matrices and XCamReturn */
-    alsc_otp_grad_t *otpGrad,
-    rk_aiq_lsc_cfg_t *lscHwConf,
-    bool* converge
-) {
-    XCamReturn XCamReturn = XCAM_RETURN_ERROR_PARAM;
-
-    if ((pMatrixUndamped != NULL) && (pMatrixDamped != NULL)) {
-        /* left shift 16 */
-        uint32_t f1_ = (uint32_t)(damp * 65536.0f);
-        uint32_t f2_ = (uint32_t)(65536U - f1_);
-
-        int16_t i;
-
-        uint32_t red;
-        uint32_t greenr;
-        uint32_t greenb;
-        uint32_t blue;
-        float dis=0;
-        float dis_th=0.015;
-        bool speedDamp = true;
-        dis = (float)(pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[0]-
-            pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[0])/
-            (pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[0]+
-            pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[0]);
-        speedDamp = fabs(dis)<dis_th;
-        dis = (float)(pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[LSC_DATA_TBL_SIZE-1]-
-            pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[LSC_DATA_TBL_SIZE-1])/
-            (pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[LSC_DATA_TBL_SIZE-1]+
-            pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[LSC_DATA_TBL_SIZE-1]);
-        speedDamp &= fabs(dis)<dis_th;
-        if(speedDamp){
-            damp = 0;
-            f1_ = 0;
-            f2_ = 65536;
-        }
-
-        for (i = 0; i < (LSC_DATA_TBL_SIZE); i++) {
-            red     = (f1_ * (uint32_t)pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[i])
-                    + (f2_ * (uint32_t)pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[i]);
-
-            greenr  = (f1_ * (uint32_t)pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[i])
-                    + (f2_ * (uint32_t)pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[i]);
-
-            greenb  = (f1_ * (uint32_t)pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[i])
-                    + (f2_ * (uint32_t)pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[i]);
-
-            blue    = (f1_ * (uint32_t)pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[i])
-                    + (f2_ * (uint32_t)pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[i]);
-
-            /* with round up (add 65536/2 <=> 0.5) before right shift */
-            pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[i]    = (uint16_t)((red    + (65536 >> 1)) >> 16);
-            pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[i] = (uint16_t)((greenr + (65536 >> 1)) >> 16);
-            pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[i] = (uint16_t)((greenb + (65536 >> 1)) >> 16);
-            pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[i]   = (uint16_t)((blue   + (65536 >> 1)) >> 16);
-        }
-
-        genLscMatrixToHwConf(pMatrixDamped, lscHwConf, otpGrad);
-
-        LOGD_ALSC( "dampfactor:%f", damp);
-        LOGD_ALSC( " undampedLscMatrix r[0:3]:%d,%d,%d,%d, gr[0:3]:%d,%d,%d,%d, gb[0:3]:%d,%d,%d,%d, b[0:3]:%d,%d,%d,%d\n",
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[0],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[1],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[2],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[3],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[0],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[1],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[2],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[3],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[0],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[1],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[2],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[3],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[0],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[1],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[2],
-                   pMatrixUndamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[3]
-                 );
-        LOGD_ALSC( " dampedLscMatrix r[0:3]:%d,%d,%d,%d, gr[0:3]:%d,%d,%d,%d, gb[0:3]:%d,%d,%d,%d, b[0:3]:%d,%d,%d,%d\n",
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[0],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[1],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[2],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_RED].uCoeff[3],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[0],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[1],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[2],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENR].uCoeff[3],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[0],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[1],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[2],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_GREENB].uCoeff[3],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[0],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[1],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[2],
-                   pMatrixDamped->LscMatrix[CAM_4CH_COLOR_COMPONENT_BLUE].uCoeff[3]
                  );
 
         *converge = speedDamp;
@@ -838,6 +786,10 @@ static XCamReturn UpdateLscCalibPara(alsc_handle_t hAlsc)
         update_count[used_case]++;
     }
 
+#if ARCHER_DEBUG
+    print_alsc(hAlsc);
+#endif
+
     // molloc & calculate the grad table
     hAlsc->res_grad_count = calib2->common.resolutionAll_len;
     hAlsc->res_grad = (alsc_grad_t*)malloc(hAlsc->res_grad_count * sizeof(alsc_grad_t));
@@ -869,65 +821,6 @@ static XCamReturn UpdateLscCalibPara(alsc_handle_t hAlsc)
     return XCAM_RETURN_NO_ERROR;
 }
 
-#if ARCHER_DEBUG
-static void print_alsc_illu_case(alsc_illu_case_t& illu_case) {
-    const CalibDbV2_AlscCof_ill_t *alsc_cof = illu_case.alsc_cof;
-    char tmp[256] = {0};
-    COUT(alsc_cof->usedForCase);
-    COUT(alsc_cof->name);
-    COUT(alsc_cof->wbGain[0]);
-    COUT(alsc_cof->wbGain[1]);
-    for (int i = 0; i < alsc_cof->tableUsed_len; i++) {
-        COUT(i);
-        COUT(alsc_cof->tableUsed[i].name);
-    }
-    array2str(alsc_cof->gains, alsc_cof->gains_len, tmp);
-    COUT2(alsc_cof->gains, tmp);
-    memset(tmp, 0, sizeof(tmp));
-    array2str(alsc_cof->vig, alsc_cof->vig_len, tmp);
-    COUT2(alsc_cof->vig, tmp);
-    ENDL;
-
-    for (int i = 0; i < illu_case.res_count; i++) {
-        alsc_illu_case_resolution_t& res = illu_case.res_group[i];
-        COUT(res.resolution.name);
-        COUT(res.lsc_table_count);
-        for (int k = 0; k < res.lsc_table_count; k++) {
-            COUT(k);
-            COUT(res.lsc_table_group[k]->name);
-            COUT(res.lsc_table_group[k]->resolution);
-            COUT(res.lsc_table_group[k]->illumination);
-            COUT(res.lsc_table_group[k]->vignetting);
-        }
-    }
-    COUT(illu_case.current_res_idx);
-
-    ENDL;
-    ENDL;
-}
-
-static void print_alsc(alsc_handle_t hAlsc)
-{
-    for (int case_id = 0; case_id < USED_FOR_CASE_MAX; case_id++)
-    {
-        alsc_mode_data_t& mode = hAlsc->alsc_mode[case_id];
-        if (mode.illu_case_count == 0) {
-            continue;
-        }
-        for (uint32_t ill_id = 0; ill_id < mode.illu_case_count; ill_id++)
-        {
-            alsc_illu_case_t& illu_case = mode.illu_case[ill_id];
-            print_alsc_illu_case(illu_case);
-        }
-    }
-    COUT(hAlsc->calibLscV2->common.enable);
-    COUT(hAlsc->calibLscV2->common.resolutionAll_len);
-    COUT(hAlsc->calibLscV2->alscCoef.damp_enable);
-    COUT(hAlsc->calibLscV2->alscCoef.illAll_len);
-    COUT(hAlsc->calibLscV2->tableAll_len);
-}
-#endif
-
 XCamReturn AlscAutoConfig(alsc_handle_t hAlsc)
 {
     if (hAlsc == NULL) {
@@ -947,15 +840,21 @@ XCamReturn AlscAutoConfig(alsc_handle_t hAlsc)
     }
 
     //1) Estimate best(nearest) illuminant case;
-    uint32_t estimateIlluCaseIdx;
+    uint32_t pre_estimateIlluCaseIdx;
     int dominateIlluListSize = 15;//to do from xml;
     //float varianceLumaTh = 0.006;//to do from xml;
-    ret = illuminant_index_estimation(alsc_mode_now, hAlsc->alscSwInfo.awbGain, estimateIlluCaseIdx);
+    ret = illuminant_index_estimation(alsc_mode_now, hAlsc->alscSwInfo.awbGain, pre_estimateIlluCaseIdx);
     RETURN_RESULT_IF_DIFFERENT(ret, XCAM_RETURN_NO_ERROR);
-    UpdateDominateIlluList(&hAlsc->alscRest.dominateIlluList, estimateIlluCaseIdx, dominateIlluListSize);
+    UpdateDominateIlluList(&hAlsc->alscRest.dominateIlluList, pre_estimateIlluCaseIdx, dominateIlluListSize);
+    uint32_t estimateIlluCaseIdx = pre_estimateIlluCaseIdx;
     //TODO: working mode which has only one illuminant case, like gray mode, does not need to estimate index.
     StableIlluEstimation(&hAlsc->alscRest.dominateIlluList, dominateIlluListSize,
         alsc_mode_now.illu_case_count, estimateIlluCaseIdx);
+
+    if (estimateIlluCaseIdx == pre_estimateIlluCaseIdx) {
+        hAlsc->smartRunRes.last_awbGain[0] = hAlsc->alscSwInfo.awbGain[0];
+        hAlsc->smartRunRes.last_awbGain[1] = hAlsc->alscSwInfo.awbGain[1];
+    }
 
     alsc_illu_case_t* illu_case = alsc_mode_now.illu_case[estimateIlluCaseIdx];
 
@@ -1039,17 +938,9 @@ XCamReturn AlscAutoConfig(alsc_handle_t hAlsc)
     if (!hAlsc->isReCal_ && hAlsc->smartRunRes.lscTableConverge) {
         hAlsc->isReCal_ = false;
     } else {
-        if (hAlsc->otpGrad.flag && hAlsc->otpGrad.table_size > 0){
-            ret = DampingandOtp(dampCoef, &hAlsc->alscRest.undampedLscMatrixTable,
-                    &hAlsc->alscRest.dampedLscMatrixTable,
-                    &hAlsc->otpGrad,
-                    &hAlsc->lscHwConf,
-                    &hAlsc->smartRunRes.lscTableConverge);
-        } else {
-            ret = Damping(dampCoef, &hAlsc->alscRest.undampedLscMatrixTable,
-                    &hAlsc->lscHwConf,
-                    &hAlsc->smartRunRes.lscTableConverge);
-        }
+        ret = Damping(dampCoef, &hAlsc->alscRest.undampedLscMatrixTable,
+                &hAlsc->lscHwConf,
+                &hAlsc->smartRunRes.lscTableConverge);
         hAlsc->isReCal_ = true;
     }
 
@@ -1134,8 +1025,6 @@ void JudgeAutoRun
 
     if ((hAlsc->smartRunRes.last_awbGain[0]-hAlsc->alscSwInfo.awbGain[0])*(hAlsc->smartRunRes.last_awbGain[0]-hAlsc->alscSwInfo.awbGain[0])
          + (hAlsc->smartRunRes.last_awbGain[1]-hAlsc->alscSwInfo.awbGain[1])*(hAlsc->smartRunRes.last_awbGain[1]-hAlsc->alscSwInfo.awbGain[1]) > wb_th) {
-        hAlsc->smartRunRes.last_awbGain[0] = hAlsc->alscSwInfo.awbGain[0];
-        hAlsc->smartRunRes.last_awbGain[1] = hAlsc->alscSwInfo.awbGain[1];
         wbgainStable = false;
         LOGD_ALSC("update wbgain: %f, %f\n", hAlsc->alscSwInfo.awbGain[0], hAlsc->alscSwInfo.awbGain[1]);
     } else {
@@ -1199,9 +1088,11 @@ XCamReturn AlscConfig
                     || hAlsc->smartRunRes.forceRunFlag) {
                 AlscAutoConfig(hAlsc);
             }
-        } else if(hAlsc->mCurAtt.mode == RK_AIQ_LSC_MODE_MANUAL && hAlsc->updateAtt) {
-            AlscManualConfig(hAlsc);
-            hAlsc->isReCal_ = true;
+        } else if(hAlsc->mCurAtt.mode == RK_AIQ_LSC_MODE_MANUAL) {
+            if (hAlsc->updateAtt) {
+                AlscManualConfig(hAlsc);
+                hAlsc->isReCal_ = true;
+            }
         } else {
             LOGE_ALSC("%s: hAlsc->mCurAtt.mode(%d) is invalid \n", __FUNCTION__, hAlsc->mCurAtt.mode);
         }
@@ -1252,6 +1143,91 @@ XCamReturn AlscConfig
 
 }
 
+static void ApiInit(rk_aiq_lsc_attrib_t* attr, const CalibDbV2_LSC_t* calib)
+{
+    if (calib) {
+        int max_length;
+        if (calib->common.resolutionAll) {
+            max_length = calib->common.resolutionAll_len > LSC_MAX_RESOLUTION ?
+                         LSC_MAX_RESOLUTION : calib->common.resolutionAll_len;
+            for (int i = 0; i < max_length; i++) {
+                memcpy(attr->stAuto.common.resolutionAll[i].name,
+                       calib->common.resolutionAll[i].name,
+                       sizeof(calib->common.resolutionAll[i].name));
+                memcpy(attr->stAuto.common.resolutionAll[i].lsc_sect_size_x,
+                       calib->common.resolutionAll[i].lsc_sect_size_x,
+                       sizeof(calib->common.resolutionAll[i].lsc_sect_size_x));
+                memcpy(attr->stAuto.common.resolutionAll[i].lsc_sect_size_y,
+                       calib->common.resolutionAll[i].lsc_sect_size_y,
+                       sizeof(calib->common.resolutionAll[i].lsc_sect_size_y));
+            }
+            attr->stAuto.common.resolutionAll_len = max_length;
+
+            attr->stAuto.alscCoef.damp_enable = calib->alscCoef.damp_enable;
+
+            if (calib->alscCoef.illAll) {
+                max_length = calib->alscCoef.illAll_len > LSC_MAX_ILLUMINANT ?
+                            LSC_MAX_ILLUMINANT : calib->alscCoef.illAll_len;
+                for (int i = 0; i < max_length; i++) {
+                    attr->stAuto.alscCoef.illAll[i].usedForCase =
+                        calib->alscCoef.illAll[i].usedForCase;
+
+                    memcpy(attr->stAuto.alscCoef.illAll[i].name,
+                           calib->alscCoef.illAll[i].name,
+                           sizeof(calib->alscCoef.illAll[i].name));
+
+                    memcpy(attr->stAuto.alscCoef.illAll[i].wbGain,
+                           calib->alscCoef.illAll[i].wbGain,
+                           sizeof(calib->alscCoef.illAll[i].wbGain));
+
+                    for (int j = 0; j < calib->alscCoef.illAll[i].tableUsed_len; j++) {
+                        attr->stAuto.alscCoef.illAll[i].tableUsed[j] =
+                                calib->alscCoef.illAll[i].tableUsed[j];
+                    }
+
+                    attr->stAuto.alscCoef.illAll[i].tableUsed_len =
+                        calib->alscCoef.illAll[i].tableUsed_len;
+
+                    memcpy(attr->stAuto.alscCoef.illAll[i].gains,
+                           calib->alscCoef.illAll[i].gains,
+                           calib->alscCoef.illAll[i].gains_len*sizeof(float));
+                    attr->stAuto.alscCoef.illAll[i].gains_len =
+                        calib->alscCoef.illAll[i].gains_len;
+                    memcpy(attr->stAuto.alscCoef.illAll[i].vig,
+                           calib->alscCoef.illAll[i].vig,
+                           calib->alscCoef.illAll[i].vig_len*sizeof(float));
+                    attr->stAuto.alscCoef.illAll[i].vig_len =
+                        calib->alscCoef.illAll[i].vig_len;
+                }
+                attr->stAuto.alscCoef.illAll_len = max_length;
+            } else {
+                attr->stAuto.alscCoef.illAll_len = 0;
+            }
+
+            if (calib->tbl.tableAll) {
+                max_length = calib->tbl.tableAll_len > LSC_MAX_ILLUMINANT*LSC_MAX_RESOLUTION ?
+                            LSC_MAX_ILLUMINANT*LSC_MAX_RESOLUTION : calib->tbl.tableAll_len;
+                memcpy(attr->stAuto.tbl.tableAll,
+                       calib->tbl.tableAll,
+                       max_length*sizeof(CalibDbV2_LscTableProfile_t));
+                attr->stAuto.tbl.tableAll_len = max_length;
+                memcpy(attr->stManual.r_data_tbl, calib->tbl.tableAll[0].lsc_samples_red.uCoeff,
+                       sizeof(calib->tbl.tableAll[0].lsc_samples_red.uCoeff));
+                memcpy(attr->stManual.gr_data_tbl, calib->tbl.tableAll[0].lsc_samples_greenR.uCoeff,
+                       sizeof(calib->tbl.tableAll[0].lsc_samples_greenR.uCoeff));
+                memcpy(attr->stManual.gb_data_tbl, calib->tbl.tableAll[0].lsc_samples_greenB.uCoeff,
+                       sizeof(calib->tbl.tableAll[0].lsc_samples_greenB.uCoeff));
+                memcpy(attr->stManual.b_data_tbl, calib->tbl.tableAll[0].lsc_samples_blue.uCoeff,
+                       sizeof(calib->tbl.tableAll[0].lsc_samples_blue.uCoeff));
+            } else {
+                attr->stAuto.tbl.tableAll_len = 0;
+            }
+        } else {
+            attr->stAuto.common.resolutionAll_len = 0;
+        }
+    }
+}
+
 XCamReturn AlscInit(alsc_handle_t *hAlsc, const CamCalibDbV2Context_t* calib2)
 {
     LOGI_ALSC("%s: (enter)\n", __FUNCTION__);
@@ -1287,6 +1263,7 @@ XCamReturn AlscInit(alsc_handle_t *hAlsc, const CamCalibDbV2Context_t* calib2)
     alsc_context->smartRunRes.last_awbGain[0]= -1;
     alsc_context->smartRunRes.last_awbGain[1]= -1;
     alsc_context->smartRunRes.forceRunFlag = true;
+    ApiInit(&alsc_context->mCurAtt, alsc_context->calibLscV2);
     //alsc_context->alscSwInfo.prepare_type = RK_AIQ_ALGO_CONFTYPE_UPDATECALIB | RK_AIQ_ALGO_CONFTYPE_NEEDRESET;
     //ret = UpdateLscCalibPara(alsc_context);
     //print_alsc(alsc_context);
@@ -1344,6 +1321,14 @@ XCamReturn AlscPrepare(alsc_handle_t hAlsc)
         ret = XCAM_RETURN_ERROR_PARAM;
     }
 
+    if (hAlsc->mCurAtt.stManual.lsc_sect_size_x[0] == 0 &&
+        hAlsc->mCurAtt.stManual.lsc_sect_size_y[0] == 0) {
+            memcpy(hAlsc->mCurAtt.stManual.lsc_sect_size_x, hAlsc->lscHwConf.x_size_tbl,
+                sizeof(hAlsc->mCurAtt.stManual.lsc_sect_size_x));
+            memcpy(hAlsc->mCurAtt.stManual.lsc_sect_size_y, hAlsc->lscHwConf.y_size_tbl,
+                sizeof(hAlsc->mCurAtt.stManual.lsc_sect_size_y));
+    }
+
     const alsc_grad_t* cur_grad = NULL;
     for (uint32_t i = 0; i < hAlsc->res_grad_count; i++) {
         if (0 == strcmp(hAlsc->res_grad[i].resolution.name, hAlsc->cur_res.name)) {
@@ -1376,7 +1361,7 @@ XCamReturn AlscAutoParamClone(alsc_handle_t hAlsc)
     LOGI_ALSC("%s: (enter)\n", __FUNCTION__);
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
-    hAlsc->fixed_calib.common.enable            = hAlsc->mCurAtt.stAuto.common.enable;
+    hAlsc->fixed_calib.common.enable            = !hAlsc->mCurAtt.byPass;
     hAlsc->fixed_calib.common.resolutionAll     = (CalibDbV2_Lsc_Resolution_t*)hAlsc->mCurAtt.stAuto.common.resolutionAll;
     hAlsc->fixed_calib.common.resolutionAll_len = hAlsc->mCurAtt.stAuto.common.resolutionAll_len;
 
@@ -1429,7 +1414,7 @@ XCamReturn AlscAutoParamFree(alsc_handle_t hAlsc)
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     if (hAlsc->fixed_calib.alscCoef.illAll &&
-            (hAlsc->mCurAtt.stAuto.tbl.tableAll_len !=
+            (hAlsc->mCurAtt.stAuto.alscCoef.illAll_len !=
             hAlsc->fixed_calib.alscCoef.illAll_len)) {
         free(hAlsc->fixed_calib.alscCoef.illAll);
         hAlsc->fixed_calib.alscCoef.illAll = NULL;

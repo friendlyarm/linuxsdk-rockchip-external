@@ -53,8 +53,14 @@ XCamReturn RkAiqAorbHandleInt::prepare() {
         aorb_config_int->orb_calib_cfg.param.orb_en = orb->param.orb_en;
     }
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "aorb algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

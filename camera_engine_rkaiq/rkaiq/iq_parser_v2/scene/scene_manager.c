@@ -327,6 +327,8 @@ CamCalibDbV2Context_t* RkAiqSceneManagerCreateSceneCalib(
     CamCalibDbV2ContextIsp39_t *calib_scene = aiq_mallocz(sizeof(CamCalibDbV2ContextIsp39_t));
 #elif defined(ISP_HW_V33)
     CamCalibDbV2ContextIsp33_t *calib_scene = aiq_mallocz(sizeof(CamCalibDbV2ContextIsp33_t));
+#elif defined(ISP_HW_V35)
+    CamCalibDbV2ContextIsp35_t *calib_scene = aiq_mallocz(sizeof(CamCalibDbV2ContextIsp35_t));
 #else
 #error "WRONG ISP_HW_VERSION, ONLY SUPPORT V20 AND V21 AND V30 NOW !"
 #endif
@@ -371,6 +373,8 @@ CamCalibDbV2Context_t* RkAiqSceneManagerCreateSceneCalib(
     calib_json = RkCam_cJSONUtils_GetPointer(scene_json, "scene_isp39");
 #elif defined(ISP_HW_V33)
     calib_json = RkCam_cJSONUtils_GetPointer(scene_json, "scene_isp33");
+#elif defined(ISP_HW_V35)
+    calib_json = RkCam_cJSONUtils_GetPointer(scene_json, "scene_isp35");
 #else
 #error "WRONG ISP_HW_VERSION, ONLY SUPPORT V20 AND V21 AND V30 NOW !"
 #endif

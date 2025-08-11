@@ -22,7 +22,10 @@ cmake -G "Ninja" \
     -DISP_HW_VERSION=${ISP_HW_VERSION} \
     -DCMAKE_INSTALL_PREFIX="installed" \
     $SOURCE_PATH \
-&& ninja -j$(nproc) \
-&& ninja install
+&& ninja -j$(nproc)
+
+status_code=$?
 
 popd
+
+exit $status_code

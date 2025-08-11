@@ -571,7 +571,7 @@ void calcAecBigWinStatsV39(
 
     case RAWSTATS_CHN_B_EN:
         for (int i = 0; i < ISP32_RAWAEBIG_MEAN_NUM; i++) {
-            stats_out->channelb_xy[i] = CLIP((int)(stats_in->blk_y[i / 15].blk_x[i % 15].b / 256 - bls1_val.b), 0, MAX_10BITS);
+            stats_out->channelb_xy[i] = CLIP((int)(stats_in->blk_y[i / 15].blk_x[i % 15].b * awb1_gain.b / 256 - bls1_val.b), 0, MAX_10BITS);
             sum_xy += ((stats_out->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
@@ -753,7 +753,7 @@ XCamReturn RkAiqResourceTranslatorV39::translateAecStats(const SmartPtr<VideoBuf
                   stats->meas_type);
 
     SmartPtr<RkAiqIrisParamsProxy> irisParams = buf->get_iris_params();
-	
+
     // expsoure params
     if (_expParams.ptr()) {
 
@@ -815,7 +815,7 @@ XCamReturn RkAiqResourceTranslatorV39::translateAecStats(const SmartPtr<VideoBuf
         run_flag = getAeStatsRunFlag(HistMean);
         run_flag |= _aeAlgoStatsCfg.UpdateStats;
     }
-	
+
     if (run_flag) {
 
         if(Bnr20bitEn > 0) {
@@ -1047,7 +1047,7 @@ XCamReturn RkAiqResourceTranslatorV39::translateAecStats(const SmartPtr<VideoBuf
      *                 chn1_mean/ISP3X_RAWAEBIG_MEAN_NUM);
      */
 
-	_lastAeStats.ae_exp = statsInt->aec_stats.ae_exp;
+    _lastAeStats.ae_exp = statsInt->aec_stats.ae_exp;
 
     // iris params
     if (irisParams.ptr()) {
@@ -1108,7 +1108,7 @@ XCamReturn RkAiqResourceTranslatorV39::translateAwbStats(const SmartPtr<VideoBuf
     } else {
         statsInt->awb_stats_v39.dbginfo_fd = -1;
     }
-    statsInt->awb_stats_v39.awb_cfg_effect.blkMeasureMode = (rk_aiq_awb_blk_stat_mode_v201_t)(_ispParams.awb_cfg_v39.com.pixEngine.hw_awbCfg_zoneStatsSrc_mode>awbStats_pixAll_mode);
+    statsInt->awb_stats_v39.awb_cfg_effect.blkMeasureMode = (rk_aiq_awb_blk_stat_mode_v201_t)(_ispParams.awb_cfg_v39.com.pixEngine.hw_awbCfg_zoneStatsSrc_mode > awbStats_pixAll_mode);
     statsInt->awb_stats_v39.awb_cfg_effect.mode = _ispParams.awb_cfg_v39.mode;
     statsInt->awb_stats_v39.awb_cfg_effect.lightNum = _ispParams.awb_cfg_v39.com.wpEngine.hw_awbCfg_lightSrcNum_val;
     statsInt->awb_stats_v39.awb_cfg_effect.groupIllIndxCurrent = _ispParams.awb_cfg_v39.groupIllIndxCurrent;
@@ -1116,11 +1116,11 @@ XCamReturn RkAiqResourceTranslatorV39::translateAwbStats(const SmartPtr<VideoBuf
            sizeof(statsInt->awb_stats_v39.awb_cfg_effect.IllIndxSetCurrent));
     memcpy(statsInt->awb_stats_v39.awb_cfg_effect.timeSign, _ispParams.awb_cfg_v39.timeSign,
            sizeof(statsInt->awb_stats_v39.awb_cfg_effect.timeSign));
-    memcpy(statsInt->awb_stats_v39.awb_cfg_effect.preWbgainSw,_ispParams.awb_cfg_v39.preWbgainSw,
-        sizeof(_ispParams.awb_cfg_v39.preWbgainSw));
+    memcpy(statsInt->awb_stats_v39.awb_cfg_effect.preWbgainSw, _ispParams.awb_cfg_v39.preWbgainSw,
+           sizeof(_ispParams.awb_cfg_v39.preWbgainSw));
     statsInt->awb_cfg_effect_valid = true;
     statsInt->frame_id = stats->frame_id;
-    awbStats_stats_t *awb_stats_v39 =&statsInt->awb_stats_v39.com ;
+    awbStats_stats_t *awb_stats_v39 = &statsInt->awb_stats_v39.com ;
 
 
     for(int i = 0; i < statsInt->awb_stats_v39.awb_cfg_effect.lightNum; i++) {
@@ -1128,13 +1128,13 @@ XCamReturn RkAiqResourceTranslatorV39::translateAwbStats(const SmartPtr<VideoBuf
             stats->stat.rawawb.sum[i].rgain_nor;
         awb_stats_v39->wpEngine.norWp[i].hw_awbCfg_bGainSum_val =
             stats->stat.rawawb.sum[i].bgain_nor;
-        awb_stats_v39->wpEngine.norWp[i].hw_awbCfg_statsWp_count=
+        awb_stats_v39->wpEngine.norWp[i].hw_awbCfg_statsWp_count =
             stats->stat.rawawb.sum[i].wp_num_nor;
         awb_stats_v39->wpEngine.bigWp[i].hw_awbCfg_rGainSum_val =
             stats->stat.rawawb.sum[i].rgain_big;
         awb_stats_v39->wpEngine.bigWp[i].hw_awbCfg_bGainSum_val =
             stats->stat.rawawb.sum[i].bgain_big;
-        awb_stats_v39->wpEngine.bigWp[i].hw_awbCfg_statsWp_count=
+        awb_stats_v39->wpEngine.bigWp[i].hw_awbCfg_statsWp_count =
             stats->stat.rawawb.sum[i].wp_num_big;
     }
     memset(&statsInt->awb_stats_v39.sumBlkRGB, 0, sizeof(statsInt->awb_stats_v39.sumBlkRGB));
@@ -1144,7 +1144,7 @@ XCamReturn RkAiqResourceTranslatorV39::translateAwbStats(const SmartPtr<VideoBuf
             awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_rSum_val = stats->stat.rawawb.ramdata_blk_y[i].ramdata_blk_x[j].r;
             awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_gSum_val = stats->stat.rawawb.ramdata_blk_y[i].ramdata_blk_x[j].g;
             awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_bSum_val = stats->stat.rawawb.ramdata_blk_y[i].ramdata_blk_x[j].b;
-            awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_statsPix_count= stats->stat.rawawb.ramdata_blk_y[i].ramdata_blk_x[j].wp;
+            awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_statsPix_count = stats->stat.rawawb.ramdata_blk_y[i].ramdata_blk_x[j].wp;
             statsInt->awb_stats_v39.sumBlkRGB.Rvalue += awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_rSum_val;
             statsInt->awb_stats_v39.sumBlkRGB.Gvalue += awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_gSum_val;
             statsInt->awb_stats_v39.sumBlkRGB.Bvalue += awb_stats_v39->pixEngine.zonePix[index].hw_awbCfg_bSum_val;
@@ -1153,7 +1153,7 @@ XCamReturn RkAiqResourceTranslatorV39::translateAwbStats(const SmartPtr<VideoBuf
     }
 
     for(int i = 0; i < RK_AIQ_AWB_WP_HIST_BIN_NUM; i++) {
-        awb_stats_v39->wpEngine.hw_awb_wpHistBin_val[i]= stats->stat.rawawb.yhist[i];
+        awb_stats_v39->wpEngine.hw_awb_wpHistBin_val[i] = stats->stat.rawawb.yhist[i];
         // move the shift code here to make WpNoHist merged by several cameras easily
         if( stats->stat.rawawb.yhist[i]  & 0x8000 ) {
             awb_stats_v39->wpEngine.hw_awb_wpHistBin_val[i] = stats->stat.rawawb.yhist[i] & 0x7FFF;
@@ -1162,12 +1162,12 @@ XCamReturn RkAiqResourceTranslatorV39::translateAwbStats(const SmartPtr<VideoBuf
     }
 
     for(int i = 0; i < statsInt->awb_stats_v39.awb_cfg_effect.lightNum; i++) {
-        awb_stats_v39->wpEngine.hw_awbCfg_wpXyUvSpcRaw_cnt[i]=  stats->stat.rawawb.sum[i].wp_num2;
+        awb_stats_v39->wpEngine.hw_awbCfg_wpXyUvSpcRaw_cnt[i] =  stats->stat.rawawb.sum[i].wp_num2;
     }
     for(int i = 0; i < RK_AIQ_AWB_STAT_WP_RANGE_NUM_V201; i++) {
-        awb_stats_v39->wpFltOutFullEngine.fltPix[i].hw_awbCfg_rGainSum_val= stats->stat.rawawb.sum_exc[i].rgain_exc;
+        awb_stats_v39->wpFltOutFullEngine.fltPix[i].hw_awbCfg_rGainSum_val = stats->stat.rawawb.sum_exc[i].rgain_exc;
         awb_stats_v39->wpFltOutFullEngine.fltPix[i].hw_awbCfg_bGainSum_val = stats->stat.rawawb.sum_exc[i].bgain_exc;
-        awb_stats_v39->wpFltOutFullEngine.fltPix[i].hw_awbCfg_statsWp_count=    stats->stat.rawawb.sum_exc[i].wp_num_exc;
+        awb_stats_v39->wpFltOutFullEngine.fltPix[i].hw_awbCfg_statsWp_count =    stats->stat.rawawb.sum_exc[i].wp_num_exc;
 
     }
     to->set_sequence(stats->frame_id);

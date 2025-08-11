@@ -28,7 +28,7 @@
 #define SHORT_MODE_COEF_MAX         (0.001)
 #define HDR_LONG_FRMAE_MODE_OECURVE (0)
 
-int mergeClipValue(float posx, int BitInt, int BitFloat, bool ifBitMax) {
+static int mergeClipValue(float posx, int BitInt, int BitFloat, bool ifBitMax) {
     int yOutInt = 0, yOutIntMin = 0, yOutIntMax = 0;
 
     if (ifBitMax)
@@ -69,23 +69,19 @@ void rk_aiq_merge22_params_dump(void* attr, isp_params_t* isp_params) {
     }
 }
 
-void rk_aiq_merge22_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_info_t* cvtinfo) {
+void rk_aiq_merge22_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_info_t* cvtinfo, mergeLuma2Wgt_t* pMergeLuma2Wgt) {
     struct isp32_hdrmge_cfg* phwcfg = &isp_params->isp_cfg->others.hdrmge_cfg;
     mge_param_t* merge_param        = (mge_param_t*)attr;
     mge_params_dyn_t* pdyn          = &merge_param->dyn;
     mge_params_static_t* psta       = &merge_param->sta;
+    int luma_idx[17] = {512, 544, 576, 608, 640, 672, 704, 736, 768, 800, 832, 864, 896, 928, 960, 992, 1024};
 
     if (psta->expRat.sw_mgeCfg_expRat_mode == mge_expRatSyncAE_mode) {
         psta->expRat.sw_mgeCfg_expRatFix_val = cvtinfo->L2S_Ratio;
     }
     bool LongFrmMode = cvtinfo->ae_exp->HdrExp[cvtinfo->frameNum - 1].exp_real_params.longfrm_mode;
-
-    float SGain = cvtinfo->ae_exp->HdrExp[0].exp_real_params.analog_gain *
-                  cvtinfo->ae_exp->HdrExp[0].exp_real_params.digital_gain *
-                  cvtinfo->ae_exp->HdrExp[0].exp_real_params.isp_dgain;
-    if (pdyn->sw_mgeT_baseFrm_mode == mge_baseHdrS_mode) {
-        float Coef = pdyn->mdWgt_baseHdrS.sw_mgeT_wgtMaxTh_strg * SHORT_MODE_COEF_MAX;
-        pdyn->mdWgt_baseHdrS.sw_mgeT_wgtMaxTh_strg = pow(100.0f * Coef * SGain, 0.5f);
+    if (LongFrmMode) {
+        psta->expRat.sw_mgeCfg_expRatFix_val = 1.0f;
     }
 
     phwcfg->mode = cvtinfo->frameNum - 1;
@@ -121,6 +117,10 @@ void rk_aiq_merge22_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
             }
         }
     }
+    for (int i = 0; i < MGE_OECURVE_LEN; i++) {
+        pMergeLuma2Wgt->luma_idx[i] = luma_idx[i];
+        pMergeLuma2Wgt->luma_wgt[i] = (float)phwcfg->e_y[i] / 1024.0;
+    }
 
     if (pdyn->sw_mgeT_baseFrm_mode == mge_baseHdrL_mode) {
         if (pdyn->mdWgt_baseHdrL.sw_mgeT_mdLut_mode == mge_cfgByCurveDirectly_mode) {
@@ -140,7 +140,7 @@ void rk_aiq_merge22_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
                 curve0 = 1.0f +
                          exp(-pdyn->mdWgt_baseHdrL.sw_mgeT_lumaLutCreate_slope * MDCURVESMOOTHMAX *
                              (k / 1023.0f - pdyn->mdWgt_baseHdrL.hw_mgeT_lumaLutCreate_offset *
-                                                MDCURVEOFFSETMAX / 256.0f));
+                              MDCURVEOFFSETMAX / 256.0f));
                 curve0                   = 1024.0f / curve0;
                 phwcfg->curve.curve_0[i] = round(curve0);
                 phwcfg->curve.curve_0[i] = MIN(phwcfg->curve.curve_0[i], 1023);
@@ -181,13 +181,20 @@ void rk_aiq_merge22_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
 
     phwcfg->s_base = pdyn->sw_mgeT_baseFrm_mode;
     if (pdyn->sw_mgeT_baseFrm_mode == mge_baseHdrS_mode) {
+        float SGain = cvtinfo->ae_exp->HdrExp[0].exp_real_params.analog_gain *
+                      cvtinfo->ae_exp->HdrExp[0].exp_real_params.digital_gain *
+                      cvtinfo->ae_exp->HdrExp[0].exp_real_params.isp_dgain;
+        float Coef = pdyn->mdWgt_baseHdrS.sw_mgeT_wgtMaxTh_strg * SHORT_MODE_COEF_MAX;
+        float sw_mgeT_wgtMaxTh_strg = pow(100.0f * Coef * SGain, 0.5f);
+
+        // calc md curve
         float sw_hdrmge_ms_thd0 = pdyn->mdWgt_baseHdrS.hw_mgeT_wgtZero_thred;
-        float sw_hdrmge_ms_thd1 = pdyn->mdWgt_baseHdrS.sw_mgeT_wgtMaxTh_strg;
+        float sw_hdrmge_ms_thd1 = sw_mgeT_wgtMaxTh_strg;
         // phwcfg->lm_thd0 = mergeClipValue(pdyn->mdWgt_baseHdrS.hw_mgeT_wgtZero_thred, 0, 10,
         // false); phwcfg->lm_thd1 = pdyn->mdWgt_baseHdrS.sw_mgeT_wgtMaxTh_strg;
         float sw_hdrmge_ms_scl = (sw_hdrmge_ms_thd0 == sw_hdrmge_ms_thd1)
-                                     ? 0.0f
-                                     : (1.0f / (sw_hdrmge_ms_thd1 - sw_hdrmge_ms_thd0));
+                                 ? 0.0f
+                                 : (1.0f / (sw_hdrmge_ms_thd1 - sw_hdrmge_ms_thd0));
         // float sw_hdrmge_lm_scl = (pdyn->mdWgt_baseHdrS.sw_mgeT_wgtMaxTh_strg ==
         // pdyn->mdWgt_baseHdrS.hw_mgeT_wgtZero_thred)
         //                                 ? 0.0f
@@ -197,6 +204,10 @@ void rk_aiq_merge22_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
         phwcfg->ms_thd1 = mergeClipValue(sw_hdrmge_ms_thd1, 0, 10, false);
         phwcfg->ms_scl  = (unsigned short)(64.0f * sw_hdrmge_ms_scl);
         // phwcfg->lm_scl = (unsigned short)(64.0f * sw_hdrmge_lm_scl);
+
+        // calc gain0 in mge_baseHdrS_mode
+        phwcfg->gain0_inv = phwcfg->gain0_inv * pdyn->mdWgt_baseHdrS.sw_mgeT_lumaDiff_scale;
+        phwcfg->gain0_inv = phwcfg->gain0_inv > 0xfff ? 0xfff : phwcfg->gain0_inv;
     }
     // // merge v12 add
     phwcfg->each_raw_en = pdyn->sw_mgeT_baseHdrL_mode;

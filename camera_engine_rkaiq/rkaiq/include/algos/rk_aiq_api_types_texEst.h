@@ -26,7 +26,7 @@ RKAIQ_BEGIN_DECLARE
 
 typedef struct texEst_param_auto_s {
     /* M4_GENERIC_DESC(
-        M4_ALIAS(static_param),
+        M4_ALIAS(sta),
         M4_TYPE(struct),
         M4_UI_MODULE(static_ui),
         M4_HIDE_EX(0),
@@ -35,7 +35,7 @@ typedef struct texEst_param_auto_s {
         M4_NOTES(The static params of texEst module))  */
     //texEst_params_static_t sta;
     /* M4_GENERIC_DESC(
-        M4_ALIAS(dynamic_param),
+        M4_ALIAS(dyn),
         M4_TYPE(struct_list),
         M4_SIZE_EX(1,13),
         M4_UI_MODULE(dynamic_ui),

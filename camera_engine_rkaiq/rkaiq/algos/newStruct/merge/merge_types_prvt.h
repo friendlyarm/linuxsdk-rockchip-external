@@ -49,8 +49,17 @@
 #define INIT_CALC_PARAMS_NUM  (2)
 #define LONG_FRAME_MODE_RATIO (1.0f)
 #define RATIO_DEFAULT         (1.0f)
-
+#define MAX_ENV_LUMA (65)
+#define MAX_ENV_EXPO (10.0*1.0)
+#define MIN_ENV_LUMA (0)
+#define MIN_ENV_EXPO (30.0*256.0)
+#define MAX_ENV_LV (MAX_ENV_LUMA / MAX_ENV_EXPO)
+#define MIN_ENV_LV (MIN_ENV_LUMA / MIN_ENV_EXPO)
+#define ENVLVMAX     (1.0)
+#define ENVLVMIN     (0.0)
 #define DEFAULT_RECALCULATE_DELTA_ISO (0.01)
+#define LIMIT_VALUE(value, max_value, min_value) \
+    (value > max_value ? max_value : value > min_value ? value : min_value)
 
 // typedef enum FrameNumber_e {
 //     LINEAR_NUM = 1,

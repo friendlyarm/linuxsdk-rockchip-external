@@ -86,6 +86,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescAwdr = {
     .pre_process = NULL,
     .processing = processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

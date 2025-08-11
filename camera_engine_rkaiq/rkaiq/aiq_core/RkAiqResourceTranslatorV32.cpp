@@ -407,7 +407,7 @@ void MergeAecWinLiteStats(
             sum_xy += (merge_stats->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -415,7 +415,7 @@ void MergeAecWinLiteStats(
             sum_xy += ((merge_stats->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -423,7 +423,7 @@ void MergeAecWinLiteStats(
             sum_xy += ((merge_stats->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -431,7 +431,7 @@ void MergeAecWinLiteStats(
             sum_xy += ((merge_stats->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -525,7 +525,7 @@ void MergeAecWinBigStats(
             sum_xy += (merge_stats->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -533,7 +533,7 @@ void MergeAecWinBigStats(
             sum_xy += ((merge_stats->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -541,7 +541,7 @@ void MergeAecWinBigStats(
             sum_xy += ((merge_stats->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -549,7 +549,7 @@ void MergeAecWinBigStats(
             sum_xy += ((merge_stats->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -564,8 +564,22 @@ void MergeAecSubWinStats(
     rawaebig_stat_t*                merge_stats,
     struct isp2x_bls_fixed_val      bls1_val,
     struct isp2x_bls_fixed_val      awb1_gain,
+    int8_t                          y_range_mode,
     u32*                            pixel_num
 ) {
+    float rcc = 0, gcc = 0, bcc = 0, off = 0;
+
+    if (y_range_mode <= CAM_YRANGEV2_MODE_FULL) {
+        rcc = 0.299;
+        gcc = 0.587;
+        bcc = 0.114;
+        off = 0;
+    } else {
+        rcc = 0.25;
+        gcc = 0.5;
+        bcc = 0.1094;
+        off = 16;  //8bit
+    }
 
     for(int i = 0; i < ISP3X_RAWAEBIG_SUBWIN_NUM; i++) {
         // step1 copy stats
@@ -577,6 +591,13 @@ void MergeAecSubWinStats(
         merge_stats->wndx_sumr[i] = CLIP((s64)(merge_stats->wndx_sumr[i] * awb1_gain.r / 256 - (pixel_num[i] >> 2) * bls1_val.r), 0, MAX_29BITS);
         merge_stats->wndx_sumg[i] = CLIP((s64)(merge_stats->wndx_sumg[i] * awb1_gain.gr / 256 - (pixel_num[i] >> 2) * bls1_val.gr), 0, MAX_32BITS);
         merge_stats->wndx_sumb[i] = CLIP((s64)(merge_stats->wndx_sumb[i] * awb1_gain.b / 256 - (pixel_num[i] >> 2) * bls1_val.b), 0, MAX_29BITS);
+
+        merge_stats->wndx_channelr[i] = merge_stats->wndx_sumr[i] / MAX((pixel_num[i] / 4), 1);
+        merge_stats->wndx_channelg[i] = merge_stats->wndx_sumg[i] / MAX((pixel_num[i] / 2), 1);
+        merge_stats->wndx_channelb[i] = merge_stats->wndx_sumb[i] / MAX((pixel_num[i] / 4), 1);
+
+        merge_stats->wndx_channely[i] = CLIP(round(rcc * (float)(merge_stats->wndx_channelr[i] >> 2)\
+                                             + gcc * (float)(merge_stats->wndx_channelg[i] >> 4) + bcc * (float)(merge_stats->wndx_channelb[i] >> 2) + off), 0, MAX_8BITS);
     }
 
 }
@@ -953,7 +974,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStats(const SmartPtr<Vid
             MergeAecSubWinStats(&left_stats->params.rawae1_1,
                                 &right_stats->params.rawae1_1,
                                 &statsInt->aec_stats.ae_data.chn[index1].rawae_big,
-                                bls1_val, awb1_gain, pixel_num);
+                                bls1_val, awb1_gain, _aeAlgoStatsCfg.YRangeMode, pixel_num);
         }
 
         //AE-BIG (RAWAE3)
@@ -976,7 +997,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStats(const SmartPtr<Vid
                 MergeAecSubWinStats(&left_stats->params.rawae3_1,
                                     &right_stats->params.rawae3_1,
                                     &statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big,
-                                    bls1_val, awb1_gain, pixel_num);
+                                    bls1_val, awb1_gain, _aeAlgoStatsCfg.YRangeMode, pixel_num);
                 break;
 
             case AEC_RAWSEL_MODE_TMO:
@@ -1005,7 +1026,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStats(const SmartPtr<Vid
                 MergeAecSubWinStats(&left_stats->params.rawae3_1,
                                     &right_stats->params.rawae3_1,
                                     &statsInt->aec_stats.ae_data.extra.rawae_big,
-                                    bls1_val, awb1_gain, pixel_num);
+                                    bls1_val, awb1_gain, _aeAlgoStatsCfg.YRangeMode, pixel_num);
 
                 rawhist3_mode = isp_params->rawhist3.mode;
                 MergeAecHistBinStats(left_stats->params.rawhist3.hist_bin,
@@ -1196,6 +1217,14 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAwbStats(const SmartPtr<Vid
     right_win.v_size = _ispParams.isp_params_v32[1].meas.rawawb.v_size;
 
     MergeAwbBlkStats(&ori_win, &left_win, &right_win, statsInt->awb_stats_v32.blockResult, &left_stats->params.rawawb, &right_stats->params.rawawb, AwbWinSplitMode);
+
+    memset(&statsInt->awb_stats_v32.sumBlkRGB, 0, sizeof(statsInt->awb_stats_v32.sumBlkRGB));
+    for(int i = 0; i < RK_AIQ_AWB_GRID_NUM_TOTAL; i++) {
+        statsInt->awb_stats_v32.sumBlkRGB.Rvalue += statsInt->awb_stats_v32.blockResult[i].Rvalue ;
+        statsInt->awb_stats_v32.sumBlkRGB.Gvalue += statsInt->awb_stats_v32.blockResult[i].Gvalue;
+        statsInt->awb_stats_v32.sumBlkRGB.Bvalue +=  statsInt->awb_stats_v32.blockResult[i].Bvalue;
+    }
+
 
     MergeAwbHistBinStats(statsInt->awb_stats_v32.WpNoHist, left_stats->params.rawawb.yhist_bin, right_stats->params.rawawb.yhist_bin, AwbWinSplitMode);
 
@@ -1770,7 +1799,7 @@ void calcAecLiteWinStatsV32(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -1779,7 +1808,7 @@ void calcAecLiteWinStatsV32(
             sum_xy += ((stats_out->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -1788,7 +1817,7 @@ void calcAecLiteWinStatsV32(
             sum_xy += ((stats_out->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -1797,7 +1826,7 @@ void calcAecLiteWinStatsV32(
             sum_xy += ((stats_out->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -1820,7 +1849,7 @@ void calcAecLiteWinStatsV32(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
     }
 
@@ -1834,6 +1863,7 @@ void calcAecBigWinStatsV32(
     unsigned char*              weight,
     int8_t                      stats_chn_sel,
     int8_t                      y_range_mode,
+    bool                        use_sub_win,
     struct isp2x_bls_fixed_val  bls1_val,
     struct isp2x_bls_fixed_val  awb1_gain,
     u32*                        pixel_num
@@ -1855,6 +1885,19 @@ void calcAecBigWinStatsV32(
         off = 16;  //8bit
     }
 
+    for (int i = 0; i < ISP32_RAWAEBIG_SUBWIN_NUM; i++) {
+        stats_out->wndx_sumr[i] = CLIP((s64)((u64)stats_in1->sumr[i] * awb1_gain.r / 256 - (pixel_num[i] >> 2) * bls1_val.r), 0, MAX_29BITS);
+        stats_out->wndx_sumg[i] = CLIP((s64)((u64)stats_in1->sumg[i] * awb1_gain.gr / 256 - (pixel_num[i] >> 1) * bls1_val.gb), 0, MAX_32BITS);
+        stats_out->wndx_sumb[i] = CLIP((s64)((u64)stats_in1->sumb[i] * awb1_gain.b / 256 - (pixel_num[i] >> 2) * bls1_val.b), 0, MAX_29BITS);
+
+        stats_out->wndx_channelr[i] = stats_out->wndx_sumr[i] / MAX((pixel_num[i] >> 2), 1);
+        stats_out->wndx_channelg[i] = stats_out->wndx_sumg[i] / MAX((pixel_num[i] >> 1), 1);
+        stats_out->wndx_channelb[i] = stats_out->wndx_sumb[i] / MAX((pixel_num[i] >> 2), 1);
+
+        stats_out->wndx_channely[i] = round(256.0f * (rcc * (float)(stats_out->wndx_channelr[i] >> 2)\
+                                            + gcc * (float)(stats_out->wndx_channelg[i] >> 4) + bcc * (float)(stats_out->wndx_channelb[i] >> 2)) + off);
+    }
+
     switch (stats_chn_sel) {
     case RAWSTATS_CHN_Y_EN:
         for (int i = 0; i < ISP32_RAWAEBIG_MEAN_NUM; i++) {
@@ -1864,7 +1907,7 @@ void calcAecBigWinStatsV32(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channely[0] : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -1873,7 +1916,7 @@ void calcAecBigWinStatsV32(
             sum_xy += ((stats_out->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelr[0] * 256 >> 2 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -1882,7 +1925,7 @@ void calcAecBigWinStatsV32(
             sum_xy += ((stats_out->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelg[0] * 256 >> 4 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -1891,7 +1934,7 @@ void calcAecBigWinStatsV32(
             sum_xy += ((stats_out->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelb[0] * 256 >> 2 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -1914,15 +1957,11 @@ void calcAecBigWinStatsV32(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channely[0] : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
     }
 
-    for (int i = 0; i < ISP32_RAWAEBIG_SUBWIN_NUM; i++) {
-        stats_out->wndx_sumr[i] = CLIP((s64)((u64)stats_in1->sumr[i] * awb1_gain.r / 256 - (pixel_num[i] >> 2) * bls1_val.r), 0, MAX_29BITS);
-        stats_out->wndx_sumg[i] = CLIP((s64)((u64)stats_in1->sumg[i] * awb1_gain.gr / 256 - (pixel_num[i] >> 1) * bls1_val.gb), 0, MAX_32BITS);
-        stats_out->wndx_sumb[i] = CLIP((s64)((u64)stats_in1->sumb[i] * awb1_gain.b / 256 - (pixel_num[i] >> 2) * bls1_val.b), 0, MAX_29BITS);
-    }
+
 }
 
 #endif
@@ -1964,7 +2003,7 @@ void calcAecLiteWinStatsV32Lite(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -1973,7 +2012,7 @@ void calcAecLiteWinStatsV32Lite(
             sum_xy += ((stats_out->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -1982,7 +2021,7 @@ void calcAecLiteWinStatsV32Lite(
             sum_xy += ((stats_out->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -1991,7 +2030,7 @@ void calcAecLiteWinStatsV32Lite(
             sum_xy += ((stats_out->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -2014,7 +2053,7 @@ void calcAecLiteWinStatsV32Lite(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
     }
 
@@ -2027,6 +2066,7 @@ void calcAecBigWinStatsV32Lite(
     unsigned char*              weight,
     int8_t                      stats_chn_sel,
     int8_t                      y_range_mode,
+    bool                        use_sub_win,
     struct isp2x_bls_fixed_val  bls1_val,
     struct isp2x_bls_fixed_val  awb1_gain,
     u32                         pixel_num
@@ -2048,6 +2088,16 @@ void calcAecBigWinStatsV32Lite(
         off = 16;  //8bit
     }
 
+    stats_out->wndx_sumr[0] = CLIP((s64)((u64)stats_in->sumr * awb1_gain.r / 256 - (pixel_num >> 2) * bls1_val.r), 0, MAX_29BITS);
+    stats_out->wndx_sumg[0] = CLIP((s64)((u64)stats_in->sumg * awb1_gain.gr / 256 - (pixel_num >> 1) * bls1_val.gb), 0, MAX_32BITS);
+    stats_out->wndx_sumb[0] = CLIP((s64)((u64)stats_in->sumb * awb1_gain.b / 256 - (pixel_num >> 2) * bls1_val.b), 0, MAX_29BITS);
+
+    stats_out->wndx_channelr[0] = stats_out->wndx_sumr[0] / MAX((pixel_num / 4), 1);
+    stats_out->wndx_channelg[0] = stats_out->wndx_sumg[0] / MAX((pixel_num / 2), 1);
+    stats_out->wndx_channelb[0] = stats_out->wndx_sumb[0] / MAX((pixel_num / 4), 1);
+    stats_out->wndx_channely[0] = round(256.0f * (rcc * (float)(stats_out->wndx_channelr[0] >> 2)\
+                                        + gcc * (float)(stats_out->wndx_channelg[0] >> 4) + bcc * (float)(stats_out->wndx_channelb[0] >> 2)) + off);
+
     switch (stats_chn_sel) {
     case RAWSTATS_CHN_Y_EN:
         for (int i = 0; i < ISP32_RAWAEBIG_MEAN_NUM; i++) {
@@ -2057,7 +2107,7 @@ void calcAecBigWinStatsV32Lite(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channely[0] : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -2066,7 +2116,7 @@ void calcAecBigWinStatsV32Lite(
             sum_xy += ((stats_out->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelr[0] * 256 >> 2 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -2075,7 +2125,7 @@ void calcAecBigWinStatsV32Lite(
             sum_xy += ((stats_out->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelg[0] * 256 >> 4 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -2084,7 +2134,7 @@ void calcAecBigWinStatsV32Lite(
             sum_xy += ((stats_out->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelb[0] * 256 >> 2 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -2107,17 +2157,10 @@ void calcAecBigWinStatsV32Lite(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channely[0] : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
     }
 
-    stats_out->wndx_sumr[0] = CLIP((s64)((u64)stats_in->sumr * awb1_gain.r / 256 - (pixel_num >> 2) * bls1_val.r), 0, MAX_29BITS);
-    stats_out->wndx_sumg[0] = CLIP((s64)((u64)stats_in->sumg * awb1_gain.gr / 256 - (pixel_num >> 1) * bls1_val.gb), 0, MAX_32BITS);
-    stats_out->wndx_sumb[0] = CLIP((s64)((u64)stats_in->sumb * awb1_gain.b / 256 - (pixel_num >> 2) * bls1_val.b), 0, MAX_29BITS);
-
-    stats_out->wndx_channelr[0] = stats_out->wndx_sumr[0] / pixel_num;
-    stats_out->wndx_channelg[0] = stats_out->wndx_sumg[0] / pixel_num;
-    stats_out->wndx_channelb[0] = stats_out->wndx_sumb[0] / pixel_num;
 }
 
 #endif
@@ -2211,11 +2254,11 @@ XCamReturn RkAiqResourceTranslatorV32::translateAecStats(const SmartPtr<VideoBuf
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
 #if defined(ISP_HW_V32) && defined(RKAIQ_HAVE_MULTIISP)
-    if (IsMultiIspMode() && GetIspUnitedMode()) {
+    if (IsMultiIspMode() && GetIspUniteMode()) {
         return translateMultiAecStats(from, to);
     }
 #elif defined(ISP_HW_V32_LITE) && defined(RKAIQ_HAVE_MULTIISP)
-    if (IsMultiIspMode() && GetIspUnitedMode()) {
+    if (IsMultiIspMode() && GetIspUniteMode()) {
         return translateMultiAecStatsV32Lite(from, to);
     }
 #endif
@@ -2366,7 +2409,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAecStats(const SmartPtr<VideoBuf
     HistMean[1] = (uint16_t)(SumHistBin[1] / MAX(SumHistPix[1], 1));
     bool run_flag = true;
 
-    if(memcmp(&_lastAeStats.ae_exp, &statsInt->aec_stats.ae_exp, sizeof(RKAiqAecExpInfo_t)) == 0) {
+    if(memcmp(&_lastAeStats.ae_exp, &statsInt->aec_stats.ae_exp, sizeof(RKAiqAecExpInfo_t)) == 0 ) {
         run_flag = getAeStatsRunFlag(HistMean);
         run_flag |= _aeAlgoStatsCfg.UpdateStats;
     }
@@ -2396,7 +2439,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAecStats(const SmartPtr<VideoBuf
                                   &statsInt->aec_stats.ae_data.chn[index1].rawae_big,
                                   &statsInt->aec_stats.ae_data.raw_mean[index1],
                                   _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                                  bls1_val, awb1_gain, pixel_num);
+                                  _aeAlgoStatsCfg.UseSubWinStats, bls1_val, awb1_gain, pixel_num);
 
             calcAecHistBinStatsV32(stats->params.rawhist1.hist_bin,
                                    statsInt->aec_stats.ae_data.chn[index1].rawhist_big.bins,
@@ -2419,7 +2462,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAecStats(const SmartPtr<VideoBuf
                                       &statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big,
                                       &statsInt->aec_stats.ae_data.raw_mean[AeSelMode],
                                       _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                                      bls1_val, awb1_gain, pixel_num);
+                                      _aeAlgoStatsCfg.UseSubWinStats, bls1_val, awb1_gain, pixel_num);
 
                 rawhist3_mode = isp_params->rawhist3.mode;
                 calcAecHistBinStatsV32(stats->params.rawhist3.hist_bin,
@@ -2445,7 +2488,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAecStats(const SmartPtr<VideoBuf
                                       &statsInt->aec_stats.ae_data.extra.rawae_big,
                                       &statsInt->aec_stats.ae_data.raw_mean[AeSelMode],
                                       _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                                      bls1_val, awb1_gain, pixel_num);
+                                      _aeAlgoStatsCfg.UseSubWinStats, bls1_val, awb1_gain, pixel_num);
 
                 memcpy(statsInt->aec_stats.ae_data.extra.rawhist_big.bins,
                        stats->params.rawhist3.hist_bin, ISP32_HIST_BIN_N_MAX * sizeof(u32));
@@ -2680,7 +2723,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAecStats(const SmartPtr<VideoBuf
                                       &statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big,
                                       &statsInt->aec_stats.ae_data.raw_mean[AeSelMode],
                                       _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                                      bls1_val, awb1_gain, pixel_num);
+                                      _aeAlgoStatsCfg.UseSubWinStats, bls1_val, awb1_gain, pixel_num);
 
             rawhist3_mode = isp_params->rawhist3.mode;
             calcAecHistBinStatsV32(stats->params.rawhist3.hist_bin,
@@ -2855,11 +2898,11 @@ XCamReturn RkAiqResourceTranslatorV32::translateAwbStats(const SmartPtr<VideoBuf
 #endif
 
 #if defined(ISP_HW_V32) && defined(RKAIQ_HAVE_MULTIISP)
-    if (IsMultiIspMode() && GetIspUnitedMode()) {
+    if (IsMultiIspMode() && GetIspUniteMode()) {
         return translateMultiAwbStats(from, to);
     }
 #elif defined(ISP_HW_V32_LITE) && defined(RKAIQ_HAVE_MULTIISP)
-    if (IsMultiIspMode()  && GetIspUnitedMode()) {
+    if (IsMultiIspMode()  && GetIspUniteMode()) {
         return translateMultiAwbStatsV32Lite(from, to);
     }
 #endif
@@ -2975,7 +3018,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAfStats(const SmartPtr<VideoBuff
     SmartPtr<RkAiqAfStats> statsInt = to->data();
 
 #if defined(ISP_HW_V32) && defined(RKAIQ_HAVE_MULTIISP)
-    if (IsMultiIspMode() && GetIspUnitedMode()) {
+    if (IsMultiIspMode() && GetIspUniteMode()) {
         return translateMultiAfStats(from, to);
     }
 #endif
@@ -3069,7 +3112,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAfStats(const SmartPtr<VideoBuff
     SmartPtr<RkAiqAfStats> statsInt = to->data();
 
 #if defined(RKAIQ_HAVE_MULTIISP)
-    if (IsMultiIspMode() && GetIspUnitedMode()) {
+    if (IsMultiIspMode() && GetIspUniteMode()) {
         return translateMultiAfStatsV32Lite(from, to);
     }
 #endif
@@ -3158,7 +3201,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateAdehazeStats(const SmartPtr<Vide
     SmartPtr<RkAiqAdehazeStats> statsInt = to->data();
 
 #if defined(ISP_HW_V32) && defined(RKAIQ_HAVE_MULTIISP)
-    if (IsMultiIspMode()) {
+    if (IsMultiIspMode() && GetIspUniteMode()) {
         return translateMultiAdehazeStats(from, to);
     }
 #endif
@@ -3453,7 +3496,7 @@ void MergeAecWinBigStatsVerticalV32Lite(
             sum_xy += (merge_stats->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -3461,7 +3504,7 @@ void MergeAecWinBigStatsVerticalV32Lite(
             sum_xy += ((merge_stats->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -3469,7 +3512,7 @@ void MergeAecWinBigStatsVerticalV32Lite(
             sum_xy += ((merge_stats->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -3477,7 +3520,7 @@ void MergeAecWinBigStatsVerticalV32Lite(
             sum_xy += ((merge_stats->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -3570,7 +3613,7 @@ void MergeAecWinLiteStatsVerticalV32Lite(
             sum_xy += (merge_stats->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -3578,7 +3621,7 @@ void MergeAecWinLiteStatsVerticalV32Lite(
             sum_xy += ((merge_stats->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -3586,7 +3629,7 @@ void MergeAecWinLiteStatsVerticalV32Lite(
             sum_xy += ((merge_stats->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -3594,7 +3637,7 @@ void MergeAecWinLiteStatsVerticalV32Lite(
             sum_xy += ((merge_stats->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -3881,7 +3924,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
     AeSelMode              = isp_params->rawae3.rawae_sel;
     AfUseAeHW              = isp_params->rawaf.ae_mode;
     unsigned int meas_type = 0;
-    RkAiqIspUnitedMode ispUnitedMode = GetIspUnitedMode();
+    RkAiqIspUniteMode ispUniteMode = GetIspUniteMode();
 
     WinSplitMode AeWinSplitMode[4] = {LEFT_AND_RIGHT_MODE}; //0:rawae0 1:rawae1 2:rawae3
     WinSplitMode HistWinSplitMode[4] = {LEFT_AND_RIGHT_MODE}; //0:rawhist0 1:rawhist1 2:rawhist3
@@ -3896,7 +3939,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
     JudgeWinLocation32(&_ispParams.meas.rawhist1.win, HistWinSplitMode[1], GetLeftIspRect(), GetRightIspRect());
     JudgeWinLocation32(&_ispParams.meas.rawhist3.win, HistWinSplitMode[3], GetLeftIspRect(), GetRightIspRect());
 
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         JudgeWinLocationVertical32(&_ispParams.meas.rawae0.win, AeWinSplitModeV[0], GetLeftIspRect(), GetBottomLeftIspRect());
         JudgeWinLocationVertical32(&_ispParams.meas.rawae1.win, AeWinSplitModeV[1], GetLeftIspRect(), GetBottomLeftIspRect());
         JudgeWinLocationVertical32(&_ispParams.meas.rawae3.win, AeWinSplitModeV[3], GetLeftIspRect(), GetBottomLeftIspRect());
@@ -3904,7 +3947,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
         JudgeWinLocationVertical32(&_ispParams.meas.rawhist0.win, HistWinSplitModeV[0], GetLeftIspRect(), GetBottomLeftIspRect());
         JudgeWinLocationVertical32(&_ispParams.meas.rawhist1.win, HistWinSplitModeV[1], GetLeftIspRect(), GetBottomLeftIspRect());
         JudgeWinLocationVertical32(&_ispParams.meas.rawhist3.win, HistWinSplitModeV[3], GetLeftIspRect(), GetBottomLeftIspRect());
-    } else if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_TWO_GRID) {
+    } else if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         for (int i = 0; i < 4; i++) {
             AeWinSplitModeV[i] = TOP_MODE;
             HistWinSplitModeV[i] = TOP_MODE;
@@ -4001,7 +4044,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
         return XCAM_RETURN_BYPASS;
     }
 
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         bottom_left_stats = (struct rkisp32_lite_stat_buffer*)(buf->get_v4l2_userptr()) + 2;
         if (bottom_left_stats == NULL) {
             LOGE("fail to get stats ,ignore\n");
@@ -4021,7 +4064,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
     if(top_left_stats->frame_id != top_right_stats->frame_id || top_left_stats->meas_type != top_right_stats->meas_type ||
             bottom_left_stats->frame_id != bottom_right_stats->frame_id || bottom_left_stats->meas_type != bottom_right_stats->meas_type ||
             bottom_left_stats->frame_id != top_left_stats->frame_id || bottom_left_stats->meas_type != top_left_stats->meas_type) {
-        LOGE_ANALYZER("status params(frmid or meas_type) of left isp and right isp are different, ispUnitedMode %d", ispUnitedMode);
+        LOGE_ANALYZER("status params(frmid or meas_type) of left isp and right isp are different, ispUniteMode %d", ispUniteMode);
         LOGE_ANALYZER("top left id %d meas %llx left id %d meas %llx bottom left id %d meas %llx left id %d meas %llx mode %d",
                       top_left_stats->frame_id, top_left_stats->meas_type,
                       top_right_stats->frame_id, top_right_stats->meas_type,
@@ -4087,7 +4130,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
                              bls1_ori_val, awb1_gain, is_hdr,
                              ISP32L_HIST_LITE_BIN_N_MAX);
 
-        if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+        if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
             MergeAecHistBinStats(bottom_left_stats->params.rawhist0.hist_bin,
                                  bottom_right_stats->params.rawhist0.hist_bin,
                                  bottom_stats,
@@ -4129,7 +4172,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
                              bls1_ori_val, awb1_gain, is_hdr,
                              ISP32_HIST_BIN_N_MAX);
 
-        if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+        if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
             MergeAecHistBinStats(bottom_left_stats->params.rawhist3.hist_bin,
                                  bottom_right_stats->params.rawhist3.hist_bin,
                                  bottom_stats,
@@ -4216,7 +4259,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
                                            &bottom_right_stats->params.rawae0,
                                            AeWinSplitMode[0]);
 
-            if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+            if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
 
                 MergeAecWinLiteStatsVerticalV32Lite(&rawae_lite_top,
                                                     &rawae_lite_bottom,
@@ -4252,7 +4295,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
             statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big.wndx_sumr[0] =
                 (u64)top_left_stats->params.rawae3.sumr + (u64)top_right_stats->params.rawae3.sumr;
 
-            if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+            if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
                 statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big.wndx_sumb[0] +=
                     (u64)bottom_left_stats->params.rawae3.sumb + (u64)bottom_right_stats->params.rawae3.sumb;
                 statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big.wndx_sumg[0] +=
@@ -4303,7 +4346,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAecStatsV32Lite(const Smart
             statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big.wndx_sumr[0] =
                 (u64)top_left_stats->params.rawae3.sumr + (u64)top_right_stats->params.rawae3.sumr;
 
-            if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+            if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
                 statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big.wndx_sumb[0] +=
                     (u64)bottom_left_stats->params.rawae3.sumb + (u64)bottom_right_stats->params.rawae3.sumb;
                 statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big.wndx_sumg[0] +=
@@ -4435,7 +4478,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAwbStatsV32Lite(const Smart
     top_left_stats = (struct rkisp32_lite_stat_buffer*)(buf->get_v4l2_userptr());
 #endif
 
-    RkAiqIspUnitedMode ispUnitedMode = GetIspUnitedMode();
+    RkAiqIspUniteMode ispUniteMode = GetIspUniteMode();
     SmartPtr<RkAiqAwbStats> statsInt = to->data();
 
     if(top_left_stats == NULL) {
@@ -4449,7 +4492,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAwbStatsV32Lite(const Smart
         return XCAM_RETURN_BYPASS;
     }
 
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         bottom_left_stats = (struct rkisp32_lite_stat_buffer*)(buf->get_v4l2_userptr()) + 2;
         if(bottom_left_stats == NULL) {
             LOGE("fail to get right stats ,ignore\n");
@@ -4510,16 +4553,16 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAwbStatsV32Lite(const Smart
     ori_win.v_size = _ispParams.meas.rawawb.v_size;
 
     JudgeWinLocation32(&ori_win, AwbWinSplitMode, GetLeftIspRect(), GetRightIspRect());
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         JudgeWinLocationVertical32(&ori_win, AwbWinSplitModeV, GetLeftIspRect(), GetBottomLeftIspRect());
-    } else if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_TWO_GRID) {
+    } else if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         AwbWinSplitModeV = TOP_MODE;
     } else {
-        LOGE_ANALYZER("%s ispUnitedMode is RK_AIQ_ISP_UNITED_MODE_NORMAL, run here error", __FUNCTION__);
+        LOGE_ANALYZER("%s ispUniteMode is RK_AIQ_ISP_UNITE_MODE_NORMAL, run here error", __FUNCTION__);
         return XCAM_RETURN_BYPASS;
     }
 
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         MergeAwbWinStats(top_stats->light, &top_left_stats->params.rawawb, &top_right_stats->params.rawawb,
                          statsInt->awb_stats_v32.awb_cfg_effect_v32.lightNum, AwbWinSplitMode);
         MergeAwbWinStats(bottom_stats->light, &bottom_left_stats->params.rawawb, &bottom_right_stats->params.rawawb,
@@ -4555,7 +4598,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAwbStatsV32Lite(const Smart
     bottom_right_win.v_offs = _ispParams.isp_params_v32[3].meas.rawawb.v_offs;
     bottom_right_win.v_size = _ispParams.isp_params_v32[3].meas.rawawb.v_size;
 
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         MergeAwbBlkStatsV32Lite(&ori_win, &top_left_win, &top_right_win, top_stats->blockResult, &top_left_stats->params.rawawb, &top_right_stats->params.rawawb, AwbWinSplitMode);
         MergeAwbBlkStatsV32Lite(&ori_win, &bottom_left_win, &bottom_right_win, bottom_stats->blockResult, &bottom_left_stats->params.rawawb, &bottom_right_stats->params.rawawb, AwbWinSplitMode);
         MergeAwbBlkStatsVerticalV32Lite(&ori_win, &top_left_win, &bottom_left_win, statsInt->awb_stats_v32.blockResult, top_stats->blockResult, bottom_stats->blockResult, AwbWinSplitModeV);
@@ -4632,6 +4675,12 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAwbStatsV32Lite(const Smart
 
         MergeAwbExcWpStats(statsInt->awb_stats_v32.excWpRangeResult, &top_left_stats->params.rawawb, &top_right_stats->params.rawawb, AwbWinSplitMode);
     }
+    memset(&statsInt->awb_stats_v32.sumBlkRGB, 0, sizeof(statsInt->awb_stats_v32.sumBlkRGB));
+    for(int i = 0; i < ISP32L_RAWAWB_RAMDATA_RGB_NUM; i++) {
+        statsInt->awb_stats_v32.sumBlkRGB.Rvalue += statsInt->awb_stats_v32.blockResult[i].Rvalue ;
+        statsInt->awb_stats_v32.sumBlkRGB.Gvalue += statsInt->awb_stats_v32.blockResult[i].Gvalue;
+        statsInt->awb_stats_v32.sumBlkRGB.Bvalue +=  statsInt->awb_stats_v32.blockResult[i].Bvalue;
+    }
 
     to->set_sequence(statsInt->frame_id);
 #endif
@@ -4682,7 +4731,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
 
     SmartPtr<RkAiqAfStats> statsInt = to->data();
     SmartPtr<RkAiqAfInfoProxy> afParams = buf->get_af_params();
-    RkAiqIspUnitedMode ispUnitedMode = GetIspUnitedMode();
+    RkAiqIspUniteMode ispUniteMode = GetIspUniteMode();
 
     if(top_left_stats == NULL) {
         LOGE("fail to get left stats ,ignore\n");
@@ -4695,7 +4744,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
         return XCAM_RETURN_BYPASS;
     }
 
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         bottom_left_stats = (struct rkisp32_lite_stat_buffer*)(buf->get_v4l2_userptr()) + 2;
         if(bottom_left_stats == NULL) {
             LOGE("fail to get right stats ,ignore\n");
@@ -4903,7 +4952,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
         r_win_ed = l_win_ed;
     }
 
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         // judge vertical win mode
         memset(&af_split_info_v, 0, sizeof(af_split_info_v));
         ov_h = GetLeftIspRect().h + GetLeftIspRect().y - GetBottomLeftIspRect().y;
@@ -5101,7 +5150,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                         t_af_stats.wina_highlit_cnt[dst_idx] =
                             ((top_left_stats->params.rawae0.data[l_idx].channelr_xy & 0x3FF) << 10) | (top_left_stats->params.rawae0.data[l_idx].channelb_xy & 0x3FF);
 
-                        if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                        if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                             continue;
 
                         b_af_stats.wnda_fv_v1[dst_idx] = bottom_left_stats->params.rawaf.ramdata.viir_wnd_data[l_idx];
@@ -5122,7 +5171,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                             top_left_stats->params.rawaf.ramdata.hiir_wnd_data[l_idx] + top_left_stats->params.rawaf.ramdata.hiir_wnd_data[l_idx + 1];
                         t_af_stats.wnda_fv_h2[dst_idx] = t_af_stats.wnda_fv_h1[dst_idx];
 
-                        if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                        if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                             continue;
 
                         temp_luma = ((luma0[l_idx].channelg_xy + luma0[l_idx + 1].channelg_xy) >> 1);
@@ -5158,7 +5207,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                         lht1 = ((top_right_stats->params.rawae0.data[r_idx + 1].channelr_xy & 0x3FF) << 10) | (top_right_stats->params.rawae0.data[r_idx + 1].channelb_xy & 0x3FF);
                         t_af_stats.wina_highlit_cnt[dst_idx] = lht0 + lht1;
 
-                        if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                        if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                             continue;
 
                         b_af_stats.wnda_fv_v1[dst_idx] =
@@ -5192,7 +5241,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                     t_af_stats.wina_highlit_cnt[dst_idx] =
                         ((top_left_stats->params.rawae0.data[l_idx].channelr_xy & 0x3FF) << 10) | (top_left_stats->params.rawae0.data[l_idx].channelb_xy & 0x3FF);
 
-                    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                         continue;
 
                     b_af_stats.wnda_fv_v1[dst_idx] = bottom_left_stats->params.rawaf.ramdata.viir_wnd_data[l_idx];
@@ -5221,7 +5270,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                     t_af_stats.wina_highlit_cnt[dst_idx] =
                         ((top_right_stats->params.rawae0.data[r_idx].channelr_xy & 0x3FF) << 10) | (top_right_stats->params.rawae0.data[r_idx].channelb_xy & 0x3FF);
 
-                    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                         continue;
 
                     b_af_stats.wnda_fv_v1[dst_idx] = bottom_right_stats->params.rawaf.ramdata.viir_wnd_data[r_idx];
@@ -5256,7 +5305,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                     lht1 = ((top_right_stats->params.rawae0.data[r_idx].channelr_xy & 0x3FF) << 10) | (top_right_stats->params.rawae0.data[r_idx].channelb_xy & 0x3FF);
                     t_af_stats.wina_highlit_cnt[dst_idx] = lht0 + lht1;
 
-                    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                         continue;
 
                     b_af_stats.wnda_fv_v1[dst_idx] =
@@ -5287,7 +5336,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                 t_af_stats.wina_highlit_cnt[i] =
                     ((top_left_stats->params.rawae0.data[i].channelr_xy & 0x3FF) << 10) | (top_left_stats->params.rawae0.data[i].channelb_xy & 0x3FF);
 
-                if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                     continue;
 
                 b_af_stats.wnda_fv_v1[i] = bottom_left_stats->params.rawaf.ramdata.viir_wnd_data[i];
@@ -5312,7 +5361,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
                 t_af_stats.wina_highlit_cnt[i] =
                     ((top_right_stats->params.rawae0.data[i].channelr_xy & 0x3FF) << 10) | (top_right_stats->params.rawae0.data[i].channelb_xy & 0x3FF);
 
-                if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID)
+                if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID)
                     continue;
 
                 b_af_stats.wnda_fv_v1[i] = bottom_right_stats->params.rawaf.ramdata.viir_wnd_data[i];
@@ -5329,7 +5378,7 @@ XCamReturn RkAiqResourceTranslatorV32::translateMultiAfStatsV32Lite(const SmartP
     }
 
     // merge vertical af stats
-    if (ispUnitedMode == RK_AIQ_ISP_UNITED_MODE_FOUR_GRID) {
+    if (ispUniteMode == RK_AIQ_ISP_UNITE_MODE_FOUR_GRID) {
         if (af_split_info_v.winb_side_info == LEFT_AND_RIGHT_MODE) {
             statsInt->af_stats_v3x.wndb_luma = t_af_stats.wndb_luma * af_split_info_v.winb_l_ratio +
                                                b_af_stats.wndb_luma * af_split_info_v.winb_r_ratio;

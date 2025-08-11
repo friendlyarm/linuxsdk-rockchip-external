@@ -35,21 +35,21 @@ typedef struct mge_expRat_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(This parameter is used to select the configuration method of exposure ratio
-       information among multiple frames.\n Reference enum types.\n Freq of use: high))  */
+       information among multiple frames.\n Reference enum types.\n Freq of use: low))  */
     mge_expRat_mode_t sw_mgeCfg_expRat_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(sw_mgeCfg_expRatFix_val),
         M4_TYPE(f32),
         M4_SIZE_EX(1,1),
         M4_RANGE_EX(1.0, 256),
-        M4_DEFAULT(16.0),
-        M4_DIGIT_EX(1f4b),
+        M4_DEFAULT(1.0),
+        M4_DIGIT_EX(2f4b),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(When expRat_mode=expRatFix_mode, the user configures a fixed exposure ratio through
        this parameter.\n expRatFix_val = Long frame exposure / Short frame exposure. Freq of use:
-       high))  */
+       low))  */
     // reg: hw_hdrmge_short_invGain, hw_hdrmge_short_gain,hw_hdrmge_long_gain,
     // hw_hdrmge_channelDetn_shortGain
     float sw_mgeCfg_expRatFix_val;
@@ -203,7 +203,7 @@ typedef struct mge_mdWgt_baseHdrL_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(Users configure the raw single channel overexposure detect LUT through
-       rawChLutCreate_xxx when mdLut_mode == mge_cfgByCoeff2Curve_mode.\n Freq of use: high))  */
+       rawChLutCreate_xxx when mdLut_mode == mge_cfgByCoeff2Curve_mode.\n Freq of use: low))  */
     // reg: hw_hdrmge_msRawDiff2wgt_val0~16
     // para: Smooth
     float sw_mgeT_rawChLutCreate_slope;
@@ -219,7 +219,7 @@ typedef struct mge_mdWgt_baseHdrL_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(Users configure the raw single channel overexposure detect LUT through
-       rawChLutCreate_xxx when mdLut_mode == mge_cfgByCoeff2Curve_mode.\n Freq of use: high))  */
+       rawChLutCreate_xxx when mdLut_mode == mge_cfgByCoeff2Curve_mode.\n Freq of use: low))  */
     // reg: hw_hdrmge_msRawDiff2wgt_val0~16
     // para: Offset
     float sw_mgeT_rawChLutCreate_offset;
@@ -273,7 +273,7 @@ typedef struct mge_mdWgt_baseHdrS_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(mge threshold-high of ms for clipping diff.\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     // reg: hw_hdrmge_msAbsDiffThred_maxLimit
     // para: coef
     float sw_mgeT_wgtMaxTh_strg;
@@ -288,9 +288,22 @@ typedef struct mge_mdWgt_baseHdrS_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(mge threshold-low of ms for clipping diff.\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     // reg: hw_hdrmge_msAbsDiffThred_minLimit
     float hw_mgeT_wgtZero_thred;
+    /* M4_GENERIC_DESC(
+    M4_ALIAS(sw_mgeT_lumaDiff_scale),
+    M4_TYPE(f32),
+    M4_SIZE_EX(1,1),
+    M4_RANGE_EX(0,64),
+    M4_DEFAULT(1),
+    M4_DIGIT_EX(2),
+    M4_HIDE_EX(0),
+    M4_RO(0),
+    M4_ORDER(0),
+    M4_NOTES(The scale value of calculating move detection. The higher the value, the easier it
+   is to distinguish the moving zone. \n Freq of use: low))  */
+    float sw_mgeT_lumaDiff_scale;
 } mge_mdWgt_baseHdrS_t;
 
 typedef enum mge_baseFrm_mode_e {
@@ -317,7 +330,7 @@ typedef struct mge_params_static_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(2),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n Freq of use: low))  */
     mge_expRat_t expRat;
 } mge_params_static_t;
 
@@ -383,7 +396,7 @@ typedef struct mge_params_dyn_s {
 
 typedef struct mge_param_s {
     /* M4_GENERIC_DESC(
-        M4_ALIAS(static_param),
+        M4_ALIAS(sta),
         M4_TYPE(struct),
         M4_UI_MODULE(static_ui),
         M4_HIDE_EX(0),
@@ -392,7 +405,7 @@ typedef struct mge_param_s {
         M4_NOTES(The static params of mge module))  */
     mge_params_static_t sta;
     /* M4_GENERIC_DESC(
-        M4_ALIAS(dynamic_param),
+        M4_ALIAS(dyn),
         M4_TYPE(struct),
         M4_UI_MODULE(dynamic_ui),
         M4_HIDE_EX(0),

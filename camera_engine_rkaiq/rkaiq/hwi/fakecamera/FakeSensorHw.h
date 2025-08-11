@@ -61,6 +61,7 @@ public:
     virtual bool is_virtual_sensor() {
         return true;
     }
+    XCamReturn set_fake_sensor_format(int width, int height, uint32_t fmt_core);
 
     bool use_rkrawstream;
 private:

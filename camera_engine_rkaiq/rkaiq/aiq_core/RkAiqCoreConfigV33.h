@@ -28,7 +28,6 @@
 #include "newStruct/blc/include/blc_algo_api.h"
 #include "newStruct/dpc/include/dpc_algo_api.h"
 #include "newStruct/cac/include/cac_algo_api.h"
-#include "newStruct/ldch/include/ldch_algo_api.h"
 #include "newStruct/csm/include/csm_algo_api.h"
 #include "newStruct/merge/include/merge_algo_api.h"
 #include "newStruct/lsc/include/lsc_algo_api.h"
@@ -41,6 +40,7 @@
 #include "newStruct/enh/include/enh_algo_api.h"
 #include "newStruct/gic/include/gic_algo_api.h"
 #include "newStruct/hsv/include/hsv_algo_api.h"
+#include "newStruct/ldc/include/ldc_algo_api.h"
 
 #if RKAIQ_ENABLE_CAMGROUP
 #include "algos_camgroup/ae/rk_aiq_algo_camgroup_ae_itf.h"
@@ -103,8 +103,9 @@ static RkAiqGrpCondition_t grp0Cond[] = {
     [1] = {XCAM_MESSAGE_AE_PRE_RES_OK, 0},
     [2] = {XCAM_MESSAGE_AWB_PROC_RES_OK, 0},
 #if USE_NEWSTRUCT
+    [3] = {XCAM_MESSAGE_AEC_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT},
 #if RK_GAIN_V2_ENABLE_GAIN2DDR
-    [3] = {XCAM_MESSAGE_AGAIN_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT3},
+    [4] = {XCAM_MESSAGE_AGAIN_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT3},
 #endif
 #else
     [3] = {XCAM_MESSAGE_BLC_V32_PROC_RES_OK, 0},
@@ -236,13 +237,16 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
     { &g_RkIspAlgoDescAfd.common,            RK_AIQ_CORE_ANALYZE_AFD,     0, 1, 0,    grpAfdConds      },
 #endif
 #if RKAIQ_HAVE_LDC
-    { &g_RkIspAlgoDescAldc.common,          RK_AIQ_CORE_ANALYZE_OTHER,   1, 1, 0, otherGrpCondsV3x      },
+    { &g_RkIspAlgoDescLdc.common,          RK_AIQ_CORE_ANALYZE_OTHER,   1, 1, 0, otherGrpCondsV3x      },
 #elif RKAIQ_HAVE_LDCH_V21
 #ifndef USE_NEWSTRUCT
     { &g_RkIspAlgoDescAldch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
 #else
     { &g_RkIspAlgoDescLdch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x },
 #endif
+#endif
+#if (RKAIQ_HAVE_AMTD_V1)
+    { &g_RkIspAlgoDescAmtd.common,      RK_AIQ_CORE_ANALYZE_AE,     0, 0, 0,    {grp_conds_array_info(aeGrpCondV3x)}},
 #endif
     { NULL,                                 RK_AIQ_CORE_ANALYZE_ALL,    0, 0, 0,    {0, 0}             },
     // clang-format on
@@ -259,7 +263,7 @@ static struct RkAiqAlgoDesCommExt g_camgroup_algos[] = {
 #ifndef ENABLE_PARTIAL_ALOGS
     // { &g_RkIspAlgoDescCamgroupAdpcc.common,      RK_AIQ_CORE_ANALYZE_AWB,    0,  0,  0, {0, 0} },
     // { &g_RkIspAlgoDescamgroupAgamma.common,      RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
-    { &g_RkIspAlgoDescCamgroupDrc.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0,  1,  0, {0, 0} },
+    { &g_RkIspAlgoDescCamgroupDrc.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
     // { &g_RkIspAlgoDescCamgroupAmerge.common,     RK_AIQ_CORE_ANALYZE_GRP0,   0,  0,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupYnr.common,       RK_AIQ_CORE_ANALYZE_OTHER, 24, 24, 24, {0, 0} },
 

@@ -43,13 +43,22 @@ int rk_aiq_uapi_get_awb_stat(const rk_aiq_sys_ctx_t* sys_ctx,
 
 int rk_aiq_uapi_get_ae_hwstats(const rk_aiq_sys_ctx_t* sys_ctx,
                                uapi_ae_hwstats_t* ae_hwstats);
+
+int rk_aiq_uapi_get_aeV39_hwstats(const rk_aiq_sys_ctx_t* sys_ctx,
+                                  uapi_ae_v39_hwstats_t* ae_hwstats);
+
 int rk_aiq_uapi_get_awbV32_stat(const rk_aiq_sys_ctx_t* sys_ctx,
                                 rk_tool_isp_awb_stats_v32_t* awb_stat);
 int rk_aiq_uapi_get_awbV39_stat(const rk_aiq_sys_ctx_t* sys_ctx,
                                 rk_tool_isp_awb_stats_v32_t* awb_stat);
 int rk_aiq_uapi_get_awbV21_stat(const rk_aiq_sys_ctx_t* sys_ctx,
                                 rk_tool_awb_stat_res2_v201_t* awb_stat);
-
+#ifndef ISP_HW_V33
+int rk_aiq_uapi_get_af_stats(const rk_aiq_sys_ctx_t* sys_ctx, uapi_af_v20stats_t* af_hwstats);
+int rk_aiq_uapi_get_af_v3xstats(const rk_aiq_sys_ctx_t* sys_ctx, uapi_af_v30stats_t* af_hwstats);
+int rk_aiq_uapi_get_af_v32litestats(const rk_aiq_sys_ctx_t* sys_ctx, uapi_af_v32litestats_t* af_hwstats);
+int rk_aiq_uapi_get_af_newstats(const rk_aiq_sys_ctx_t* sys_ctx, afStats_stats_t* af_hwstats);
+#endif
 XCamReturn rk_aiq_get_adpcc_manual_attr(const rk_aiq_sys_ctx_t *sys_ctx,
                                         Adpcc_Manual_Attr_t *manual);
 

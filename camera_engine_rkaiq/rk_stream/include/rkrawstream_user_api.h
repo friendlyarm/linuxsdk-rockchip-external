@@ -56,6 +56,7 @@ typedef struct {
     char* dev2_name;
     void* user_data;
     uint8_t use_offline;
+    char* isp_driver_name;
 } rkraw_vi_init_params_t;
 
 typedef struct {
@@ -276,6 +277,8 @@ int rkrawstream_isp_init(rkraw_vi_ctx_t* ctx, rkraw_vi_init_params_t *p);
 int rkrawstream_isp_prepare(rkraw_vi_ctx_t* ctx, rkraw_vi_prepare_params_t *p);
 int rkrawstream_isp_start(rkraw_vi_ctx_t* ctx, rkrawstream_isp_cb_t cb);
 int rkrawstream_isp_stop(rkraw_vi_ctx_t* ctx);
+
+const char* rkrawstream_get_inputparam_path_by_vi(rkraw_vi_ctx_t* ctx);
 
 #ifdef __cplusplus
 }

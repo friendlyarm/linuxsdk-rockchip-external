@@ -37,7 +37,7 @@ RkAiqResourceTranslatorV3x::RkAiqResourceTranslatorV3x() : mIsMultiIsp(false) {
     memset(&pic_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
     memset(&left_isp_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
     memset(&right_isp_rect_, 0, sizeof(RkAiqResourceTranslatorV3x::Rectangle));
-    mIspUnitedMode = RK_AIQ_ISP_UNITED_MODE_NORMAL;
+    mIspUniteMode = RK_AIQ_ISP_UNITE_MODE_NORMAL;
 }
 
 RkAiqResourceTranslatorV3x& RkAiqResourceTranslatorV3x::SetMultiIspMode(bool isMultiIsp) {
@@ -45,8 +45,8 @@ RkAiqResourceTranslatorV3x& RkAiqResourceTranslatorV3x::SetMultiIspMode(bool isM
     return *this;
 }
 
-RkAiqResourceTranslatorV3x& RkAiqResourceTranslatorV3x::SetIspUnitedMode(RkAiqIspUnitedMode mode) {
-    mIspUnitedMode = mode;
+RkAiqResourceTranslatorV3x& RkAiqResourceTranslatorV3x::SetIspUniteMode(RkAiqIspUniteMode mode) {
+    mIspUniteMode = mode;
     return *this;
 }
 
@@ -108,8 +108,8 @@ bool RkAiqResourceTranslatorV3x::IsMultiIspMode() const {
     return mIsMultiIsp;
 }
 
-RkAiqIspUnitedMode RkAiqResourceTranslatorV3x::GetIspUnitedMode() {
-    return mIspUnitedMode;
+RkAiqIspUniteMode RkAiqResourceTranslatorV3x::GetIspUniteMode() {
+    return mIspUniteMode;
 }
 
 RkAiqResourceTranslatorV3x::Rectangle RkAiqResourceTranslatorV3x::GetPicInfo() {
@@ -261,7 +261,7 @@ void MergeAecWinLiteStats(
             sum_xy += (merge_stats->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -269,7 +269,7 @@ void MergeAecWinLiteStats(
             sum_xy += ((merge_stats->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -278,7 +278,7 @@ void MergeAecWinLiteStats(
             sum_xy += ((merge_stats->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -286,7 +286,7 @@ void MergeAecWinLiteStats(
             sum_xy += ((merge_stats->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -378,7 +378,7 @@ void MergeAecWinBigStats(
             sum_xy += (merge_stats->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -386,7 +386,7 @@ void MergeAecWinBigStats(
             sum_xy += ((merge_stats->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -395,7 +395,7 @@ void MergeAecWinBigStats(
             sum_xy += ((merge_stats->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -403,7 +403,7 @@ void MergeAecWinBigStats(
             sum_xy += ((merge_stats->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -420,8 +420,23 @@ void MergeAecSubWinStats(
     u8*                             right_en,
     struct isp2x_bls_fixed_val      bls1_val,
     float*                          bls_ratio,
+    int8_t                          y_range_mode,
     u32*                            pixel_num
 ) {
+    float rcc = 0, gcc = 0, bcc = 0, off = 0;
+
+    if (y_range_mode <= CAM_YRANGEV2_MODE_FULL) {
+        rcc = 0.299;
+        gcc = 0.587;
+        bcc = 0.114;
+        off = 0;
+    } else {
+        rcc = 0.25;
+        gcc = 0.5;
+        bcc = 0.1094;
+        off = 16;  //8bit
+    }
+
     for(int i = 0; i < ISP3X_RAWAEBIG_SUBWIN_NUM; i++) {
         // step1 copy stats
         merge_stats->wndx_sumr[i] = ((left_en[i]) ? left_stats->sumr[i] : 0) + ((right_en[i]) ? right_stats->sumr[i] : 0);
@@ -434,6 +449,13 @@ void MergeAecSubWinStats(
             merge_stats->wndx_sumg[i] = (u32)CLIP((merge_stats->wndx_sumg[i] - (pixel_num[i] >> 1) * bls1_val.gr) * bls_ratio[1], 0, MAX_32BITS);
             merge_stats->wndx_sumb[i] = (u32)CLIP((merge_stats->wndx_sumb[i] - (pixel_num[i] >> 2) * bls1_val.b) * bls_ratio[2], 0, MAX_29BITS);
         }
+
+        merge_stats->wndx_channelr[i] = merge_stats->wndx_sumr[i] / MAX((pixel_num[i] / 4), 1);
+        merge_stats->wndx_channelg[i] = merge_stats->wndx_sumg[i] / MAX((pixel_num[i] / 2), 1);
+        merge_stats->wndx_channelb[i] = merge_stats->wndx_sumb[i] / MAX((pixel_num[i] / 4), 1);
+
+        merge_stats->wndx_channely[i] = CLIP(round(rcc * (float)(merge_stats->wndx_channelr[i] >> 2)\
+                                             + gcc * (float)(merge_stats->wndx_channelg[i] >> 4) + bcc * (float)(merge_stats->wndx_channelb[i] >> 2) + off), 0, MAX_8BITS);
     }
 }
 
@@ -1004,7 +1026,7 @@ RkAiqResourceTranslatorV3x::translateMultiAecStats(const SmartPtr<VideoBuffer>& 
                             &right_stats->params.rawae1,
                             &statsInt->aec_stats.ae_data.chn[index1].rawae_big,
                             ispParams.isp_params_v3x[1].meas.rawae1.subwin_en, ispParams.isp_params_v3x[2].meas.rawae1.subwin_en,
-                            bls1_val, bls_ratio, pixel_num);
+                            bls1_val, bls_ratio, _aeAlgoStatsCfg.YRangeMode, pixel_num);
 
         //chn index2 => rawae2 rawhist2
         MergeAecWinBigStats(&left_stats->params.rawae2, &right_stats->params.rawae2,
@@ -1021,7 +1043,7 @@ RkAiqResourceTranslatorV3x::translateMultiAecStats(const SmartPtr<VideoBuffer>& 
                             &right_stats->params.rawae2,
                             &statsInt->aec_stats.ae_data.chn[index2].rawae_big,
                             ispParams.isp_params_v3x[1].meas.rawae2.subwin_en, ispParams.isp_params_v3x[2].meas.rawae2.subwin_en,
-                            bls1_val, bls_ratio, pixel_num);
+                            bls1_val, bls_ratio, _aeAlgoStatsCfg.YRangeMode, pixel_num);
 
         if(!AfUseAeBig) {
             switch(AeSelMode) {
@@ -1043,7 +1065,7 @@ RkAiqResourceTranslatorV3x::translateMultiAecStats(const SmartPtr<VideoBuffer>& 
                                     &right_stats->params.rawae3,
                                     &statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big,
                                     ispParams.isp_params_v3x[1].meas.rawae3.subwin_en, ispParams.isp_params_v3x[2].meas.rawae3.subwin_en,
-                                    bls1_val, bls_ratio, pixel_num);
+                                    bls1_val, bls_ratio, _aeAlgoStatsCfg.YRangeMode, pixel_num);
 
                 break;
 
@@ -1072,7 +1094,7 @@ RkAiqResourceTranslatorV3x::translateMultiAecStats(const SmartPtr<VideoBuffer>& 
                                     &right_stats->params.rawae3,
                                     &statsInt->aec_stats.ae_data.extra.rawae_big,
                                     ispParams.isp_params_v3x[1].meas.rawae3.subwin_en, ispParams.isp_params_v3x[2].meas.rawae3.subwin_en,
-                                    bls1_val, bls_ratio, pixel_num);
+                                    bls1_val, bls_ratio, _aeAlgoStatsCfg.YRangeMode, pixel_num);
 
                 rawhist3_mode = ispParams.isp_params_v3x[0].meas.rawhist3.mode;
                 MergeAecHistBinStats(left_stats->params.rawhist3.hist_bin,
@@ -1837,7 +1859,7 @@ void calcAecLiteWinStatsV3X(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -1846,7 +1868,7 @@ void calcAecLiteWinStatsV3X(
             sum_xy += ((stats_out->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -1855,7 +1877,7 @@ void calcAecLiteWinStatsV3X(
             sum_xy += ((stats_out->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -1864,7 +1886,7 @@ void calcAecLiteWinStatsV3X(
             sum_xy += ((stats_out->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -1887,7 +1909,7 @@ void calcAecLiteWinStatsV3X(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
     }
 
@@ -1900,6 +1922,7 @@ void calcAecBigWinStatsV3X(
     unsigned char*              weight,
     int8_t                      stats_chn_sel,
     int8_t                      y_range_mode,
+    bool                        use_sub_win,
     struct isp2x_bls_fixed_val  bls1_val,
     float *                     bls_ratio,
     u32 *                       pixel_num
@@ -1921,6 +1944,19 @@ void calcAecBigWinStatsV3X(
         off = 16;  //8bit
     }
 
+    for(int i = 0; i < ISP3X_RAWAEBIG_SUBWIN_NUM; i++) {
+        stats_out->wndx_sumr[i] = CLIP((s64)((stats_in->sumr[i] - (pixel_num[i] >> 2) * bls1_val.r) * bls_ratio[0]), 0, MAX_29BITS);
+        stats_out->wndx_sumg[i] = CLIP((s64)((stats_in->sumg[i] - (pixel_num[i] >> 1) * bls1_val.gr) * bls_ratio[1]), 0, MAX_32BITS);
+        stats_out->wndx_sumb[i] = CLIP((s64)((stats_in->sumb[i] - (pixel_num[i] >> 2) * bls1_val.b) * bls_ratio[2]), 0, MAX_29BITS);
+
+        stats_out->wndx_channelr[i] = stats_out->wndx_sumr[i] / MAX((pixel_num[i] / 4), 1);
+        stats_out->wndx_channelg[i] = stats_out->wndx_sumg[i] / MAX((pixel_num[i] / 2), 1);
+        stats_out->wndx_channelb[i] = stats_out->wndx_sumb[i] / MAX((pixel_num[i] / 4), 1);
+
+        stats_out->wndx_channely[i] = round(256.0f * (rcc * (float)(stats_out->wndx_channelr[i] >> 2)\
+                                            + gcc * (float)(stats_out->wndx_channelg[i] >> 4) + bcc * (float)(stats_out->wndx_channelb[i] >> 2) + off));
+    }
+
     switch (stats_chn_sel) {
     case RAWSTATS_CHN_Y_EN:
         for (int i = 0; i < ISP3X_RAWAEBIG_MEAN_NUM; i++) {
@@ -1930,7 +1966,7 @@ void calcAecBigWinStatsV3X(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channely[0] : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_R_EN:
@@ -1939,7 +1975,7 @@ void calcAecBigWinStatsV3X(
             sum_xy += ((stats_out->channelr_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelr[0] * 256 >> 2 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_G_EN:
@@ -1948,7 +1984,7 @@ void calcAecBigWinStatsV3X(
             sum_xy += ((stats_out->channelg_xy[i] >> 4) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelg[0] * 256 >> 4 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_B_EN:
@@ -1957,7 +1993,7 @@ void calcAecBigWinStatsV3X(
             sum_xy += ((stats_out->channelb_xy[i] >> 2) * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channelb[0] * 256 >> 2 : round(256.0f * (float)sum_xy / (float)MAX(sum_weight, 1));
         break;
 
     case RAWSTATS_CHN_RGB_EN:
@@ -1980,15 +2016,12 @@ void calcAecBigWinStatsV3X(
             sum_xy += (stats_out->channely_xy[i] * weight[i]);
             sum_weight += weight[i];
         }
-        *raw_mean = round(256.0f * (float)sum_xy / (float)sum_weight);
+        *raw_mean = (use_sub_win) ? stats_out->wndx_channely[0] : round(256.0f * (float)sum_xy / (float)sum_weight);
         break;
     }
 
-    for(int i = 0; i < ISP3X_RAWAEBIG_SUBWIN_NUM; i++) {
-        stats_out->wndx_sumr[i] = CLIP((s64)((stats_in->sumr[i] - (pixel_num[i] >> 2) * bls1_val.r) * bls_ratio[0]), 0, MAX_29BITS);
-        stats_out->wndx_sumg[i] = CLIP((s64)((stats_in->sumg[i] - (pixel_num[i] >> 1) * bls1_val.gr) * bls_ratio[1]), 0, MAX_32BITS);
-        stats_out->wndx_sumb[i] = CLIP((s64)((stats_in->sumb[i] - (pixel_num[i] >> 2) * bls1_val.b) * bls_ratio[2]), 0, MAX_29BITS);
-    }
+
+
 
 }
 
@@ -2366,7 +2399,7 @@ RkAiqResourceTranslatorV3x::translateAecStats (const SmartPtr<VideoBuffer> &from
     SmartPtr<RkAiqAecStats> statsInt = to->data();
 
 #if defined(RKAIQ_HAVE_MULTIISP)
-    if (mIsMultiIsp) {
+    if (mIsMultiIsp && mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         return translateMultiAecStats(from, to);
     }
 #endif
@@ -2540,7 +2573,7 @@ RkAiqResourceTranslatorV3x::translateAecStats (const SmartPtr<VideoBuffer> &from
                               &statsInt->aec_stats.ae_data.chn[index1].rawae_big,
                               &statsInt->aec_stats.ae_data.raw_mean[index1],
                               _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                              bls1_val, bls_ratio, pixel_num);
+                              _aeAlgoStatsCfg.UseSubWinStats, bls1_val, bls_ratio, pixel_num);
 
         pixel_num[0] = isp_params->rawae2.subwin[0].h_size * isp_params->rawae2.subwin[0].v_size;
         pixel_num[1] = isp_params->rawae2.subwin[1].h_size * isp_params->rawae2.subwin[1].v_size;
@@ -2550,7 +2583,7 @@ RkAiqResourceTranslatorV3x::translateAecStats (const SmartPtr<VideoBuffer> &from
                               &statsInt->aec_stats.ae_data.chn[index2].rawae_big,
                               &statsInt->aec_stats.ae_data.raw_mean[index2],
                               _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                              bls1_val, bls_ratio, pixel_num);
+                              _aeAlgoStatsCfg.UseSubWinStats, bls1_val, bls_ratio, pixel_num);
 
         calcAecHistBinStatsV3X(stats->params.rawhist0.hist_bin,
                                statsInt->aec_stats.ae_data.chn[index0].rawhist_lite.bins,
@@ -2578,7 +2611,7 @@ RkAiqResourceTranslatorV3x::translateAecStats (const SmartPtr<VideoBuffer> &from
                                       &statsInt->aec_stats.ae_data.chn[AeSelMode].rawae_big,
                                       &statsInt->aec_stats.ae_data.raw_mean[AeSelMode],
                                       _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                                      bls1_val, bls_ratio, pixel_num);
+                                      _aeAlgoStatsCfg.UseSubWinStats, bls1_val, bls_ratio, pixel_num);
 
                 rawhist3_mode = isp_params->rawhist3.mode;
                 calcAecHistBinStatsV3X(stats->params.rawhist3.hist_bin,
@@ -2600,7 +2633,7 @@ RkAiqResourceTranslatorV3x::translateAecStats (const SmartPtr<VideoBuffer> &from
                                       &statsInt->aec_stats.ae_data.extra.rawae_big,
                                       &statsInt->aec_stats.ae_data.raw_mean[AeSelMode],
                                       _aeAlgoStatsCfg.BigWeight, _aeAlgoStatsCfg.RawStatsChnSel, _aeAlgoStatsCfg.YRangeMode,
-                                      bls1_val, bls_ratio, pixel_num);
+                                      _aeAlgoStatsCfg.UseSubWinStats, bls1_val, bls_ratio, pixel_num);
 
                 memcpy(statsInt->aec_stats.ae_data.extra.rawhist_big.bins, stats->params.rawhist3.hist_bin, ISP3X_HIST_BIN_N_MAX * sizeof(u32));
                 break;
@@ -2719,7 +2752,7 @@ RkAiqResourceTranslatorV3x::translateAwbStats (const SmartPtr<VideoBuffer> &from
     SmartPtr<RkAiqAwbStats> statsInt = to->data();
 
 #if defined(RKAIQ_HAVE_MULTIISP)
-    if (mIsMultiIsp) {
+    if (mIsMultiIsp && mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         return translateMultiAwbStats(from, to);
     }
 #endif
@@ -2883,7 +2916,7 @@ RkAiqResourceTranslatorV3x::translateAfStats (const SmartPtr<VideoBuffer> &from,
     SmartPtr<RkAiqAfStats> statsInt = to->data();
 
 #if defined(RKAIQ_HAVE_MULTIISP)
-    if (mIsMultiIsp) {
+    if (mIsMultiIsp && mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         return translateMultiAfStats(from, to);
     }
 #endif
@@ -2958,7 +2991,7 @@ RkAiqResourceTranslatorV3x::translateAdehazeStats (const SmartPtr<VideoBuffer> &
     SmartPtr<RkAiqAdehazeStats> statsInt = to->data();
 
 #if defined(RKAIQ_HAVE_MULTIISP)
-    if (mIsMultiIsp) {
+    if (mIsMultiIsp && mIspUniteMode == RK_AIQ_ISP_UNITE_MODE_TWO_GRID) {
         return translateMultiAdehazeStats(from, to);
     }
 #endif

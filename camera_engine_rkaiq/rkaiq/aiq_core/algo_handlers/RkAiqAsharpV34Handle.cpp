@@ -217,8 +217,14 @@ XCamReturn RkAiqAsharpV34HandleInt::prepare() {
     asharp_config_int->stAsharpConfig.rawWidth  = sharedCom->snsDes.isp_acq_width;
     asharp_config_int->stAsharpConfig.rawHeight = sharedCom->snsDes.isp_acq_height;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "asharp algo prepare failed");
     EXIT_ANALYZER_FUNCTION();
     return ret;

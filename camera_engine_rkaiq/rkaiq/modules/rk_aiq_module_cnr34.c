@@ -49,42 +49,36 @@
 
 #define Math_LOG2(x)    (log((double)x)   / log((double)2))
 
-void cnr_gauss7x1_filter_coeff(float sigma, int* gstab, int coef_bit)
+void cnr_CreateKernelCoeffs_V32(int radius_x, int radius_y, float rsigma, uint8_t *kernel_coeffs, int fix_bits)
 {
-    int halfx = 7;
-    int centerx = halfx / 2;
-    int gausstab[7 * 1];
-    int i, j, sumc;
-    float tmpf0, tmpf1;
-    float tmpf2, gausstabf[7 * 1];
-    int gstabidx[7 * 1] =
-    { 0, 1, 2, 3, 2, 1, 0 };
+    double e = 2.71828182845905;
 
-    tmpf2 = 0;
-    sumc = 0;
+    float coeff_float[(2 * radius_y + 1) * (2 * radius_x + 1)];
 
-    for (j = 0; j < halfx; j++)
+    float sumTable = 0;
+    for(int y = -radius_y; y <= radius_y; y ++)
     {
-        tmpf0 = (float)((j - centerx) * (j - centerx));
-        tmpf0 = tmpf0 / (2 * sigma * sigma);
-        tmpf1 = expf(-tmpf0);
-        tmpf2 = tmpf2 + tmpf1;
-        gausstabf[j] = tmpf1;
+        for(int x = -radius_x; x <= radius_x; x ++)
+        {
+            float dis = y * y + x * x;
+            float coeff = pow(e, -dis / 2.0 / rsigma / rsigma);
+
+            coeff_float[(y + radius_y) * (2 * radius_x + 1) + x + radius_x] = coeff;
+            sumTable += coeff;
+        }
+    }
+    int sum_coeff = 0;
+    for (int i = 0; i < (2 * radius_x + 1) * (2 * radius_y + 1); i++) {
+        float coeff = coeff_float[i];
+        coeff  = coeff / sumTable;
+        coeff = ROUND_F(coeff * (1 << fix_bits));
+        kernel_coeffs[i] = coeff;
+        sum_coeff  += coeff;
     }
 
-    for (j = 0; j < halfx; j++)
-    {
-        gausstab[j] = (int)(gausstabf[j]  * (1 << coef_bit));
-    }
-
-
-    for (j = 0; j < halfx; j++)
-    {
-        gstab[gstabidx[j]] = gausstab[j];
-#if 0
-        printf("gaus7x5 gstabidx[%d]: 0x%x coefMax:0x%x\n", gstabidx[j], gstab[gstabidx[j]], 1 << coef_bit);
-#endif
-    }
+    // check coeff
+    int offset = (1 << fix_bits) - sum_coeff;
+    kernel_coeffs[radius_y * (2 * radius_x + 1) + radius_x] = kernel_coeffs[radius_y * (2 * radius_x + 1) + radius_x] + offset;
 
 }
 
@@ -97,6 +91,8 @@ void rk_aiq_cnr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
     struct isp39_cnr_cfg *pFix = &isp_params->isp_cfg->others.cnr_cfg;
 #elif RKAIQ_HAVE_CNR_V35
     struct isp33_cnr_cfg *pFix = &isp_params->isp_cfg->others.cnr_cfg;
+#elif RKAIQ_HAVE_CNR_V36
+    struct isp35_cnr_cfg *pFix = &isp_params->isp_cfg->others.cnr_cfg;
 #endif
     cnr_param_t *cnr_param = (cnr_param_t *) attr;
     cnr_params_dyn_t* pdyn = &cnr_param->dyn;
@@ -112,7 +108,7 @@ void rk_aiq_cnr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
     pFix->yuv422_mode = 0;
     // pFix->exgain_bypass = pSelect->hw_cnrT_exgain_bypass;
     pFix->hiflt_wgt0_mode = pdyn->hiNr_bifilt.hw_cnrT_filtWgtZero_mode;
-#if RKAIQ_HAVE_CNR_V35
+#if defined(RKAIQ_HAVE_CNR_V35) || defined(RKAIQ_HAVE_CNR_V36)
     pFix->local_alpha_dis = !pdyn->hiNr_locFiltAlpha.hw_cnrT_locFiltAlpha_en;
 #endif
     pFix->loflt_coeff = (pdyn->loNrGuide_iirFilt.hw_cnrT_filtSpatial_wgt[0] & 0x01 << 0)
@@ -150,8 +146,8 @@ void rk_aiq_cnr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
 
     /* CNR_LBF_WEITD */
     if (pdyn->loNrGuide_bifilt.sw_cnrT_filtCfg_mode == cnr_cfgByFiltStrg_mode) {
-        int gaus_tmp[7];
-        cnr_gauss7x1_filter_coeff(pdyn->loNrGuide_bifilt.sw_cnrT_filtSpatial_strg, gaus_tmp, RKCNR_V31_exp2_lut_y);
+        uint8_t gaus_tmp[7];
+        cnr_CreateKernelCoeffs_V32(RKCNR_V31_THUMB_BF_RADIUS, 0, pdyn->loNrGuide_bifilt.sw_cnrT_filtSpatial_strg, gaus_tmp, RKCNR_V31_exp2_lut_y);
         pFix->thumb_bf_coeff0 = CLIP(gaus_tmp[0], 0, 0xff);
         pFix->thumb_bf_coeff1 = CLIP(gaus_tmp[1], 0, 0xff);
         pFix->thumb_bf_coeff2 = CLIP(gaus_tmp[2], 0, 0xff);
@@ -292,12 +288,30 @@ void rk_aiq_cnr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
         pFix->sgm_ratio[i] = CLIP(tmp, 0, 0xff);
     }
 
+#if RKAIQ_HAVE_CNR_V36
     /* CNR_IIR_GLOBAL_GAIN */
-    tmp = pdyn->loNrGuide_iirFilt.hw_cnrT_glbSgmRatio_alpha * (1 << RKCNR_V31_G_GAIN_ALPHA_FIX_BITS);
-    pFix->loflt_global_sgm_ratio_alpha = CLIP(tmp, 0, 0x8);
+    // mode0 : global, cnr_glbSgmRatio_only_mode; mode1 : global, local, cnr_glbSgmRat_locSgmStrg_mode; mode2 : local, cnr_locSgmStrg2SgmRat_mode;
+    if(pdyn->loNrGuide_iirFilt.sw_cnrT_rgeSgmRatio_mode == cnr_glbSgmRatio_only_mode)
+    {
+        pFix->loflt_global_sgm_ratio_alpha = 1.0 * (1 << RKCNR_V31_G_GAIN_ALPHA_FIX_BITS);
+    }
+    else if(pdyn->loNrGuide_iirFilt.sw_cnrT_rgeSgmRatio_mode == cnr_locSgmStrg2SgmRat_mode)
+    {
+        pFix->loflt_global_sgm_ratio_alpha = 0.0 * (1 << RKCNR_V31_G_GAIN_ALPHA_FIX_BITS);
+    }
+    else
+    {
+        tmp = pdyn->loNrGuide_iirFilt.hw_cnrT_glbSgmRatio_alpha * (1 << RKCNR_V31_G_GAIN_ALPHA_FIX_BITS);
+        pFix->loflt_global_sgm_ratio_alpha = CLIP(tmp, 0, 0x8);
+    }
+#else
+    /* CNR_IIR_GLOBAL_GAIN */
+    // ic not support iir local gain, the value is always 0x8.
+    pFix->loflt_global_sgm_ratio_alpha = 0x8;
+#endif
     tmp = pdyn->loNrGuide_iirFilt.hw_cnrT_glbSgm_ratio * (1 << RKCNR_V31_sgmRatio);
     pFix->loflt_global_sgm_ratio = CLIP(tmp, 0, 0xff);
-#if RKAIQ_HAVE_CNR_V35
+#if defined(RKAIQ_HAVE_CNR_V35) || defined(RKAIQ_HAVE_CNR_V36)
     tmp = ROUND_F((1.0 - pdyn->hiNr_locFiltAlpha.hw_cnrT_locFiltAlpha_minLimit) * (1 << RKCNR_V32_FIX_BIT_GLOBAL_ALPHA));
     pFix->bf_alpha_max_limit = CLIP(tmp, 0, 0x7ff);
     tmp = ROUND_F((1.0 / sqrt(pdyn->hiNr_locFiltAlpha.hw_cnrT_locFiltAlpha_maxLimit) * (1 << 14)));
@@ -317,5 +331,25 @@ void rk_aiq_cnr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
         tmp = log2e / (pdyn->hw_cnrC_luma2HiNrSgm_curve.val[i] * scale);
         pFix->hiflt_vsigma[i] = CLIP(tmp, 0, 0x3fff);
     }
+#if RKAIQ_HAVE_CNR_V36
+    for (int i = 0; i < 13; i++) {
+        tmp = ROUND_F(pdyn->loNrGuide_iirFilt.hw_cnrT_locSgmStrg2SgmRat_val[i] * (1 << RKCNR_V31_sgmRatio));
+        pFix->lo_flt_vsigma[i] = CLIP(tmp, 0, 0xff);
+    }
+    tmp = pdyn->hiNr_locFiltAlpha.hw_cnrT_hueSatAdj_en;
+    pFix->hsv_alpha_en = CLIP(tmp, 0, 1);
+    for (int i = 0; i < 10; i++) {
+        tmp = ROUND_F(pdyn->hiNr_locFiltAlpha.hw_cnrT_hue2NrOutAlpha[i] * (1 << 7));
+        pFix->hsv_adj_alpha_table[i] = CLIP(tmp, 0, 0x80);
+    }
+    for (int i = 0; i < 10; i++) {
+        tmp = ROUND_F(pdyn->hiNr_locFiltAlpha.hw_cnrT_sat2NrOutAlpha[i] * (1 << 7));
+        pFix->sat_adj_alpha_table[i] = CLIP(tmp, 0, 0x80);
+    }
+    for (int i = 0; i < 10; i++) {
+        tmp = ROUND_F(pdyn->hiNr_locFiltAlpha.hw_cnrT_locSgmStrg2NrOutAlpha[i] * (1 << 4));
+        pFix->gain_adj_alpha_table[i] = CLIP(tmp, 0, 0xff);
+    }
+#endif
     return;
 }

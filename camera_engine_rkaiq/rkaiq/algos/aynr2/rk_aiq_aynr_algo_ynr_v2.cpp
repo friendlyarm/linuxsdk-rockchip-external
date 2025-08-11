@@ -475,7 +475,7 @@ Aynr_result_t ynr_fix_transfer_V2(RK_YNR_Params_V2_Select_t* pSelect, RK_YNR_Fix
     tmp = (int)(pSelect->ynr_low_weight_V2 *  fStrength * (1 << 7));
     pFix->ynr_low_weight = CLIP(tmp, 0, 0x80);
     tmp = (int)(pSelect->ynr_low_center_weight_V2 / fStrength * (1 << 10));
-    pFix->ynr_low_center_weight = CLIP(tmp, 0, 0x400);
+    pFix->ynr_low_center_weight = CLIP(tmp, 1, 0x400);
 
     // YNR_2700_HIGHNR_CTRL0 (0x0020)
     tmp = (int)(pSelect->ynr_hi_min_adj_V2 / fStrength * (1 << 6));

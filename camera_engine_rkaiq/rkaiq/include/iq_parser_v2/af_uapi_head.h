@@ -25,123 +25,69 @@
 extern "C" {
 #endif
 
-typedef struct rk_tool_customAf_res_s {
-    // M4_NUMBER_DESC("af enable", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char af_en;
-    // M4_NUMBER_DESC("af selection", "u8", M4_RANGE(0, 3), "0", M4_DIGIT(0))
-    unsigned char rawaf_sel;
-    // M4_NUMBER_DESC("gamma enable", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char gamma_en;
-    // M4_NUMBER_DESC("gause enable", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0), M4_HIDE(1))
-    unsigned char gaus_en;
-    // M4_NUMBER_DESC("v1 fir selection", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char v1_fir_sel;
-    // M4_NUMBER_DESC("hiir enable", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char hiir_en;
-    // M4_NUMBER_DESC("viir enable", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char viir_en;
-    // M4_NUMBER_DESC("v1 fv mode", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char v1_fv_outmode;
-    // M4_NUMBER_DESC("v2 fv mode", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char v2_fv_outmode;
-    // M4_NUMBER_DESC("h1 fv mode", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char h1_fv_outmode;
-    // M4_NUMBER_DESC("h2 fv mode", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char h2_fv_outmode;
-    // M4_NUMBER_DESC("ldg enable", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char ldg_en;
-    // M4_NUMBER_DESC("accu 8bit mode", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0), M4_HIDE(1))
-    unsigned char accu_8bit_mode;
-    // M4_NUMBER_DESC("ae mode", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0))
-    unsigned char ae_mode;
-    // M4_NUMBER_DESC("y mode", "u8", M4_RANGE(0, 1), "0", M4_DIGIT(0), M4_HIDE(1))
-    unsigned char y_mode;
-    // M4_ARRAY_DESC("line enable", "u8", M4_SIZE(1,5), M4_RANGE(0,1), "0", M4_DIGIT(0), M4_DYNAMIC(0), M4_HIDE(1))
-    unsigned char line_en[5];
-    // M4_ARRAY_DESC("line number", "u8", M4_SIZE(1,5), M4_RANGE(0,15), "0", M4_DIGIT(0), M4_DYNAMIC(0), M4_HIDE(1))
-    unsigned char line_num[5];
+typedef struct {
+    // M4_NUMBER_DESC("roia_sharpness", "u64", M4_RANGE(0, 18446744073709551616), "0", M4_DIGIT(0))
+    unsigned long long roia_sharpness;
+    // M4_NUMBER_DESC("roia_luminance", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int roia_luminance;
+    // M4_NUMBER_DESC("roib_sharpness", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int roib_sharpness;
+    // M4_NUMBER_DESC("roib_luminance", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int roib_luminance;
+    // M4_ARRAY_DESC("global_sharpness", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int global_sharpness[225];
+    // M4_ARRAY_DESC("lowpass_fv4_4", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    int lowpass_fv4_4[225];
+    // M4_ARRAY_DESC("lowpass_fv8_8", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    int lowpass_fv8_8[225];
+    // M4_ARRAY_DESC("lowpass_highlht", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    int lowpass_highlht[225];
+    // M4_ARRAY_DESC("lowpass_highlht2", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    int lowpass_highlht2[225];
 
-    // M4_NUMBER_DESC("window num", "u8", M4_RANGE(1, 2), "0", M4_DIGIT(0))
-    unsigned char window_num;
-    // M4_NUMBER_DESC("wina h offs", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short wina_h_offs;
-    // M4_NUMBER_DESC("wina v offs", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short wina_v_offs;
-    // M4_NUMBER_DESC("wina h size", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short wina_h_size;
-    // M4_NUMBER_DESC("wina v size", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short wina_v_size;
-    // M4_NUMBER_DESC("winb h offs", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short winb_h_offs;
-    // M4_NUMBER_DESC("winb v offs", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short winb_v_offs;
-    // M4_NUMBER_DESC("winb h size", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short winb_h_size;
-    // M4_NUMBER_DESC("winb v size", "u16", M4_RANGE(0, 8192), "0", M4_DIGIT(0))
-    unsigned short winb_v_size;
+} uapi_af_v20stats_t;
 
-    // M4_ARRAY_MARK_DESC("Gamma Curve", "u16", M4_SIZE(1,17), M4_RANGE(0, 1023), "[0,45,108,179,245,344,409,459,500,567,622,676,759,833,896,962,1023]", M4_DIGIT(0), M4_DYNAMIC(0), "curve_table")
-    unsigned short gamma_y[17];
+typedef struct {
+    // M4_NUMBER_DESC("wndb_luma", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int wndb_luma;
+    // M4_NUMBER_DESC("wndb_sharpness", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int wndb_sharpness;
+    // M4_NUMBER_DESC("winb_highlit_cnt", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int winb_highlit_cnt;
+    // M4_ARRAY_DESC("wnda_luma", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_luma[225];
+    // M4_ARRAY_DESC("wnda_fv_v1", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_v1[225];
+    // M4_ARRAY_DESC("wnda_fv_v2", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_v2[225];
+    // M4_ARRAY_DESC("wnda_fv_h1", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_h1[225];
+    // M4_ARRAY_DESC("wnda_fv_h2", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_h2[225];
+    // M4_ARRAY_DESC("wina_highlit_cnt", "u32", M4_SIZE(15,15), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wina_highlit_cnt[225];
+} uapi_af_v30stats_t;
 
-    // M4_NUMBER_DESC("afmThres", "u16", M4_RANGE(0, 65535), "4", M4_DIGIT(0))
-    unsigned short thres;
-    // M4_NUMBER_DESC("wina fv shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0), M4_HIDE(1))
-    unsigned char shift_sum_a;
-    // M4_NUMBER_DESC("winb fv shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0))
-    unsigned char shift_sum_b;
-    // M4_NUMBER_DESC("wina luma shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0), M4_HIDE(1))
-    unsigned char shift_y_a;
-    // M4_NUMBER_DESC("winb luma shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0))
-    unsigned char shift_y_b;
-
-    // M4_ARRAY_DESC("vertical first iir filter", "s16", M4_SIZE(1,9), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short v1_iir_coe[9];
-    // M4_ARRAY_DESC("vertical first fir filter", "s16", M4_SIZE(1,3), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short v1_fir_coe[3];
-    // M4_ARRAY_DESC("vertical second iir filter", "s16", M4_SIZE(1,3), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short v2_iir_coe[3];
-    // M4_ARRAY_DESC("vertical second fir filter", "s16", M4_SIZE(1,3), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short v2_fir_coe[3];
-
-    // M4_ARRAY_DESC("horizontal first iir1 filter", "s16", M4_SIZE(1,6), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short h1_iir1_coe[6];
-    // M4_ARRAY_DESC("horizontal first iir2 filter", "s16", M4_SIZE(1,6), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short h2_iir1_coe[6];
-    // M4_ARRAY_DESC("horizontal second iir1 filter", "s16", M4_SIZE(1,6), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short h1_iir2_coe[6];
-    // M4_ARRAY_DESC("horizontal second iir2 filter", "s16", M4_SIZE(1,6), M4_RANGE(-2047,2047), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    short h2_iir2_coe[6];
-
-    // M4_ARRAY_DESC("horizontal thresh", "u8", M4_SIZE(1,2), M4_RANGE(0,255), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    unsigned char h_ldg_lumth[2];
-    // M4_ARRAY_DESC("horizontal gain", "u8", M4_SIZE(1,2), M4_RANGE(0, 255), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    unsigned char h_ldg_gain[2];
-    // M4_ARRAY_DESC("horizontal slope", "u16", M4_SIZE(1,2), M4_RANGE(0, 8191), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    unsigned short h_ldg_gslp[2];
-    // M4_ARRAY_DESC("vertical thresh", "u8", M4_SIZE(1,2), M4_RANGE(0,255), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    unsigned char v_ldg_lumth[2];
-    // M4_ARRAY_DESC("vertical gain", "u8", M4_SIZE(1,2), M4_RANGE(0, 255), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    unsigned char v_ldg_gain[2];
-    // M4_ARRAY_DESC("vertical slope", "u16", M4_SIZE(1,2), M4_RANGE(0, 8191), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    unsigned short v_ldg_gslp[2];
-
-    // M4_NUMBER_DESC("vertical fv thresh", "u16", M4_RANGE(0, 4095), "0", M4_DIGIT(0))
-    unsigned short v_fv_thresh;
-    // M4_NUMBER_DESC("horizontal fv thresh", "u16", M4_RANGE(0, 4095), "0", M4_DIGIT(0))
-    unsigned short h_fv_thresh;
-
-    // M4_NUMBER_DESC("wina v1 shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0))
-    unsigned char v1_fv_shift;
-    // M4_NUMBER_DESC("wina v2 shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0))
-    unsigned char v2_fv_shift;
-    // M4_NUMBER_DESC("wina h1 shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0))
-    unsigned char h1_fv_shift;
-    // M4_NUMBER_DESC("wina h2 shift", "u8", M4_RANGE(0, 7), "0", M4_DIGIT(0))
-    unsigned char h2_fv_shift;
-
-    // M4_NUMBER_DESC("highlight thresh", "u16", M4_RANGE(0, 4095), "0", M4_DIGIT(0))
-    unsigned short highlit_thresh;
-}  rk_tool_customAf_res_t;
+typedef struct {
+    // M4_NUMBER_DESC("wndb_luma", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int wndb_luma;
+    // M4_NUMBER_DESC("wndb_sharpness", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int wndb_sharpness;
+    // M4_NUMBER_DESC("winb_highlit_cnt", "u32", M4_RANGE(0, 4294967296), "0", M4_DIGIT(0))
+    unsigned int winb_highlit_cnt;
+    // M4_ARRAY_DESC("wnda_luma", "u32", M4_SIZE(5,5), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_luma[25];
+    // M4_ARRAY_DESC("wnda_fv_v1", "u32", M4_SIZE(5,5), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_v1[25];
+    // M4_ARRAY_DESC("wnda_fv_v2", "u32", M4_SIZE(5,5), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_v2[25];
+    // M4_ARRAY_DESC("wnda_fv_h1", "u32", M4_SIZE(5,5), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_h1[25];
+    // M4_ARRAY_DESC("wnda_fv_h2", "u32", M4_SIZE(5,5), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wnda_fv_h2[25];
+    // M4_ARRAY_DESC("wina_highlit_cnt", "u32", M4_SIZE(5,5), M4_RANGE(0,4294967296), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    unsigned int wina_highlit_cnt[25];
+} uapi_af_v32litestats_t;
 
 #ifdef __cplusplus
 }

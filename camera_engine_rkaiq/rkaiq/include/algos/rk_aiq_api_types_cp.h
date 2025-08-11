@@ -26,7 +26,7 @@ RKAIQ_BEGIN_DECLARE
 
 typedef struct {
     /* M4_GENERIC_DESC(
-        M4_ALIAS(static_param),
+        M4_ALIAS(sta),
         M4_TYPE(struct),
         M4_UI_MODULE(static_ui),
         M4_HIDE_EX(0),

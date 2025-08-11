@@ -222,7 +222,7 @@ typedef rk_aiq_isp_params_t<rk_aiq_isp_cac_v32_t>             rk_aiq_isp_cac_par
 #endif
 
 #ifdef ISP_HW_V39
-typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v39_t>    rk_aiq_isp_awb_params_t;
+//typedef rk_aiq_isp_params_t<rk_aiq_isp_awb_meas_cfg_v39_t>    rk_aiq_isp_awb_params_t;
 typedef rk_aiq_isp_params_t<rk_aiq_isp_wb_gain_v32_t>         rk_aiq_isp_awb_gain_params_t;
 #if USE_NEWSTRUCT
 typedef rk_aiq_isp_params_t<afStats_cfg_t>                    rk_aiq_isp_af_params_t;
@@ -276,12 +276,11 @@ typedef rk_aiq_isp_params_t<ynr_param_t>        rk_aiq_isp_ynr_params_t;
 typedef rk_aiq_isp_params_t<sharp_param_t>      rk_aiq_isp_sharp_params_t;
 typedef rk_aiq_isp_params_t<cnr_param_t>        rk_aiq_isp_cnr_params_t;
 typedef rk_aiq_isp_params_t<rk_aiq_isp_drc_v39_t>      rk_aiq_isp_drc_params_t;
-typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_v39_t>      rk_aiq_isp_dehaze_params_t;
+// typedef rk_aiq_isp_params_t<rk_aiq_isp_dehaze_v39_t>      rk_aiq_isp_dehaze_params_t;
 typedef rk_aiq_isp_params_t<dpc_param_t>          rk_aiq_isp_dpcc_params_t;
 typedef rk_aiq_isp_params_t<gic_param_t>         rk_aiq_isp_gic_params_t;
 typedef rk_aiq_isp_params_t<yme_param_t>         rk_aiq_isp_yme_params_t;
 typedef rk_aiq_isp_params_t<cac_param_t>      rk_aiq_isp_cac_params_t;
-typedef rk_aiq_isp_params_t<ldch_param_t>      rk_aiq_isp_ldch_params_t;
 typedef rk_aiq_isp_params_t<mge_param_t>      rk_aiq_isp_merge_params_t;
 typedef rk_aiq_isp_params_t<lsc_param_t>      rk_aiq_isp_lsc_params_t;
 typedef rk_aiq_isp_params_t<rgbir_param_t>         rk_aiq_isp_rgbir_params_t;
@@ -472,6 +471,9 @@ enum cam_thread_type_e {
     VICAP_WITH_RK1608_RESET_EVT,
     VICAP_POLL_SCL,
     ISP_POLL_AIISP,
+    ISP_POLL_AIBNR_DONE,
+    ISP_POLL_RKNN_DONE,
+    ISP_POLL_AIRMS_DONE,
     ISP_POLL_POST_MAX,
 };
 
@@ -502,6 +504,7 @@ enum cam_thread_type_e {
 #define VIPCAP_TX_BUF_NUM_1608 6    // For mount 3 sensor, is mount 4 sensor, is 7
 
 typedef struct {
+    char driver[16];
     int  model_idx;
     int  logic_id;
     int  phy_id; // physical isp id
@@ -924,11 +927,11 @@ typedef struct _RkAiqBay3dStat {
     struct isp39_bay3d_stat stat;
 } RkAiqBay3dStat;
 
-typedef enum _RkAiqIspUnitedMode {
-    RK_AIQ_ISP_UNITED_MODE_NORMAL = 0,
-    RK_AIQ_ISP_UNITED_MODE_TWO_GRID,
-    RK_AIQ_ISP_UNITED_MODE_FOUR_GRID,
-} RkAiqIspUnitedMode;
+typedef enum _RkAiqIspUniteMode {
+    RK_AIQ_ISP_UNITE_MODE_NORMAL = 0,
+    RK_AIQ_ISP_UNITE_MODE_TWO_GRID,
+    RK_AIQ_ISP_UNITE_MODE_FOUR_GRID,
+} RkAiqIspUniteMode;
 
 #if defined(ISP_HW_V32_LITE)
 #define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 4224 * 3136

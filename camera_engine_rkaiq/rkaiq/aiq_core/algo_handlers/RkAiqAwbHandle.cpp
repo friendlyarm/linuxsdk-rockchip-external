@@ -1003,7 +1003,7 @@ XCamReturn RkAiqAwbHandleInt::processing() {
         if (getAlgoId() == 0) {
             mProcResShared = new RkAiqAlgoProcResAwbIntShared();
         }
-        memcpy(&mProcResShared->result.awb_gain_algo, awb_proc_res_int->awb_gain_algo, sizeof(rk_aiq_wb_gain_t));
+        mProcResShared->result.awb_gain_algo = awb_proc_res_int->awb_gain_algo_golden;
         mProcResShared->result.awb_smooth_factor = awb_proc_res_int->awb_smooth_factor;
         mProcResShared->result.varianceLuma = awb_proc_res_int->varianceLuma;
         mProcResShared->result.awbConverged = awb_proc_res_int->awbConverged;

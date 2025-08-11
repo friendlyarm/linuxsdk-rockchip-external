@@ -41,8 +41,10 @@ static XCamReturn _handlerBtnr_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "btnr handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "btnr algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();
@@ -63,7 +65,7 @@ static XCamReturn _handlerBtnr_processing(AiqAlgoHandler_t* pAlgoHandler) {
         RKAIQCORE_CHECK_RET(ret, "btnr handle processing failed");
     }
 
-#if defined(ISP_HW_V39) || defined(ISP_HW_V33)
+#if defined(ISP_HW_V39) || defined(ISP_HW_V33) || defined(ISP_HW_V35)
     RkAiqAlgoProcBtnr* btnr_proc_param = (RkAiqAlgoProcBtnr*)pAlgoHandler->mProcInParam;
     btnr_proc_param->blc_ob_predgain = 1.0;
 #else

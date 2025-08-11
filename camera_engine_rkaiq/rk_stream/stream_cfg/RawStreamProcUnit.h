@@ -17,10 +17,10 @@
 #ifndef _RAW_STREAM_PROC_UNIT_H_
 #define _RAW_STREAM_PROC_UNIT_H_
 #include <v4l2_device.h>
+#include "rk_aiq_offline_raw.h"
 #include "poll_thread.h"
 #include "xcam_mutex.h"
 #include "Stream.h"
-#include "rk_aiq_offline_raw.h"
 #include "rkrawstream_user_api.h"
 #include <map>
 
@@ -52,7 +52,7 @@ class RawStreamProcUnit : public PollCallback
 {
 public:
     //explicit RawStreamProcUnit (char *ispdev, char *dev0, char *dev1, char *dev2, bool linked_to_isp);
-    explicit RawStreamProcUnit (const rk_sensor_full_info_t *s_info, uint8_t is_offline);
+    explicit RawStreamProcUnit (const rk_aiq_isp_t *s_info, uint8_t is_offline);
     virtual ~RawStreamProcUnit ();
     virtual XCamReturn start        ();
     virtual XCamReturn stop         ();

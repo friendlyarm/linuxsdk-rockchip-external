@@ -78,7 +78,7 @@ typedef struct cac_g_interp_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_cacT_hiDrct_ratio
     float hw_cacT_hiDrct_ratio;
 } cac_g_interp_t;
@@ -92,7 +92,7 @@ typedef struct cac_edge_detect_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-		Freq of use: low))  */
+		Freq of use: high))  */
     // reg: hw_cacT_edgeDetect_en;
     bool hw_cacT_edgeDetect_en;
     /* M4_GENERIC_DESC(
@@ -106,7 +106,7 @@ typedef struct cac_edge_detect_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_flat_thred;
     float hw_cacT_flat_thred;
     /* M4_GENERIC_DESC(
@@ -119,7 +119,7 @@ typedef struct cac_edge_detect_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: sw_cac_flat_thed_b
     unsigned int hw_cacT_flat_offset;
 } cac_edge_detect_t;
@@ -177,7 +177,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtColorB_minThred;
     // check fixed 20bit or 22bit
 	float hw_cacT_wgtColorB_minThred;
@@ -192,7 +192,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtColorB_slope;
 	float hw_cacT_wgtColorB_maxThred;
        /* M4_GENERIC_DESC(
@@ -206,7 +206,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtColorR_minThred;
 	float hw_cacT_wgtColorR_minThred;
         /* M4_GENERIC_DESC(
@@ -220,7 +220,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtColorR_slope;
 	float hw_cacT_wgtColorR_maxThred;
      /* M4_GENERIC_DESC(
@@ -234,7 +234,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtColor_minLuma;
 	float hw_cacT_wgtColor_minLuma;
      /* M4_GENERIC_DESC(
@@ -248,7 +248,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtColorLuma_slope;
 	float hw_cacT_wgtColor_maxLuma;
      /* M4_GENERIC_DESC(
@@ -262,7 +262,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_residualChroma_ratio;
 	float hw_cacT_residualChroma_ratio;
      /* M4_GENERIC_DESC(
@@ -303,7 +303,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtOverExpo_minThred;
 	float hw_cacT_wgtOverExpo_minThred;
      /* M4_GENERIC_DESC(
@@ -317,7 +317,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtOverExpo_slope;
 	float hw_cacT_wgtOverExpo_maxThred;
      /* M4_GENERIC_DESC(
@@ -330,7 +330,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_contrast_offset;
 	unsigned int hw_cacT_contrast_offset;
       /* M4_GENERIC_DESC(
@@ -344,7 +344,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_contrast_offset;
 	float hw_cacT_wgtContrast_minThred;
       /* M4_GENERIC_DESC(
@@ -358,7 +358,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgtContrast_slope;
 	float hw_cacT_wgtContrast_maxThred;
       /* M4_GENERIC_DESC(
@@ -372,7 +372,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgt_dark_thed;
 	float hw_cacT_wgtDarkArea_minThred;
       /* M4_GENERIC_DESC(
@@ -386,7 +386,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_wgt_dark_slope;
 	float hw_cacT_wgtDarkArea_maxThred;
     /* M4_GENERIC_DESC(
@@ -397,7 +397,7 @@ typedef struct cac_chromaAberrCorr_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-		Freq of use: low))  */
+		Freq of use: high))  */
     // reg: sw_cacT_wgt_color_en;
 	bool hw_cacT_wgtColor_en;
 }cac_chromaAberrCorr_t;
@@ -422,7 +422,7 @@ typedef struct cac_hfCalc_s{
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-		Freq of use: low))  */
+		Freq of use: high))  */
     // reg: no reg;
     bool hw_cacT_overExpoDetect_en;
       /* M4_GENERIC_DESC(
@@ -436,7 +436,7 @@ typedef struct cac_hfCalc_s{
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_overExpo_thred;
 	float hw_cacT_overExpo_thred;
       /* M4_GENERIC_DESC(
@@ -450,7 +450,7 @@ typedef struct cac_hfCalc_s{
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(TODO.
-        Freq of use: low))  */
+        Freq of use: high))  */
     // reg: hw_cacT_overExpo_adj;
 	float hw_cacT_overExpo_adj;
 }cac_hfCalc_t;

@@ -51,6 +51,11 @@ static XCamReturn _handlerAwb_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "ae handle prepare failed");
 
+    RkAiqAlgosGroupShared_t* shared =
+        (RkAiqAlgosGroupShared_t*)(pAlgoHandler->mAlogsGroupSharedParams);
+    RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
+    pAlgoHandler->mConfig->reserverd = (void*)(sharedCom->gray_mode);
+
     RkAiqAlgoConfigAwb* awb_config_int = (RkAiqAlgoConfigAwb*)pAlgoHandler->mConfig;
 
     awb_config_int->mem_ops_ptr   = pAlgoHandler->mAiqCore->mShareMemOps;
@@ -85,7 +90,7 @@ static XCamReturn _handlerAwb_processing(AiqAlgoHandler_t* pAlgoHandler) {
 	aiq_awb_stats_wrapper_t* pAwbStatsWrap = NULL;
 	if (shared->awbStatsBuf)
 		pAwbStatsWrap = (aiq_awb_stats_wrapper_t*)shared->awbStatsBuf->_data;
-#if RKAIQ_HAVE_AWB_V39
+#if USE_NEWSTRUCT
     if (pAwbStatsWrap) {
         awb_proc_int->awb_statsBuf_v39 = &pAwbStatsWrap ->awb_stats_v39;
 	} else
@@ -94,7 +99,7 @@ static XCamReturn _handlerAwb_processing(AiqAlgoHandler_t* pAlgoHandler) {
 	awb_proc_int->awb_statsBuf_v39 = NULL;
 #endif
 
-#if !defined(ISP_HW_V39) || !defined(ISP_HW_V33)
+#if !defined(ISP_HW_V39) || !defined(ISP_HW_V33) || !defined(ISP_HW_V35)
     if (shared->aecStatsBuf) {
 		aiq_ae_stats_wrapper_t* pAeStatsWrap = (aiq_ae_stats_wrapper_t*)shared->aecStatsBuf->_data;
         awb_proc_int->aecStatsBuf = &pAeStatsWrap->aec_stats;
@@ -154,14 +159,14 @@ static XCamReturn _handlerAwb_processing(AiqAlgoHandler_t* pAlgoHandler) {
     // for otp awb
     awb_proc_int->awb_otp = &sharedCom->snsDes.otp_awb;
 
-#if defined(ISP_HW_V39) || defined(ISP_HW_V33)
+#if defined(ISP_HW_V39) || defined(ISP_HW_V33) || defined(ISP_HW_V35)
 	aiq_params_base_t* pBase = shared->fullParams->pParamsArray[RESULT_TYPE_AWB_PARAM];
 	if (pBase)
-		awb_proc_res_int->awb_hw39_para = (rk_aiq_isp_awb_params_t*)pBase->_data;
+		awb_proc_res_int->awb_hw_cfg_priv = (rk_aiq_isp_awb_params_t*)pBase->_data;
 	else
-		awb_proc_res_int->awb_hw39_para = NULL;
+		awb_proc_res_int->awb_hw_cfg_priv = NULL;
 #else
-    awb_proc_res_int->awb_hw39_para = NULL;
+    awb_proc_res_int->awb_hw_cfg_priv = NULL;
 #endif
 
 	aiq_params_base_t* pGainBase = shared->fullParams->pParamsArray[RESULT_TYPE_AWBGAIN_PARAM];
@@ -208,7 +213,10 @@ static XCamReturn _handlerAwb_processing(AiqAlgoHandler_t* pAlgoHandler) {
 				pAwbHdl->mProcResShared = (AlgoRstShared_t*)pItem->_pData;
 			} else {
 				LOGW_AWB("no awb_proc_res buf !");
-			}
+#if RKAIQ_HAVE_DUMPSYS
+                                pAlgoHandler->mAiqCore->mNoFreeBufCnt.awbProcRes++;
+#endif
+                        }
         }
 		RkAiqAlgoProcResAwbShared_t* pAwbShared = NULL;
 		if (pAwbHdl->mProcResShared) {
@@ -639,3 +647,18 @@ XCamReturn AiqAlgoHandlerAwb_getStrategyResult(AiqAlgoHandlerAwb_t* pAwbHdl, rk_
     return ret;
 }
 
+XCamReturn AiqAlgoHandlerAwb_SetNNres(AiqAlgoHandlerAwb_t* pAwbHdl, const awb_ai_res_t *att)
+{
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+	AiqAlgoHandler_t* pHdl = (AiqAlgoHandler_t*)pAwbHdl;
+    aiqMutex_lock(&pHdl->mCfgMutex);
+
+    ret = rk_aiq_uapiV3_awb_SetNNres(pHdl->mAlgoCtx, att, false);
+
+    aiqMutex_unlock(&pHdl->mCfgMutex);
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}

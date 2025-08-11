@@ -16,8 +16,8 @@ void rk_aiq_rgbir10_params_cvt(void* attr, isp_params_t* isp_params)
     rgbir_param_t *rgbir_param = (rgbir_param_t *) attr;
     rgbir_params_dyn_t* pdyn = &rgbir_param->dyn;
 
-    pFix->coe_delta = CLIP(pdyn->hw_rgbir_remosaic_edge_coef, BIT_MIN, BIT_12_MAX);
-    pFix->coe_theta = CLIP(pdyn->hw_rgbir_remosaic_ir_blk_level, BIT_MIN + 1, BIT_14_MAX);
+    pFix->coe_delta = CLIP(pdyn->hw_rgbir_remosaic_edge_coef, BIT_MIN + 1, BIT_12_MAX);
+    pFix->coe_theta = CLIP(pdyn->hw_rgbir_remosaic_ir_blk_level, BIT_MIN, BIT_14_MAX);
     pFix->scale[0] = CLIP(pdyn->sw_rgbir_remosaic_r_scale_coef * 128, BIT_MIN + 1, BIT_8_MAX + 1);
     pFix->scale[1] = CLIP(pdyn->sw_rgbir_remosaic_gr_scale_coef * 128, BIT_MIN + 1, BIT_8_MAX + 1);
     pFix->scale[2] = CLIP(pdyn->sw_rgbir_remosaic_gb_scale_coef * 128, BIT_MIN + 1, BIT_8_MAX + 1);

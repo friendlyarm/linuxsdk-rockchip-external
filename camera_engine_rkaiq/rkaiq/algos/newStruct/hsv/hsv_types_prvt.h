@@ -43,6 +43,10 @@ typedef struct {
     int16_t lut0[HSV_1DLUT_NUM];
     int16_t lut1[HSV_1DLUT_NUM];
     int16_t lut2[HSV_2DLUT_NUM];
+#if RKAIQ_HAVE_HSV_V11
+    int16_t lut2d1[HSV_2DLUT_NUM];
+    int16_t lut2d2[HSV_2DLUT_NUM];
+#endif
 } hsv_meshGain_t;
 
 typedef struct {
@@ -51,9 +55,14 @@ typedef struct {
     int pre_gain;
     int pre_wbgain[2];
     uint8_t pre_illu_idx;
+#if RKAIQ_HAVE_HSV_V10
     uint8_t pre_mode[3];
-    float pre_alpha;
     int32_t pre_lutSum[3];
+#elif RKAIQ_HAVE_HSV_V11
+    uint8_t pre_mode[5];
+    int32_t pre_lutSum[5];
+#endif
+    float pre_alpha;
 
     hsv_param_dyn_t* calib_lut;
 
@@ -62,6 +71,11 @@ typedef struct {
     hsv_meshGain_t damped_lut;
 
     bool is_calib_update;
+
+    ahsv_satStrg_t strg;
+    ahsv_hueOffset_t hoffset;
+    ahsv_valOffset_t voffset;
+    bool isReCal_;
 } HsvContext_t;
 
 XCamReturn Ahsv_prepare(RkAiqAlgoCom* params);

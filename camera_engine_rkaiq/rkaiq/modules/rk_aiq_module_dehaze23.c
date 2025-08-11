@@ -164,6 +164,30 @@ void rk_aiq_histeq23_params_cvt(void* attr, isp_params_t* isp_params, common_cvt
     pFix->thumb_col = psta->hw_histc_blocks_cols;
     // thumb_row
     pFix->thumb_row = psta->hw_histc_blocks_rows;
+    // check thumb_col
+    if (pFix->thumb_col % 2) {
+        pFix->thumb_col = (uint8_t)(pFix->thumb_col / 2) * 2;
+    }
+    if (cols >= 4352 && pFix->thumb_col <= 4) {
+        pFix->thumb_col = 6;
+    } else if (pFix->thumb_col < 4) {
+        pFix->thumb_col = 4;
+    } else if (pFix->thumb_col > 10) {
+        pFix->thumb_col = 10;
+    }
+    // check thumb_row
+    if (pFix->thumb_row % 2) {
+        pFix->thumb_row = (uint8_t)(pFix->thumb_row / 2) * 2;
+    }
+    if (rows > 6132) {
+        pFix->thumb_row = 8;
+    } else if (rows > 4088 && rows <= 6132 && pFix->thumb_row <= 4) {
+        pFix->thumb_row = 6;
+    } else if (pFix->thumb_row < 4) {
+        pFix->thumb_row = 4;
+    } else if (pFix->thumb_row > 8) {
+        pFix->thumb_row = 8;
+    }
     // blk_het
     pFix->blk_het = LIMIT_VALUE(rows / pFix->thumb_row, HIST_BLOCK_HEIGHT_MAX, HSIT_BLOCK_HEIGHT_MIN);
     // blk_wid

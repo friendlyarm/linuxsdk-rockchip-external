@@ -1,7 +1,7 @@
 CODEABI_3.8 {
     global:
-        *rk_aiq_user_api2*;
-        *rk_aiq_uapi2_*;
+        *rk_aiq_user_api*;
+        *rk_aiq_uapi*;
         *g_rkaiq_isp_hw_ver*;
 		rkaiq_uapi_unified_ctl;
     local: *;

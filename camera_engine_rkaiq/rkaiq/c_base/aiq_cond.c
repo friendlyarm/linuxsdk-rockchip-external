@@ -18,13 +18,19 @@
 
 int aiqCond_init(AiqCond_t* cond) {
     int ret = 0;
+    pthread_condattr_t cond_attr;
 
     XCAM_ASSERT(cond);
 
-    ret = pthread_cond_init(cond, NULL);
+    pthread_condattr_init(&cond_attr);
+    pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+
+    ret = pthread_cond_init(cond, &cond_attr);
     if (ret != 0) {
         XCAM_LOG_WARNING("Cond init failed %s", strerror(ret));
     }
+
+    pthread_condattr_destroy(&cond_attr);
 
     return ret;
 }
@@ -57,7 +63,7 @@ int aiqCond_wait(AiqCond_t* cond, AiqMutex_t* mutex) {
 }
 
 int aiqCond_timedWait(AiqCond_t* cond, AiqMutex_t* mutex, int32_t timeout_us) {
-    struct timeval now;
+    struct timespec now;
     struct timespec abstime;
 
     XCAM_ASSERT(cond);
@@ -66,14 +72,17 @@ int aiqCond_timedWait(AiqCond_t* cond, AiqMutex_t* mutex, int32_t timeout_us) {
 	if (timeout_us == -1) {
 		return pthread_cond_wait(cond, mutex);
 	} else {
-		// TODO: use MONOTICK instead ?
-		gettimeofday(&now, NULL);
-		now.tv_usec += timeout_us;
+        clock_gettime(CLOCK_MONOTONIC, &now);
 		xcam_mem_clear(abstime);
-		abstime.tv_sec += now.tv_sec + now.tv_usec / 1000000;
-		abstime.tv_nsec = (now.tv_usec % 1000000) * 1000;
+        abstime.tv_sec = now.tv_sec + timeout_us / 1000000;
+        abstime.tv_nsec = now.tv_nsec + (timeout_us % 1000000) * 1000;
 
-		return pthread_cond_timedwait(cond, mutex, &abstime);
+        if (abstime.tv_nsec >= 1000000000) {
+            abstime.tv_sec += 1;
+            abstime.tv_nsec -= 1000000000;
+        }
+
+        return pthread_cond_timedwait(cond, mutex, &abstime);
 	}
 }
 

@@ -18,7 +18,11 @@
 #define _RK_AIQ_API_TYPES_MERGE_H_
 
 #include "common/rk_aiq_comm.h"
+#if ISP_HW_V35
+#include "isp/rk_aiq_isp_merge23.h"
+#else
 #include "isp/rk_aiq_isp_merge22.h"
+#endif
 
 #define MERGE_LINK_NUM 13
 
@@ -48,9 +52,9 @@ typedef struct amge_paraLinkCfg_s {
         M4_ALIAS(sw_mgeT_isoLink_val),
         M4_TYPE(s32),
         M4_SIZE_EX(1,13),
-        M4_RANGE_EX(0,65535),
-        M4_DEFAULT([50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 16300, 51200, 102400, 204800]),
-        M4_DIGIT_EX(4),
+        M4_RANGE_EX(0,1000000),
+        M4_DEFAULT([50, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200, 102400, 204800]),
+        M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
@@ -80,7 +84,8 @@ typedef struct amge_param_static_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n
+        Freq of use: low))  */
     mge_params_static_t mgeCfg;
     /* M4_GENERIC_DESC(
         M4_ALIAS(paraLinkCfg),
@@ -89,20 +94,21 @@ typedef struct amge_param_static_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES(TODO))  */
-    amge_paraLinkCfg_t paraLinkCfg;
-	/* M4_GENERIC_DESC(
-        M4_ALIAS( sw_mgeT_oeDamp_val),
-        M4_TYPE(f32),
-        M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,1),
-        M4_DEFAULT(0.1),
-        M4_DIGIT_EX(3),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(In order to avoid oeWgt from changing too fast, which leads to flicker. The sameller the value, the slower the oeWgt change.\n
+        M4_NOTES(TODO.\n
         Freq of use: low))  */
+    amge_paraLinkCfg_t paraLinkCfg;
+    /* M4_GENERIC_DESC(
+    M4_ALIAS( sw_mgeT_oeDamp_val),
+    M4_TYPE(f32),
+    M4_SIZE_EX(1,1),
+    M4_RANGE_EX(0,1),
+    M4_DEFAULT(0.1),
+    M4_DIGIT_EX(3),
+    M4_HIDE_EX(0),
+    M4_RO(0),
+    M4_ORDER(0),
+    M4_NOTES(In order to avoid oeWgt from changing too fast, which leads to flicker. The sameller
+    the value, the slower the oeWgt change.\n Freq of use: low))  */
     float sw_mgeT_oeDamp_val;
     /* M4_GENERIC_DESC(
         M4_ALIAS( sw_mgeT_mdDamp_val),
@@ -114,24 +120,24 @@ typedef struct amge_param_static_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES(In order to avoid mdWgt from changing too fast, which leads to flicker. The sameller the value, the slower the mdWgt change.\n
-        Freq of use: low))  */
+        M4_NOTES(In order to avoid mdWgt from changing too fast, which leads to flicker. The
+       sameller the value, the slower the mdWgt change.\n Freq of use: low))  */
     float sw_mgeT_mdDamp_val;
 } amge_param_static_t;
 
 typedef struct amge_params_dyn_s {
-     /* M4_GENERIC_DESC(
-        M4_ALIAS(sw_mgeT_baseFrm_mode),
-        M4_TYPE(enum),
-        M4_ENUM_DEF(mge_baseFrm_mode_t),
-        M4_DEFAULT(mge_baseHdrL_mode),
-        M4_GROUP_CTRL(baseFrm_mode_group),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_NOTES(TODO\n
-        Reference enum types.\n
-        Freq of use: low))  */
+    /* M4_GENERIC_DESC(
+       M4_ALIAS(sw_mgeT_baseFrm_mode),
+       M4_TYPE(enum),
+       M4_ENUM_DEF(mge_baseFrm_mode_t),
+       M4_DEFAULT(mge_baseHdrL_mode),
+       M4_GROUP_CTRL(baseFrm_mode_group),
+       M4_HIDE_EX(0),
+       M4_RO(0),
+       M4_ORDER(0),
+       M4_NOTES(TODO\n
+       Reference enum types.\n
+       Freq of use: high))  */
     mge_baseFrm_mode_t sw_mgeT_baseFrm_mode;
     /* M4_GENERIC_DESC(
         M4_ALIAS(sw_mgeT_baseHdrL_mode),
@@ -146,6 +152,21 @@ typedef struct amge_params_dyn_s {
         Reference enum types.\n
         Freq of use: low))  */
     mge_baseHdrL_mode_t sw_mgeT_baseHdrL_mode;
+#if ISP_HW_V35
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_mgeT_baseHdrS_mode),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(mge_baseHdrS_mode_t),
+        M4_DEFAULT(mge_motionDR_SPrior_mode),
+        M4_GROUP_CTRL(baseHdrS_mode_group),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(TODO.\n
+        Reference enum types.\n
+        Freq of use: low))  */
+    mge_baseHdrS_mode_t sw_mgeT_baseHdrS_mode;
+#endif
     /* M4_GENERIC_DESC(
         M4_ALIAS(oeWgt),
         M4_TYPE(struct),
@@ -153,7 +174,7 @@ typedef struct amge_params_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(2),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n Freq of use: high))  */
     mge_oeWgt_t oeWgt;
     /* M4_GENERIC_DESC(
         M4_ALIAS(mdWgt_baseHdrL),
@@ -163,7 +184,7 @@ typedef struct amge_params_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(2),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n Freq of use: high))  */
     mge_mdWgt_baseHdrL_t mdWgt_baseHdrL;
     /* M4_GENERIC_DESC(
         M4_ALIAS(mdWgt_baseHdrS),
@@ -173,20 +194,20 @@ typedef struct amge_params_dyn_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(2),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n Freq of use: low))  */
     mge_mdWgt_baseHdrS_t mdWgt_baseHdrS;
 } amge_params_dyn_t;
 
 typedef struct mge_param_auto_s {
-     /* M4_GENERIC_DESC(
-        M4_ALIAS(sta),
-        M4_SIZE_EX(1,1),
-        M4_TYPE(struct),
-        M4_UI_MODULE(static_ui),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(2),
-        M4_NOTES(TODO))  */
+    /* M4_GENERIC_DESC(
+       M4_ALIAS(sta),
+       M4_SIZE_EX(1,1),
+       M4_TYPE(struct),
+       M4_UI_MODULE(static_ui),
+       M4_HIDE_EX(0),
+       M4_RO(0),
+       M4_ORDER(2),
+       M4_NOTES(TODO))  */
     amge_param_static_t sta;
     /* M4_GENERIC_DESC(
         M4_ALIAS(dyn),

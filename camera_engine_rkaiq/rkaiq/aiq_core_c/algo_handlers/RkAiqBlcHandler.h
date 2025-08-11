@@ -24,6 +24,9 @@ typedef struct AiqAlgoHandlerBlc_s {
     AiqAlgoHandler_t _base;
     blc_param_t* mLatestparam;
     bool mLatesten;
+    RkAiqAlgoProcResAeShared_t mAeProcRes;
+    bool damping;
+    bool aeIsConverged;
 } AiqAlgoHandlerBlc_t;
 
 AiqAlgoHandler_t* AiqAlgoHandlerBlc_constructor(RkAiqAlgoDesComm* des, AiqCore_t* aiqCore);
@@ -32,6 +35,9 @@ XCamReturn AiqAlgoHandlerBlc_setAttrib(AiqAlgoHandlerBlc_t* pHdlBlc, blc_api_att
 XCamReturn AiqAlgoHandlerBlc_getAttrib(AiqAlgoHandlerBlc_t* pHdlBlc, blc_api_attrib_t* attr);
 XCamReturn AiqAlgoHandlerBlc_queryStatus(AiqAlgoHandlerBlc_t* pHdlBlc, blc_status_t* status);
 #endif
+
+#define AiqBlcHandler_setAeProcRes(pHdBlc, pAeProcRes) \
+    (pHdBlc)->mAeProcRes = *pAeProcRes
 
 RKAIQ_END_DECLARE
 

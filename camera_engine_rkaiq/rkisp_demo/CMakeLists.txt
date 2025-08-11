@@ -19,6 +19,9 @@ include(CompileOptions)
 include(GNUInstallDirs)
 
 find_package(librga QUIET)
+if (RKAIQ_NEWSTRUCT_TEST)
+    set(librga_FOUND FALSE)
+endif()
 if (librga_FOUND)
     add_compile_options(${LIBRGA_CFLAGS})
     add_compile_options(-DISPDEMO_ENABLE_RGA=1)
@@ -70,6 +73,8 @@ if(ADD_RK_AIQ)
     add_compile_options(-Os)
     add_compile_options(-DADD_RK_AIQ)
     add_compile_options(-fstack-protector-strong -D_FORTIFY_SOURCE=2)
+    add_compile_options(-Wno-unused-variable -Wno-unused-parameter
+        -Wno-unused-function -Wno-unused-but-set-variable)
     set(RK_AIQ_INSTALLED_DIR "${RK_AIQ_SOURCE_DIR}/build/${OS}/output/${ARCH}/installed" CACHE STRING "AIQ library installed dir")
     set(RK_AIQ_LIB_DIR ${RK_AIQ_INSTALLED_DIR}/lib)
     message("rkaiq lib path" ${RK_AIQ_LIB_DIR})
@@ -123,7 +128,7 @@ include_directories(
     ${RK_AIQ_HEADER_DIR}
     )
 
-set (DIR_SRCS demo/rkisp_demo.cpp)
+set (DIR_SRCS demo/rkisp_demo.c)
 
 if (libdrm_FOUND OR LOCAL_DRM_LIB_FOUND)
     set(DIR_SRCS
@@ -163,11 +168,11 @@ list(APPEND DIR_SRCS ${AEDEMO_DIR_SRCS})
 #list(APPEND DIR_SRCS ${AWBDEMO_DIR_SRCS})
 if (${ISP_HW_VERSION} STREQUAL "-DISP_HW_V39")
     # add_compile_options(-DUSE_NEWSTRUCT=1)
-    set(AWBDEMO_DIR_SRCS demo/awb_algo_demo/third_party_awbV39_algo.cpp)
+    set(AWBDEMO_DIR_SRCS demo/awb_algo_demo/third_party_awbV39_algo.c)
 elseif (${ISP_HW_VERSION} STREQUAL "-DISP_HW_V32")
-    set(AWBDEMO_DIR_SRCS demo/awb_algo_demo/third_party_awbV32_algo.cpp)
+    set(AWBDEMO_DIR_SRCS demo/awb_algo_demo/third_party_awbV32_algo.c)
 else()
-    set(AWBDEMO_DIR_SRCS demo/awb_algo_demo/third_party_awb_algo.cpp)
+    set(AWBDEMO_DIR_SRCS demo/awb_algo_demo/third_party_awb_algo.c)
 endif()
 list(APPEND DIR_SRCS ${AWBDEMO_DIR_SRCS})
 
@@ -230,3 +235,5 @@ else ()
     target_link_libraries(rkisp_demo
         pthread)
 endif()
+target_link_libraries(rkisp_demo
+    m)

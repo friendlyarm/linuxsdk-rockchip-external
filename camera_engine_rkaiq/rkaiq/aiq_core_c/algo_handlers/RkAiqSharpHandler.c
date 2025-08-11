@@ -41,8 +41,10 @@ static XCamReturn _handlerSharp_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "sharp handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "sharp algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();
@@ -74,7 +76,7 @@ static XCamReturn _handlerSharp_processing(AiqAlgoHandler_t* pAlgoHandler) {
     }
     sharpRes = (void *)pBase->_data;
 
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
     pBase = shared->fullParams->pParamsArray[RESULT_TYPE_TEXEST_PARAM];
     if (!pBase) {
         LOGE("no sharp params buf !");
@@ -102,7 +104,7 @@ static XCamReturn _handlerSharp_processing(AiqAlgoHandler_t* pAlgoHandler) {
             pAlgoHandler->mOpMode = RK_AIQ_OP_MODE_MANUAL;
         }
 
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
         wrap_param.type           = RESULT_TYPE_TEXEST_PARAM;
         wrap_param.man_param_size = sizeof(texEst_param_t);
         wrap_param.man_param_ptr  = texEstRes;
@@ -128,7 +130,7 @@ static XCamReturn _handlerSharp_processing(AiqAlgoHandler_t* pAlgoHandler) {
         if (!AiqCore_isGroupAlgo(pAlgoHandler->mAiqCore, pAlgoHandler->mDes->type)) {
             proc_res->algoRes = sharpRes;
             Asharp_processing(inparams, proc_res, iso);
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
             proc_res->algoRes = texEstRes;
             AtexEst_processing(inparams, proc_res, iso);
 #endif
@@ -149,7 +151,7 @@ static XCamReturn _handlerSharp_genIspResult(AiqAlgoHandler_t* pAlgoHandler, Aiq
                                            AiqFullParams_t* cur_params) {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
     ret = AiqAlgoHandler_genIspResult_byType(pAlgoHandler, params, cur_params, RESULT_TYPE_SHARPEN_PARAM, sizeof(sharp_param_t));
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
     ret = AiqAlgoHandler_genIspResult_byType(pAlgoHandler, params, cur_params, RESULT_TYPE_TEXEST_PARAM, sizeof(texEst_param_t));
 #endif
     return ret;
@@ -255,7 +257,7 @@ XCamReturn AiqSharpHandler_queryStatus_texEst(AiqAlgoHandler_t* pHdl, void *buf)
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
     aiqMutex_lock(&pHdl->mCfgMutex);
 
-#if RKAIQ_HAVE_SHARP_V40
+#if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
     texEst_status_t *status = (texEst_status_t *)buf;
     aiq_params_base_t* pCurBase =
         pHdl->mAiqCore->mAiqCurParams->pParamsArray[RESULT_TYPE_TEXEST_PARAM];

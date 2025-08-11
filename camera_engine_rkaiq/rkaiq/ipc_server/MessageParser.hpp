@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include <condition_variable>
+#include <cstdio>
 #include <memory>
 #include <mutex>
 #include <thread>

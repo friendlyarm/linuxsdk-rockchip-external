@@ -69,7 +69,7 @@ XCamReturn RkAiqCustomAwbHandle::processing() {
         RkAiqAwbHandleInt* parent =  dynamic_cast<RkAiqAwbHandleInt*>(mParentHdl);
         if (!parent)
             LOGE_AWB("no parent awb handler in multiple handler mode !");
-        mProcResShared =  parent->mProcResShared ;
+        mProcResShared =  parent->mProcResShared;
     } else {
         mProcResShared = new RkAiqAlgoProcResAwbIntShared();
         if (!mProcResShared.ptr()) {

@@ -18,7 +18,11 @@
 #include "rk_aiq_isp39_modules.h"
 
 #define MAX_AE_DRC_GAIN     (256.0f)
+#define MAX_AE_DRC_GAIN_RV1103B (32.0f)
+#define DRC_GAIN_MAX            (8.0f)
 #define GAINMIN             (1.0f)
+#define PREDGAIN_MAX        (4.0f)
+#define PREDGAIN_DEFAULT    (8.0f)
 #define ISP_HDR_BIT_NUM_MAX (20)
 #define ISP_HDR_BIT_NUM_MIN (12)
 #define ISP_RAW_BIT         (12)
@@ -144,34 +148,54 @@ void rk_aiq_drc40_params_dump(void* attr, isp_params_t* isp_params) {
         isp_params->isp_cfg->others.drc_cfg.sfthd_y[16]);
 }
 
-void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_info_t* cvtinfo) {
+void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_info_t* cvtinfo, bool drc_en) {
 #if ISP_HW_V39
     struct isp39_drc_cfg* phwcfg = &isp_params->isp_cfg->others.drc_cfg;
 #elif ISP_HW_V33
     struct isp33_drc_cfg* phwcfg = &isp_params->isp_cfg->others.drc_cfg;
+#elif ISP_HW_V35
+    struct isp33_drc_cfg* phwcfg = &isp_params->isp_cfg->others.drc_cfg;
 #endif
     drc_param_t* drc_param         = &((rk_aiq_isp_drc_v39_t*)attr)->drc_param;
     drc_params_dyn_t* pdyn         = &drc_param->dyn;
+#if ISP_HW_V33
+    drc_params_static_t* pdrcSta     = &drc_param->sta;
+#endif
     trans_api_attrib_t* trans_attr = &((rk_aiq_isp_drc_v39_t*)attr)->trans_attr;
-    trans_params_static_t* psta    = &trans_attr->stMan.sta;
+    trans_params_static_t* ptransSta = &trans_attr->stMan.sta;
     float L2S_Ratio                = ((rk_aiq_isp_drc_v39_t*)attr)->L2S_Ratio;
     cvtinfo->L2S_Ratio             = L2S_Ratio;
     unsigned char compr_bit        = ((rk_aiq_isp_drc_v39_t*)attr)->compr_bit;
 
     bool LongFrmMode = false;
-    if (cvtinfo->frameNum == 1) {
-        LongFrmMode = cvtinfo->ae_exp->LinearExp.exp_real_params.longfrm_mode;
-    } else {
+    if (cvtinfo->frameNum > 1) {
         LongFrmMode = cvtinfo->ae_exp->HdrExp[cvtinfo->frameNum - 1].exp_real_params.longfrm_mode;
+        if (LongFrmMode) {
+            L2S_Ratio          = 1.0f;
+            cvtinfo->L2S_Ratio = 1.0f;
+        }
     }
 
     // clip drc gain
-    float drc_gain = 1.0f;
+    float drc_gain = 1.0f, preDGain = 1.0f, preDGain_drc = 1.0f;
     if (pdyn->preProc.sw_drcT_toneCurve_mode == drc_cfgCurveCtrlCoeff_mode)
         drc_gain = pdyn->preProc.toneCurveCtrl.sw_drcT_toneGain_maxLimit;
     else if (pdyn->preProc.sw_drcT_toneCurve_mode == drc_cfgCurveDirect_mode)
         drc_gain = pdyn->preProc.hw_drcT_luma2ToneGain_val[16];
 
+    if (cvtinfo->btnr_en && cvtinfo->btnrCfg_pixDomain_mode == btnr_pixLog2Domain_mode) {
+        if (!drc_en) {
+            if (cvtinfo->drc_warning_count < 5) {
+                LOGE_ATMO("DRC must be enable when btnrCfg_pixDomain_mode is btnr_pixLog2Domain_mode, btnrCfg_pixDomain_mode=%d", cvtinfo->btnrCfg_pixDomain_mode);
+            }
+            else if (cvtinfo->drc_warning_count % 300 == 0) {
+                LOGE_ATMO("DRC must be enable when btnrCfg_pixDomain_mode is btnr_pixLog2Domain_mode, btnrCfg_pixDomain_mode=%d", cvtinfo->btnrCfg_pixDomain_mode);
+            }
+            cvtinfo->drc_warning_count++; 
+        }
+    }
+
+#if ISP_HW_V39
     if (compr_bit) {
         if (pow(2.0f, (float)(compr_bit - ISP_HDR_BIT_NUM_MIN)) * drc_gain > MAX_AE_DRC_GAIN) {
             if (pow(2.0f, (float)(compr_bit - ISP_HDR_BIT_NUM_MIN)) > MAX_AE_DRC_GAIN)
@@ -186,45 +210,145 @@ void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
         }
     } else if (cvtinfo->frameNum > 1) {
         if (L2S_Ratio * drc_gain > MAX_AE_DRC_GAIN) {
-            LOGE_ATMO("%s:  AERatio*sw_drcT_toneGain_maxLimit > 256!!!\n", __FUNCTION__);
+            LOGE_ATMO(
+                "%s:  AERatio(%f)*sw_drcT_toneGain_maxLimit(%f): %f > 256x!!! Please change AE HDR "
+                "parameters and DRC sw_drcT_toneGain_maxLimit vaule.\n",
+                __FUNCTION__, L2S_Ratio, drc_gain, L2S_Ratio * drc_gain);
+            if (L2S_Ratio < GAINMIN) {
+                LOGE_ATMO("%s:  AERatio: %f < 1x!!! Please check AE status.\n", __FUNCTION__,
+                          L2S_Ratio);
+                L2S_Ratio = GAINMIN;
+            }
             drc_gain = MAX(MAX_AE_DRC_GAIN / L2S_Ratio, GAINMIN);
+            drc_gain = MIN(drc_gain, DRC_GAIN_MAX);
         }
-    } else {
-        drc_gain = CLIP(drc_gain, GAINMIN, 8.0f);
+    }
+#endif
+#if ISP_HW_V33
+    if (cvtinfo->frameNum > 1) {
+        if (L2S_Ratio * drc_gain > MAX_AE_DRC_GAIN_RV1103B) {
+            LOGE_ATMO(
+                "%s:  AERatio(%f)*sw_drcT_toneGain_maxLimit(%f): %f > 32x!!! Please change AE HDR "
+                "parameters and DRC sw_drcT_toneGain_maxLimit vaule.\n",
+                __FUNCTION__, L2S_Ratio, drc_gain, L2S_Ratio * drc_gain);
+            if (L2S_Ratio > MAX_AE_DRC_GAIN_RV1103B) {
+                LOGE_ATMO(
+                    "%s:  AERatio: %f > 32x, which leads to the loss of highlight region. Please "
+                    "change AE parameters to decrease AE ratio value.\n",
+                    __FUNCTION__, L2S_Ratio);
+                L2S_Ratio = MAX_AE_DRC_GAIN_RV1103B;
+                drc_gain  = GAINMIN;
+            } else {
+                if (L2S_Ratio < GAINMIN) {
+                    LOGE_ATMO("%s:  AERatio: %f < 1x!!! Please check AE status.\n", __FUNCTION__,
+                              L2S_Ratio);
+                    L2S_Ratio = GAINMIN;
+                }
+                drc_gain = MAX(MAX_AE_DRC_GAIN_RV1103B / L2S_Ratio, GAINMIN);
+                drc_gain = MIN(drc_gain, DRC_GAIN_MAX);
+            }
+        }
+    }
+#endif
+    if (cvtinfo->frameNum == 1) {
+        if (cvtinfo->btnr_init_en && cvtinfo->btnrCfg_pixDomain_mode == btnr_pixLog2Domain_mode
+            && !cvtinfo->use_aiisp && cvtinfo->btnrT_predgainWkArd_en) {
+            if (cvtinfo->btnrT_predgain_mode == btnr_vendorDefault_mode) {
+                float totalGain = cvtinfo->ae_exp->LinearExp.exp_real_params.analog_gain
+                    * cvtinfo->ae_exp->LinearExp.exp_real_params.digital_gain
+                    * cvtinfo->ae_exp->LinearExp.exp_real_params.isp_dgain;
+                LOGD_ATMO("totalGain is %f", totalGain);
+                preDGain = PREDGAIN_DEFAULT;
+                while (totalGain >= 64.0f && preDGain > 1.0f) {
+                    preDGain = MAX(preDGain * 0.707, 1);
+                    totalGain /= 2;
+                }
+                if (totalGain > 32.0f && preDGain > 1.0f) {
+                    float ratio = (totalGain / 32.0f - 1);
+                    preDGain = MAX(preDGain * 0.707 * ratio + preDGain * (1 - ratio), 1);
+                }
+            }
+            else {
+                preDGain = CLIP(cvtinfo->btnrT_predgain_curve, 1, 8);
+            }
+#if defined(ISP_HW_V33)
+            if (cvtinfo->isFirstFrame || cvtinfo->sw_btnrT_outFrmBase_mode == btnr_curBaseOut_mode) {
+                preDGain_drc = preDGain;
+            }
+            else {
+                preDGain_drc = cvtinfo->preDGain_preFrm;
+            }
+#else
+            preDGain_drc = preDGain;
+#endif
+            drc_gain = drc_gain / preDGain_drc;
+            cvtinfo->preDGain_preFrm = preDGain;
+            LOGD_ATMO("frameId %d: preDGain is set to %f when btnrCfg_pixDomain_mode is btnr_pixLog2Domain_mode\n",
+                cvtinfo->frameId, preDGain_drc);
+        }
+        else {
+            preDGain = 1.0f;
+            preDGain_drc = 1.0f;
+            cvtinfo->preDGain_preFrm = preDGain;
+        }
     }
 
-    if (pdyn->preProc.sw_drcT_toneCurve_mode == drc_cfgCurveCtrlCoeff_mode)
-        pdyn->preProc.toneCurveCtrl.sw_drcT_toneGain_maxLimit = drc_gain;
-    else if (pdyn->preProc.sw_drcT_toneCurve_mode == drc_cfgCurveDirect_mode) {
+    rk_aiq_isp_drc_v39_t* drc_res = (rk_aiq_isp_drc_v39_t*)attr;
+    if (preDGain_drc != cvtinfo->preDGain_preFrm) {
+        *drc_res->damping = 1;
+    }
+    else {
+        *drc_res->damping = 0;
+    }
+
+    // get sw_drc_gain_y
+    float tmp_float = 0.0f;
+    float luma2ToneGain_val[DRC_CURVE_LEN];
+    if (pdyn->preProc.sw_drcT_toneCurve_mode == drc_cfgCurveCtrlCoeff_mode) {
+        /*luma[i] = pow((1.0f - luma[i] / 4096.0f), 2.0f)*/
+        float luma[DRC_CURVE_LEN] = {1.0f,    0.8789f, 0.7656f, 0.6602f, 0.5625f, 0.4727f,
+                                     0.3906f, 0.3164f, 0.2500f, 0.1914f, 0.1406f, 0.0977f,
+                                     0.0625f, 0.0352f, 0.0156f, 0.0039f, 0.0f};
+        float alpha               = pdyn->preProc.toneCurveCtrl.sw_drcT_toneCurveK_coeff;
+        for (int i = 0; i < DRC_CURVE_LEN; ++i) {
+            tmp_float = pow(drc_gain, 1 - alpha * luma[i]) * pow(preDGain_drc, -alpha * luma[i]);
+            luma2ToneGain_val[i] = tmp_float;
+        }
+    } else if (pdyn->preProc.sw_drcT_toneCurve_mode == drc_cfgCurveDirect_mode) {
         for (int i = 0; i < 17; i++) {
-            pdyn->preProc.hw_drcT_luma2ToneGain_val[i] =
-                pdyn->preProc.hw_drcT_luma2ToneGain_val[i] > drc_gain
-                    ? drc_gain
-                    : pdyn->preProc.hw_drcT_luma2ToneGain_val[i];
+            luma2ToneGain_val[i] = pdyn->preProc.hw_drcT_luma2ToneGain_val[i] / preDGain_drc;
+            luma2ToneGain_val[i] = luma2ToneGain_val[i] > drc_gain ? drc_gain : luma2ToneGain_val[i];
         }
     }
+
+#if ISP_HW_V33
+    phwcfg->bf_lp_en = pdrcSta->lowPowerCfg.loBifiltLP.hw_drcT_lp_en ? 1 : 0;
+#endif
 
     uint16_t tmp;
-    phwcfg->cmps_byp_en          = (trans_attr->en == 0 || trans_attr->bypass > 0);
-    phwcfg->offset_pow2          = CLIP(psta->hw_transCfg_transOfDrc_offset, 0, (1 << 4) - 1);
-    tmp                          = psta->hw_transCfg_lscOutTrans_offset;
+    phwcfg->cmps_byp_en          = !trans_attr->en;
+    phwcfg->offset_pow2          = CLIP(ptransSta->hw_transCfg_transOfDrc_offset, 0, (1 << 4) - 1);
+    tmp                          = ptransSta->hw_transCfg_lscOutTrans_offset;
     phwcfg->cmps_offset_bits_int = tmp > 15 ? 15 : tmp;
-    phwcfg->cmps_fixbit_mode     = psta->hw_transCfg_trans_mode == trans_lgi3f9_mode ? 1 : 0;
+    phwcfg->cmps_fixbit_mode     = ptransSta->hw_transCfg_trans_mode == trans_lgi3f9_mode ? 1 : 0;
     LOGD_ATMO("phwcfg->cmps_byp_en %d, phwcfg->offset_pow2 %d, phwcfg->cmps_offset_bits_int %d\n",
               phwcfg->cmps_byp_en, phwcfg->offset_pow2, phwcfg->cmps_offset_bits_int);
 
     // phwcfg->bypass_en   = 0;
-    phwcfg->gainx32_en  = 0;
+    phwcfg->gainx32_en  = 1;
     phwcfg->raw_dly_dis = 0;
 
-    phwcfg->position = CLIP(pdyn->preProc.hw_drcT_toneCurveIdx_scale * (1 << 8), 0, (1 << 14) - 1);
+    float toneCurveIdx_scale_toIsp = pdyn->preProc.hw_drcT_toneCurveIdx_scale / preDGain_drc;
+    phwcfg->position = CLIP(toneCurveIdx_scale_toIsp * (1 << 8), 0, (1 << 14) - 1);
     // get sw_drc_compres_scl
-    float log_ratio2     = log(L2S_Ratio * drc_gain) / log(2.0f) + 12.0f;
-    float offsetbits_int = CLIP(psta->hw_transCfg_transOfDrc_offset, 0, 15);
+    float log_ratio2     = log(L2S_Ratio * drc_gain * preDGain_drc) / log(2.0f) + 12.0f;
+    float offsetbits_int = CLIP(ptransSta->hw_transCfg_transOfDrc_offset, 0, 15);
 
     unsigned char cmps_fixbit_mode =
-        (psta->hw_transCfg_trans_mode == trans_lgi3f9_mode ? FUNCTION_ENABLE : FUNCTION_DISABLE);
-    LOGD_ATMO("pDrcCtx->hw_transCfg_transOfDrc_offset %d", psta->hw_transCfg_transOfDrc_offset);
+        (ptransSta->hw_transCfg_trans_mode == trans_lgi3f9_mode ? FUNCTION_ENABLE
+                                                                : FUNCTION_DISABLE);
+    LOGD_ATMO("pDrcCtx->hw_transCfg_transOfDrc_offset %d",
+              ptransSta->hw_transCfg_transOfDrc_offset);
     int cmps_fix_bit                        = 8 + cmps_fixbit_mode;
     float offsetbits                        = offsetbits_int * (1 << cmps_fix_bit);
     float hdrbits                           = log_ratio2 * (1 << cmps_fix_bit);
@@ -232,15 +356,8 @@ void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
     pdyn->drcProc.hw_drcT_drcCurveIdx_scale = (12.0f * (1 << (cmps_fix_bit + 11))) / hdrvalidbits;
     phwcfg->compres_scl = (unsigned short)pdyn->drcProc.hw_drcT_drcCurveIdx_scale;
 
-    // get hw_drc_comps_gain_minLimit
-    if (LongFrmMode) {
-        pdyn->drcProc.hw_drcT_drcGain_minLimit = 1.0f;
-    } else if (pdyn->drcProc.sw_drcT_drcGainLimit_mode == drc_drcGainLmt_auto_mode) {
-        pdyn->drcProc.hw_drcT_drcGain_minLimit = 1.0f / (L2S_Ratio * drc_gain);
-    }
-
     // get sw_drc_compres_y
-    if (pdyn->drcProc.sw_drcT_drcCurve_mode == drc_vendorDefault_mode) {
+    if (pdyn->drcProc.sw_drcT_drcCurve_mode == adrc_vendorDefault_mode) {
         float luma2[DRC_CURVE_LEN] = {0.0f,     1024.0f,  2048.0f,  3072.0f,  4096.0f,  5120.0f,
                                       6144.0f,  7168.0f,  8192.0f,  10240.0f, 12288.0f, 14336.0f,
                                       16384.0f, 18432.0f, 20480.0f, 22528.0f, 24576.0f};
@@ -250,37 +367,38 @@ void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
         float curveparam2 = validbits * (1.0f + curveparam);
         float curveparam3 = hdrvalidbits * curveparam;
         for (int i = 0; i < DRC_CURVE_LEN; ++i) {
-            float tmp        = luma2[i] * hdrvalidbits / 24576.0f;
-            float curveTable = tmp * curveparam2 / (tmp + curveparam3);
+            tmp_float        = luma2[i] * hdrvalidbits / 24576.0f;
+            float curveTable = tmp_float * curveparam2 / (tmp_float + curveparam3);
             pdyn->drcProc.hw_drcT_hdr2Sdr_curve[i] =
                 ((unsigned short)(curveTable)) >> cmps_fixbit_mode;
         }
     }
 
-    // get sw_drc_gain_y
-    if (pdyn->preProc.sw_drcT_toneCurve_mode == drc_cfgCurveCtrlCoeff_mode) {
-        float tmp = 0.0f;
-        /*luma[i] = pow((1.0f - luma[i] / 4096.0f), 2.0f)*/
-        float luma[DRC_CURVE_LEN] = {1.0f,    0.8789f, 0.7656f, 0.6602f, 0.5625f, 0.4727f,
-                                     0.3906f, 0.3164f, 0.2500f, 0.1914f, 0.1406f, 0.0977f,
-                                     0.0625f, 0.0352f, 0.0156f, 0.0039f, 0.0f};
-        float DrcGain             = pdyn->preProc.toneCurveCtrl.sw_drcT_toneGain_maxLimit;
-        float alpha               = pdyn->preProc.toneCurveCtrl.sw_drcT_toneCurveK_coeff;
+    // get scale_y
+    if (pdyn->drcProc.sw_drcT_drcStrgLut_mode == drc_vendorDefault_mode) {
+        float drcStrgLut_default[DRC_CURVE_LEN] = {0.0f,   0.001f, 0.01f,  0.037f, 0.094f, 0.186f,
+                                                   0.308f, 0.377f, 0.449f, 0.521f, 0.591f, 0.722f,
+                                                   0.830f, 0.910f, 0.961f, 0.988f, 1.0f};
         for (int i = 0; i < DRC_CURVE_LEN; ++i) {
-            tmp                                        = 1 - alpha * luma[i];
-            tmp                                        = pow(DrcGain, tmp);
-            pdyn->preProc.hw_drcT_luma2ToneGain_val[i] = tmp;
+            pdyn->drcProc.hw_drcT_luma2DrcStrg_val[i] = drcStrgLut_default[i];
         }
     }
 
-    tmp                    = 2048.0f * pdyn->drcProc.hw_drcT_loDetail_strg;
+    tmp                    = 2048.0f * pdyn->drcProc.hw_drcT_locDetail_strg;
     phwcfg->lpdetail_ratio = tmp > 2048 ? 2048 : tmp;
-    tmp                    = 2048.0f * pdyn->drcProc.hw_drcT_drcStrg_alpha;
+    tmp                    = 2048.0f * pdyn->drcProc.hw_drcT_hfDarkRegion_strg;
     phwcfg->hpdetail_ratio = tmp > 2048 ? 2048 : tmp;
     tmp                    = 256.0f * pdyn->drcProc.hw_drcT_drcStrgLutLuma_scale;
     phwcfg->delta_scalein  = tmp > 255 ? 255 : tmp;
+    // get hw_drc_comps_gain_minLimit
+    tmp_float = pdyn->drcProc.hw_drcT_drcGain_minLimit;
+    if (LongFrmMode) {
+        tmp_float = 1.0f;
+    } else if (pdyn->drcProc.sw_drcT_drcGainLimit_mode == drc_drcGainLmt_auto_mode) {
+        tmp_float = 1.0f / (L2S_Ratio * drc_gain * preDGain_drc);
+    }
     phwcfg->min_ogain =
-        CLIP((int)(pdyn->drcProc.hw_drcT_drcGain_minLimit * (1 << 15)), 0, (1 << 15));
+        CLIP((int)(tmp_float * (1 << 15)), 0, (1 << 15));
     tmp               = 256.0f * pdyn->preProc.hw_drcT_lpfSoftThd_thred;
     phwcfg->drc_gas_t = tmp > 1023 ? 1023 : tmp;
 
@@ -289,7 +407,7 @@ void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
     tmp                  = 16.0f * pdyn->bifilt_filter.hw_drcT_centerPixel_wgt;
     phwcfg->weicur_pix   = tmp > 255 ? 255 : tmp;
     if (pdyn->bifilt_filter.hw_drcT_midRgeSgm_val != 0.0f)
-        tmp = 256.0f * pdyn->bifilt_filter.hw_drcT_midRgeSgm_val;
+        tmp = 256.0f / pdyn->bifilt_filter.hw_drcT_midRgeSgm_val;
     else
         tmp = 256.0f / 0.25f;
     phwcfg->range_sgm_inv0 = tmp > 1023 ? 1023 : tmp;
@@ -302,7 +420,7 @@ void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
     phwcfg->weig_bilat      = tmp > 16 ? 16 : tmp;
     tmp                     = 256.0f * pdyn->bifilt_filter.hw_drcT_midWgt_alpha;
     phwcfg->weight_8x8thumb = tmp > 255 ? 255 : tmp;
-    tmp                     = 2048.0f * pdyn->bifilt_filter.hw_drcT_softThd_thred;
+    tmp                     = 256.0f * pdyn->bifilt_filter.hw_drcT_softThd_thred;
     phwcfg->bilat_soft_thd  = tmp > 0x3ff ? 0x3ff : tmp;
     phwcfg->enable_soft_thd = pdyn->bifilt_filter.hw_drcT_softThd_en;
 
@@ -334,7 +452,7 @@ void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
     }
 
     for (int i = 0; i < DRC_CURVE_LEN; ++i) {
-        tmp               = 1024.0f * pdyn->preProc.hw_drcT_luma2ToneGain_val[i];
+        tmp               = 1024.0f * luma2ToneGain_val[i];
         phwcfg->gain_y[i] = tmp > 0x1fff ? 0x1fff : tmp;
 
         tmp                  = pdyn->drcProc.hw_drcT_hdr2Sdr_curve[i];
@@ -343,14 +461,18 @@ void rk_aiq_drc40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
         tmp                = 2048.0f * pdyn->drcProc.hw_drcT_luma2DrcStrg_val[i];
         phwcfg->scale_y[i] = tmp > 0x800 ? 0x800 : tmp;
     }
-    if (!cvtinfo->use_aiisp)
-        cvtinfo->preDGain = CLIP(pdyn->preProc.hw_drcT_luma2ToneGain_val[16], 0, 4);
+    cvtinfo->preDGain = cvtinfo->use_aiisp ? 0 : preDGain;
+    cvtinfo->preDGain_drc = preDGain_drc;
     LOGD_ATMO("%s: cvtinfo->preDGain %f\n", __FUNCTION__, cvtinfo->preDGain);
-
-    if ((cvtinfo->frameNum > 1 || cvtinfo->preDGain > 1) && phwcfg->cmps_byp_en == 1) {
+    if (cvtinfo->frameNum ==1 && (!cvtinfo->btnr_en || cvtinfo->btnrCfg_pixDomain_mode == btnr_pixLinearDomain_mode)) {
+        phwcfg->cmps_byp_en = 1;
+    }
+    if ((cvtinfo->frameNum > 1 || (cvtinfo->btnr_init_en && cvtinfo->btnrCfg_pixDomain_mode == btnr_pixLog2Domain_mode)) && phwcfg->cmps_byp_en == 1 && drc_en) {
         phwcfg->cmps_byp_en = 0;
     }
     cvtinfo->cmps_on = phwcfg->cmps_byp_en == 0 ? 1 : 0;
+    cvtinfo->cmps_is15bit = phwcfg->cmps_fixbit_mode;
+    cvtinfo->cmps_offsetbit = phwcfg->cmps_offset_bits_int;
 #if ISP_HW_V33
     phwcfg->position &= 0x3ff0;
     for (int i = 0; i < DRC_CURVE_LEN; ++i) {

@@ -73,11 +73,15 @@ typedef struct rk_aiq_aiisp_s {
     uint16_t wr_linecnt;
     uint16_t rd_linecnt;
     int sequence;
+	unsigned long long timestamp;
     int height;
-    rkisp_bay3dbuf_info_t bay3dbuf;
+    struct rkisp_bnr_buf_info* bay3dbuf;
     void* iir_address;
     void* gain_address;
     void* aiisp_address;
+	int iir_index;
+	int gain_index;
+	int aiisp_index;
 } rk_aiq_aiisp_t;
 
 typedef XCamReturn(*rk_aiq_error_cb)(rk_aiq_err_msg_t* err_msg);

@@ -37,8 +37,14 @@ XCamReturn RkAiqAdrcHandleInt::prepare() {
     adrc_config_int->compr_bit    = sharedCom->snsDes.compr_bit;
     adrc_config_int->working_mode = sharedCom->working_mode;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "adrc algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

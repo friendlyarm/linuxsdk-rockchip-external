@@ -216,7 +216,7 @@ FakeSensorHw::setExposureParams(SmartPtr<RkAiqExpParamsProxy>& expPar)
 {
     ENTER_CAMHW_FUNCTION();
 
-    if (_first) {
+    if (_first && !use_rkrawstream) {
         RKAiqAecExpInfoWrapper_t* exp = &expPar->data()->result;
         SmartPtr<RkAiqSensorExpParamsProxy> expParamsProxy = NULL;
         if (exp->ae_proc_res_rk.exp_set_cnt > 0) {
@@ -409,6 +409,17 @@ FakeSensorHw::prepare(rk_aiq_raw_prop_t prop)
     _height = prop.frame_height;
     _fmt_code = rk_format_to_media_format(prop.format);
     _rawbuf_type = prop.rawbuf_type;
+    EXIT_CAMHW_FUNCTION();
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn
+FakeSensorHw::set_fake_sensor_format(int width, int height, uint32_t fmt_core)
+{
+    ENTER_CAMHW_FUNCTION();
+    _width = width;
+    _height = height;
+    _fmt_code = fmt_core;
     EXIT_CAMHW_FUNCTION();
     return XCAM_RETURN_NO_ERROR;
 }

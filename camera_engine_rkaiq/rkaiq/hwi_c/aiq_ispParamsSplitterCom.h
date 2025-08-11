@@ -74,16 +74,19 @@ XCamReturn AiqIspParamsSplitter_SplitRawHistBigParams(AiqIspParamsSplitter_t* pS
                                                       struct isp2x_rawhistbig_cfg* left,
                                                       struct isp2x_rawhistbig_cfg* right);
 
-int AiqIspParamsSplitter_AlscMatrixScale(unsigned short ori_matrix[], unsigned short left_matrix[],
+int AiqIspParamsSplitter_AlscMatrixScale(float lrate, int lmid_col_idx, float rrate, int rmid_col_idx,
+                                         unsigned short ori_matrix[], unsigned short left_matrix[],
                                          unsigned short right_matrix[], int cols, int rows);
 
-int AiqIspParamsSplitter_AlscMatrixScaleVertical(unsigned short ori_matrix[],
-                                                 unsigned short left_matrix[],
-                                                 unsigned short right_matrix[], int cols, int rows);
+int AiqIspParamsSplitter_AlscMatrixScaleVertical(float trate, int tmid_row_idx,
+                                                 float brate, int bmid_row_idx,
+                                                 unsigned short ori_matrix[],
+                                                 unsigned short top_matrix[],
+                                                 unsigned short btm_matrix[],
+                                                 int rows, int cols);
 
-int AiqIspParamsSplitter_SplitAlscXtable(const unsigned short* in_array, int in_size, int ori_imgw,
-                                         unsigned short* dst_left, unsigned short* dst_right,
-                                         int left_w, int right_w);
+int AiqIspParamsSplitter_SplitAlscXtable(const unsigned short* in_array, int in_size,
+                                         unsigned short* dst_left, unsigned short* dst_right);
 
 int AiqIspParamsSplitter_LscGradUpdate(unsigned short xgrad_tbl[], unsigned short ygrad_tbl[],
                                        unsigned short x_sect_tbl[], unsigned short y_sect_tbl[],

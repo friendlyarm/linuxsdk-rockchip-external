@@ -358,6 +358,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAbayertnrV30 = {
     .pre_process = NULL,
     .processing = groupAbayertnrV30Processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

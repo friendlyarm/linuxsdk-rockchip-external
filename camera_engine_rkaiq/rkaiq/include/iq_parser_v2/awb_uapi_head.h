@@ -340,7 +340,7 @@ typedef struct rk_tool_awb_strategy_result_s {
     // M4_ARRAY_DESC("algMethod", "s32", M4_SIZE(1,1), M4_RANGE(0,100), "1", M4_DIGIT(0), M4_DYNAMIC(0))
     int  algMethod;
 } rk_tool_awb_strategy_result_t;
-#endif
+#endif//ifndef USE_NEWSTRUCT
 
 
 #ifdef USE_NEWSTRUCT
@@ -361,11 +361,27 @@ typedef struct rk_tool_awb_illInf2_s {
     float spatialGainValue[RK_TOOL_AWB_CHANNEL_MAX];
     // M4_ARRAY_DESC("prob_WPNO", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
     float prob_WPNO;
-    // M4_ARRAY_DESC("staWeight", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
-    float staWeight;
+    // M4_ARRAY_DESC("preferWgt", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float preferWgt;
     // M4_ARRAY_DESC("bigWp_wgt", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
     float bigWp_wgt;
 } rk_tool_awb_illInf2_t;
+typedef struct rk_tool_awb_sgc_result2_s {
+    // M4_ARRAY_DESC("illEst", "u32", M4_SIZE(1,1), M4_RANGE(0,14), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    int illEst;
+    // M4_ARRAY_DESC("colorEst", "u32", M4_SIZE(1,1), M4_RANGE(0,14), "0", M4_DIGIT(0), M4_DYNAMIC(0))
+    int colorEst;
+    // M4_ARRAY_DESC("voteResult", "u32", M4_SIZE(1,14), M4_RANGE(0,225), "1", M4_DIGIT(0), M4_DYNAMIC(0))
+    int voteResult[14];
+    // M4_ARRAY_DESC("wgt_lv", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float wgt_lv;
+    // M4_ARRAY_DESC("wgt_wpnum", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float wgt_wpnum;
+    // M4_ARRAY_DESC("wgt_meandis", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float wgt_meandis;
+    // M4_ARRAY_DESC("wgt_clrGrad", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float wgt_clrGrad;
+} rk_tool_awb_sgc_result2_t;
 
 typedef struct rk_tool_awb_strategy_result_s {
     // M4_BOOL_DESC("awbConverged", "0")
@@ -382,16 +398,6 @@ typedef struct rk_tool_awb_strategy_result_s {
     uint32_t runInterval;
     // M4_NUMBER_DESC("tolerance", "f32", M4_RANGE(0,10000), "5000", M4_DIGIT(0))
     float tolerance;
-    // M4_ARRAY_DESC("dsRateWt", "u8", M4_SIZE(1,1), M4_RANGE(0,255), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    uint8_t dsRateWh; //downsample 8x8->Pixel(R,G,B)
-    // M4_ARRAY_DESC("dsRateHt", "u8", M4_SIZE(1,1), M4_RANGE(0,255), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    uint8_t dsRateHt; //downsample 8x8->Pixel(R,G,B)
-    // M4_ARRAY_DESC("width_ds", "u32", M4_SIZE(1,1), M4_RANGE(0,4294967295), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    uint32_t width_ds;
-    // M4_ARRAY_DESC("height_ds", "u32", M4_SIZE(1,1), M4_RANGE(0,4294967295), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    uint32_t height_ds;
-    // M4_ARRAY_DESC("WPmode", "s32", M4_SIZE(1,1), M4_RANGE(-2147483648,2147483647), "0", M4_DIGIT(0), M4_DYNAMIC(0))
-    int WPmode;
     // M4_ARRAY_DESC("WPTotalNUM", "u32", M4_SIZE(1,1), M4_RANGE(0,4294967295), "0", M4_DIGIT(0), M4_DYNAMIC(0))
     uint32_t WPTotalNUM;
     // M4_ARRAY_DESC("WPType", "s32", M4_SIZE(1,1), M4_RANGE(-2147483648,2147483647), "0", M4_DIGIT(0), M4_DYNAMIC(0))
@@ -410,8 +416,8 @@ typedef struct rk_tool_awb_strategy_result_s {
     rk_tool_awb_illInf2_t illInf[RK_TOOL_AWB_MAX_WHITEREGIONS_NUM2];//information and measure result in different illuminations
     // M4_ARRAY_DESC("wbGainTepTp3", "f32", M4_SIZE(1,4), M4_RANGE(0,8), "1", M4_DIGIT(4), M4_DYNAMIC(0))
     float wbGainTepTp3[RK_TOOL_AWB_CHANNEL_MAX];
-    // M4_ARRAY_DESC("wbWeiTepTp3", "f32", M4_SIZE(1,1), M4_RANGE(0,100), "1", M4_DIGIT(4), M4_DYNAMIC(0))
-    float wbWeiTepTp3;//temporal mix statistics
+    // M4_ARRAY_DESC("wgtPrfNgt", "f32", M4_SIZE(1,1), M4_RANGE(0,100), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float wgtPrfNgt;//temporal mix statistics
     // M4_ARRAY_DESC("xy_area_type", "u8", M4_SIZE(1,1), M4_RANGE(0,255), "1", M4_DIGIT(4), M4_DYNAMIC(0))
     uint8_t xy_area_type; //enalbe type
     // M4_BOOL_DESC("spaGainEqu2Tem", "0")
@@ -430,10 +436,8 @@ typedef struct rk_tool_awb_strategy_result_s {
     float wbGainSgc[RK_TOOL_AWB_CHANNEL_MAX];
     // M4_ARRAY_DESC("wbWeightSgc", "f32", M4_SIZE(1,1), M4_RANGE(0,100), "1", M4_DIGIT(4), M4_DYNAMIC(0))
     float wbWeightSgc;
-    // M4_ARRAY_DESC("wbGainSpa", "f32", M4_SIZE(1,4), M4_RANGE(0,8), "1", M4_DIGIT(4), M4_DYNAMIC(0))
-    float  wbGainSpa[RK_TOOL_AWB_CHANNEL_MAX];//day gain
-    // M4_ARRAY_DESC("wbWeightSpa", "f32", M4_SIZE(1,1), M4_RANGE(0,100), "1", M4_DIGIT(4), M4_DYNAMIC(0))
-    float wbWeightSpa;
+    // M4_ARRAY_DESC("wgtWbGnRef2T1", "f32", M4_SIZE(1,1), M4_RANGE(0,100), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float wgtWbGnRef2T1;
     // M4_ARRAY_DESC("varianceLuma", "f32", M4_SIZE(1,1), M4_RANGE(0,2147483647), "1", M4_DIGIT(4), M4_DYNAMIC(0))
     float varianceLuma;
     // M4_ARRAY_DESC("wbGainDampFactor", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
@@ -466,8 +470,20 @@ typedef struct rk_tool_awb_strategy_result_s {
     float  stat3aAwbGainOut[RK_TOOL_AWB_CHANNEL_MAX];// final gain
     // M4_ARRAY_DESC("WPType", "s32", M4_SIZE(1,1), M4_RANGE(-2147483648,2147483647), "0", M4_DIGIT(0), M4_DYNAMIC(0))
     int gnCalc_method;
+    // M4_ARRAY_DESC("wbGainDampFactor2", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float wbGainDampFactor2;
+    // M4_ARRAY_DESC("extraWp_wgt", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float extraWp_wgt;
+    // M4_ARRAY_DESC("extraWp_wbGainUsed", "u32", M4_SIZE(1,2), M4_RANGE(0,8), "1", M4_DIGIT(0), M4_DYNAMIC(0))
+    int extraWp_wbGainUsed[2];
+     // M4_ARRAY_DESC("extraWp_domainWgt", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float extraWp_domainWgt;
+    // M4_ARRAY_DESC("aec_iso", "f32", M4_SIZE(1,1), M4_RANGE(0,1), "1", M4_DIGIT(4), M4_DYNAMIC(0))
+    float aec_iso;
+    // M4_STRUCT_DESC("sinColorResult", "normal_ui_style")
+    rk_tool_awb_sgc_result2_t sinColorResult;
 } rk_tool_awb_strategy_result_t;
-#endif
+#endif//ifdef USE_NEWSTRUCT
 
 typedef struct __uapi_wbV21_log_info_t {
     // M4_STRUCT_DESC("awb_stat", "normal_ui_style")

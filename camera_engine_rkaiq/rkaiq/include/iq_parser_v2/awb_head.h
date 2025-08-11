@@ -32,8 +32,8 @@ RKAIQ_BEGIN_DECLARE
 #define CALD_AWB_GRID_NUM_TOTAL 225
 #define CALD_AWB_RGCT_GRID_NUM 9
 #define CALD_AWB_BGCRI_GRID_NUM 11
-
-#if ISP_HW_V32_LITE||ISP_HW_V39 || ISP_HW_V33
+#define CALD_AWB_SCENE_NUM_MAX 8
+#if ISP_HW_V32_LITE||ISP_HW_V39 || ISP_HW_V33 || ISP_HW_V35
 typedef enum CalibDbV2_Awb_Down_Scale_Mode_e {
     CALIB_AWB_DS_4X4 = 0,
     CALIB_AWB_DS_8X8 = 1,
@@ -597,7 +597,7 @@ typedef struct CalibDbV2_Wb_Awb_Ext_Com_Para_t {
     CalibDbV2_Wb_Awb_Prob_Calc_Lv_t probCalcLv;
     // M4_STRUCT_DESC("probCalcWp", "normal_ui_style")
     CalibDbV2_Wb_Awb_Prob_Calc_Wp_t probCalcWp;
-    // M4_STRUCT_DESC("converged", "normal_ui_style")
+    // M4_STRUCT_DESC("converged", "normal_ui_style", M4_HIDE(1))
     CalibDbV2_Wb_Awb_Convg_t converged;
     // M4_STRUCT_DESC("xyRegionStableSelection", "normal_ui_style")
     CalibDbV2_Awb_xyRegion_stable_t xyRegionStableSelection;
@@ -666,7 +666,7 @@ typedef struct CalibDbV2_Wb_Awb_Ext_Para_V32_s {
     CalibDbV2_Wb_Awb_Prob_Calc_Lv_t probCalcLv;
     // M4_STRUCT_DESC("probCalcWp", "normal_ui_style")
     CalibDbV2_Wb_Awb_Prob_Calc_Wp_t probCalcWp;
-    // M4_STRUCT_DESC("converged", "normal_ui_style")
+    // M4_STRUCT_DESC("converged", "normal_ui_style", M4_HIDE(1))
     CalibDbV2_Wb_Awb_Convg_t converged;
     // M4_STRUCT_DESC("xyRegionStableSelection", "normal_ui_style")
     CalibDbV2_Awb_xyRegion_stable_t xyRegionStableSelection;
@@ -1077,7 +1077,7 @@ typedef struct CalibDbV2_Wb_Awb_Para_V32_t {
 #if ISP_HW_V32_LITE
     // M4_ARRAY_DESC("wpDiffBlkWeight", "u16", M4_SIZE(5,5), M4_RANGE(0,63), "0", M4_DIGIT(0), M4_DYNAMIC(0))
     unsigned short wpDiffBlkWeight[CALD_AWB_GRID_NUM_TOTAL_LITE];
-#elif ISP_HW_V39 || ISP_HW_V33
+#elif ISP_HW_V39 || ISP_HW_V33 || ISP_HW_V35
     // M4_ARRAY_DESC("wpDiffBlkWeight", "u8", M4_SIZE(15,15), M4_RANGE(0,63), "0", M4_DIGIT(0), M4_DYNAMIC(0))
     unsigned char wpDiffBlkWeight[CALD_AWB_GRID_NUM_TOTAL];
 #else

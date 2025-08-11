@@ -26,12 +26,15 @@
 
 typedef struct {
     btnr_api_attrib_t* btnr_attrib;
+    uint32_t *iso_list;
     int working_mode;
     int pre_iso;
 
     bool isReCal_;
     bool strength_en;
     float fStrength;
+
+    int sameISO_cnt;
 } BtnrContext_t;
 
 #define DEFAULT_RECALCULATE_DELTA_ISO (10.0)

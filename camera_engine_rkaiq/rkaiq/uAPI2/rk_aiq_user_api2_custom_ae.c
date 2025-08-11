@@ -851,7 +851,7 @@ static XCamReturn initAecHwConfig(rk_aiq_rkAe_config_t* pConfig)
     pConfig->aeHwConfig.hist_meas.rawhist3.off = 0x00;
 #endif
 
-#if ISP_HW_V39 || ISP_HW_V33
+#if ISP_HW_V39 || ISP_HW_V33 || ISP_HW_V35
     if (pConfig->IsHdr) {
         pConfig->aeHwConfig.ae_meas.rawae0.rawae_sel = 0;
         pConfig->aeHwConfig.ae_meas.rawae3.rawae_sel = 1;

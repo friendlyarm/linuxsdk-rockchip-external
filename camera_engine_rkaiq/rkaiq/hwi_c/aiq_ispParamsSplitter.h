@@ -40,6 +40,7 @@ struct AiqIspParamsSplitter_s {
     Splitter_Rectangle_t right_isp_rect_;
     Splitter_Rectangle_t bottom_left_isp_rect_;
     Splitter_Rectangle_t bottom_right_isp_rect_;
+    int                  isp_unite_mode_;
 
     XCamReturn (*SplitIspParams)(AiqIspParamsSplitter_t* pSplit, void* orig_isp_params,
                                  void* isp_params);
@@ -64,5 +65,8 @@ AiqIspParamsSplitter_t* AiqIspParamsSplitter_SetBottomRightIspRect(
 const Splitter_Rectangle_t* AiqIspParamsSplitter_GetPicInfo(AiqIspParamsSplitter_t* pSplit);
 const Splitter_Rectangle_t* AiqIspParamsSplitter_GetLeftIspRect(AiqIspParamsSplitter_t* pSplit);
 const Splitter_Rectangle_t* AiqIspParamsSplitter_GetRightIspRect(AiqIspParamsSplitter_t* pSplit);
+
+int AiqIspParamsSplitter_GetIspUniteMode(AiqIspParamsSplitter_t* pSplit);
+XCamReturn AiqIspParamsSplitter_SetIspUniteMode(AiqIspParamsSplitter_t* pSplit, int mode);
 
 #endif  // __COMMON_HWI_ISP_PARAMS_SPLITTER_H__

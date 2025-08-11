@@ -857,6 +857,8 @@ SensorHw::getSensorModeData(const char* sns_ent_name,
     sns_des.sensor_output_height = sensor_desc.sensor_output_height;
     sns_des.sensor_pixelformat = sensor_desc.sensor_pixelformat;
 
+    _sensor_desc = sns_des;
+
     LOGD_CAMHW_SUBM(SENSOR_SUBM, "vts-hts-pclk: %d-%d-%d-%f, rect: [%dx%d]\n",
                     sns_des.frame_length_lines,
                     sns_des.line_length_pck,

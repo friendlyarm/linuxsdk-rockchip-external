@@ -134,6 +134,7 @@ public:
     bool get_is_single_mode() {
         return mIsSingleMode;
     }
+    rk_aiq_exposure_sensor_descriptor _sensor_desc;
     XCAM_DEAD_COPY (SensorHw);
 protected:
     Mutex _mutex;
@@ -142,7 +143,6 @@ protected:
     std::map<uint32_t, SmartPtr<RkAiqSensorExpParamsProxy>> _effecting_exp_map;
     bool _first;
     uint32_t _frame_sequence;
-    rk_aiq_exposure_sensor_descriptor _sensor_desc;
     std::list<SmartPtr<RkAiqSensorExpParamsProxy>> _delayed_gain_list;
     std::list<SmartPtr<RkAiqSensorExpParamsProxy>> _delayed_dcg_gain_mode_list;
     SmartPtr<RkAiqSensorExpParamsProxy> _last_exp_time;

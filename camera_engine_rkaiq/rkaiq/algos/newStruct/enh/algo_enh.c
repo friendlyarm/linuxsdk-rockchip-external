@@ -38,7 +38,7 @@ XCamReturn EnhSelectParam(EnhContext_t* pEnhCtx, enh_param_t* out, int iso) {
     uint16_t uratio;
     enh_param_auto_t* paut = &pEnhCtx->enh_attrib->stAuto;
 
-    pre_interp(iso, NULL, 0, &ilow, &ihigh, &ratio);
+    pre_interp(iso, pEnhCtx->iso_list, 13, &ilow, &ihigh, &ratio);
     uratio = ratio * (1 << RATIO_FIXBIT);
 
     if (ratio > 0.5)
@@ -46,57 +46,91 @@ XCamReturn EnhSelectParam(EnhContext_t* pEnhCtx, enh_param_t* out, int iso) {
     else
         inear = ilow;
 
-    out->dyn.iir.hw_enhT_iir_inv_sigma =
-        interpolation_f32(paut->dyn[ilow].iir.hw_enhT_iir_inv_sigma,
-                          paut->dyn[ihigh].iir.hw_enhT_iir_inv_sigma, ratio);
-    out->dyn.iir.hw_enhT_iir_soft_thed =
-        interpolation_f32(paut->dyn[ilow].iir.hw_enhT_iir_soft_thed,
-                          paut->dyn[ihigh].iir.hw_enhT_iir_soft_thed, ratio);
-    out->dyn.iir.hw_enhT_iir_cur_wgt = interpolation_f32(
-        paut->dyn[ilow].iir.hw_enhT_iir_cur_wgt, paut->dyn[ihigh].iir.hw_enhT_iir_cur_wgt, ratio);
+    out->dyn.guideImg_iir.spatial.hw_enhT_sigma_val =
+        interpolation_f32(paut->dyn[ilow].guideImg_iir.spatial.hw_enhT_sigma_val,
+                          paut->dyn[ihigh].guideImg_iir.spatial.hw_enhT_sigma_val, ratio);
+    out->dyn.guideImg_iir.spatial.hw_enhT_softThd_val =
+        interpolation_f32(paut->dyn[ilow].guideImg_iir.spatial.hw_enhT_softThd_val,
+                          paut->dyn[ihigh].guideImg_iir.spatial.hw_enhT_softThd_val, ratio);
+    out->dyn.guideImg_iir.spatial.hw_enhT_centerPix_wgt =
+        interpolation_f32(paut->dyn[ilow].guideImg_iir.spatial.hw_enhT_centerPix_wgt,
+                          paut->dyn[ihigh].guideImg_iir.spatial.hw_enhT_centerPix_wgt, ratio);
+    out->dyn.guideImg_iir.temporal.hw_enhT_iirFrm_maxLimit =
+        interpolation_f32(paut->dyn[ilow].guideImg_iir.temporal.hw_enhT_iirFrm_maxLimit,
+                          paut->dyn[ihigh].guideImg_iir.temporal.hw_enhT_iirFrm_maxLimit, ratio);
 
-    out->dyn.loBlf.hw_enhT_loBlf_bypass =
-        interpolation_bool(paut->dyn[ilow].loBlf.hw_enhT_loBlf_bypass,
-                           paut->dyn[ihigh].loBlf.hw_enhT_loBlf_bypass, uratio);
-    out->dyn.loBlf.hw_enhT_loBlf_inv_sigma =
-        interpolation_f32(paut->dyn[ilow].loBlf.hw_enhT_loBlf_inv_sigma,
-                          paut->dyn[ihigh].loBlf.hw_enhT_loBlf_inv_sigma, ratio);
-    out->dyn.loBlf.hw_enhT_loBlf_cur_wgt =
-        interpolation_f32(paut->dyn[ilow].loBlf.hw_enhT_loBlf_cur_wgt,
-                          paut->dyn[ihigh].loBlf.hw_enhT_loBlf_cur_wgt, ratio);
-    out->dyn.loBlf.hw_enhT_loBlf_thumb_cur_wgt =
-        interpolation_f32(paut->dyn[ilow].loBlf.hw_enhT_loBlf_thumb_cur_wgt,
-                          paut->dyn[ihigh].loBlf.hw_enhT_loBlf_thumb_cur_wgt, ratio);
+    out->dyn.loBifilt.hw_enhT_loBlf_en =
+        interpolation_bool(paut->dyn[ilow].loBifilt.hw_enhT_loBlf_en,
+                           paut->dyn[ihigh].loBifilt.hw_enhT_loBlf_en, uratio);
+    out->dyn.loBifilt.hw_enhT_sigma_val =
+        interpolation_f32(paut->dyn[ilow].loBifilt.hw_enhT_sigma_val,
+                          paut->dyn[ihigh].loBifilt.hw_enhT_sigma_val, ratio);
+    out->dyn.loBifilt.hw_enhT_centerPix_wgt =
+        interpolation_f32(paut->dyn[ilow].loBifilt.hw_enhT_centerPix_wgt,
+                          paut->dyn[ihigh].loBifilt.hw_enhT_centerPix_wgt, ratio);
 
-    out->dyn.midBlf.hw_enhT_midBlf_inv_sigma =
-        interpolation_f32(paut->dyn[ilow].midBlf.hw_enhT_midBlf_inv_sigma,
-                          paut->dyn[ihigh].midBlf.hw_enhT_midBlf_inv_sigma, ratio);
-    out->dyn.midBlf.hw_enhT_midBlf_cur_wgt =
-        interpolation_f32(paut->dyn[ilow].midBlf.hw_enhT_midBlf_cur_wgt,
-                          paut->dyn[ihigh].midBlf.hw_enhT_midBlf_cur_wgt, ratio);
+    out->dyn.midBifilt.hw_enhT_sigma_val =
+        interpolation_f32(paut->dyn[ilow].midBifilt.hw_enhT_sigma_val,
+                          paut->dyn[ihigh].midBifilt.hw_enhT_sigma_val, ratio);
+    out->dyn.midBifilt.hw_enhT_centerPix_wgt =
+        interpolation_f32(paut->dyn[ilow].midBifilt.hw_enhT_centerPix_wgt,
+                          paut->dyn[ihigh].midBifilt.hw_enhT_centerPix_wgt, ratio);
 
     out->dyn.strg.hw_enhT_global_strg = interpolation_f32(
         paut->dyn[ilow].strg.hw_enhT_global_strg, paut->dyn[ihigh].strg.hw_enhT_global_strg, ratio);
-    out->dyn.strg.hw_enhT_detail2strg_en =
-        interpolation_bool(paut->dyn[ilow].strg.hw_enhT_detail2strg_en,
-                           paut->dyn[ihigh].strg.hw_enhT_detail2strg_en, uratio);
+    out->dyn.strg.hw_enhT_detail2Strg_en =
+        interpolation_bool(paut->dyn[ilow].strg.hw_enhT_detail2Strg_en,
+                           paut->dyn[ihigh].strg.hw_enhT_detail2Strg_en, uratio);
     for (i = 0; i < 8; i++) {
-        out->dyn.strg.hw_enhT_detail2strg_curve.idx[i] =
-            interpolation_f32(paut->dyn[ilow].strg.hw_enhT_detail2strg_curve.idx[i],
-                              paut->dyn[ihigh].strg.hw_enhT_detail2strg_curve.idx[i], ratio);
-        out->dyn.strg.hw_enhT_detail2strg_curve.val[i] =
-            interpolation_f32(paut->dyn[ilow].strg.hw_enhT_detail2strg_curve.val[i],
-                              paut->dyn[ihigh].strg.hw_enhT_detail2strg_curve.val[i], ratio);
+        out->dyn.strg.hw_enhT_detail2Strg_curve.idx[i] =
+            interpolation_f32(paut->dyn[ilow].strg.hw_enhT_detail2Strg_curve.idx[i],
+                              paut->dyn[ihigh].strg.hw_enhT_detail2Strg_curve.idx[i], ratio);
+        out->dyn.strg.hw_enhT_detail2Strg_curve.val[i] =
+            interpolation_f32(paut->dyn[ilow].strg.hw_enhT_detail2Strg_curve.val[i],
+                              paut->dyn[ihigh].strg.hw_enhT_detail2Strg_curve.val[i], ratio);
     }
-    out->dyn.strg.hw_enhT_luma2strg_en =
-        interpolation_bool(paut->dyn[ilow].strg.hw_enhT_luma2strg_en,
-                           paut->dyn[ihigh].strg.hw_enhT_luma2strg_en, uratio);
+    out->dyn.strg.hw_enhT_luma2Strg_en =
+        interpolation_bool(paut->dyn[ilow].strg.hw_enhT_luma2Strg_en,
+                           paut->dyn[ihigh].strg.hw_enhT_luma2Strg_en, uratio);
     for (i = 0; i < 17; i++) {
-        out->dyn.strg.hw_enhT_lum2strg[i] =
-            interpolation_f32(paut->dyn[ilow].strg.hw_enhT_lum2strg[i],
-                              paut->dyn[ihigh].strg.hw_enhT_lum2strg[i], ratio);
+        out->dyn.strg.hw_enhT_luma2Strg_val[i] =
+            interpolation_f32(paut->dyn[ilow].strg.hw_enhT_luma2Strg_val[i],
+                              paut->dyn[ihigh].strg.hw_enhT_luma2Strg_val[i], ratio);
     }
     return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn EnhanceApplyStrength(EnhContext_t *pEnhCtx, enh_param_t *out) {
+
+    XCamReturn result = XCAM_RETURN_NO_ERROR;
+    if (pEnhCtx == NULL || out == NULL) {
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    bool level_up;
+    unsigned int level_diff;
+    aenh_strength_t* strg = &pEnhCtx->strg;
+
+    if (strg->MEnhanceStrth != ENHANCE_DEFAULT_LEVEL) {
+        LOG1_ADEHAZE("MEnhanceStrth %d\n", strg->MEnhanceStrth);
+        level_diff = strg->MEnhanceStrth > ENHANCE_DEFAULT_LEVEL
+                         ? (strg->MEnhanceStrth - ENHANCE_DEFAULT_LEVEL)
+                         : (ENHANCE_DEFAULT_LEVEL - strg->MEnhanceStrth);
+        level_up = strg->MEnhanceStrth > ENHANCE_DEFAULT_LEVEL;
+        if (level_up) {
+            out->dyn.strg.hw_enhT_global_strg +=
+                level_diff * ENH_LUMA_DEFAULT_STEP_FLOAT;
+            out->dyn.strg.hw_enhT_global_strg =
+                LIMIT_VALUE(out->dyn.strg.hw_enhT_global_strg, 16.0f, 0.0f);
+        } else {
+            out->dyn.strg.hw_enhT_global_strg -=
+                level_diff * ENH_LUMA_DEFAULT_STEP_FLOAT;
+            out->dyn.strg.hw_enhT_global_strg =
+                LIMIT_VALUE(out->dyn.strg.hw_enhT_global_strg, 16.0f, 0.0f);
+        }
+    }
+
+    return result;
 }
 
 static XCamReturn create_context(RkAiqAlgoContext** context, const AlgoCtxInstanceCfg* cfg) {
@@ -111,6 +145,10 @@ static XCamReturn create_context(RkAiqAlgoContext** context, const AlgoCtxInstan
 
     ctx->isReCal_   = true;
     ctx->enh_attrib = (enh_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(pCalibDbV2, enh));
+
+    ctx->strg.en                  = false;
+    ctx->strg.MEnhanceStrth       = DEHAZE_DEFAULT_LEVEL;
+    ctx->strg.MEnhanceChromeStrth = DEHAZE_DEFAULT_LEVEL;
 
     *context = (RkAiqAlgoContext*)ctx;
     LOGV_ADEHAZE("%s: (exit)\n", __FUNCTION__);
@@ -131,6 +169,7 @@ static XCamReturn prepare(RkAiqAlgoCom* params) {
 
     pEnhCtx->enh_attrib =
         (enh_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(params->u.prepare.calibv2, enh));
+    pEnhCtx->iso_list = params->u.prepare.calibv2->sensor_info->iso_list;
     pEnhCtx->isReCal_ = true;
 
     return result;
@@ -155,12 +194,13 @@ XCamReturn Aenh_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
 
     outparams->cfg_update = false;
 
+#if 0
     if (inparams->u.proc.is_bw_sensor) {
         enh_attrib->en        = false;
         outparams->cfg_update = init ? true : false;
         return XCAM_RETURN_NO_ERROR;
     }
-
+#endif
     if (enh_attrib->opMode != RK_AIQ_OP_MODE_AUTO) {
         LOGE_ADEHAZE("mode is %d, not auto mode, ignore", enh_attrib->opMode);
         return XCAM_RETURN_NO_ERROR;
@@ -176,6 +216,7 @@ XCamReturn Aenh_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
 
     if (pEnhCtx->isReCal_) {
         EnhSelectParam(pEnhCtx, enhRes, iso);
+        EnhanceApplyStrength(pEnhCtx, enhRes);
 
         outparams->cfg_update = true;
         outparams->en         = enh_attrib->en;
@@ -193,6 +234,37 @@ XCamReturn Aenh_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
 static XCamReturn processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams) {
     int iso = inparams->u.proc.iso;
     Aenh_processing(inparams, outparams, iso);
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn algo_enh_SetStrength(
+    RkAiqAlgoContext* ctx,
+    aenh_strength_t *strg
+) {
+    if(ctx == NULL || strg == NULL) {
+        LOGE_ADEHAZE("%s(%d): null pointer\n", __FUNCTION__, __LINE__);
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    EnhContext_t* pEnhCtx = (EnhContext_t*)ctx;
+    pEnhCtx->isReCal_ = true;
+    pEnhCtx->strg     = *strg;
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn algo_enh_GetStrength(
+    RkAiqAlgoContext* ctx,
+    aenh_strength_t *strg
+) {
+    if(ctx == NULL || strg == NULL) {
+        LOGE_ADEHAZE("%s(%d): null pointer\n", __FUNCTION__, __LINE__);
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    EnhContext_t* pEnhCtx = (EnhContext_t*)ctx;
+    *strg                 = pEnhCtx->strg;
 
     return XCAM_RETURN_NO_ERROR;
 }

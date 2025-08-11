@@ -28,7 +28,7 @@ typedef struct {
     /* M4_GENERIC_DESC(
         M4_ALIAS(static_param),
         M4_TYPE(struct),
-        M4_UI_MODULE(static_ui),
+        M4_UI_MODULE(sta),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(1),
@@ -38,7 +38,7 @@ typedef struct {
         M4_ALIAS(dynamic_param),
         M4_TYPE(struct_list),
         M4_SIZE_EX(1,13),
-        M4_UI_MODULE(dynamic_ui),
+        M4_UI_MODULE(dyn),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(3),

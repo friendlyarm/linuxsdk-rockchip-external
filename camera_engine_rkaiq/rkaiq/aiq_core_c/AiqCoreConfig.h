@@ -50,6 +50,7 @@ enum XCamMessageType {
     XCAM_MESSAGE_YNR_PROC_RES_OK,
     XCAM_MESSAGE_VICAP_POLL_SCL_OK,
     XCAM_MESSAGE_TNR_STATS_OK,
+    XCAM_MESSAGE_AIBNR_PROC_RES_OK,
     XCAM_MESSAGE_MAX,
 };
 
@@ -84,6 +85,7 @@ static const char* MessageType2Str[XCAM_MESSAGE_MAX] = {
     [XCAM_MESSAGE_YNR_PROC_RES_OK]     = "YNR_PROC_RES",
     [XCAM_MESSAGE_VICAP_POLL_SCL_OK]   = "VICAP_POLL_SCL",
     [XCAM_MESSAGE_TNR_STATS_OK]        = "TNR_STATS",
+    [XCAM_MESSAGE_AIBNR_PROC_RES_OK]    = "AIBNR_PROC_RES",
 };
 
 typedef struct RkAiqGrpCondition_s {
@@ -171,7 +173,7 @@ static const char* algo_str_map_array[RK_AIQ_ALGO_TYPE_MAX] = {
     [RK_AIQ_ALGO_TYPE_AYNR]=        "Ynr"        ,
     [RK_AIQ_ALGO_TYPE_ACNR]=        "Cnr"        ,
 #else
-#if defined(ISP_HW_V39) || defined(ISP_HW_V33) || defined(ISP_HW_V30) || defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
+#if defined(ISP_HW_V39) || defined(ISP_HW_V33) || defined(ISP_HW_V30) || defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE) || defined(ISP_HW_V35)
     [RK_AIQ_ALGO_TYPE_ARAWNR]=      "Abayer2dnr" ,
     [RK_AIQ_ALGO_TYPE_AMFNR]=       "Abayertnr"  ,
 #else
@@ -196,6 +198,8 @@ static const char* algo_str_map_array[RK_AIQ_ALGO_TYPE_MAX] = {
     [RK_AIQ_ALGO_TYPE_AHISTEQ]=        "Histeq"       ,
     [RK_AIQ_ALGO_TYPE_AENH]=        "Enh"       ,
     [RK_AIQ_ALGO_TYPE_AHSV]=        "Hsv"       ,
+    [RK_AIQ_ALGO_TYPE_AIBNR]=        "Aibnr"       ,
+    [RK_AIQ_ALGO_TYPE_AIRMS]=        "Airms"       ,
     // clang-format oon
 };
 
@@ -226,6 +230,10 @@ static const char* AlgoTypeToString(RkAiqAlgoType_t type) {
 
 #if defined(ISP_HW_V33)
 #include "RkAiqCoreConfigV33.h"
+#endif
+
+#if defined(ISP_HW_V35)
+#include "RkAiqCoreConfigV35.h"
 #endif
 
 #endif

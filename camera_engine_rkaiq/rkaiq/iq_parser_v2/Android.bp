@@ -54,6 +54,7 @@ cc_library_static {
         "external/camera_engine_rkaiq/aiq_core",
         "external/camera_engine_rkaiq/include/isp",
         "external/camera_engine_rkaiq/c_base",
+        "external/camera_engine_rkaiq/ipc",
     ],
 
     srcs: [

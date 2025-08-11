@@ -545,21 +545,49 @@ XCamReturn Isp3xSplitAlscParams(AiqIspParamsSplitter_t* pSplit, struct isp3x_isp
     memcpy(lsc_cfg_lef->y_size_tbl, lsc_cfg_ori->y_size_tbl, sizeof(lsc_cfg_ori->y_size_tbl));
     memcpy(lsc_cfg_rht->y_size_tbl, lsc_cfg_ori->y_size_tbl, sizeof(lsc_cfg_ori->y_size_tbl));
 
-    AiqIspParamsSplitter_SplitAlscXtable(lsc_cfg_ori->x_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
-                                         pSplit->pic_rect_.w, lsc_cfg_lef->x_size_tbl,
-                                         lsc_cfg_rht->x_size_tbl, pSplit->left_isp_rect_.w,
-                                         pSplit->right_isp_rect_.w);
+    int lsc_tbl_idx_lef = ISP3X_LSC_SIZE_TBL_SIZE / 2;
+    int lsc_tbl_idx_rht = ISP3X_LSC_SIZE_TBL_SIZE / 2 - 1;
+    unsigned short lsc_x_size0_lef = 0;
+    unsigned short lsc_x_size0_rht = 0;
 
-    AiqIspParamsSplitter_AlscMatrixScale(lsc_cfg_ori->r_data_tbl, lsc_cfg_lef->r_data_tbl,
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2 - 1; i > 0; i--) {
+        lsc_x_size0_rht += lsc_cfg_ori->x_size_tbl[i];
+        lsc_tbl_idx_rht = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_rht) {
+            break;
+        }
+    }
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2; i < ISP3X_LSC_SIZE_TBL_SIZE; i++) {
+        lsc_x_size0_lef += lsc_cfg_ori->x_size_tbl[i];
+        lsc_tbl_idx_lef = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_lef) {
+            break;
+        }
+    }
+    float rate_rht = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_rht;
+    float rate_lef = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_lef;
+
+    AiqIspParamsSplitter_SplitAlscXtable(lsc_cfg_ori->x_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
+                                         lsc_cfg_lef->x_size_tbl, lsc_cfg_rht->x_size_tbl);
+
+    AiqIspParamsSplitter_AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                                         rate_rht, lsc_tbl_idx_rht,
+                                         lsc_cfg_ori->r_data_tbl, lsc_cfg_lef->r_data_tbl,
                                          lsc_cfg_rht->r_data_tbl, ISP3X_LSC_SIZE_TBL_SIZE + 1,
                                          ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AiqIspParamsSplitter_AlscMatrixScale(lsc_cfg_ori->gr_data_tbl, lsc_cfg_lef->gr_data_tbl,
+    AiqIspParamsSplitter_AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                                         rate_rht, lsc_tbl_idx_rht,
+                                         lsc_cfg_ori->gr_data_tbl, lsc_cfg_lef->gr_data_tbl,
                                          lsc_cfg_rht->gr_data_tbl, ISP3X_LSC_SIZE_TBL_SIZE + 1,
                                          ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AiqIspParamsSplitter_AlscMatrixScale(lsc_cfg_ori->gb_data_tbl, lsc_cfg_lef->gb_data_tbl,
+    AiqIspParamsSplitter_AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                                         rate_rht, lsc_tbl_idx_rht,
+                                         lsc_cfg_ori->gb_data_tbl, lsc_cfg_lef->gb_data_tbl,
                                          lsc_cfg_rht->gb_data_tbl, ISP3X_LSC_SIZE_TBL_SIZE + 1,
                                          ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AiqIspParamsSplitter_AlscMatrixScale(lsc_cfg_ori->b_data_tbl, lsc_cfg_lef->b_data_tbl,
+    AiqIspParamsSplitter_AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                                         rate_rht, lsc_tbl_idx_rht,
+                                         lsc_cfg_ori->b_data_tbl, lsc_cfg_lef->b_data_tbl,
                                          lsc_cfg_rht->b_data_tbl, ISP3X_LSC_SIZE_TBL_SIZE + 1,
                                          ISP3X_LSC_SIZE_TBL_SIZE + 1);
 

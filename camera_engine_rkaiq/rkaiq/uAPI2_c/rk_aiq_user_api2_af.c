@@ -86,7 +86,9 @@ rk_aiq_user_api2_af_SetCalib(const rk_aiq_sys_ctx_t* sys_ctx, void *calib)
     RKAIQ_API_SMART_LOCK(sys_ctx);
     AiqAlgoHandlerAf_t* algo_handle =
         (AiqAlgoHandlerAf_t*)sys_ctx->_analyzer->mAlgoHandleMaps[RK_AIQ_ALGO_TYPE_AF];
-
+#if ISP_HW_V35
+    GlobalParamsManager_checkStatsrc(&sys_ctx->_rkAiqManager->mGlobalParamsManager, calib, RESULT_TYPE_AF_PARAM);
+#endif
     if (algo_handle) {
         return AiqAlgoHandlerAf_setCalib(algo_handle, calib);
     }

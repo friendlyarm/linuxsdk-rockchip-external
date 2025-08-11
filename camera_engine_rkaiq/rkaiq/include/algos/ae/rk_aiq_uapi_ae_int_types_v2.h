@@ -176,6 +176,21 @@ typedef struct Uapi_ExpWin_s {
 
 /*****************************************************************************/
 /**
+ * @brief   ISP2.0/2.1 AEC API ROI Params
+ */
+/*****************************************************************************/
+typedef struct SubWin_s {
+    bool                          SubWinEn;
+    window_t                      SubWin;
+} SubWin_t;
+
+typedef struct Uapi_ExpSubWin_s {
+    rk_aiq_uapi_sync_t            sync;
+    SubWin_t                      Params;
+} Uapi_ExpSubWin_t;
+
+/*****************************************************************************/
+/**
  * @brief   ISP2.0/2.1 AEC API ExpQueryInfo Params
  */
 /*****************************************************************************/
@@ -224,6 +239,8 @@ typedef struct Uapi_ExpQueryInfo_s {
     bool              EnvChange;
     // M4_BOOL_DESC("IsExpMax", "0",M4_HIDE(1))
     bool              IsExpMax;
+    // M4_BOOL_DESC("IsExpMin", "0",M4_HIDE(1))
+    bool              IsExpMin;
 
     // M4_STRUCT_DESC("LinAeInfo", "normal_ui_style")
     Uapi_LinAeInfo_t  LinAeInfo;
@@ -272,5 +289,19 @@ typedef struct Uapi_AecStatsCfg_s {
     bool                    GChannelEn;
     bool                    BChannelEn;
 } Uapi_AecStatsCfg_t;
+
+/*****************************************************************************/
+/**
+ * @brief   ISP2.0/2.1 AEC API Frame Hdr Params
+ */
+/*****************************************************************************/
+typedef struct Uapi_FrameHdrAttr_s {
+    rk_aiq_uapi_sync_t sync;
+    bool FrameHdrEn;
+    uint8_t FrameHdrNum;
+    float FrameHdrCurve[256];
+    RkAiqExpParamComb_t FrameHdrExp[3];
+    uint32_t FrameLengthLines[3];
+} Uapi_FrameHdrAttr_t;
 
 #endif

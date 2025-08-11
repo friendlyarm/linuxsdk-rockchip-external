@@ -323,4 +323,192 @@ typedef struct uapi_ae_hwstats_s {
     uint16_t raw_mean[4];  //not HW! The last 8bits are decimal places, raw_mean[3] = extra-chn-mean
 } uapi_ae_hwstats_t;
 
+typedef struct uapi_aeStats_mainWinStats_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_ae_meanBayerR_val),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,225),
+        M4_RANGE_EX(0,0xfff),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(1),
+        M4_ORDER(0),
+        M4_NOTES(meanluma of R channel in ae main roi))  */
+    uint16_t hw_ae_meanBayerR_val[RAWAEBIG_WIN_NUM];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_ae_meanBayerGrGb_val),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,225),
+        M4_RANGE_EX(0,0xfff),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(1),
+        M4_ORDER(0),
+        M4_NOTES(meanluma of G channel in ae main roi))  */
+    uint16_t hw_ae_meanBayerGrGb_val[RAWAEBIG_WIN_NUM];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_ae_meanBayerB_val),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,225),
+        M4_RANGE_EX(0,0xfff),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(1),
+        M4_ORDER(0),
+        M4_NOTES(meanluma of G channel in ae main roi))  */
+    uint16_t hw_ae_meanBayerB_val[RAWAEBIG_WIN_NUM];
+} uapi_aeStats_mainWinStats_t;
+
+typedef struct uapi_aeStats_subWinStats_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_ae_meanBayerR_val),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,0xfff),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(1),
+        M4_ORDER(0),
+        M4_NOTES(meanluma of R channel in ae main roi))  */
+    uint32_t hw_ae_sumBayerR_val;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_ae_sumBayerGrGb_val),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,0xfff),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(1),
+        M4_ORDER(0),
+        M4_NOTES(meanluma of G channel in ae main roi))  */
+    uint32_t hw_ae_sumBayerGrGb_val;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_ae_sumBayerB_val),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,0xfff),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(1),
+        M4_ORDER(0),
+        M4_NOTES(meanluma of B channel in ae main roi))  */
+    uint32_t hw_ae_sumBayerB_val;
+} uapi_aeStats_subWinStats_t;
+
+typedef struct uapi_aeStats_histStats_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_ae_histBin_val),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,256),
+        M4_RANGE_EX(0,0xffffffff),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(1),
+        M4_ORDER(0),
+        M4_NOTES(histogram stats))  */
+    unsigned int hw_ae_histBin_val[RAWHIST_BIN_N_MAX];
+} uapi_aeStats_histStats_t;
+
+typedef struct uapi_aeStats_entityStats_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(mainWin),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(22),
+        M4_NOTES(.....))  */
+    uapi_aeStats_mainWinStats_t mainWin;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(subWin),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(22),
+        M4_NOTES(.....))  */
+    uapi_aeStats_subWinStats_t subWin[RAWAEBIG_SUBWIN_NUM];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hist),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(22),
+        M4_NOTES(.....))  */
+    uapi_aeStats_histStats_t hist;
+} uapi_aeStats_entityStats_t;
+
+typedef struct uapi_aeStats_entitiesStats_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(entity0),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(22),
+        M4_NOTES(It is only valid in aeStats_entity03_indWk_mode | aeStats_entity0_wkOnly_mode))  */
+    uapi_aeStats_entityStats_t entity0;
+    /* M4_GENERIC_DESC(
+         M4_ALIAS(entity3),
+         M4_TYPE(struct),
+         M4_UI_MODULE(normal_ui_style),
+         M4_HIDE_EX(0),
+         M4_RO(0),
+         M4_ORDER(22),
+         M4_NOTES(It is only valid in aeStats_entity03_indWk_mode mode | aeStats_entity3_wkOnly_mode))  */
+    uapi_aeStats_entityStats_t entity3;
+} uapi_aeStats_entitiesStats_t;
+
+typedef struct uapi_aeStats_entityGrpStats_s {
+    /* M4_GENERIC_DESC(
+         M4_ALIAS(coWkEnt03),
+         M4_TYPE(struct),
+         M4_UI_MODULE(normal_ui_style),
+         M4_HIDE_EX(0),
+         M4_RO(0),
+         M4_ORDER(22),
+         M4_NOTES(It is only valid in aeStats_entity03_coWk_mode mode))  */
+    uapi_aeStats_entitiesStats_t coWkEnt03;
+    /* M4_GENERIC_DESC(
+         M4_ALIAS(entities),
+         M4_TYPE(struct),
+         M4_UI_MODULE(normal_ui_style),
+         M4_HIDE_EX(0),
+         M4_RO(0),
+         M4_ORDER(22),
+         M4_NOTES(It is only valid in aeStats_entity0_wkOnly_mode | aeStats_entity3_wkOnly_mode | aeStats_entity03_indWk_mode mode))  */
+    uapi_aeStats_entitiesStats_t entities;
+} uapi_aeStats_entityGrpStats_t;
+
+typedef enum uapi_entityGroupWk_mode_e {
+    entity03_coWk_mode = 0,
+    entity03_indWk_mode = 1,
+    entity0_wkOnly_mode = 2,
+    entity3_wkOnly_mode = 3,
+} uapi_entityGroupWk_mode_t;
+
+typedef struct uapi_ae_v39_hwstats_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(hw_aeCfg_entityGroup_mode),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(uapi_entityGroupWk_mode_t),
+        M4_DEFAULT(entity03_indWk_mode),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(1),
+        M4_NOTES(..... Reference enum types.\n
+        Freq of use: high))  */
+    uapi_entityGroupWk_mode_t hw_ae_entityGroup_mode;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(entityGroup),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(22),
+        M4_NOTES(...))  */
+    uapi_aeStats_entityGrpStats_t entityGroup;
+} uapi_ae_v39_hwstats_t;
+
 #endif /*__AEC_UAPI_HEAD_H__*/

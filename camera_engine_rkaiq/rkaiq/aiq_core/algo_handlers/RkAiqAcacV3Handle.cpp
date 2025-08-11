@@ -42,7 +42,13 @@ XCamReturn RkAiqAcacV3HandleInt::prepare() {
     acac_config_int->is_multi_isp             = sharedCom->is_multi_isp_mode;
     acac_config_int->multi_isp_extended_pixel = sharedCom->multi_isp_extended_pixels;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     ret = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "acac algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

@@ -1172,7 +1172,8 @@ XCamReturn AiqIspParamsSplitter_SplitRawHistBigParams(AiqIspParamsSplitter_t* pS
     return XCAM_RETURN_NO_ERROR;
 }
 
-int AiqIspParamsSplitter_AlscMatrixScale(unsigned short ori_matrix[], unsigned short left_matrix[],
+int AiqIspParamsSplitter_AlscMatrixScale(float lrate, int lmid_col_idx, float rrate, int rmid_col_idx,
+                                         unsigned short ori_matrix[], unsigned short left_matrix[],
                                          unsigned short right_matrix[], int cols, int rows) {
     int ori_col_index = 0;
     int lef_dst_index = 0;
@@ -1188,8 +1189,10 @@ int AiqIspParamsSplitter_AlscMatrixScale(unsigned short ori_matrix[], unsigned s
                                                 ori_matrix[row_index * cols + ori_col_index + 1]) /
                                                2;
             } else if (ori_col_index == mid_col) {
-                left_matrix[lef_dst_index++]  = ori_matrix[row_index * cols + ori_col_index];
-                right_matrix[rht_dst_index++] = ori_matrix[row_index * cols + ori_col_index];
+                left_matrix[lef_dst_index++] = (unsigned short) ((1 - lrate) * ori_matrix[row_index * cols + lmid_col_idx] + 
+                                                lrate * ori_matrix[row_index * cols + ori_col_index] + 0.5);
+                right_matrix[rht_dst_index++] = (unsigned short) (rrate * ori_matrix[row_index * cols + rmid_col_idx] + 
+                                                (1 - rrate) * ori_matrix[row_index * cols + ori_col_index] + 0.5);
             } else {
                 right_matrix[rht_dst_index++] = (ori_matrix[row_index * cols + ori_col_index] +
                                                  ori_matrix[row_index * cols + ori_col_index - 1]) /
@@ -1223,21 +1226,25 @@ static int AlscMatrixSplit(const unsigned short* ori_matrix, int cols, int rows,
     return 0;
 }
 
-int AiqIspParamsSplitter_SplitAlscXtable(const unsigned short* in_array, int in_size, int ori_imgw,
-                                         unsigned short* dst_left, unsigned short* dst_right,
-                                         int left_w, int right_w) {
+int AiqIspParamsSplitter_SplitAlscXtable(const unsigned short* in_array, int in_size,
+                                         unsigned short* dst_left, unsigned short* dst_right) {
     int in_index    = 0;
     int left_index  = 0;
     int right_index = 0;
     for (in_index = 0; in_index < in_size; in_index++) {
         if (in_index < (in_size / 2)) {
-            dst_left[left_index++] = ceil(in_array[in_index] * 1.0 / ori_imgw * left_w);
-            dst_left[left_index++] = floor(in_array[in_index] * 1.0 / ori_imgw * left_w);
+            dst_left[left_index++] = ceil(in_array[in_index] * 1.0 / 2);
+            dst_left[left_index] = in_array[in_index] - dst_left[left_index-1];
+            left_index++;
         } else {
-            dst_right[right_index++] = ceil(in_array[in_index] * 1.0 / ori_imgw * right_w);
-            dst_right[right_index++] = floor(in_array[in_index] * 1.0 / ori_imgw * right_w);
+            dst_right[right_index++] = ceil(in_array[in_index] * 1.0 / 2);
+            dst_right[right_index] = in_array[in_index] - dst_left[right_index-1];
+            right_index++;
         }
     }
+
+    dst_left[in_size - 1] += RKMOUDLE_UNITE_EXTEND_PIXEL;
+    dst_right[0] += RKMOUDLE_UNITE_EXTEND_PIXEL;
 
     return 0;
 }
@@ -1426,36 +1433,39 @@ static int SplitAlscYtable(const unsigned short* in_array, int in_size, int ori_
     return 0;
 }
 
-int AiqIspParamsSplitter_AlscMatrixScaleVertical(unsigned short ori_matrix[],
-                                                 unsigned short left_matrix[],
-                                                 unsigned short right_matrix[], int cols,
-                                                 int rows) {
-    int ori_col_index = 0;
-    int lef_dst_index = 0;
-    int rht_dst_index = 0;
-    int mid_col       = cols / 2;
-    int row_index     = 0;
+int AiqIspParamsSplitter_AlscMatrixScaleVertical(float trate, int tmid_row_idx,
+                                                 float brate, int bmid_row_idx,
+                                                 unsigned short ori_matrix[],
+                                                 unsigned short top_matrix[],
+                                                 unsigned short btm_matrix[],
+                                                 int rows, int cols) {
+    int ori_row_index = 0;
+    int mid_row       = rows / 2;
+    int col_index     = 0;
 
-    for (row_index = 0; row_index < rows; row_index++) {
-        for (ori_col_index = 0; ori_col_index < cols; ori_col_index++) {
-            if (ori_col_index < mid_col) {
-                left_matrix[row_index + ori_col_index * 2 * cols] =
-                    ori_matrix[row_index + ori_col_index * cols];
-                left_matrix[row_index + (ori_col_index * 2 + 1) * cols] =
-                    (ori_matrix[row_index + ori_col_index * cols] +
-                     ori_matrix[row_index + (ori_col_index + 1) * cols]) /
+    for (col_index = 0; col_index < cols; col_index++) {
+        for (ori_row_index = 0; ori_row_index < rows; ori_row_index++) {
+            if (ori_row_index < mid_row) {
+                top_matrix[col_index + ori_row_index * 2 * cols] =
+                    ori_matrix[col_index + ori_row_index * cols];
+                top_matrix[col_index + (ori_row_index * 2 + 1) * cols] =
+                    (ori_matrix[col_index + ori_row_index * cols] +
+                     ori_matrix[col_index + (ori_row_index + 1) * cols]) /
                     2;
-            } else if (ori_col_index == mid_col) {
-                left_matrix[row_index + (cols - 1) * cols] =
-                    ori_matrix[row_index + ori_col_index * cols];
-                right_matrix[row_index] = ori_matrix[row_index + ori_col_index * cols];
+            } else if (ori_row_index == mid_row) {               
+                top_matrix[col_index + (rows - 1) * cols] = 
+                        (unsigned short) ((1 - trate) * ori_matrix[col_index + tmid_row_idx * cols] + 
+                        trate * ori_matrix[col_index +  ori_row_index * cols] + 0.5);
+                btm_matrix[col_index] = 
+                        (unsigned short) (brate * ori_matrix[col_index +  bmid_row_idx * cols] + 
+                        (1 - brate) * ori_matrix[col_index + ori_row_index * cols] + 0.5);
             } else {
-                right_matrix[row_index + (ori_col_index * 2 - cols) * cols] =
-                    (ori_matrix[row_index + ori_col_index * cols] +
-                     ori_matrix[row_index + (ori_col_index - 1) * cols]) /
+                btm_matrix[col_index + (ori_row_index * 2 - rows) * cols] =
+                    (ori_matrix[col_index + ori_row_index * cols] +
+                     ori_matrix[col_index + (ori_row_index - 1) * cols]) /
                     2;
-                right_matrix[row_index + (ori_col_index * 2 - cols + 1) * cols] =
-                    ori_matrix[row_index + ori_col_index * cols];
+                btm_matrix[col_index + (ori_row_index * 2 - rows + 1) * cols] =
+                    ori_matrix[col_index + ori_row_index * cols];
             }
         }
     }

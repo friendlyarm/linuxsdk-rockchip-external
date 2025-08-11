@@ -428,8 +428,14 @@ XCamReturn RkAiqAfHandleInt::prepare() {
 
     if ((af_config_int->com.u.prepare.sns_op_width != 0) &&
             (af_config_int->com.u.prepare.sns_op_height != 0)) {
+#ifdef DISABLE_HANDLE_ATTRIB
+        mCfgMutex.lock();
+#endif
         RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
         ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+        mCfgMutex.unlock();
+#endif
         RKAIQCORE_CHECK_RET(ret, "af algo prepare failed");
     } else {
         LOGI_AF("input sns_op_width %d or sns_op_height %d is zero, bypass!",

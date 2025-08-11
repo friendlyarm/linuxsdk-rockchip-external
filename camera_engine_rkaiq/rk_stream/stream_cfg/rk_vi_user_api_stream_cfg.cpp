@@ -20,6 +20,7 @@ struct rkraw_vi_ctx_s {
 	class RawStreamProcUnit *_mRawProcUnit;
     bool fake_sns_mode;
     const char *fake_sns_name;
+    rk_aiq_isp_t *isp_info;
 };
 
 rkraw_vi_ctx_t *rkrawstream_uapi_init()
@@ -32,13 +33,6 @@ rkraw_vi_ctx_t *rkrawstream_uapi_init()
     ctx->_mRawProcUnit = NULL;
     ctx->fake_sns_mode = false;
 	return ctx;
-}
-
-void rkrawstream_uapi_fakesns_mode(rkraw_vi_ctx_t *ctx, int isp_index, const char *real_lens)
-{
-    ctx->_mMediaInfo->setupOffLineLink(isp_index, true);
-    ctx->fake_sns_name = ctx->_mMediaInfo->offline(isp_index, real_lens);
-    ctx->fake_sns_mode = true;
 }
 
 void rkrawstream_uapi_deinit(rkraw_vi_ctx_t *ctx)
@@ -66,6 +60,9 @@ void rkrawstream_uapi_deinit(rkraw_vi_ctx_t *ctx)
             ctx->_mRawProcUnit = NULL;
         }
         if(ctx->_mMediaInfo) {
+            if (ctx->isp_info) {
+                ctx->_mMediaInfo->setupOffLineLink(ctx->isp_info->media_dev_path, false, RK_AIQ_WORKING_MODE_NORMAL);
+            }
             delete ctx->_mMediaInfo;
             ctx->_mMediaInfo = NULL;
         }
@@ -105,6 +102,7 @@ int rkrawstream_vicap_init(rkraw_vi_ctx_t* ctx, rkraw_vi_init_params_t *p)
             return XCAM_RETURN_ERROR_SENSOR;
         }
         ctx->_mRawCapUnit = new RawStreamCapUnit(ctx->s_full_info);
+        LOGK_RKSTREAM("%s: init success of %s", __FUNCTION__, ctx->s_full_info->sensor_name.c_str());
     } else {
         ctx->_mRawCapUnit = new RawStreamCapUnit(p->dev0_name, p->dev1_name, p->dev2_name);
     }
@@ -188,18 +186,29 @@ int rkrawstream_readback_init(rkraw_vi_ctx_t* ctx, rkraw_vi_init_params_t *p)
 {
     SmartLock locker (ctx->_api_mutex);
 	int ret = 0;
-    if (ctx->fake_sns_mode) {
-        ctx->s_full_info = ctx->_mMediaInfo->getSensorFullInfo((char *)ctx->fake_sns_name, 0);
-    } else {
+    char *dep_str = NULL;
+    if (p->sns_ent_name) {
+        dep_str = p->sns_ent_name;
         ctx->s_full_info = ctx->_mMediaInfo->getSensorFullInfo(p->sns_ent_name, 0);
+        if(ctx->s_full_info == NULL){
+            LOGE_RKSTREAM("%s: can't find sensor %s", __FUNCTION__, p->sns_ent_name);
+            return XCAM_RETURN_ERROR_SENSOR;
+        }
+        ctx->isp_info = ctx->s_full_info->isp_info;
     }
-    if(ctx->s_full_info == NULL){
-        LOGE_RKSTREAM("can't find sensor %s", p->sns_ent_name);
+    if (p->isp_driver_name && !ctx->isp_info && !ctx->s_full_info) {
+        dep_str = p->isp_driver_name;
+        ctx->isp_info = ctx->_mMediaInfo->getIspInfo(p->isp_driver_name);
+    }
+    if (!ctx->isp_info) {
+        LOGE_RKSTREAM("%s: can't find isp info by %s", __FUNCTION__, dep_str);
         return XCAM_RETURN_ERROR_SENSOR;
     }
-    ctx->_mRawProcUnit = new RawStreamProcUnit(ctx->s_full_info, ctx->fake_sns_mode);
+    ctx->_mRawProcUnit = new RawStreamProcUnit(ctx->isp_info, ctx->fake_sns_mode);
 
     ctx->_mRawProcUnit->user_priv_data = p->user_data;
+
+    LOGK_RKSTREAM("%s: init success of %s", __FUNCTION__, ctx->isp_info->driver);
 	return ret;
 }
 
@@ -210,6 +219,8 @@ int rkrawstream_readback_prepare(rkraw_vi_ctx_t* ctx, rkraw_vi_prepare_params_t 
         p->mem_mode, p->buf_memory_type, p->buf_cnt);
     SmartLock locker (ctx->_api_mutex);
 	int ret = 0;
+    ctx->_mMediaInfo->setupOffLineLink(ctx->isp_info->media_dev_path, true, p->hdr_mode);
+    ctx->_mMediaInfo->ispDevReUpdateHwStatus(ctx->isp_info->isp_dev_path);
     ctx->_mRawProcUnit->set_working_mode(p->hdr_mode);
     ctx->_mRawProcUnit->set_rx_format(p->width, p->height, p->pix_fmt, p->mem_mode);
     ctx->_mRawProcUnit->prepare(p->buf_memory_type, p->buf_cnt);
@@ -267,15 +278,23 @@ int rkrawstream_setup_pipline_fmt(rkraw_vi_ctx_t* ctx, int width, int height, ui
 int rkrawstream_isp_init(rkraw_vi_ctx_t* ctx, rkraw_vi_init_params_t *p)
 {
     SmartLock locker (ctx->_api_mutex);
+    const char *dep_str;
 	int ret = 0;
-    if (ctx->fake_sns_mode) {
-        ctx->s_full_info = ctx->_mMediaInfo->getSensorFullInfo((char*)ctx->fake_sns_name, 0);
+    if (p->sns_ent_name) {
+        dep_str = p->sns_ent_name;
+        ctx->s_full_info = ctx->_mMediaInfo->getSensorFullInfo(p->sns_ent_name, -1);
+        if(ctx->s_full_info == NULL){
+            LOGE_RKSTREAM("%s: can't find sensor %s", __FUNCTION__, p->sns_ent_name);
+            return XCAM_RETURN_ERROR_SENSOR;
+        }
+        ctx->isp_info = ctx->s_full_info->isp_info;
     }
-    else {
-        ctx->s_full_info = ctx->_mMediaInfo->getSensorFullInfo(p->sns_ent_name, 0);
+    if (p->isp_driver_name && !ctx->isp_info && !ctx->s_full_info) {
+        dep_str = p->isp_driver_name;
+        ctx->isp_info = ctx->_mMediaInfo->getIspInfo(p->isp_driver_name);
     }
-    if(ctx->s_full_info == NULL){
-        LOGE_RKSTREAM("can't find sensor %s", p->sns_ent_name);
+    if (!ctx->isp_info) {
+        LOGE_RKSTREAM("%s: can't find isp info by %s", __FUNCTION__, dep_str);
         return XCAM_RETURN_ERROR_SENSOR;
     }
     ctx->_mIspCapUnit = new IspStreamCapUnit(ctx->s_full_info);
@@ -315,4 +334,18 @@ int rkrawstream_isp_stop(rkraw_vi_ctx_t* ctx)
 	ctx->_mIspCapUnit->stop();
     LOGD_RKSTREAM("%s exit", __func__);
 	return ret;
+}
+
+const char* rkrawstream_get_inputparam_path_by_vi(rkraw_vi_ctx_t* ctx)
+{
+    if (!ctx) {
+        return NULL;
+    }
+
+    if (!ctx->isp_info) {
+        return NULL;
+    }
+
+    return ctx->isp_info->input_params_path;
+
 }

@@ -2397,7 +2397,8 @@ XCamReturn IspParamsSplitter::SplitAfParams<struct isp32_isp_params_cfg>(
     return XCAM_RETURN_NO_ERROR;
 }
 
-int AlscMatrixScale(unsigned short ori_matrix[], unsigned short left_matrix[],
+int AlscMatrixScale(float lrate, int lmid_col_idx, float rrate, int rmid_col_idx,
+                    unsigned short ori_matrix[], unsigned short left_matrix[],
                     unsigned short right_matrix[], int cols, int rows) {
     int ori_col_index = 0;
     int lef_dst_index = 0;
@@ -2414,10 +2415,10 @@ int AlscMatrixScale(unsigned short ori_matrix[], unsigned short left_matrix[],
                     (ori_matrix[row_index * cols + ori_col_index] +
                      ori_matrix[row_index * cols + ori_col_index + 1]) / 2;
             } else if (ori_col_index == mid_col) {
-                left_matrix[lef_dst_index++] =
-                    ori_matrix[row_index * cols + ori_col_index];
-                right_matrix[rht_dst_index++] =
-                    ori_matrix[row_index * cols + ori_col_index];
+                left_matrix[lef_dst_index++] = (unsigned short) ((1 - lrate) * ori_matrix[row_index * cols + lmid_col_idx] + 
+                                                lrate * ori_matrix[row_index * cols + ori_col_index] + 0.5);
+                right_matrix[rht_dst_index++] = (unsigned short) (rrate * ori_matrix[row_index * cols + rmid_col_idx] + 
+                                                (1 - rrate) * ori_matrix[row_index * cols + ori_col_index] + 0.5);
             } else {
                 right_matrix[rht_dst_index++] =
                     (ori_matrix[row_index * cols + ori_col_index] +
@@ -2452,25 +2453,25 @@ int AlscMatrixSplit(const unsigned short* ori_matrix, int cols, int rows, unsign
     return 0;
 }
 
-int SplitAlscXtable(const unsigned short* in_array, int in_size, int ori_imgw,
-                    unsigned short* dst_left, unsigned short* dst_right,
-                    int left_w, int right_w) {
+int SplitAlscXtable(const unsigned short* in_array, int in_size,
+                    unsigned short* dst_left, unsigned short* dst_right) {
     int in_index = 0;
     int left_index = 0;
     int right_index = 0;
     for (in_index = 0; in_index < in_size; in_index++) {
         if (in_index < (in_size / 2)) {
-            dst_left[left_index++] =
-                ceil(in_array[in_index] * 1.0 / ori_imgw * left_w);
-            dst_left[left_index++] =
-                floor(in_array[in_index] * 1.0 / ori_imgw * left_w);
+            dst_left[left_index++] = ceil(in_array[in_index] * 1.0 / 2);
+            dst_left[left_index] = in_array[in_index] - dst_left[left_index-1];
+            left_index++;
         } else {
-            dst_right[right_index++] =
-                ceil(in_array[in_index] * 1.0 / ori_imgw * right_w);
-            dst_right[right_index++] =
-                floor(in_array[in_index] * 1.0 / ori_imgw * right_w);
+            dst_right[right_index++] = ceil(in_array[in_index] * 1.0 / 2);
+            dst_right[right_index] =in_array[in_index] - dst_left[right_index-1];
+            right_index++;
         }
     }
+
+    dst_left[in_size - 1] += RKMOUDLE_UNITE_EXTEND_PIXEL;
+    dst_right[0] += RKMOUDLE_UNITE_EXTEND_PIXEL;
 
     return 0;
 }
@@ -2515,29 +2516,55 @@ XCamReturn IspParamsSplitter::SplitAlscParams<struct isp3x_isp_params_cfg>(
     memcpy(lsc_cfg_rht->y_size_tbl, lsc_cfg_ori->y_size_tbl,
            sizeof(lsc_cfg_ori->y_size_tbl));
 
-    SplitAlscXtable(lsc_cfg_ori->x_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
-                    pic_rect_.w,
-                    lsc_cfg_lef->x_size_tbl,
-                    lsc_cfg_rht->x_size_tbl,
-                    left_isp_rect_.w,
-                    right_isp_rect_.w);
+    int lsc_tbl_idx_lef = ISP3X_LSC_SIZE_TBL_SIZE / 2;
+    int lsc_tbl_idx_rht = ISP3X_LSC_SIZE_TBL_SIZE / 2 - 1;
+    unsigned short lsc_x_size0_lef = 0;
+    unsigned short lsc_x_size0_rht = 0;
 
-    AlscMatrixScale(lsc_cfg_ori->r_data_tbl,
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2 - 1; i > 0; i--) {
+        lsc_x_size0_rht += lsc_cfg_ori->x_size_tbl[i];
+        lsc_tbl_idx_rht = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_rht) {
+            break;
+        }
+    }
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2; i < ISP3X_LSC_SIZE_TBL_SIZE; i++) {
+        lsc_x_size0_lef += lsc_cfg_ori->x_size_tbl[i];
+        lsc_tbl_idx_lef = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_lef) {
+            break;
+        }
+    }
+    float rate_rht = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_rht;
+    float rate_lef = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_lef;
+
+    SplitAlscXtable(lsc_cfg_ori->x_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
+                    lsc_cfg_lef->x_size_tbl, lsc_cfg_rht->x_size_tbl);
+
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->r_data_tbl,
                     lsc_cfg_lef->r_data_tbl,
                     lsc_cfg_rht->r_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScale(lsc_cfg_ori->gr_data_tbl,
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->gr_data_tbl,
                     lsc_cfg_lef->gr_data_tbl,
                     lsc_cfg_rht->gr_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScale(lsc_cfg_ori->gb_data_tbl,
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->gb_data_tbl,
                     lsc_cfg_lef->gb_data_tbl,
                     lsc_cfg_rht->gb_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScale(lsc_cfg_ori->b_data_tbl,
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->b_data_tbl,
                     lsc_cfg_lef->b_data_tbl,
                     lsc_cfg_rht->b_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
@@ -2567,29 +2594,55 @@ XCamReturn IspParamsSplitter::SplitAlscParams<struct isp32_isp_params_cfg>(
     memcpy(lsc_cfg_rht->y_size_tbl, lsc_cfg_ori->y_size_tbl,
            sizeof(lsc_cfg_ori->y_size_tbl));
 
-    SplitAlscXtable(lsc_cfg_ori->x_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
-                    pic_rect_.w,
-                    lsc_cfg_lef->x_size_tbl,
-                    lsc_cfg_rht->x_size_tbl,
-                    left_isp_rect_.w,
-                    right_isp_rect_.w);
+    int lsc_tbl_idx_lef = ISP3X_LSC_SIZE_TBL_SIZE / 2;
+    int lsc_tbl_idx_rht = ISP3X_LSC_SIZE_TBL_SIZE / 2 - 1;
+    unsigned short lsc_x_size0_lef = 0;
+    unsigned short lsc_x_size0_rht = 0;
 
-    AlscMatrixScale(lsc_cfg_ori->r_data_tbl,
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2 - 1; i > 0; i--) {
+        lsc_x_size0_rht += lsc_cfg_ori->x_size_tbl[i];
+        lsc_tbl_idx_rht = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_rht) {
+            break;
+        }
+    }
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2; i < ISP3X_LSC_SIZE_TBL_SIZE; i++) {
+        lsc_x_size0_lef += lsc_cfg_ori->x_size_tbl[i];
+        lsc_tbl_idx_lef = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_lef) {
+            break;
+        }
+    }
+    float rate_rht = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_rht;
+    float rate_lef = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_lef;
+
+    SplitAlscXtable(lsc_cfg_ori->x_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
+                    lsc_cfg_lef->x_size_tbl, lsc_cfg_rht->x_size_tbl);
+
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->r_data_tbl,
                     lsc_cfg_lef->r_data_tbl,
                     lsc_cfg_rht->r_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScale(lsc_cfg_ori->gr_data_tbl,
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->gr_data_tbl,
                     lsc_cfg_lef->gr_data_tbl,
                     lsc_cfg_rht->gr_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScale(lsc_cfg_ori->gb_data_tbl,
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->gb_data_tbl,
                     lsc_cfg_lef->gb_data_tbl,
                     lsc_cfg_rht->gb_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScale(lsc_cfg_ori->b_data_tbl,
+    AlscMatrixScale(rate_lef, lsc_tbl_idx_lef,
+                    rate_rht, lsc_tbl_idx_rht,
+                    lsc_cfg_ori->b_data_tbl,
                     lsc_cfg_lef->b_data_tbl,
                     lsc_cfg_rht->b_data_tbl,
                     ISP3X_LSC_SIZE_TBL_SIZE + 1,
@@ -3498,33 +3551,39 @@ int SplitAlscYtable(const unsigned short* in_array, int in_size, int ori_imgh,
     return 0;
 }
 
-int AlscMatrixScaleVertical(unsigned short ori_matrix[], unsigned short left_matrix[],
-                    unsigned short right_matrix[], int cols, int rows) {
-    int ori_col_index = 0;
-    int lef_dst_index = 0;
-    int rht_dst_index = 0;
-    int mid_col = cols / 2;
-    int row_index = 0;
+int AlscMatrixScaleVertical(float trate, int tmid_row_idx,
+                            float brate, int bmid_row_idx,
+                            unsigned short ori_matrix[], 
+                            unsigned short top_matrix[],
+                            unsigned short btm_matrix[], 
+                            int rows, int cols) {
+    int ori_row_index = 0;
+    int mid_row       = rows / 2;
+    int col_index     = 0;
 
-    for (row_index = 0; row_index < rows; row_index++) {
-        for (ori_col_index = 0; ori_col_index < cols; ori_col_index++) {
-            if (ori_col_index < mid_col) {
-                left_matrix[row_index + ori_col_index * 2 * cols] =
-                    ori_matrix[row_index + ori_col_index * cols];
-                left_matrix[row_index + (ori_col_index * 2 + 1) * cols] =
-                    (ori_matrix[row_index + ori_col_index * cols] +
-                     ori_matrix[row_index + (ori_col_index + 1) * cols]) / 2;
-            } else if (ori_col_index == mid_col) {
-                left_matrix[row_index + (cols - 1) * cols] =
-                    ori_matrix[row_index + ori_col_index * cols];
-                right_matrix[row_index] =
-                    ori_matrix[row_index + ori_col_index * cols];
+    for (col_index = 0; col_index < cols; col_index++) {
+        for (ori_row_index = 0; ori_row_index < rows; ori_row_index++) {
+            if (ori_row_index < mid_row) {
+                top_matrix[col_index + ori_row_index * 2 * cols] =
+                    ori_matrix[col_index + ori_row_index * cols];
+                top_matrix[col_index + (ori_row_index * 2 + 1) * cols] =
+                    (ori_matrix[col_index + ori_row_index * cols] +
+                     ori_matrix[col_index + (ori_row_index + 1) * cols]) /
+                    2;
+            } else if (ori_row_index == mid_row) {               
+                top_matrix[col_index + (rows - 1) * cols] = 
+                        (unsigned short) ((1 - trate) * ori_matrix[col_index + tmid_row_idx * cols] + 
+                        trate * ori_matrix[col_index +  ori_row_index * cols] + 0.5);
+                btm_matrix[col_index] = 
+                        (unsigned short) (brate * ori_matrix[col_index +  bmid_row_idx * cols] + 
+                        (1 - brate) * ori_matrix[col_index + ori_row_index * cols] + 0.5);
             } else {
-                right_matrix[row_index + (ori_col_index * 2 - cols) * cols] =
-                    (ori_matrix[row_index + ori_col_index * cols] +
-                     ori_matrix[row_index + (ori_col_index - 1) * cols]) / 2;
-                right_matrix[row_index + (ori_col_index * 2 - cols + 1) * cols] =
-                    ori_matrix[row_index + ori_col_index * cols];
+                btm_matrix[col_index + (ori_row_index * 2 - rows) * cols] =
+                    (ori_matrix[col_index + ori_row_index * cols] +
+                     ori_matrix[col_index + (ori_row_index - 1) * cols]) /
+                    2;
+                btm_matrix[col_index + (ori_row_index * 2 - rows + 1) * cols] =
+                    ori_matrix[col_index + ori_row_index * cols];
             }
         }
     }
@@ -3546,29 +3605,55 @@ XCamReturn IspParamsSplitter::SplitAlscParamsVertical<struct isp32_isp_params_cf
     memcpy(lsc_cfg_btm->x_size_tbl, lsc_cfg_ori->x_size_tbl,
            sizeof(lsc_cfg_ori->x_size_tbl));
     
-    SplitAlscXtable(lsc_cfg_ori->y_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
-                    pic_rect_.h,
-                    lsc_cfg_top->y_size_tbl,
-                    lsc_cfg_btm->y_size_tbl,
-                    left_isp_rect_.h,
-                    bottom_left_isp_rect_.h);
+    int lsc_tbl_idx_top = ISP3X_LSC_SIZE_TBL_SIZE / 2;
+    int lsc_tbl_idx_btm = ISP3X_LSC_SIZE_TBL_SIZE / 2 - 1;
+    unsigned short lsc_x_size0_top = 0;
+    unsigned short lsc_x_size0_btm = 0;
 
-    AlscMatrixScaleVertical(lsc_cfg_ori->r_data_tbl,
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2 - 1; i > 0; i--) {
+        lsc_x_size0_btm += lsc_cfg_ori->y_size_tbl[i];
+        lsc_tbl_idx_btm = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_btm) {
+            break;
+        }
+    }
+    for (int i = ISP3X_LSC_SIZE_TBL_SIZE/2; i < ISP3X_LSC_SIZE_TBL_SIZE; i++) {
+        lsc_x_size0_top += lsc_cfg_ori->y_size_tbl[i];
+        lsc_tbl_idx_top = i;
+        if (RKMOUDLE_UNITE_EXTEND_PIXEL < lsc_x_size0_top) {
+            break;
+        }
+    }
+    float rate_btm = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_btm;
+    float rate_top = RKMOUDLE_UNITE_EXTEND_PIXEL * 1.0 / lsc_x_size0_top;
+    
+    SplitAlscXtable(lsc_cfg_ori->y_size_tbl, ISP3X_LSC_SIZE_TBL_SIZE,
+                    lsc_cfg_top->y_size_tbl, lsc_cfg_btm->y_size_tbl);
+
+    AlscMatrixScaleVertical(rate_top, lsc_tbl_idx_top, 
+                            rate_btm, lsc_tbl_idx_btm,
+                            lsc_cfg_ori->r_data_tbl,
                             lsc_cfg_top->r_data_tbl,
                             lsc_cfg_btm->r_data_tbl,
                             ISP3X_LSC_SIZE_TBL_SIZE + 1,
                             ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScaleVertical(lsc_cfg_ori->gr_data_tbl,
+    AlscMatrixScaleVertical(rate_top, lsc_tbl_idx_top, 
+                            rate_btm, lsc_tbl_idx_btm,
+                            lsc_cfg_ori->gr_data_tbl,
                             lsc_cfg_top->gr_data_tbl,
                             lsc_cfg_btm->gr_data_tbl,
                             ISP3X_LSC_SIZE_TBL_SIZE + 1,
                             ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScaleVertical(lsc_cfg_ori->gb_data_tbl,
+    AlscMatrixScaleVertical(rate_top, lsc_tbl_idx_top, 
+                            rate_btm, lsc_tbl_idx_btm,
+                            lsc_cfg_ori->gb_data_tbl,
                             lsc_cfg_top->gb_data_tbl,
                             lsc_cfg_btm->gb_data_tbl,
                             ISP3X_LSC_SIZE_TBL_SIZE + 1,
                             ISP3X_LSC_SIZE_TBL_SIZE + 1);
-    AlscMatrixScaleVertical(lsc_cfg_ori->b_data_tbl,
+    AlscMatrixScaleVertical(rate_top, lsc_tbl_idx_top, 
+                            rate_btm, lsc_tbl_idx_btm,
+                            lsc_cfg_ori->b_data_tbl,
                             lsc_cfg_top->b_data_tbl,
                             lsc_cfg_btm->b_data_tbl,
                             ISP3X_LSC_SIZE_TBL_SIZE + 1,

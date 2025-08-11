@@ -47,36 +47,14 @@ static XCamReturn groupRgbirProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoRe
     }
 
     int iso = pRgbirGroupCtx->iso;
-    float blc_ob_predgain = procParaGroup->stAblcV32_proc_res.isp_ob_predgain;
     rk_aiq_singlecam_3a_result_t* scam_3a_res = procParaGroup->camgroupParmasArray[0];
     if(scam_3a_res->aec._bEffAecExpValid) {
-        RKAiqAecExpInfo_t* pCurExp = &scam_3a_res->aec._effAecExpInfo;
-        if((rk_aiq_working_mode_t)procParaGroup->working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
-            iso =  blc_ob_predgain * scam_3a_res->hdrIso;
-        } else {
-            iso = scam_3a_res->hdrIso;
-        }
+        iso = scam_3a_res->hdrIso;
     }
 
-    if (procParaGroup->attribUpdated) {
-        LOGI("%s attribUpdated", __func__);
-        pRgbirGroupCtx->isReCal_ = true;
-    }
+    outparams->algoRes = procResParaGroup->camgroupParmasArray[0]->rgbir;
+    Argbir_processing(inparams, outparams, iso);
 
-    int delta_iso = abs(iso - pRgbirGroupCtx->iso);
-    if (delta_iso > DEFAULT_RECALCULATE_DELTA_ISO)
-        pRgbirGroupCtx->isReCal_ = true;
-
-    rgbir_param_t *rgbir_param = procResParaGroup->camgroupParmasArray[0]->rgbir;
-
-    if (pRgbirGroupCtx->isReCal_) {
-        RgbirSelectParam(&pRgbirGroupCtx->rgbir_attrib->stAuto, rgbir_param, iso);
-		outparams->cfg_update = true;
-        outparams->en         = pRgbirGroupCtx->rgbir_attrib->en;
-        outparams->bypass     = pRgbirGroupCtx->rgbir_attrib->bypass;
-    } else {
-		outparams->cfg_update = false;
-	}
 
 	void* gp_ptrs[procResParaGroup->arraySize];
 	int gp_size = sizeof(*procResParaGroup->camgroupParmasArray[0]->rgbir);
@@ -84,9 +62,6 @@ static XCamReturn groupRgbirProcessing(const RkAiqAlgoCom* inparams, RkAiqAlgoRe
 		gp_ptrs[i] = procResParaGroup->camgroupParmasArray[i]->rgbir;
 
 	algo_camgroup_update_results(inparams, outparams, gp_ptrs, gp_size);
-
-    pRgbirGroupCtx->iso = iso;
-    pRgbirGroupCtx->isReCal_ = false;
 
     LOGD_ARGBIR("%s exit\n", __FUNCTION__);
     return ret;

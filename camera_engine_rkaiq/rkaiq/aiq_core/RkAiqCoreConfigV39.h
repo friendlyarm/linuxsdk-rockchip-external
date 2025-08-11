@@ -68,7 +68,6 @@
 #include "newStruct/blc/include/blc_algo_api.h"
 #include "newStruct/dpc/include/dpc_algo_api.h"
 #include "newStruct/cac/include/cac_algo_api.h"
-#include "newStruct/ldch/include/ldch_algo_api.h"
 #include "newStruct/csm/include/csm_algo_api.h"
 #include "newStruct/merge/include/merge_algo_api.h"
 #include "newStruct/lsc/include/lsc_algo_api.h"
@@ -79,6 +78,8 @@
 #include "newStruct/gain/include/gain_algo_api.h"
 #include "newStruct/3dlut/include/3dlut_algo_api.h"
 #include "newStruct/ccm/include/ccm_algo_api.h"
+#include "newStruct/ldc/include/ldc_algo_api.h"
+#include "amtd/rk_aiq_algo_amtd_itf.h"
 
 #if RKAIQ_ENABLE_CAMGROUP
 #include "algos_camgroup/abayer2dnrV23/rk_aiq_algo_camgroup_abayer2dnr_itf_v23.h"
@@ -123,7 +124,7 @@ static RkAiqGrpCondition_t aeGrpCondV3x[] = {
  * initializer element is not constant used in g_default_3a_des
  */
 
-static const RkAiqGrpConditions_t aeGrpCondsV3x = {grp_conds_array_info(aeGrpCondV3x)};
+static const RkAiqGrpConditions_t aeGrpCondsV3xs = {grp_conds_array_info(aeGrpCondV3x)};
 
 static RkAiqGrpCondition_t awbGrpCond[] = {
     [0] = {XCAM_MESSAGE_SOF_INFO_OK, 0},
@@ -153,8 +154,9 @@ static RkAiqGrpCondition_t grp0Cond[] = {
     [1] = {XCAM_MESSAGE_AE_PRE_RES_OK, 0},
     [2] = {XCAM_MESSAGE_AWB_PROC_RES_OK, 0},
 #if USE_NEWSTRUCT
+    [3] = {XCAM_MESSAGE_AEC_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT},
 #if RK_GAIN_V2_ENABLE_GAIN2DDR
-    [3] = {XCAM_MESSAGE_AGAIN_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT3},
+    [4] = {XCAM_MESSAGE_AGAIN_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT3},
 #endif
 #else
     [3] = {XCAM_MESSAGE_BLC_V32_PROC_RES_OK, 0},
@@ -201,199 +203,202 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 // clang-format off
 #if RKAIQ_HAVE_AE_V1
 #if defined(ISP_HW_V39)
-    // { &g_RkIspAlgoDescAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0, 5, 0,    aeGrpCondsV3x      },
+    // { &g_RkIspAlgoDescAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0, 5, 0,    {grp_conds_array_info(aeGrpCondV3x)}      },
 #else
-    { &g_RkIspAlgoDescAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0, 3, 0,    aeGrpCondsV3x      },
+    { &g_RkIspAlgoDescAe.common,            RK_AIQ_CORE_ANALYZE_AE,     0, 3, 0,    {grp_conds_array_info(aeGrpCondV3x)}      },
 #endif
 #endif
 #if RKAIQ_HAVE_BLC_V32
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescBlc.common,           RK_AIQ_CORE_ANALYZE_AWB,    0, 0, 0,       awbGrpConds        },
+    { &g_RkIspAlgoDescBlc.common,           RK_AIQ_CORE_ANALYZE_AWB,    0, 0, 0,       {grp_conds_array_info(awbGrpCond)}        },
 #else
-    { &g_RkIspAlgoDescAblcV32.common,          RK_AIQ_CORE_ANALYZE_OTHER,    32, 32, 32,    otherGrpCondsV3x        },
+    { &g_RkIspAlgoDescAblcV32.common,          RK_AIQ_CORE_ANALYZE_OTHER,    32, 32, 32,    {grp_conds_array_info(otherGrpCondV3x)}        },
 #endif
 #endif
 #if RKAIQ_HAVE_AWB_V39
-    // { &g_RkIspAlgoDescAwb.common,           RK_AIQ_CORE_ANALYZE_AWB,    1, 2, 39,   awbGrpConds        },
+    // { &g_RkIspAlgoDescAwb.common,           RK_AIQ_CORE_ANALYZE_AWB,    1, 2, 39,   {grp_conds_array_info(awbGrpCond)}        },
 #endif
 #if RKAIQ_HAVE_CAC_V11
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAcac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 11,   grp0Conds          },
+    { &g_RkIspAlgoDescAcac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 11,   {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescCac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,   grp0Conds          },
+    { &g_RkIspAlgoDescCac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,   {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_GAMMA_V11
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAgamma.common,        RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    otherGrpCondsV3x          },
+    { &g_RkIspAlgoDescAgamma.common,        RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}          },
 #else
-    { &g_RkIspAlgoDescGamma.common,         RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    otherGrpCondsV3x          },
+    { &g_RkIspAlgoDescGamma.common,         RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_CGC_V1
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAcgc.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescAcgc.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #else
-    { &g_RkIspAlgoDescCgc.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescCgc.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #endif
 #endif
 #if RKAIQ_HAVE_CSM_V1
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescCsm.common,           RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    otherGrpCondsV3x        },
+    { &g_RkIspAlgoDescCsm.common,           RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}        },
 #else
-    { &g_RkIspAlgoDescAcsm.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescAcsm.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #endif
 #endif
 #if RKAIQ_HAVE_ACP_V10
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAcp.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescAcp.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #else
-    { &g_RkIspAlgoDescCp.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescCp.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #endif
 #endif
 #if RKAIQ_HAVE_AIE_V10
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAie.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescAie.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #else
-    { &g_RkIspAlgoDescIe.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescIe.common,           RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #endif
 #endif
 #if RKAIQ_HAVE_GIC_V2
 #ifdef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescGic.common,           RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,   otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescGic.common,           RK_AIQ_CORE_ANALYZE_OTHER,   0, 0, 0,   {grp_conds_array_info(otherGrpCondV3x)}   },
 #else
-    { &g_RkIspAlgoDescAgic.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 1, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescAgic.common,          RK_AIQ_CORE_ANALYZE_OTHER,  0, 1, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #endif
 #endif
 #if RKAIQ_HAVE_CCM_V3
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescCcm.common,           RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds        },
+    { &g_RkIspAlgoDescCcm.common,           RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}        },
 #else
-    { &g_RkIspAlgoDescAccm.common,          RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescAccm.common,          RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_DEBAYER_V3
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAdebayer.common,      RK_AIQ_CORE_ANALYZE_OTHER,   0, 3, 0,    otherGrpCondsV3x          },
+    { &g_RkIspAlgoDescAdebayer.common,      RK_AIQ_CORE_ANALYZE_OTHER,   0, 3, 0,    {grp_conds_array_info(otherGrpCondV3x)}          },
 #else
-    { &g_RkIspAlgoDescDemosaic.common,      RK_AIQ_CORE_ANALYZE_OTHER,   0, 3, 0,    otherGrpCondsV3x          },
+    { &g_RkIspAlgoDescDemosaic.common,      RK_AIQ_CORE_ANALYZE_OTHER,   0, 3, 0,    {grp_conds_array_info(otherGrpCondV3x)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_DRC_V20
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAdrc.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescAdrc.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescDrc.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescDrc.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_RGBIR_REMOSAIC_V10
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescARGBIR.common,            RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescARGBIR.common,            RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescRgbir.common,            RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescRgbir.common,            RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_YNR_V24
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescYnr.common,           RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, grp0Conds          },
+    { &g_RkIspAlgoDescYnr.common,           RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescAynrV24.common,       RK_AIQ_CORE_ANALYZE_GRP0,   24, 24, 24, grp0Conds          },
+    { &g_RkIspAlgoDescAynrV24.common,       RK_AIQ_CORE_ANALYZE_GRP0,   24, 24, 24, {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_DEHAZE_V14
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAdhaz.common,         RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    grpDhazConds         },
+    { &g_RkIspAlgoDescAdhaz.common,         RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    {grp_conds_array_info(grpDhazCond)}         },
 #else
-    { &g_RkIspAlgoDescDehaze.common,          RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    grpDhazConds         },
-    { &g_RkIspAlgoDescHisteq.common,          RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    grpDhazConds         },
+    { &g_RkIspAlgoDescDehaze.common,          RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    {grp_conds_array_info(grpDhazCond)}         },
+    { &g_RkIspAlgoDescHisteq.common,          RK_AIQ_CORE_ANALYZE_DHAZ,   0, 1, 0,    {grp_conds_array_info(grpDhazCond)}         },
 #endif
 #endif
 #if (RKAIQ_HAVE_SHARP_V34)
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescSharp.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 1, 0,       grp0Conds          },
+    { &g_RkIspAlgoDescSharp.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 1, 0,       {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescAsharpV34.common,       RK_AIQ_CORE_ANALYZE_GRP0,   34, 34, 34,    grp0Conds          },
+    { &g_RkIspAlgoDescAsharpV34.common,       RK_AIQ_CORE_ANALYZE_GRP0,   34, 34, 34,    {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if (RKAIQ_HAVE_BAYERTNR_V30)
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescBayertnr.common,     RK_AIQ_CORE_ANALYZE_GRP0,    0, 0, 0, grp0Conds          },
+    { &g_RkIspAlgoDescBayertnr.common,     RK_AIQ_CORE_ANALYZE_GRP0,    0, 0, 0, {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescAbayertnrV30.common, RK_AIQ_CORE_ANALYZE_GRP0,    30, 30, 30, grp0Conds          },
+    { &g_RkIspAlgoDescAbayertnrV30.common, RK_AIQ_CORE_ANALYZE_GRP0,    30, 30, 30, {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_YUVME_V1
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescYme.common,      RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0, grp0Conds         },
+    { &g_RkIspAlgoDescYme.common,      RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0, {grp_conds_array_info(grp0Cond)}         },
 #else
-    { &g_RkIspAlgoDescAyuvmeV1.common,      RK_AIQ_CORE_ANALYZE_GRP0,   1, 1, 1, grp0Conds         },
+    { &g_RkIspAlgoDescAyuvmeV1.common,      RK_AIQ_CORE_ANALYZE_GRP0,   1, 1, 1, {grp_conds_array_info(grp0Cond)}         },
 #endif
 #endif
 #if (RKAIQ_HAVE_CNR_V31)
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescCnr.common,           RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, grp0Conds          },
+    { &g_RkIspAlgoDescCnr.common,           RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescAcnrV31.common, RK_AIQ_CORE_ANALYZE_GRP0,    31, 31, 31, grp0Conds          },
+    { &g_RkIspAlgoDescAcnrV31.common, RK_AIQ_CORE_ANALYZE_GRP0,    31, 31, 31, {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_GAIN_V2
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescGain.common,       RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds },
+    { &g_RkIspAlgoDescGain.common,       RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)} },
 #else
-    { &g_RkIspAlgoDescAgainV2.common,       RK_AIQ_CORE_ANALYZE_GRP0,   2, 2, 2,    grp0Conds },
+    { &g_RkIspAlgoDescAgainV2.common,       RK_AIQ_CORE_ANALYZE_GRP0,   2, 2, 2,    {grp_conds_array_info(grp0Cond)} },
 #endif
-    
+
 #endif
 
 #if RKAIQ_HAVE_DPCC_V2
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAdpcc.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescAdpcc.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #else
-    { &g_RkIspAlgoDescDpc.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescDpc.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #endif
 
 #endif
 #if RKAIQ_HAVE_AF_V33 || RKAIQ_ONLY_AF_STATS_V33
-    { &g_RkIspAlgoDescAf.common,            RK_AIQ_CORE_ANALYZE_AF,     0, 4, 0,    afGrpCondsV3x   },
+    { &g_RkIspAlgoDescAf.common,            RK_AIQ_CORE_ANALYZE_AF,     0, 4, 0,    {grp_conds_array_info(afGrpCondV3x)}   },
 #endif
-    
+
 #if RKAIQ_HAVE_MERGE_V12
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAmerge.common,		RK_AIQ_CORE_ANALYZE_GRP0,	0, 0, 0,	grp0Conds },
+    { &g_RkIspAlgoDescAmerge.common,        RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)} },
 #else
-    { &g_RkIspAlgoDescMerge.common,		RK_AIQ_CORE_ANALYZE_GRP0,	0, 0, 0,	grp0Conds },
+    { &g_RkIspAlgoDescMerge.common,     RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)} },
 #endif
 #endif
 #if RKAIQ_HAVE_LSC_V3
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAlsc.common,          RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescAlsc.common,          RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescLsc.common,           RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescLsc.common,           RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if RKAIQ_HAVE_3DLUT_V1
 #if USE_NEWSTRUCT
-    { &g_RkIspAlgoDescLut3d.common,         RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescLut3d.common,         RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #else
-    { &g_RkIspAlgoDescA3dlut.common,        RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescA3dlut.common,        RK_AIQ_CORE_ANALYZE_GRP1,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if defined(ISP_HW_V39)
 #if RKAIQ_HAVE_ASD_V10
-    { &g_RkIspAlgoDescAsd.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    grp0Conds          },
+    { &g_RkIspAlgoDescAsd.common,           RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,    {grp_conds_array_info(grp0Cond)}          },
 #endif
 #endif
 #if (RKAIQ_HAVE_AFD_V2)
-    { &g_RkIspAlgoDescAfd.common,            RK_AIQ_CORE_ANALYZE_AFD,     0, 1, 0,    grpAfdConds      },
+    { &g_RkIspAlgoDescAfd.common,            RK_AIQ_CORE_ANALYZE_AFD,     0, 1, 0,    {grp_conds_array_info(grpAfdCond)}      },
 #endif
 #if RKAIQ_HAVE_LDC
-    { &g_RkIspAlgoDescAldc.common,          RK_AIQ_CORE_ANALYZE_OTHER,   1, 1, 0, otherGrpCondsV3x      },
+    { &g_RkIspAlgoDescLdc.common,           RK_AIQ_CORE_ANALYZE_OTHER,   1, 1, 0,    {grp_conds_array_info(otherGrpCondV3x)}      },
 #elif RKAIQ_HAVE_LDCH_V21
 #ifndef USE_NEWSTRUCT
-    { &g_RkIspAlgoDescAldch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x   },
+    { &g_RkIspAlgoDescAldch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)}   },
 #else
-    { &g_RkIspAlgoDescLdch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x },
+    { &g_RkIspAlgoDescLdch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    {grp_conds_array_info(otherGrpCondV3x)} },
 #endif
+#endif
+#if (RKAIQ_HAVE_AMTD_V1)
+    {   &g_RkIspAlgoDescAmtd.common,        RK_AIQ_CORE_ANALYZE_AE,     0, 0, 0,    {grp_conds_array_info(aeGrpCondV3x)}},
 #endif
     { NULL,                                 RK_AIQ_CORE_ANALYZE_ALL,    0, 0, 0,    {0, 0}             },
     // clang-format on
@@ -408,7 +413,7 @@ static struct RkAiqAlgoDesCommExt g_camgroup_algos[] = {
 #else
     { &g_RkIspAlgoDescCamgroupAblcV32.common,       RK_AIQ_CORE_ANALYZE_GRP0,  32, 32, 32, {0, 0} },
 #endif
-   // { &g_RkIspAlgoDescCamgroupAwb.common,           RK_AIQ_CORE_ANALYZE_AWB,    1,  2, 32, {0, 0} },
+    // { &g_RkIspAlgoDescCamgroupAwb.common,           RK_AIQ_CORE_ANALYZE_AWB,    1,  2, 32, {0, 0} },
 #if USE_NEWSTRUCT
     { &g_RkIspAlgoDescCamgroupLsc.common,           RK_AIQ_CORE_ANALYZE_AWB,   0,  0,  0, {0, 0} },
 #else
@@ -457,7 +462,7 @@ static struct RkAiqAlgoDesCommExt g_camgroup_algos[] = {
 #else
     { &g_RkIspAlgoDescCamgroupAsharpV34.common,     RK_AIQ_CORE_ANALYZE_OTHER, 34, 34, 34, {0, 0} },
 #endif
-    
+
 #if USE_NEWSTRUCT
     { &g_RkIspAlgoDescCamgroupGain.common,       RK_AIQ_CORE_ANALYZE_OTHER,  0,  0,  0, {0, 0} },
     { &g_RkIspAlgoDescCamgroupDehaze.common,         RK_AIQ_CORE_ANALYZE_DHAZ,   0,  1,  0, {0, 0} },

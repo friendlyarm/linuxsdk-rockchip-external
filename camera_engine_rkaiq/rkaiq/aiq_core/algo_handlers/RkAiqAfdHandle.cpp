@@ -100,8 +100,14 @@ XCamReturn RkAiqAfdHandleInt::prepare() {
     afd_config->RawWidth  = sharedCom->snsDes.isp_acq_width;
     afd_config->RawHeight = sharedCom->snsDes.isp_acq_height;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "afd algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

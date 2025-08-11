@@ -63,6 +63,7 @@ public:
     virtual void releaseParams();
     void setAeAlgoStatsCfg(const RkAiqSetStatsCfg* cfg) {
         _aeAlgoStatsCfg.UpdateStats = cfg->UpdateStats;
+        _aeAlgoStatsCfg.UseSubWinStats = cfg->UseSubWinStats;
         _aeAlgoStatsCfg.RawStatsChnSel = cfg->RawStatsChnSel;
         _aeAlgoStatsCfg.YRangeMode = cfg->YRangeMode;
         memcpy(_aeAlgoStatsCfg.BigWeight, cfg->BigWeight, RAWHISTBIG_WIN_NUM);
@@ -75,6 +76,7 @@ protected:
     SmartPtr<RkAiqSensorExpParamsProxy> _expParams;
     typedef struct aeAlgoStatsCfg_s {
         bool UpdateStats;           /* update stats every frame */
+        bool UseSubWinStats;
         int8_t RawStatsChnSel;      /* RawStatsChnEn_t */
         int8_t YRangeMode;          /* CalibDb_CamYRangeModeV2_t */
         unsigned char BigWeight[RAWHISTBIG_WIN_NUM];

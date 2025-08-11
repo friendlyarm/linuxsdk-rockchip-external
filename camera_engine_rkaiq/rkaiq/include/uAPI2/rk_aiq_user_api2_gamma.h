@@ -33,6 +33,8 @@ XCamReturn
 rk_aiq_user_api2_gamma_GetAttrib(const rk_aiq_sys_ctx_t* sys_ctx, gamma_api_attrib_t* attr);
 XCamReturn
 rk_aiq_user_api2_gamma_QueryStatus(const rk_aiq_sys_ctx_t* sys_ctx, gamma_status_t* status);
+XCamReturn
+rk_aiq_user_api2_gamma_SetGammaStrength(const rk_aiq_sys_ctx_t* sys_ctx, int strg);
 
 RKAIQ_END_DECLARE
 

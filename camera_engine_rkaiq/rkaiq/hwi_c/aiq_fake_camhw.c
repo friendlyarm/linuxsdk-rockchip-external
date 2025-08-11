@@ -17,6 +17,9 @@
 
 #include "aiq_fake_camhw.h"
 
+#if RKAIQ_HAVE_DUMPSYS
+#include "common/aiq_notifier.h"
+#endif
 #include "hwi_c/aiq_CamHwBase.h"
 #include "hwi_c/aiq_camHw.h"
 #include "hwi_c/aiq_fake_camhw.h"
@@ -25,6 +28,7 @@
 #include "hwi_c/aiq_rawStreamProcUnit.h"
 #include "hwi_c/isp39/aiq_CamHwIsp39.h"
 #include "hwi_c/isp33/aiq_CamHwIsp33.h"
+#include "hwi_c/isp35/aiq_CamHwIsp35.h"
 #include "include/common/mediactl/mediactl.h"
 
 #ifndef FAKECAM_SUBM
@@ -103,10 +107,19 @@ static XCamReturn prepare_mipi_devices(AiqCamHwFake_t* pFakeCamHw) {
                 AiqV4l2Device_setBufCnt(pFakeCamHw->_mipi_tx_devs[i], ISP_TX_BUF_NUM);
                 AiqV4l2Device_setBufCnt(pFakeCamHw->_mipi_rx_devs[i], ISP_TX_BUF_NUM);
             } else {
+                if (pFakeCamHw->_rawbuf_type == RK_AIQ_RAW_DATA) {
+                    pFakeDev = (AiqFakeV4l2Device_t*)pFakeCamHw->_mipi_rx_devs[i];
+                    pFakeDev->_base._v4l_base._use_type = 1;
+                }
+
                 AiqV4l2Device_setBufCnt(pFakeCamHw->_mipi_tx_devs[i], ISP_TX_BUF_NUM);
                 AiqV4l2Device_setBufCnt(pFakeCamHw->_mipi_rx_devs[i], ISP_TX_BUF_NUM);
             }
         } else {
+            if (pFakeCamHw->_rawbuf_type == RK_AIQ_RAW_DATA) {
+                pFakeDev = (AiqFakeV4l2Device_t*)pFakeCamHw->_mipi_rx_devs[i];
+                pFakeDev->_base._v4l_base._use_type = 1;
+            }
             AiqV4l2Device_setBufCnt(pFakeCamHw->_mipi_tx_devs[i], VIPCAP_TX_BUF_NUM);
             AiqV4l2Device_setBufCnt(pFakeCamHw->_mipi_rx_devs[i], VIPCAP_TX_BUF_NUM);
         }
@@ -740,6 +753,19 @@ static XCamReturn FakeCamHwIsp20_prepare(AiqCamHwBase_t* pCamHw, uint32_t width,
     if (!pCamHw->use_rkrawstream) {
         setupOffLineLink(pFakeCamHw, isp_index, true);
         prepare_mipi_devices(pFakeCamHw);
+    } else {
+        struct v4l2_subdev_format isp_sink_fmt;
+
+        memset(&isp_sink_fmt, 0, sizeof(isp_sink_fmt));
+        isp_sink_fmt.pad = 0;
+        isp_sink_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+        ret = pCamHw->mIspCoreDev->getFormat(pCamHw->mIspCoreDev, &isp_sink_fmt);
+        if (ret) {
+            LOGE_CAMHW_SUBM(ISP20HW_SUBM, "get mIspCoreDev fmt failed to set fake sensor!\n");
+        }
+        AiqFakeSensorHw_t* fakeSensorHw = (AiqFakeSensorHw_t*)pCamHw->_mSensorDev;
+        fakeSensorHw->set_fake_sensor_format(fakeSensorHw, isp_sink_fmt.format.width,
+                                             isp_sink_fmt.format.height, isp_sink_fmt.format.code);
     }
 
     ret = AiqCamHw_prepare(pCamHw, width, height, mode, t_delay, g_delay);
@@ -784,6 +810,8 @@ XCamReturn AiqCamHwFake_init(AiqCamHwFake_t* pFakeCamHw, const char* sns_ent_nam
     ret = AiqCamHwIsp39_init(pCamBase, sns_ent_name);
 #elif defined(ISP_HW_V33)
     ret = AiqCamHwIsp33_init(pCamBase, sns_ent_name);
+#elif defined(ISP_HW_V35)
+    ret = AiqCamHwIsp35_init(pCamBase, sns_ent_name);
 #else
     XCAM_ASSERT(0);
 #endif
@@ -810,6 +838,21 @@ XCamReturn AiqCamHwFake_init(AiqCamHwFake_t* pFakeCamHw, const char* sns_ent_nam
     if (pCamBase->mIspSofStream)
         ((AiqStream_t*)(pCamBase->mIspSofStream))
             ->setPollCallback((AiqStream_t*)(pCamBase->mIspSofStream), NULL);
+    if (pCamBase->mIspStatsStream)
+        pCamBase->mIspStatsStream->set_event_handle_dev(pCamBase->mIspStatsStream,
+                                                        pCamBase->_mSensorDev);
+#if RKAIQ_HAVE_DUMPSYS
+    aiq_notifier_remove_subscriber(&pCamBase->notifier, AIQ_NOTIFIER_MATCH_HWI_SENSOR);
+
+    {
+        pCamBase->sub_sensor.match_type     = AIQ_NOTIFIER_MATCH_HWI_SENSOR;
+        pCamBase->sub_sensor.name           = "HWI -> sensor";
+        pCamBase->sub_sensor.dump.dump_fn_t = pCamBase->_mSensorDev->dump;
+        pCamBase->sub_sensor.dump.dumper    = pCamBase->_mSensorDev;
+
+        aiq_notifier_add_subscriber(&pCamBase->notifier, &pCamBase->sub_sensor);
+    }
+#endif
 
     SnsFullInfoWraps_t* pSnsInfoWrap = NULL;
 

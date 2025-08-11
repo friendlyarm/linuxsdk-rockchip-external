@@ -279,8 +279,14 @@ XCamReturn RkAiqAmergeHandleInt::prepare() {
     amerge_config_int->rawWidth     = sharedCom->snsDes.isp_acq_width;
     amerge_config_int->working_mode = sharedCom->working_mode;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "amerge algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

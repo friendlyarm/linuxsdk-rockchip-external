@@ -54,7 +54,7 @@ extern "C" {
         int _use_fakecam;
         rk_aiq_raw_prop_t _raw_prop;
         bool _use_rkrawstream;
-        rk_aiq_rkrawstream_info_t *_rawstream_info;
+        rk_aiq_control_preinit_t *_ctrlPreinit_info;
         FILE* _lock_file;
         bool _use_aiisp;
         uint16_t _wr_linecnt_now;

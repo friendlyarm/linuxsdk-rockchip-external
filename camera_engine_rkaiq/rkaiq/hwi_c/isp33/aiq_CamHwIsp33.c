@@ -19,6 +19,8 @@
 #include "hwi_c/aiq_CamHwBase.h"
 #include "hwi_c/aiq_ispParamsCvt.h"
 
+#define AIQCAM_FASTBOOT_FILE_PREFIX "/tmp/.rkaiq_fst_info_"
+
 static void CamHwIsp33_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, void* ori_params) {
 #if defined(ISP_HW_V33)
     struct isp33_isp_params_cfg* isp_params = (struct isp33_isp_params_cfg*)params;
@@ -31,7 +33,7 @@ static void CamHwIsp33_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, voi
 
     if (XCAM_RETURN_NO_ERROR ==
             AiqCamHw_getEffectiveIspParams(pCamHw, &latestIspParams, latest_id) &&
-        latestIspParams)
+            latestIspParams)
         is_got_latest_params = true;
 #endif
 
@@ -41,8 +43,8 @@ static void CamHwIsp33_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, voi
         goto out;
     }
     if (pCamHw->_mIspParamsCvt->mAwbParams) {
-        pDstEff->awb_cfg_v39 =
-            *(rk_aiq_isp_awb_meas_cfg_v39_t*)(pCamHw->_mIspParamsCvt->mAwbParams->_data);
+        pDstEff->awb_cfg_v33 =
+            *(rk_aiq_isp_awb_meas_cfg_v33_t*)(pCamHw->_mIspParamsCvt->mAwbParams->_data);
     }
 
     if (pCamHw->_mIspParamsCvt->mAeParams) {
@@ -52,6 +54,8 @@ static void CamHwIsp33_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, voi
     }
     pDstEff->meas         = pCamHw->_mIspParamsCvt->mLatestMeasCfg;
     pDstEff->bls_cfg      = pCamHw->_mIspParamsCvt->mLatestBlsCfg;
+    pDstEff->blc0_diff = pCamHw->_mIspParamsCvt->mCommonCvtInfo.blc0_diff;
+    pDstEff->offset2Blc1 = pCamHw->_mIspParamsCvt->mCommonCvtInfo.offset2Blc1;
     pDstEff->awb_gain_cfg = pCamHw->_mIspParamsCvt->mLatestWbGainCfg;
 
 #if defined(RKAIQ_HAVE_MULTIISP)
@@ -113,6 +117,33 @@ out:
 bool CamHwIsp33_processTb(AiqCamHwBase_t* pCamHw, void* params) {
 #if defined(ISP_HW_V33)
     struct isp33_isp_params_cfg* isp_params = (struct isp33_isp_params_cfg*)params;
+    if (pCamHw->mTbInfo.is_start_again && pCamHw->_not_skip_first) {
+        pCamHw->_not_skip_first = false;
+        aiq_isp_effect_params_t* pDstEff =
+            AiqCamHw_getParamsForEffMap(pCamHw, isp_params->frame_id);
+        if (pDstEff) {
+            awbStats_cfg_priv_t* awb_meas_cfg =
+                (awbStats_cfg_priv_t*)pCamHw->_mIspParamsCvt->mAwbParams->_data;
+            LOGK_CAMHW("run here %s:%d %s", __FUNCTION__, __LINE__, awb_meas_cfg->timeSign);
+            if (pCamHw->_mIspParamsCvt->mAwbParams && pCamHw->_first_awb_param) {
+                awbStats_cfg_priv_t* first_awb_param =
+                    (awbStats_cfg_priv_t*)pCamHw->_first_awb_param;
+                memcpy(first_awb_param->preWbgainSw, awb_meas_cfg->preWbgainSw,
+                       4 * sizeof(float));
+                *awb_meas_cfg        = *first_awb_param;
+                pDstEff->awb_cfg_v33 = *awb_meas_cfg;
+            }
+            LOGK_CAMHW("run here %s:%d %s", __FUNCTION__, __LINE__, awb_meas_cfg->timeSign);
+        }
+        if (pCamHw->_first_awb_param) {
+            aiq_free(pCamHw->_first_awb_param);
+            pCamHw->_first_awb_param = NULL;
+        }
+        return true;
+    }
+#endif
+#if defined(ISP_HW_V33) && 0
+    struct isp33_isp_params_cfg* isp_params = (struct isp33_isp_params_cfg*)params;
     if (pCamHw->mTbInfo.is_fastboot) {
         if (isp_params->frame_id == 0 && pCamHw->_not_skip_first) {
             pCamHw->_not_skip_first = false;
@@ -122,7 +153,7 @@ bool CamHwIsp33_processTb(AiqCamHwBase_t* pCamHw, void* params) {
                     *(rk_aiq_isp_awb_meas_cfg_v32_t*)(pCamHw->_mIspParamsCvt->mAwbParams->_data);
             }
             if (!pCamHw->_first_awb_cfg) {
-                pCamHw->_skipped_params = aiq_mallocz(sizeof(struct isp33_rawawb_meas_cfg));
+                pCamHw->_first_awb_cfg = aiq_mallocz(sizeof(struct isp33_rawawb_meas_cfg));
                 *((struct isp33_rawawb_meas_cfg*)pCamHw->_first_awb_cfg) = isp_params->meas.rawawb;
             }
             if (!pCamHw->_skipped_params) {
@@ -149,15 +180,15 @@ bool CamHwIsp33_processTb(AiqCamHwBase_t* pCamHw, void* params) {
                 aiq_isp_effect_params_t* pDstEff =
                     AiqCamHw_getParamsForEffMap(pCamHw, isp_params->frame_id);
                 if (pDstEff) {
-                    rk_aiq_isp_awb_meas_cfg_v39_t* awb_meas_cfg =
-                        (rk_aiq_isp_awb_meas_cfg_v39_t*)pCamHw->_mIspParamsCvt->mAwbParams->_data;
+                    rk_aiq_isp_awb_meas_cfg_v33_t* awb_meas_cfg =
+                        (rk_aiq_isp_awb_meas_cfg_v33_t*)pCamHw->_mIspParamsCvt->mAwbParams->_data;
                     if (pCamHw->_mIspParamsCvt->mAwbParams && pCamHw->_first_awb_param) {
-                        rk_aiq_isp_awb_meas_cfg_v39_t* first_awb_param =
-                            (rk_aiq_isp_awb_meas_cfg_v39_t*)pCamHw->_first_awb_param;
+                        rk_aiq_isp_awb_meas_cfg_v33_t* first_awb_param =
+                            (rk_aiq_isp_awb_meas_cfg_v33_t*)pCamHw->_first_awb_param;
                         memcpy(first_awb_param->preWbgainSw, awb_meas_cfg->preWbgainSw,
                                4 * sizeof(float));
                         *awb_meas_cfg        = *first_awb_param;
-                        pDstEff->awb_cfg_v39 = *awb_meas_cfg;
+                        pDstEff->awb_cfg_v33 = *awb_meas_cfg;
                     }
                     pDstEff->meas = pCamHw->_mIspParamsCvt->mLatestMeasCfg;
                 }
@@ -190,7 +221,7 @@ bool CamHwIsp33_processTb(AiqCamHwBase_t* pCamHw, void* params) {
                            isp_params->frame_id, skip_cfg_up);
                 if (skip_cfg_up & ISP32_MODULE_RAWAF) {
                     new_param->module_cfg_update |= ISP32_MODULE_RAWAF;
-					// TODO
+                    // TODO
                     //new_param->meas.rawaf = skip_param->meas.rawaf;
                 }
             }
@@ -203,6 +234,10 @@ bool CamHwIsp33_processTb(AiqCamHwBase_t* pCamHw, void* params) {
                     new_param->module_ens |= skip_param->module_ens & ISP32_MODULE_RAWAF;
                 }
             }
+
+            //special cfg for btnr, fastboot F0 not update btnr
+            new_param->module_en_update &= ~ISP33_MODULE_BAY3D;
+            new_param->module_cfg_update &= ~ISP33_MODULE_BAY3D;
 
             aiq_free(pCamHw->_skipped_params);
             pCamHw->_skipped_params = NULL;
@@ -223,15 +258,72 @@ bool CamHwIsp33_processTb(AiqCamHwBase_t* pCamHw, void* params) {
 #endif
 }
 
+XCamReturn CamHwIsp33_saveInfoForStartAgainTb(AiqCamHwBase_t* pCamHw) {
+#if defined(ISP_HW_V33)
+    char fastboot_info_path[32];
+    snprintf(fastboot_info_path, 32, "%s%d", AIQCAM_FASTBOOT_FILE_PREFIX, pCamHw->mCamPhyId);
+    aiq_isp_effect_params_t* ispParams = NULL;
+    AiqCamHw_getEffectiveIspParams(pCamHw, &ispParams, (uint32_t) -2);
+
+    FILE *fp = fopen(fastboot_info_path, "wb+");
+    if (!fp) {
+        AIQ_REF_BASE_UNREF(&ispParams->_ref_base);
+        LOGE_CAMHW("<TB> open %s fail", fastboot_info_path);
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    fwrite(&pCamHw->mTbInfo.pixel_clock_freq_mhz, sizeof(float), 1, fp);
+    fwrite(&ispParams->awb_cfg_v33, sizeof(awbStats_cfg_priv_t), 1, fp);
+    fclose(fp);
+
+    LOGK_CAMHW("<TB> sync to file, pclock %f, awb time(%s)",
+               pCamHw->mTbInfo.pixel_clock_freq_mhz, ispParams->awb_cfg_v33.timeSign);
+
+    AIQ_REF_BASE_UNREF(&ispParams->_ref_base);
+#endif
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn CamHwIsp33_getLastEffectParamTb(AiqCamHwBase_t* pCamHw) {
+#if defined(ISP_HW_V33)
+    char fastboot_info_path[32];
+    snprintf(fastboot_info_path, 32, "%s%d", AIQCAM_FASTBOOT_FILE_PREFIX, pCamHw->mCamPhyId);
+
+    FILE *fp = fopen(fastboot_info_path, "r");
+    if (!fp) {
+        LOGK_CAMHW("<TB> open %s fail", fastboot_info_path);
+        return XCAM_RETURN_BYPASS;
+    }
+
+    pCamHw->mTbInfo.is_start_again = true;
+
+    fread(&pCamHw->mTbInfo.pixel_clock_freq_mhz, sizeof(float), 1, fp);
+
+    if (!pCamHw->_first_awb_param) {
+        pCamHw->_first_awb_param = aiq_mallocz(sizeof(awbStats_cfg_priv_t));
+        if (!pCamHw->_first_awb_param) {
+            return XCAM_RETURN_BYPASS;
+        }
+    }
+
+    fread(pCamHw->_first_awb_param, sizeof(awbStats_cfg_priv_t), 1, fp);
+    fclose(fp);
+
+    LOGK_CAMHW("<TB> sync frome file, pclock %f, awb time(%s)",
+               pCamHw->mTbInfo.pixel_clock_freq_mhz, ((awbStats_cfg_priv_t*)pCamHw->_first_awb_param)->timeSign);
+#endif
+    return XCAM_RETURN_NO_ERROR;
+
+}
+
 XCamReturn AiqCamHwIsp33_init(AiqCamHwBase_t* pCamHw, const char* sns_ent_name) {
     XCamReturn ret                    = AiqCamHwBase_init(pCamHw, sns_ent_name);
     pCamHw->mVicapIspPhyLinkSupported = true;
-    if (g_mIsMultiIspMode) {
-        pCamHw->mNoReadBack = false;
-    }
 
-    pCamHw->updateEffParams = CamHwIsp33_updateEffParams;
-    pCamHw->processTb       = CamHwIsp33_processTb;
+    pCamHw->updateEffParams      = CamHwIsp33_updateEffParams;
+    pCamHw->processTb            = CamHwIsp33_processTb;
+    pCamHw->getLastEffectParamTb = CamHwIsp33_getLastEffectParamTb;
+    pCamHw->saveInfotoFileTb     = CamHwIsp33_saveInfoForStartAgainTb;
 
     return ret;
 }

@@ -250,8 +250,8 @@ void j2s_dump_obj_to_file(j2s_ctx *ctx, int struct_idx, int *idx_pr)
     j2s_obj *obj;
     j2s_struct *struct_obj;
     int child_index;
-    char tmp_buf[1024];
-    char desc_buf[1024];
+    char tmp_buf[4096];
+    char desc_buf[4096];
     char *tmp_ptr;
 
     struct_obj = &ctx->structs[struct_idx];
@@ -322,7 +322,11 @@ void j2s_dump_obj_to_file(j2s_ctx *ctx, int struct_idx, int *idx_pr)
         if (ctx->descs && ctx->descs[child_index]) {
             printf("#ifdef J2S_ENABLE_DESC\n");
             printf("\tctx->descs[%d] = \"", child_index);
-            sprintf(desc_buf, "%s", ctx->descs[child_index]);
+            if (strlen(ctx->descs[child_index]) > 4095) {
+                ERR(".j2s_generated.h descs[%d] strlen %llu more large then 4096, maybe cause some error\n%s\n",
+                    child_index, strlen(ctx->descs[child_index]), ctx->descs[child_index]);
+            }
+            snprintf(desc_buf, 4096, "%s", ctx->descs[child_index]);
             tmp_ptr = strtok(desc_buf, "\n");
             while (tmp_ptr != NULL) {
                 printf("%s", tmp_ptr);

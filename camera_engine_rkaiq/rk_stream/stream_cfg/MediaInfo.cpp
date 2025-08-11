@@ -416,7 +416,9 @@ get_isp_subdevs(struct media_device *device, const char *devpath, rk_aiq_isp_t* 
         isp_info[index].model_idx = 3;
     else
         isp_info[index].model_idx = -1;
+
 #endif
+    strcpy(isp_info[index].driver, device->info.driver);
 
     strncpy(isp_info[index].media_dev_path, devpath, sizeof(isp_info[index].media_dev_path)-1);
 
@@ -865,6 +867,40 @@ MediaInfo::getSensorFullInfo(char* sns_ent_name, uint16_t index)
     return NULL;
 }
 
+rk_aiq_isp_t*
+MediaInfo::getIspInfo(char* isp_driver_name)
+{
+    std::map<std::string, SmartPtr<rk_sensor_full_info_t>>::iterator it;
+
+    FILE *fp = NULL;
+    struct media_device *device = NULL;
+    int nents, j = 0, i = 0, node_index = 0;
+    const struct media_entity_desc *entity_info = NULL;
+    struct media_entity *entity = NULL;
+
+    rk_sensor_full_info_t *s_info = NULL;
+    if (isp_driver_name) {
+        std::string str(isp_driver_name);
+
+        for (it = mSensorHwInfos.begin(); it != mSensorHwInfos.end(); it++) {
+            s_info = it->second.ptr();
+            if (s_info->isp_info) {
+                if (strcmp(s_info->isp_info->driver, isp_driver_name) == 0) {
+                    break;
+                }
+            }
+        }
+        if (it != mSensorHwInfos.end()) {
+            LOGD_RKSTREAM("find ispinfo of %s!", isp_driver_name);
+            return it->second.ptr()->isp_info;
+        } else {
+            LOGE_RKSTREAM("ispinfo of %s not fount!", isp_driver_name);
+        }
+    }
+
+    return NULL;
+}
+
 XCamReturn
 MediaInfo::clearStaticCamHwInfo()
 {
@@ -1270,7 +1306,7 @@ MediaInfo::offline(int isp_index, const char* offline_sns_ent_name)
 }
 
 XCamReturn
-MediaInfo::setupOffLineLink(int isp_index, bool enable)
+MediaInfo::setupOffLineLink(const char *media_path, bool enable, int hdr_mode)
 {
     media_device* device  = NULL;
     media_entity* entity  = NULL;
@@ -1279,7 +1315,10 @@ MediaInfo::setupOffLineLink(int isp_index, bool enable)
     int lvds_max_entities = 6;
     int lvds_entity       = 0;
 
-    device = media_device_new(mIspHwInfos.isp_info[isp_index].media_dev_path);
+    if (media_path == NULL)
+        return XCAM_RETURN_ERROR_FAILED;
+
+    device = media_device_new(media_path);
     if (!device) return XCAM_RETURN_ERROR_FAILED;
 
     /* Enumerate entities, pads and links. */
@@ -1334,11 +1373,53 @@ MediaInfo::setupOffLineLink(int isp_index, bool enable)
         }
     }
 
+    entity = media_get_entity_by_name(device, "rkisp_rawrd0_m", strlen("rkisp_rawrd0_m"));
+    if(entity) {
+        src_pad = (media_pad *)media_entity_get_pad(entity, 0);
+        if (src_pad) {
+            if (RK_AIQ_HDR_GET_WORKING_MODE(hdr_mode) >= RK_AIQ_WORKING_MODE_ISP_HDR2 && enable) {
+                media_setup_link(device, src_pad, sink_pad, MEDIA_LNK_FL_ENABLED);
+            } else
+                media_setup_link(device, src_pad, sink_pad, 0);
+            }
+    }
+
+    entity = media_get_entity_by_name(device, "rkisp_rawrd1_l", strlen("rkisp_rawrd0_m"));
+    if(entity) {
+        src_pad = (media_pad *)media_entity_get_pad(entity, 0);
+        if (src_pad) {
+            if (RK_AIQ_HDR_GET_WORKING_MODE(hdr_mode) == RK_AIQ_WORKING_MODE_ISP_HDR3 && enable) {
+                media_setup_link(device, src_pad, sink_pad, MEDIA_LNK_FL_ENABLED);
+            } else
+                media_setup_link(device, src_pad, sink_pad, 0);
+            }
+    }
+
     media_device_unref(device);
     return XCAM_RETURN_NO_ERROR;
 FAIL:
     media_device_unref(device);
     return XCAM_RETURN_ERROR_FAILED;
+}
+
+XCamReturn
+MediaInfo::ispDevReUpdateHwStatus(const char *dev_path)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    SmartPtr<V4l2SubDevice> ispCoreDev = new V4l2SubDevice(dev_path);
+    if (!ispCoreDev.ptr()) {
+        return XCAM_RETURN_ERROR_FAILED;
+    }
+
+    ispCoreDev->open();
+
+    if (ispCoreDev->io_control(RKISP_CMD_MULTI_DEV_FORCE_ENUM, NULL) < 0)
+        ret = XCAM_RETURN_ERROR_FAILED;
+
+    ispCoreDev->close();
+
+    return ret;
 }
 
 }

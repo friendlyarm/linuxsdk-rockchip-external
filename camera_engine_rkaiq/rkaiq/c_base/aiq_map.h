@@ -71,6 +71,8 @@ AiqMapItem_t* aiqMap_erase(AiqMap_t* map, void* key);
 AiqMapItem_t* aiqMap_erase_locked(AiqMap_t* map, void* key);
 void aiqMap_reset(AiqMap_t* map);
 int aiqMap_size(AiqMap_t* map);
+int aiqMap_itemNums(AiqMap_t* map);
+int aiqMap_itemSize(AiqMap_t* map);
 int aiqMap_foreach(AiqMap_t* map, aiqMap_cb cb, void* args);
 AiqMapItem_t* aiqMap_begin(AiqMap_t* map);
 void aiqMap_dump(AiqMap_t* map);

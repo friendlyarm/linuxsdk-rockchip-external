@@ -24,6 +24,12 @@ AiqAlgoHandler_t* AiqAlgoHandlerHsv_constructor(RkAiqAlgoDesComm* des, AiqCore_t
 XCamReturn AiqHsvHandler_queryahsvStatus(AiqHsvHandler_t* pHdlHsv, ahsv_status_t* status);
 XCamReturn AiqHsvHandler_setCalib(AiqHsvHandler_t* pHdlHsv, ahsv_hsvCalib_t* calib);
 XCamReturn AiqHsvHandler_getCalib(AiqHsvHandler_t* pHdlHsv, ahsv_hsvCalib_t* calib);
+XCamReturn AiqHsvHandler_setSatStrth(AiqHsvHandler_t* pHdlHsv, ahsv_satStrg_t* strg);
+XCamReturn AiqHsvHandler_getSatStrth(AiqHsvHandler_t* pHdlHsv, ahsv_satStrg_t* strg);
+XCamReturn AiqHsvHandler_setHueOffset(AiqHsvHandler_t* pHdlHsv, ahsv_hueOffset_t* offset);
+XCamReturn AiqHsvHandler_getHueOffset(AiqHsvHandler_t* pHdlHsv, ahsv_hueOffset_t* offset);
+XCamReturn AiqHsvHandler_setValOffset(AiqHsvHandler_t* pHdlHsv, ahsv_valOffset_t* offset);
+XCamReturn AiqHsvHandler_getValOffset(AiqHsvHandler_t* pHdlHsv, ahsv_valOffset_t* offset);
 
 #endif
 #endif

@@ -21,7 +21,11 @@ func rkaiqFlags(ctx android.BaseContext) []string {
     var cflags []string
     //fmt.Fprintf(os.Stderr, "%s\n", "deviceFlags called") //example prints
     //fmt.Fprintf(os.Stderr, "%s\n", ctx.AConfig())
-    board := ctx.Config().Getenv("TARGET_BOARD_PLATFORM") //currently using this for reference but you can refer to README for other variables.
+    var board  string
+    board = ctx.Config().Getenv("TARGET_BOARD_PLATFORM") //currently using this for reference but you can refer to README for other variables.
+    if(board == ""){
+        board = ctx.Config().VendorConfig("core_rockchip").String("platform")
+    }
     fmt.Fprintf(os.Stderr, ">>>>>>>>>>>>>>>>>>>>> %s\n", board)
     if board == "rv1126" {
        cflags = append(cflags, "-DISP_HW_V20")
@@ -113,7 +117,7 @@ func rkaiqLibraryStatic(ctx android.LoadHookContext) {
     ctx.AppendProperties(p)
 }
 
-func rkaiqPrebuiltStaticLibrary (ctx android.LoadHookContext) {
+func rkaiqPrebuiltStaticLibrary(ctx android.LoadHookContext) {
     type props struct {
         Compile_multilib *string
         Multilib Ex_multilibType
@@ -149,6 +153,64 @@ func rkaiqPrebuiltStaticLibrary (ctx android.LoadHookContext) {
     ctx.AppendProperties(p)
 }
 
+func smartIrPrebuiltLibraryShared(ctx android.LoadHookContext) {
+    type props struct {
+        Compile_multilib *string
+        Multilib Ex_multilibType
+    }
+    p := &props{}
+
+    var compile_multilib string = ""
+    target_arch := ctx.AConfig().DevicePrimaryArchType().String()
+    if (strings.EqualFold(target_arch,"arm64")) {
+        compile_multilib = "both"
+    } else {
+        compile_multilib = "32"
+    }
+    p.Compile_multilib = &compile_multilib
+
+    // get static lib
+    var prefix64 string = ""
+    var prefix32 string = ""
+    var srcs []string
+    var module_name string = ctx.ModuleName()[9:] + ".so"
+    soc := rkaiq_get_aiq_version(ctx)
+    prefix64 += "lib/" + soc + "/android/arm64/"
+    prefix32 += "lib/" + soc + "/android/arm/"
+    p.Multilib.Lib32.Srcs = append(srcs, prefix32 + module_name)
+    p.Multilib.Lib64.Srcs = append(srcs, prefix64 + module_name)
+    //fmt.Println("arch.arm.srcs:", p.Multilib.Lib32.Srcs)
+    //fmt.Println("arch.arm64.srcs:", p.Multilib.Lib64.Srcs)
+
+    if soc != "rk3326" && soc != "rk3399" {
+        ctx.AppendProperties(p)
+    }
+}
+
+func rkaiqVersionDefaults(ctx android.LoadHookContext) {
+    type props struct {
+        Target struct {
+            Android struct {
+                Cflags  []string
+                Enabled *bool
+            }
+            Host struct {
+                Enabled *bool
+            }
+            Not_windows struct {
+                Cflags []string
+            }
+        }
+        Cflags []string
+    }
+    p := &props{}
+
+    //p.Cflags = deviceFlags(ctx)
+
+    p.Target.Android.Cflags = rkaiqFlags(ctx)
+    ctx.AppendProperties(p)
+}
+
 /* This is called from the boot strap process
  * We register a module here
 */
@@ -157,6 +219,8 @@ func init() {
     android.RegisterModuleType("cc_rkaiq_library_shared", cc_rkaiq_library_sharedFactory)
     android.RegisterModuleType("cc_rkaiq_library_static", cc_rkaiq_library_staticFactory)
     android.RegisterModuleType("cc_rkaiq_prebuilt_library_static", cc_rkaiq_prebuilt_library_staticFactory)
+    android.RegisterModuleType("rkaiq_version_defaults", rkaiqVersionDefaultFactory)
+    android.RegisterModuleType("cc_smart_ir_prebuilt_library_shared", cc_smart_ir_prebuilt_library_sharedFactory)
 }
 
 func rkaiqDefaultFactory() android.Module {
@@ -179,9 +243,21 @@ func cc_rkaiq_library_staticFactory() android.Module {
 
 func cc_rkaiq_prebuilt_library_staticFactory() (android.Module) {
     // Register rockchip_prebuilt_libs factory as PrebuiltSharedLibraryFactory
-    module := cc.PrebuiltSharedLibraryFactory()
+    module := cc.PrebuiltStaticLibraryFactory()
 
     // Add Hook for PrebuiltSharedLibraryFactory
     android.AddLoadHook(module, rkaiqPrebuiltStaticLibrary)
+    return module
+}
+
+func rkaiqVersionDefaultFactory() android.Module {
+    module := cc.DefaultsFactory()
+    android.AddLoadHook(module, rkaiqVersionDefaults)
+    return module
+}
+
+func cc_smart_ir_prebuilt_library_sharedFactory() android.Module {
+    module := cc.PrebuiltSharedLibraryFactory()
+    android.AddLoadHook(module, smartIrPrebuiltLibraryShared)
     return module
 }

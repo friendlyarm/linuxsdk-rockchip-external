@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include "aiq_base.h"
 #include "RkAiqDrcHandler.h"
-#include "aiq_core.h"
+
 #include "RkAiqGlobalParamsManager_c.h"
+#include "aiq_base.h"
+#include "aiq_core.h"
 #include "newStruct/drc/drc_types_prvt.h"
+#include "ae/rk_aiq_uapi_ae_int.h"
 
 static void _handlerDrc_init(AiqAlgoHandler_t* pHdl) {
     ENTER_ANALYZER_FUNCTION();
@@ -45,8 +47,10 @@ static XCamReturn _handlerDrc_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     RkAiqAlgoConfigDrc* adrc_config_int     = (RkAiqAlgoConfigDrc*)pAlgoHandler->mConfig;
     RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "drc algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();
@@ -58,6 +62,7 @@ static void DrcProchelper(AiqAlgoHandler_t* pAlgoHandler, RkAiqAlgoProcDrc* drc_
     RkAiqAlgosGroupShared_t* shared =
         (RkAiqAlgosGroupShared_t*)(pAlgoHandler->mAlogsGroupSharedParams);
     RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
+    AiqDrcHandler_t* pdrcHandler     = (AiqDrcHandler_t*)pAlgoHandler;
 
     aiq_params_base_t* pBase = shared->fullParams->pParamsArray[RESULT_TYPE_DRC_PARAM];
     rk_aiq_isp_drc_v39_t* drcRes = (rk_aiq_isp_drc_params_t*)pBase->_data;
@@ -85,6 +90,7 @@ static void DrcProchelper(AiqAlgoHandler_t* pAlgoHandler, RkAiqAlgoProcDrc* drc_
     drc_proc_param->FrameNumber = FrameNumber;
     drcRes->compr_bit = compr_bit;
 
+    drc_proc_param->aeIsConverged               = pdrcHandler->mAeProcRes.IsConverged;
     drc_proc_param->NextData.AEData.LongFrmMode = drc_proc_param->LongFrmMode;
     if (FrameNumber == LINEAR_NUM) {
         drc_proc_param->NextData.AEData.SExpo =
@@ -103,6 +109,7 @@ static void DrcProchelper(AiqAlgoHandler_t* pAlgoHandler, RkAiqAlgoProcDrc* drc_
         drc_proc_param->NextData.AEData.LExpo = drc_proc_param->NextData.AEData.SExpo;
     }
     else if(FrameNumber == HDR_2X_NUM) {
+            drc_proc_param->com.u.proc.nxtExp->HdrExp[0].exp_real_params.integration_time;
         drc_proc_param->NextData.AEData.SExpo =
             drc_proc_param->com.u.proc.nxtExp->HdrExp[0].exp_real_params.analog_gain *
             drc_proc_param->com.u.proc.nxtExp->HdrExp[0].exp_real_params.digital_gain *
@@ -238,6 +245,56 @@ static void DrcProchelper(AiqAlgoHandler_t* pAlgoHandler, RkAiqAlgoProcDrc* drc_
     drcRes->L2S_Ratio = drc_proc_param->NextData.AEData.L2S_Ratio;
 }
 
+static void DrcStatsConfig(AiqAlgoHandler_t* pAlgoHandler, aiq_stats_base_t* xAecStats,
+                           RkAiqAlgoProcDrc* drc_proc_param) {
+    aiq_ae_stats_wrapper_t* pAeStatsWrap = NULL;
+    if (xAecStats) {
+        drc_proc_param->drc_stats.frame_id = xAecStats->frame_id;
+        pAeStatsWrap                       = (aiq_ae_stats_wrapper_t*)xAecStats->_data;
+    }
+
+    if (pAeStatsWrap) {
+        drc_proc_param->drc_stats.stats_true = true;
+        bool isHDR                           = false;
+        if (pAlgoHandler->mProcInParam->u.prepare.working_mode >= RK_AIQ_WORKING_MODE_ISP_HDR2)
+            isHDR = true;
+
+        for (int i = 0; i < DRC_AE_HIST_BIN_NUM; i++) {
+            if (isHDR) {
+                drc_proc_param->drc_stats.aeHiatBins[i] =
+                    pAeStatsWrap->aec_stats_v25.ae_data.entityGroup.entities.entity3.hist
+                        .hw_ae_histBin_val[i];
+            } else {
+                drc_proc_param->drc_stats.aeHiatBins[i] =
+                    pAeStatsWrap->aec_stats_v25.ae_data.entityGroup.entities.entity0.hist
+                        .hw_ae_histBin_val[i];
+            }
+
+            int hist_total_num = 0;
+            for (int i = 0; i < DRC_AE_HIST_BIN_NUM; ++i)
+                hist_total_num += drc_proc_param->drc_stats.aeHiatBins[i];
+            drc_proc_param->drc_stats.ae_hist_total_num = hist_total_num;
+        }
+    } else {
+        drc_proc_param->drc_stats.stats_true        = false;
+        drc_proc_param->drc_stats.ae_hist_total_num = 0;
+        for (int i = 0; i < DRC_AE_HIST_BIN_NUM; i++) drc_proc_param->drc_stats.aeHiatBins[i] = 0;
+    }
+
+#if 0
+    printf("%s: frame_id:%d stats_true:%d ae_hist_total_num:%d\n", __FUNCTION__,
+           drc_proc_param->drc_stats.frame_id, drc_proc_param->drc_stats.stats_true,
+           drc_proc_param->drc_stats.ae_hist_total_num);
+    for (int m = 0; m < 16; m++) {
+        printf("%s: aeHiatBins[%d]: %d ", __FUNCTION__, m,
+               drc_proc_param->drc_stats.aeHiatBins[16 * m]);
+        for (int n = 1; n < 15; n++)
+            printf("%d ", drc_proc_param->drc_stats.aeHiatBins[16 * m + n]);
+        printf("%d \n", drc_proc_param->drc_stats.aeHiatBins[16 * m + 15]);
+    }
+#endif
+}
+
 static XCamReturn _handlerDrc_processing(AiqAlgoHandler_t* pAlgoHandler) {
     ENTER_ANALYZER_FUNCTION();
 
@@ -245,6 +302,7 @@ static XCamReturn _handlerDrc_processing(AiqAlgoHandler_t* pAlgoHandler) {
 
     RkAiqAlgosGroupShared_t* shared =
         (RkAiqAlgosGroupShared_t*)(pAlgoHandler->mAlogsGroupSharedParams);
+    RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
 
     ret = AiqAlgoHandler_processing(pAlgoHandler);
     if (ret) {
@@ -257,12 +315,24 @@ static XCamReturn _handlerDrc_processing(AiqAlgoHandler_t* pAlgoHandler) {
         return XCAM_RETURN_BYPASS;
     }
 
+    aiq_stats_base_t* xAecStats = NULL;
+    if (shared->aecStatsBuf) {
+        xAecStats = shared->aecStatsBuf;
+        if (!xAecStats) LOGE_ATMO("aec stats is null");
+    } else {
+        LOGW_ATMO("the xcamvideobuffer of aec stats is null");
+    }
+    if ((!xAecStats || !xAecStats->bValid) && !sharedCom->init) {
+        LOGW_ATMO("fid:%d no aec stats, ignore!", shared->frameId);
+        return XCAM_RETURN_BYPASS;
+    }
+
     RkAiqAlgoProcDrc* drc_proc_param = (RkAiqAlgoProcDrc*)pAlgoHandler->mProcInParam;
+    drc_proc_param->LongFrmMode      = ((AiqDrcHandler_t*)pAlgoHandler)->mAeProcRes.LongFrmMode;
     drc_proc_param->isp_ob_predgain = 1.0;
 
     DrcProchelper(pAlgoHandler, drc_proc_param);
-
-    AiqAlgoHandler_do_processing_common(pAlgoHandler);
+    DrcStatsConfig(pAlgoHandler, xAecStats, drc_proc_param);
 
     GlobalParamsManager_t * globalParamsManager = pAlgoHandler->mAiqCore->mGlobalParamsManger;
 
@@ -275,19 +345,50 @@ static XCamReturn _handlerDrc_processing(AiqAlgoHandler_t* pAlgoHandler) {
     ret = GlobalParamsManager_get(globalParamsManager, &params);
     trans_attr.en = params.en;
     trans_attr.bypass = params.bypass;
-	XCamReturn ret1           = GlobalParamsManager_getAndClearPending(globalParamsManager, &params);
+    trans_attr.opMode = params.opMode;
+    XCamReturn ret1       = GlobalParamsManager_getAndClearPending(globalParamsManager, &params);
+
+    drc_proc_param->staTrans.hw_transCfg_trans_mode = trans_attr.stMan.sta.hw_transCfg_trans_mode;
+    drc_proc_param->staTrans.hw_transCfg_lscOutTrans_offset =
+        trans_attr.stMan.sta.hw_transCfg_lscOutTrans_offset;
+    drc_proc_param->staTrans.hw_transCfg_transOfDrc_offset =
+        trans_attr.stMan.sta.hw_transCfg_transOfDrc_offset;
+
+    AiqAlgoHandler_do_processing_common(pAlgoHandler);
+    ret1 = GlobalParamsManager_getAndClearPending(globalParamsManager, &params);
+
     if (pBase) {
-		trans_api_attrib_t* trans_curAttr = &((rk_aiq_isp_drc_params_t*)pBase->_data)->trans_attr;
-		*trans_curAttr = trans_attr;
-	}
+        trans_api_attrib_t* trans_curAttr = &((rk_aiq_isp_drc_params_t*)pBase->_data)->trans_attr;
+        *trans_curAttr                    = trans_attr;
+    }
     if (ret1 == XCAM_RETURN_NO_ERROR) {
         pAlgoHandler->mProcOutParam->cfg_update = true;
         LOGD_ATMO("trans params update");
     }
-
+#if 0
+    rk_aiq_isp_drc_v39_t* drcRes = (rk_aiq_isp_drc_params_t*)pBase->_data;
+    AiqDrcHandler_t* pdrcHandler = (AiqDrcHandler_t*)pAlgoHandler;
+    drcRes->damping = &pdrcHandler->damping;
+    if (pdrcHandler->damping) {
+        pAlgoHandler->mProcOutParam->cfg_update = true;
+    }
+#endif
     RKAIQCORE_CHECK_RET(ret, "drc algo processing failed");
 
     EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn _handlerDrc_genIspResult(AiqAlgoHandler_t* pAlgoHandler,
+        AiqFullParams_t* params, AiqFullParams_t* cur_params) {
+    XCamReturn ret = AiqAlgoHandler_genIspResult_common(pAlgoHandler, params, cur_params);
+    AiqDrcHandler_t* pdrcHandler = (AiqDrcHandler_t*)pAlgoHandler;
+    aiq_params_base_t* pBase = params->pParamsArray[RESULT_TYPE_DRC_PARAM];
+    rk_aiq_isp_drc_v39_t* drcRes = (rk_aiq_isp_drc_params_t*)pBase->_data;
+    drcRes->damping = &pdrcHandler->damping;
+    if (pdrcHandler->damping) {
+        pAlgoHandler->mProcOutParam->cfg_update = true;
+    }
     return ret;
 }
 
@@ -297,7 +398,7 @@ AiqAlgoHandler_t* AiqAlgoHandlerDrc_constructor(RkAiqAlgoDesComm* des, AiqCore_t
 		return NULL;
 	AiqAlgoHandler_constructor(pHdl, des, aiqCore);
     pHdl->processing   = _handlerDrc_processing;
-    pHdl->genIspResult = AiqAlgoHandler_genIspResult_common;
+    pHdl->genIspResult = _handlerDrc_genIspResult/*AiqAlgoHandler_genIspResult_common*/;
     pHdl->prepare      = _handlerDrc_prepare;
     pHdl->init         = _handlerDrc_init;
 	return pHdl;
@@ -367,4 +468,68 @@ XCamReturn AiqDrcHandler_queryStatus(AiqDrcHandler_t* pHdlDrc, drc_status_t* sta
     EXIT_ANALYZER_FUNCTION();
     return ret;
 
+}
+
+XCamReturn AiqDrcHandler_setStrength(AiqDrcHandler_t* pHdlDrc, adrc_strength_t* ctrl) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    AiqAlgoHandler_t* pHdl = (AiqAlgoHandler_t*)pHdlDrc;
+
+    aiqMutex_lock(&pHdl->mCfgMutex);
+
+    ret = algo_drc_SetStrength(pHdl->mAlgoCtx, ctrl);
+
+    aiqMutex_unlock(&pHdl->mCfgMutex);
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret; 
+}
+
+XCamReturn AiqDrcHandler_getStrength(AiqDrcHandler_t* pHdlDrc, adrc_strength_t* ctrl) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    AiqAlgoHandler_t* pHdl = (AiqAlgoHandler_t*)pHdlDrc;
+
+    aiqMutex_lock(&pHdl->mCfgMutex);
+
+    ret = algo_drc_GetStrength(pHdl->mAlgoCtx, ctrl);
+
+    aiqMutex_unlock(&pHdl->mCfgMutex);
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn AiqDrcHandler_queryTransStatus(AiqDrcHandler_t* pHdlDrc, trans_status_t* status) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    AiqAlgoHandler_t* pHdl = (AiqAlgoHandler_t*)pHdlDrc;
+    aiqMutex_lock(&pHdl->mCfgMutex);
+    aiq_params_base_t* pCurBase =
+        pHdl->mAiqCore->mAiqCurParams->pParamsArray[RESULT_TYPE_DRC_PARAM];
+
+    if (pCurBase) {
+        trans_api_attrib_t* trans_curAttr = &((rk_aiq_isp_drc_params_t*)pCurBase->_data)->trans_attr;
+        if (trans_curAttr) {
+            status->stMan  = trans_curAttr->stMan;
+            status->en     = trans_curAttr->en;
+            status->bypass = trans_curAttr->bypass;
+            status->opMode = trans_curAttr->opMode;
+        } else {
+            ret = XCAM_RETURN_ERROR_FAILED;
+            LOGE_ANR("have no status info !");
+        }
+    } else {
+        ret = XCAM_RETURN_ERROR_FAILED;
+        LOGE_ANR("have no status info !");
+    }
+
+    aiqMutex_unlock(&pHdl->mCfgMutex);
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
 }

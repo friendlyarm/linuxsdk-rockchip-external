@@ -418,7 +418,7 @@ Asharp_result_V33_t sharp_fix_transfer_V33(void* pSelect_v, RK_SHARP_Fix_V33_t* 
     for (int i = 0; i < RK_SHARP_V33_LUMA_POINT_NUM; i++) {
         tmp = (int16_t)ROUND_F((float)1 / (pSelect->luma_sigma[i] * pSelect->pbf_gain +
                                            pSelect->pbf_add) * fPercent * (1 << sigma_bits[2]));
-        pFix->sharp_pbf_sigma_inv[i] = CLIP(tmp, 0, 4095);
+        pFix->sharp_pbf_sigma_inv[i] = CLIP(tmp, 0, 1023);
     }
 
     // SHARP_BF_SIGMA_INV_0 (0x0018 -  0x0020)
@@ -440,7 +440,7 @@ Asharp_result_V33_t sharp_fix_transfer_V33(void* pSelect_v, RK_SHARP_Fix_V33_t* 
     for (int i = 0; i < RK_SHARP_V33_LUMA_POINT_NUM; i++) {
         tmp = (int16_t)ROUND_F((float)1 / (pSelect->luma_sigma[i] * pSelect->bf_gain +
                                            pSelect->bf_add) * fPercent * (1 << sigma_bits[2]));
-        pFix->sharp_bf_sigma_inv[i] = CLIP(tmp, 0, 4095);
+        pFix->sharp_bf_sigma_inv[i] = CLIP(tmp, 0, 1023);
     }
 
     // SHARP_SIGMA_SHIFT (0x00024)

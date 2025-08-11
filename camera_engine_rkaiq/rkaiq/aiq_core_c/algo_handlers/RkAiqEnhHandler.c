@@ -41,8 +41,10 @@ static XCamReturn _handlerEnh_prepare(AiqAlgoHandler_t* pAlgoHandler) {
     ret = AiqAlgoHandler_prepare(pAlgoHandler);
     RKAIQCORE_CHECK_RET(ret, "enh handle prepare failed");
 
+    GlobalParamsManager_lockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)pAlgoHandler->mDes;
     ret                       = des->prepare(pAlgoHandler->mConfig);
+    GlobalParamsManager_unlockAlgoParam(pAlgoHandler->mAiqCore->mGlobalParamsManger, pAlgoHandler->mResultType);
     RKAIQCORE_CHECK_RET(ret, "enh algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();
@@ -139,3 +141,23 @@ XCamReturn AiqEnhHandler_queryStatus(AiqEnhHandler_t* pHdlEnh, enh_status_t* sta
 
 }
 #endif
+
+XCamReturn AiqEnhHandler_setStrength(AiqEnhHandler_t* pHdlEnh, aenh_strength_t* strg)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    aiqMutex_lock(&pHdlEnh->mCfgMutex);
+    ret = algo_enh_SetStrength(pHdlEnh->mAlgoCtx, strg);
+    aiqMutex_unlock(&pHdlEnh->mCfgMutex);
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn AiqEnhHandler_getStrength(AiqEnhHandler_t* pHdlEnh, aenh_strength_t* strg)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    aiqMutex_lock(&pHdlEnh->mCfgMutex);
+    ret = algo_enh_GetStrength(pHdlEnh->mAlgoCtx, strg);
+    aiqMutex_unlock(&pHdlEnh->mCfgMutex);
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}

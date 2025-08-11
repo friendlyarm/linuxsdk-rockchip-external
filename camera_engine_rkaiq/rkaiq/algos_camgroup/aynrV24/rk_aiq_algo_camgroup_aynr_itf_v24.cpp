@@ -289,6 +289,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAynrV24 = {
     .pre_process  = NULL,
     .processing   = groupAynrV24Processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

@@ -105,7 +105,7 @@ void rk_aiq_ynr32_params_cvt(void* attr, struct isp32_isp_params_cfg* isp_cfg,co
     tmp = (int)(pdyn->loNrPost.hw_ynrT_loNr_alpha * (1 << 7));
     phwcfg->low_weight = CLIP(tmp, 0, 0x80);
     tmp = (int)(pdyn->loNrBifilt5.hw_ynrT_centerPix_wgt * (1 << 10));
-    phwcfg->low_center_weight = CLIP(tmp, 0, 0x400);
+    phwcfg->low_center_weight = CLIP(tmp, 1, 0x400);
 
     // YNR_2700_LOWNR_CTRL4 (0x002c)
     tmp = (int)(0x0000);
@@ -184,7 +184,7 @@ void rk_aiq_ynr32_params_cvt(void* attr, struct isp32_isp_params_cfg* isp_cfg,co
 
     //YNR_NLM_WEIGHT (0x00f8)
     tmp = (int)(pdyn->hiNr.hw_ynrT_nlmSpatial_wgt[6] * (1 << 10));
-    phwcfg->nlm_center_weight = CLIP(tmp, 0, 0x3ffff);
+    phwcfg->nlm_center_weight = CLIP(tmp, 1, 0x3ffff);
     tmp = (int)(pdyn->hiNr.hw_ynrT_nlmRgeWgt_negOffset * (1 << 10));
     phwcfg->nlm_weight_offset = CLIP(tmp, 0, 0x3ff);
 

@@ -81,10 +81,16 @@ private:
 
 public:
     Cond (bool dynamic = true) : _dynamic(dynamic) {
-        if (!dynamic)
+        if (!dynamic) {
             _cond = PTHREAD_COND_INITIALIZER;
-        else
-            pthread_cond_init (&_cond, NULL);
+        } else {
+            pthread_condattr_t cond_attr;
+
+            pthread_condattr_init(&cond_attr);
+            pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+            pthread_cond_init (&_cond, &cond_attr);
+            pthread_condattr_destroy(&cond_attr);
+        }
     }
     ~Cond () {
         if (_dynamic)
@@ -95,14 +101,19 @@ public:
         return pthread_cond_wait (&_cond, &mutex._mutex);
     }
     int timedwait (Mutex &mutex, uint32_t time_in_us) {
-        struct timeval now;
+        struct timespec now;
         struct timespec abstime;
 
-        gettimeofday (&now, NULL);
-        now.tv_usec += time_in_us;
+        clock_gettime(CLOCK_MONOTONIC, &now);
         xcam_mem_clear (abstime);
-        abstime.tv_sec += now.tv_sec + now.tv_usec / 1000000;
-        abstime.tv_nsec = (now.tv_usec % 1000000) * 1000;
+
+        abstime.tv_sec = now.tv_sec + time_in_us / 1000000;
+        abstime.tv_nsec = now.tv_nsec + (time_in_us % 1000000) * 1000;
+
+        if (abstime.tv_nsec >= 1000000000) {
+            abstime.tv_sec += 1;
+            abstime.tv_nsec -= 1000000000;
+        }
 
         return pthread_cond_timedwait (&_cond, &mutex._mutex, &abstime);
     }

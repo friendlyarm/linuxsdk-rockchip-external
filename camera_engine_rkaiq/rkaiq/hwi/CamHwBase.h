@@ -160,27 +160,11 @@ public:
     virtual XCamReturn rawReproc_genIspParams (uint32_t sequence, rk_aiq_frame_info_t *offline_finfo, int mode) {
         return XCAM_RETURN_ERROR_FAILED;
     }
-    virtual XCamReturn rawReProc_prepare (uint32_t sequence, rk_aiq_frame_info_t *offline_finfo) {
+    virtual XCamReturn rawReProc_prepare (uint32_t sequence) {
         return XCAM_RETURN_ERROR_FAILED;
     }
-    virtual void setRawStreamInfo(rk_aiq_rkrawstream_info_t *info) {
-        mRawStreamInfo = *info;
-    }
-    virtual XCamReturn setAiispMode(rk_aiq_aiisp_cfg_t *aiisp_cfg)
-    {
-        return XCAM_RETURN_ERROR_FAILED;
-    }
-    virtual XCamReturn read_aiisp_result()
-    {
-        return XCAM_RETURN_ERROR_FAILED;
-    }
-    virtual XCamReturn get_aiisp_bay3dbuf()
-    {
-        return XCAM_RETURN_ERROR_FAILED;
-    }
-    virtual XCamReturn aiisp_processing(rk_aiq_aiisp_t* aiisp_evt)
-    {
-        return XCAM_RETURN_ERROR_FAILED;
+    virtual void setAiqPreCtrlInfo(rk_aiq_control_preinit_t *info) {
+        mAiqPreCtrlInfo = *info;
     }
     virtual void setRkAiqManager(RkAiqManager *rkAiqManager)
     {
@@ -189,6 +173,9 @@ public:
     virtual XCamReturn setUserOtpInfo(rk_aiq_user_otp_info_t otp_info) {
         return XCAM_RETURN_ERROR_FAILED;
     }
+    virtual RkAiqIspUniteMode getIspUniteMode() {
+        return RK_AIQ_ISP_UNITE_MODE_NORMAL;
+    };
     HwResListener* mHwResLintener;
 
 protected:
@@ -215,7 +202,7 @@ protected:
     bool mIsMain;
     RkAiqTbInfo_t mTbInfo;
     std::map<std::string, int> mDevBufCntMap;
-    rk_aiq_rkrawstream_info_t mRawStreamInfo;
+    rk_aiq_control_preinit_t mAiqPreCtrlInfo;
     RkAiqManager* rkAiqManager;
 
  private:

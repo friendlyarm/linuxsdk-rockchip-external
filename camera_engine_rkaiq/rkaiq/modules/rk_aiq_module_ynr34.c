@@ -86,6 +86,9 @@ void rk_aiq_ynr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
 
     // YNR_2700_LOWNR_CTRL3 (0x001c)
     pFix->lospnr_center_wgt = ynrClipFloatValueV24(pdyn->loNr_bifilt.hw_ynrT_centerPix_wgt, 2, 10);
+    if(pFix->lospnr_center_wgt < 1) {
+        pFix->lospnr_center_wgt = 1;
+    }
     pFix->lospnr_strg       = ynrClipFloatValueV24(pdyn->loNr_bifilt.hw_ynrT_rgeSgm_scale, 5, 7);
 
     // YNR_2700_LOWNR_CTRL4 (0x002c)
@@ -120,22 +123,13 @@ void rk_aiq_ynr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
 
     // YNR_2700_SGM_DX (0x0040 ~ 0x0060)
     // YNR_2700_luma2sima_val (0x0070 ~ 0x0060)
-
-    if (pdyn->sw_ynrCfg_sgmCurve_mode == ynr_cfgByCoeff2Curve_mode) {
-        for (int i = 0; i < YNR_V24_ISO_CURVE_POINT_NUM; i++) {
-            tmp                    = pdyn->hw_ynrC_luma2Sigma_curve.idx[i];
-            pFix->luma2sima_idx[i] = CLIP(tmp, 0, 0x400);
-            tmp                    = (int)(pdyn->hw_ynrC_luma2Sigma_curve.val[i]  * (1 << YNR_V24_NOISE_SIGMA_FIX_BIT)) * pdyn->coeff2SgmCurve.lowFreqCoeff;
-            pFix->luma2sima_val[i] = CLIP(tmp, 0, 0xfff);
-        }
-    } else {
-        for (int i = 0; i < YNR_V24_ISO_CURVE_POINT_NUM; i++) {
-            tmp                    = pdyn->hw_ynrC_luma2Sigma_curve.idx[i];
-            pFix->luma2sima_idx[i] = CLIP(tmp, 0, 0x400);
-            tmp                    = (int)(pdyn->hw_ynrC_luma2Sigma_curve.val[i]  * (1 << YNR_V24_NOISE_SIGMA_FIX_BIT));
-            pFix->luma2sima_val[i] = CLIP(tmp, 0, 0xfff);
-        }
+    for (int i = 0; i < YNR_V24_ISO_CURVE_POINT_NUM; i++) {
+        tmp                    = pdyn->hw_ynrC_luma2Sigma_curve.idx[i];
+        pFix->luma2sima_idx[i] = CLIP(tmp, 0, 0x400);
+        tmp                    = (int)(pdyn->hw_ynrC_luma2Sigma_curve.val[i]  * (1 << YNR_V24_NOISE_SIGMA_FIX_BIT));
+        pFix->luma2sima_val[i] = CLIP(tmp, 0, 0xfff);
     }
+
 
     // YNR_2700_RNR_STRENGTH03 (0x00d0- 0x00e0)
     for (int i = 0; i < 17; i++) {
@@ -166,6 +160,9 @@ void rk_aiq_ynr34_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
         ynrClipFloatValueV24(pdyn->hiNr_filtProc.hw_ynrT_nlmRgeWgt_negOff, 0, 10);
     pFix->hispnr_filt_center_wgt =
         LIMIT_VALUE(pdyn->hiNr_filtProc.hw_ynrT_centerPix_wgt * 1024.0f, BIT_17_MAX + 1, BIT_MIN);
+    if(pFix->hispnr_filt_center_wgt < 1) {
+        pFix->hispnr_filt_center_wgt = 1;
+    }
 
     // YNR_2700_NLM_NR_WEIGHT (0x00fc)
     pFix->hispnr_filt_wgt =

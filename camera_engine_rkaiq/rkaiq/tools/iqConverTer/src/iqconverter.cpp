@@ -17,6 +17,8 @@ int g_rkaiq_isp_hw_ver = 321;
 int g_rkaiq_isp_hw_ver = 39;
 #elif defined(ISP_HW_V33)
 int g_rkaiq_isp_hw_ver = 33;
+#elif defined(ISP_HW_V35)
+int g_rkaiq_isp_hw_ver = 35;
 #else
 #error "WRONG ISP_HW_VERSION, ONLY SUPPORT V20/V21/V30/V32 NOW !"
 #endif

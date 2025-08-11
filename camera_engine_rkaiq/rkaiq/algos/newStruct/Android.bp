@@ -1,3 +1,29 @@
+cc_prebuilt_library_static {
+    name: "librkAlgoMapSeparate",
+    vendor: true,
+    arch: {
+        arm: {
+            srcs: ["ldc/gen_mesh/android/arm/librkAlgoMapSeparate.a"],
+        },
+        arm64: {
+            srcs: ["ldc/gen_mesh/android/aarch64/librkAlgoMapSeparate.a"],
+        },
+    },
+}
+
+cc_prebuilt_library_static {
+    name: "librkAlgoGenMesh",
+    vendor: true,
+    arch: {
+        arm: {
+            srcs: ["ldc/gen_mesh/android/arm/librkAlgoGenMesh.a"],
+        },
+        arm64: {
+            srcs: ["ldc/gen_mesh/android/aarch64/librkAlgoGenMesh.a"],
+        },
+    },
+}
+
 cc_rkaiq_library_static {
     name: "librkaiq_3dlut",
     vendor: true,
@@ -107,6 +133,12 @@ cc_rkaiq_library_static {
 }
 
 cc_rkaiq_library_static {
+    name: "librkaiq_aldc",
+    vendor: true,
+    defaults: ["algo_defaults"],
+}
+
+cc_rkaiq_library_static {
     name: "librkaiq_lsc",
     vendor: true,
     defaults: ["algo_defaults"],
@@ -142,3 +174,14 @@ cc_rkaiq_library_static {
     defaults: ["algo_defaults"],
 }
 
+cc_rkaiq_library_static {
+    name: "librkaiq_histeq",
+    vendor: true,
+    defaults: ["algo_defaults"],
+}
+
+cc_rkaiq_library_static {
+    name: "librkaiq_enh",
+    vendor: true,
+    defaults: ["algo_defaults"],
+}

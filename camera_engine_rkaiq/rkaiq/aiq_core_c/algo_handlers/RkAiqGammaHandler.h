@@ -21,6 +21,7 @@
 typedef AiqAlgoHandler_t AiqGammaHandler_t;
 
 AiqAlgoHandler_t* AiqAlgoHandlerGamma_constructor(RkAiqAlgoDesComm* des, AiqCore_t* aiqCore);
+XCamReturn AiqGammaHandler_setStrength(AiqGammaHandler_t* pHdlGamma, int strg);
 #if 0
 XCamReturn AiqGammaHandler_setAttrib(AiqGammaHandler_t* pHdlGamma, gamma_api_attrib_t* attr);
 XCamReturn AiqGammaHandler_getAttrib(AiqGammaHandler_t* pHdlGamma, gamma_api_attrib_t* attr);

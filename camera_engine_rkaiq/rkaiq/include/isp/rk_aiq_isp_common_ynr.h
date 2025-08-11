@@ -100,11 +100,12 @@ typedef struct ynr_sigmaCurve_dyn_s  {
         M4_UI_PARAM(data_x),
         M4_SIZE_EX(1,17),
         M4_RANGE_EX(0,65535),
-        M4_DEFAULT("[0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1023]"),
+        M4_DEFAULT([0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1023]),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n
+        Freq of use: high))  */
     uint16_t idx[YNR_SIGMACURVE_SEGMENT_MAX];
     /* M4_GENERIC_DESC(
         M4_ALIAS(val),
@@ -112,26 +113,29 @@ typedef struct ynr_sigmaCurve_dyn_s  {
         M4_UI_PARAM(data_y),
         M4_SIZE_EX(1,17),
         M4_RANGE_EX(0,65535),
-        M4_DEFAULT(0),
+        M4_DEFAULT(64),
         M4_HIDE_EX(0),
+        M4_DIGIT_EX(3f9b),
         M4_RO(0),
         M4_ORDER(1),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n
+        Freq of use: high))  */
     float val[YNR_SIGMACURVE_SEGMENT_MAX];
 } ynr_sigmaCurve_dyn_t;
 
 typedef struct ynr_coeff2SgmCurve_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(sigma_coeff),
-        M4_TYPE(f32),
+        M4_TYPE(f64),
         M4_SIZE_EX(1,5),
         M4_RANGE_EX(-4095.0, 4095.0),
         M4_DEFAULT(1.0),
-        M4_DIGIT_EX(6),
+        M4_DIGIT_EX(20),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES(TODO))  */
+        M4_NOTES(TODO.\n
+        Freq of use: high))  */
     float sigma_coeff[YNR_SIGMACURVE_COEFF_MAX];
     /* M4_GENERIC_DESC(
         M4_ALIAS(sw_lowFreqCoeff),
@@ -144,7 +148,7 @@ typedef struct ynr_coeff2SgmCurve_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(Software internally caulculate low frequency sigma curve points by sigma coeff and low frequency coeff.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     float lowFreqCoeff;
 } ynr_coeff2SgmCurve_t;
 

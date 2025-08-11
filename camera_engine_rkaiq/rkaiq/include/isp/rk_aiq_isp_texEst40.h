@@ -61,52 +61,6 @@ typedef enum texEst_texEstWgtOpt_mode_e {
 
 typedef struct texEst_noiseEst_dyn_s {
     /* M4_GENERIC_DESC(
-        M4_ALIAS(noiseCurve_mode),
-        M4_TYPE(enum),
-        M4_ENUM_DEF(texEst_noiseEstThd_mode_t),
-        M4_DEFAULT(texEst_baseManualCfg_mode),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_GROUP_CTRL(nsEst_mode_group),
-        M4_NOTES(The mode of the noise curve. \n
-        Reference enum types.\n
-        Freq of use: low))  */
-    // @reg: hw_sharp_noiseCurve_mode
-    texEst_noiseEstThd_mode_t hw_texEstT_nsEstThd_mode;
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(noise_curve_ext),
-        M4_TYPE(u16),
-        M4_SIZE_EX(1,17),
-        M4_RANGE_EX(0,7),
-        M4_DEFAULT([7, 22, 57, 86, 98, 103, 108, 123, 134, 134, 132, 119, 125, 182, 307, 277, 277]),
-        M4_HIDE_EX(0),
-        M4_UI_MODULE(curve),
-        M4_DATAX([0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024]),
-        M4_RO(0),
-        M4_ORDER(0),
-        M4_GROUP(nsEst_mode_group:texEst_baseManualCfg_mode),
-        M4_NOTES(The manual noise curve value when noiseCurve_mode  == texEst_noiseManualCurve_mode. \n
-        Freq of use: high))  */
-    // @reg: hw_sharp_noise_curve_ext0~16
-    uint16_t hw_texEstT_nsEstManual_thred[17];
-    /* M4_GENERIC_DESC(
-        M4_ALIAS(noiseCountThred_ratio),
-        M4_TYPE(f32),
-        M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,0.249),
-        M4_DEFAULT(0.003),
-        M4_DIGIT_EX(4),
-        M4_FP_EX(0,4,10),
-        M4_HIDE_EX(0),
-        M4_RO(0),
-        M4_ORDER(1),
-        M4_GROUP(nsEst_mode_group:texEst_baseNoiseStats_mode),
-        M4_NOTES(The lower limit of the count of pixel when noise estimation.\n
-        Freq of use: high))  */
-    // @reg: hw_texEst_noiseCountThred_ratio
-    float hw_texEstT_nsStatsCntThd_ratio;
-    /* M4_GENERIC_DESC(
         M4_ALIAS(noiseCalc_mode),
         M4_TYPE(enum),
         M4_ENUM_DEF(texEst_noiseEst_mode_t),
@@ -138,6 +92,52 @@ typedef struct texEst_noiseEst_dyn_s {
     // @reg: hw_sharp_noiseEst_alpha
     float hw_texEstT_nsEstMean_alpha;
     /* M4_GENERIC_DESC(
+        M4_ALIAS(noiseCurve_mode),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(texEst_noiseEstThd_mode_t),
+        M4_DEFAULT(texEst_baseManualCfg_mode),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_GROUP_CTRL(nsEst_mode_group),
+        M4_NOTES(The mode of the noise curve. \n
+        Reference enum types.\n
+        Freq of use: high))  */
+    // @reg: hw_sharp_noiseCurve_mode
+    texEst_noiseEstThd_mode_t hw_texEstT_nsEstTexThd_mode;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(noise_curve_ext),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,17),
+        M4_RANGE_EX(0,2047),
+        M4_DEFAULT([7, 22, 57, 86, 98, 103, 108, 123, 134, 134, 132, 119, 125, 182, 307, 277, 277]),
+        M4_HIDE_EX(0),
+        M4_UI_MODULE(curve),
+        M4_DATAX([0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024]),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_GROUP(nsEst_mode_group:texEst_baseManualCfg_mode),
+        M4_NOTES(The manual noise curve value when noiseCurve_mode  == texEst_noiseManualCurve_mode. \n
+        Freq of use: high))  */
+    // @reg: hw_sharp_noise_curve_ext0~16
+    uint16_t hw_texEstT_nsEstTexManual_thred[17];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(noiseCountThred_ratio),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,0.249),
+        M4_DEFAULT(0.003),
+        M4_DIGIT_EX(4),
+        M4_FP_EX(0,4,10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(1),
+        M4_GROUP(nsEst_mode_group:texEst_baseNoiseStats_mode),
+        M4_NOTES(The lower limit of the count of pixel when noise estimation.\n
+        Freq of use: low))  */
+    // @reg: hw_texEst_noiseCountThred_ratio
+    float hw_texEstT_nsStatsCntThd_ratio;
+    /* M4_GENERIC_DESC(
         M4_ALIAS(noiseClip_scale),
         M4_TYPE(f32),
         M4_SIZE_EX(1,1),
@@ -151,9 +151,9 @@ typedef struct texEst_noiseEst_dyn_s {
         M4_GROUP(nsEst_mode_group:texEst_baseNoiseStats_mode),
         M4_NOTES(The scaling ratio of noise statistics in the previous frame, used as a texture threshold.\n
         Lower the value, the lower the noise into noise statistics .\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_noiseClip_scale
-    float hw_texEstT_nsEstThd_scale;
+    float hw_texEstT_nsEstTexThd_scale;
     /* M4_GENERIC_DESC(
         M4_ALIAS(noiseClip_minLimit),
         M4_TYPE(f32),
@@ -169,7 +169,7 @@ typedef struct texEst_noiseEst_dyn_s {
         M4_NOTES(the lower limit of noise estimation threshold.\n
         Freq of use: low))  */
     // @reg: hw_sharp_noiseClip_minLimit
-    float hw_texEstT_nsEstThd_minLimit;
+    float hw_texEstT_nsEstTexThd_minLimit;
     /* M4_GENERIC_DESC(
         M4_ALIAS(noiseClip_maxLimit),
         M4_TYPE(f32),
@@ -185,7 +185,7 @@ typedef struct texEst_noiseEst_dyn_s {
         M4_NOTES(the higer limit of noise estimation threshold.\n
         Freq of use: low))  */
     // @reg: hw_sharp_noiseClip_maxLimit
-    float hw_texEstT_nsEstThd_maxLimit;
+    float hw_texEstT_nsEstTexThd_maxLimit;
 } texEst_noiseEst_dyn_t;
 
 typedef struct texEst_texEst_dyn_s {
@@ -207,7 +207,7 @@ typedef struct texEst_texEst_dyn_s {
         M4_ALIAS(fstNoise_scale),
         M4_TYPE(f32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,64.0),
+        M4_RANGE_EX(0,1024.0),
         M4_DEFAULT(1.0),
         M4_DIGIT_EX(3),
         M4_FP_EX(0,10,6),
@@ -216,14 +216,14 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf1Only_mode),
         M4_NOTES(The noise scale value when calculating the first-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_fstNoise_scale
     float hw_texEstT_nsEstDf1_scale;
     /* M4_GENERIC_DESC(
         M4_ALIAS(fstSigma_scale),
         M4_TYPE(f32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,64.0),
+        M4_RANGE_EX(0,1024.0),
         M4_DEFAULT(1.0),
         M4_DIGIT_EX(3),
         M4_FP_EX(0,10,6),
@@ -232,7 +232,7 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf1Only_mode),
         M4_NOTES(The sigma scale of denominator  when calculating first-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_fstSigma_scale
     float hw_texEstT_sigmaDf1_scale;
     /* M4_GENERIC_DESC(
@@ -248,7 +248,7 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf1Only_mode),
         M4_NOTES(The sigma offset of denominator when calculating first-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_fstSigma_offset
     float hw_texEstT_sigmaDf1_offset;
     /* M4_GENERIC_DESC(
@@ -264,14 +264,14 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf1Only_mode),
         M4_NOTES(the scaling coefficient of first-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_fstWgt_scale
     float hw_texEstT_texEstDf1_scale;
     /* M4_GENERIC_DESC(
         M4_ALIAS(secNoise_scale),
         M4_TYPE(f32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,64.0),
+        M4_RANGE_EX(0,1024.0),
         M4_DEFAULT(1.0),
         M4_DIGIT_EX(3),
         M4_FP_EX(0,10,6),
@@ -280,14 +280,14 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf2Only_mode),
         M4_NOTES(The noise scale value when calculating the second-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_secNoise_scale
     float hw_texEstT_nsEstDf2_scale;
     /* M4_GENERIC_DESC(
         M4_ALIAS(secSigma_scale),
         M4_TYPE(f32),
         M4_SIZE_EX(1,1),
-        M4_RANGE_EX(0,64.0),
+        M4_RANGE_EX(0,1024.0),
         M4_DEFAULT(1.0),
         M4_DIGIT_EX(3),
         M4_FP_EX(0,10,6),
@@ -296,7 +296,7 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf2Only_mode),
         M4_NOTES(The sigma scale of denominator  when calculating second-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_secSigma_scale
     float hw_texEstT_sigmaDf2_scale;
     /* M4_GENERIC_DESC(
@@ -312,7 +312,7 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf2Only_mode),
         M4_NOTES(The sigma offset of denominator when calculating second-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_secSigma_offset
     float hw_texEstT_sigmaDf2_offset;
     /* M4_GENERIC_DESC(
@@ -328,7 +328,7 @@ typedef struct texEst_texEst_dyn_s {
         M4_ORDER(1),
         M4_GROUP(texWgtOpt_mode_group:texEst_texEstDf12Wgt_mode|texEst_texEstDf2Only_mode),
         M4_NOTES(the scaling coefficient of second-order derivative weight.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_secWgt_scale
     float hw_texEstT_texEstDf2_scale;
     /* M4_GENERIC_DESC(
@@ -342,7 +342,7 @@ typedef struct texEst_texEst_dyn_s {
         M4_GROUP_CTRL(texWgtOpt_mode_group),
         M4_NOTES(SHARP derivative estiamtion mode. \n
         Reference enum types.\n
-        Freq of use: low))  */
+        Freq of use: high))  */
     // @reg: hw_sharp_texWgt_mode
     texEst_texEstWgtOpt_mode_t hw_texEstT_wgtOpt_mode;
 } texEst_texEst_dyn_t;

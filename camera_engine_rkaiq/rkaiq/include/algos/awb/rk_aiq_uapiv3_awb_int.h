@@ -77,7 +77,10 @@ XCamReturn
 rk_aiq_uapiV3_awb_SetPreWbgain(RkAiqAlgoContext *ctx,
                                const float  preWbgain[4],
                                bool need_sync);
-
+XCamReturn
+rk_aiq_uapiV3_awb_SetNNres(RkAiqAlgoContext *ctx,
+                               const awb_ai_res_t *attr,
+                               bool need_sync);
 RKAIQ_END_DECLARE
 #endif
 

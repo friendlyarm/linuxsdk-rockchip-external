@@ -83,9 +83,11 @@ prepare(RkAiqAlgoCom* params)
        !!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_CHANGERES) || \
        !!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_CHANGECAMS)) {
         alscGetOtpInfo(params);
+#if 0
         adjustVignettingForLscOTP(hAlsc->otpGrad.lsc_b, hAlsc->otpGrad.lsc_gb, \
                 hAlsc->otpGrad.lsc_gr, hAlsc->otpGrad.lsc_r, \
                 20, hAlsc->cur_res.width, hAlsc->cur_res.height);
+#endif
 
         LOGD_ALSC( "adjustVignettingForLscOTP r[0:4]:%d,%d,%d,%d,%d, gr[0:4]:%d,%d,%d,%d,%d, gb[0:4]:%d,%d,%d,%d,%d, b[0:4]:%d,%d,%d,%d,%d\n",
                 hAlsc->otpGrad.lsc_r[0],
@@ -109,6 +111,10 @@ prepare(RkAiqAlgoCom* params)
                 hAlsc->otpGrad.lsc_b[3],
                 hAlsc->otpGrad.lsc_b[4]);
         convertSensorLscOTP(&hAlsc->cur_res, &hAlsc->otpGrad, para->alsc_sw_info.bayerPattern);
+        para->alsc_sw_info.otpInfo.lsc_r = hAlsc->otpGrad.lsc_r;
+        para->alsc_sw_info.otpInfo.lsc_b = hAlsc->otpGrad.lsc_b;
+        para->alsc_sw_info.otpInfo.lsc_gr = hAlsc->otpGrad.lsc_gr;
+        para->alsc_sw_info.otpInfo.lsc_gb = hAlsc->otpGrad.lsc_gb;
     }
 
     AlscPrepare((alsc_handle_t)(params->ctx->alsc_para));
@@ -149,8 +155,24 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
                hAlsc->cur_res.name, hAlsc->alscSwInfo.awbIIRDampCoef);
 
     AlscConfig(hAlsc);
+
     if (hAlsc->isReCal_) {
         memcpy(proResAlsc->alsc_hw_conf, &hAlsc->lscHwConf, sizeof(rk_aiq_lsc_cfg_t));
+        alsc_otp_grad_t* otpGrad = &hAlsc->otpGrad;
+        if (otpGrad && otpGrad->flag && otpGrad->table_size > 0) {
+            // apply sensor lsc otp
+            for (int32_t i = 0; i < LSC_DATA_TBL_SIZE; i++) {
+                proResAlsc->alsc_hw_conf->r_data_tbl[i]  = (float) (hAlsc->lscHwConf.r_data_tbl[i] * \
+                                                            otpGrad->lsc_r[i]) / 1024 + 0.5;
+                proResAlsc->alsc_hw_conf->gr_data_tbl[i] = (float) (hAlsc->lscHwConf.gr_data_tbl[i] * \
+                                                            otpGrad->lsc_gr[i]) / 1024 + 0.5;
+                proResAlsc->alsc_hw_conf->gb_data_tbl[i] = (float) (hAlsc->lscHwConf.gb_data_tbl[i] * \
+                                                            otpGrad->lsc_gb[i]) / 1024 + 0.5;
+                proResAlsc->alsc_hw_conf->b_data_tbl[i]  = (float) (hAlsc->lscHwConf.b_data_tbl[i] * \
+                                                            otpGrad->lsc_b[i]) / 1024 + 0.5;
+            }
+        }
+
         outparams->cfg_update = true;
         hAlsc->isReCal_ = false;
     } else {
@@ -199,6 +221,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescAlsc = {
     .pre_process = NULL,
     .processing = processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

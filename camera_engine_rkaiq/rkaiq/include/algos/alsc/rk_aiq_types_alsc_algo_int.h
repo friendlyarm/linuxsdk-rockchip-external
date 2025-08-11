@@ -72,7 +72,6 @@ typedef struct Lsc_v2_Resolution_s {
 } Lsc_v2_Resolution_t;
 
 typedef struct CalibDbV2_Lsc_Common_fixed_s {
-    bool enable;
     Lsc_v2_Resolution_t resolutionAll[LSC_MAX_RESOLUTION];
     int resolutionAll_len;
 } CalibDbV2_Lsc_Common_fixed_t;

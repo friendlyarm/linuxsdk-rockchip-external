@@ -57,6 +57,10 @@ PdafStreamProcUnit::prepare(rk_sensor_pdaf_info_t *pdaf_inf)
     ret = mPdafDev->set_format(mPdafInf.pdaf_width, mPdafInf.pdaf_height,
                                mPdafInf.pdaf_pixelformat, V4L2_FIELD_NONE, 0);
 
+    struct v4l2_format fmt;
+    ret = mPdafDev->get_format(fmt);
+    mPdafMeas.bytesperline = fmt.fmt.pix_mp.plane_fmt[0].bytesperline;
+
     return ret;
 }
 
@@ -132,8 +136,7 @@ PdafStreamProcUnit::poll_buffer_ready (SmartPtr<V4l2BufferProxy> &buf, int dev_i
         pdaf_buf->pdaf_meas = mPdafMeas;
         //LOGD_AF("%s: PDAF_STATS seq: %d, driver_time : %lld, aiq_time: %lld", __func__,
         //    video_buf->get_sequence(), video_buf->get_timestamp(), get_systime_us());
-
-        // change timestamp as vicap/pdaf driver set timestamp using fs, we need fe time as 3a stats use fe time.
+        // vicap/pdaf driver set timestamp using fs, 3a stats use fe on old platform and fs on new platform(3576/1126b).
         video_buf->set_timestamp(get_systime_us());
         mCamHw->mHwResLintener->hwResCb(video_buf);
     }

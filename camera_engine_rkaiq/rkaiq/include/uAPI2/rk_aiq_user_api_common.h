@@ -94,8 +94,8 @@ typedef struct frameRateInfo_s {
 typedef struct rk_aiq_version_info_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(aiq_ver),
-        M4_TYPE(char),
-        M4_SIZE_EX(1,32),
+        M4_TYPE(string),
+        M4_SIZE_EX(1,1),
         M4_DEFAULT(""),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -161,6 +161,16 @@ typedef struct rk_aiq_module_list_s {
         M4_NOTES(TODO))   */
     rk_aiq_module_ctl_t module_ctl[RESULT_TYPE_MAX_PARAM];
 } rk_aiq_module_list_t;
+
+typedef enum cSpaceMode_e {
+    CSPACE_MODE_BT601_FULL  = 0,
+    CSPACE_MODE_BT601_LIMIT = 1,
+    CSPACE_MODE_BT709_FULL  = 2,
+    CSPACE_MODE_BT709_LIMIT = 3,
+    CSPACE_MODE_OTHER_FULL  = 253,
+    CSPACE_MODE_OTHER_LIMIT = 254,
+    CSPACE_MODE_OTHERS      = 255,
+} cSpaceMode_t;
 
 #ifdef __cplusplus
 }

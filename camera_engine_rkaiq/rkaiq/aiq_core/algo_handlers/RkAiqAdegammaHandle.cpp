@@ -106,8 +106,14 @@ XCamReturn RkAiqAdegammaHandleInt::prepare() {
     adegamma_config_int->calib = sharedCom->calib;
 #endif
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "adegamma algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

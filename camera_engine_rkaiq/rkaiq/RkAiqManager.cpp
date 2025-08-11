@@ -118,7 +118,6 @@ RkAiqManager::RkAiqManager(const char* sns_ent_name,
     , mErrCb(err_cb)
     , mMetasCb(metas_cb)
     , mHwEvtCb(NULL)
-    , mAiispCtx({NULL, NULL})
 , mHwEvtCbCtx(NULL)
 , mSnsEntName(sns_ent_name)
 #ifdef RKAIQ_ENABLE_PARSER_V1
@@ -317,6 +316,7 @@ RkAiqManager::prepare(uint32_t width, uint32_t height, rk_aiq_working_mode_t mod
 
     RKAIQMNG_CHECK_RET(ret, "getSensorModeData error %d", ret);
     mRkAiqAnalyzer->notifyIspStreamMode(mCamHw->getIspStreamMode());
+    mRkAiqAnalyzer->setTranslaterIspUniteMode(mCamHw->getIspUniteMode());
     ret = mRkAiqAnalyzer->prepare(&sensor_des, working_mode_hw);
     RKAIQMNG_CHECK_RET(ret, "analyzer prepare error %d", ret);
 
@@ -336,7 +336,6 @@ RkAiqManager::prepare(uint32_t width, uint32_t height, rk_aiq_working_mode_t mod
     }
 #endif
 
-    mCamHw->get_aiisp_bay3dbuf();
     mWorkingMode = mode;
     mOldWkModeForGray = RK_AIQ_WORKING_MODE_NORMAL;
     mWidth = width;
@@ -586,7 +585,19 @@ RkAiqManager::hwResCb(SmartPtr<VideoBuffer>& hwres)
             return XCAM_RETURN_BYPASS;
         }
 
+#if defined(RKAIQ_ENABLE_CAMGROUP)
+        if (mIsAovMode && mCamGroupCoreManager) {
+            if ((stats->meas_type & ISP32_STAT_RTT_FST) && (seq != mLastAweekId)) {
+                mLastAweekId = seq;
+                mCamHwIsp20->sendNullParamBufForIsp(seq);
+            } else {
+                ret = mRkAiqAnalyzer->pushStats(hwres);
+            }
+            return ret;
+        } else if ((stats->meas_type & ISP32_STAT_RTT_FST) && (seq != mLastAweekId)) {
+#else
         if ((stats->meas_type & ISP32_STAT_RTT_FST) && (seq != mLastAweekId)) {
+#endif
             mRkAiqAnalyzer->awakenClean(seq);
             ret = mCamHwIsp20->setFastAeExp(seq);
 #if 0
@@ -667,31 +678,6 @@ RkAiqManager::hwResCb(SmartPtr<VideoBuffer>& hwres)
             metas.cam_id = mCamHw->getCamPhyId();
             metas.sensor_name = mSnsEntName;
             (*mMetasCb)(&metas);
-        }
-    }
-    else if (hwres->_buf_type == ISP_POLL_AIISP) {
-        SmartPtr<CamHwIsp20> mCamHwIsp20 = mCamHw.dynamic_cast_ptr<CamHwIsp20>();
-        SmartPtr<AiispEventBuffer> evtbuf = hwres.dynamic_cast_ptr<AiispEventBuffer>();
-        SmartPtr<AiispEventData> evtdata = evtbuf->get_data();
-        if (mAiispCtx.mAiispEvtcb) {
-            rk_aiq_aiisp_t aiisp_evt;
-            memset(&aiisp_evt, 0, sizeof(aiisp_evt));
-            aiisp_evt.wr_linecnt = mCamHwIsp20->mAiisp_cfg.wr_linecnt;
-            aiisp_evt.rd_linecnt = mCamHwIsp20->mAiisp_cfg.rd_linecnt;
-            aiisp_evt.height = evtdata->_height;
-            aiisp_evt.sequence = evtdata->_frameid;
-            aiisp_evt.bay3dbuf = evtdata->bay3dbuf;
-            aiisp_evt.iir_address = evtdata->iir_address;
-            aiisp_evt.gain_address = evtdata->gain_address;
-            aiisp_evt.aiisp_address = evtdata->aiisp_address;
-            LOGD_ANALYZER("aiisp params: wr_linecnt %d rd_linecnt %d _height %d _frameid %d bay3dbuf.iir_fd  %d bay3dbuf.iir_size %d",
-                          aiisp_evt.wr_linecnt, aiisp_evt.rd_linecnt, aiisp_evt.height, aiisp_evt.sequence, aiisp_evt.bay3dbuf.iir_fd,
-                          aiisp_evt.bay3dbuf.iir_size);
-            LOGD_ANALYZER("bay3dbuf.aiisp_fd  %d bay3dbuf.aiisp_size %d", aiisp_evt.bay3dbuf.u.v39.aiisp_fd, aiisp_evt.bay3dbuf.u.v39.aiisp_size);
-            (*mAiispCtx.mAiispEvtcb)(&aiisp_evt, mAiispCtx.ctx);
-        }
-        else {
-            LOGE_ANALYZER("mAiispEvtcb is NULL");
         }
     } else if (hwres->_buf_type == ISP_POLL_TX) {
 #if 0
@@ -1034,6 +1020,22 @@ RkAiqManager::applyAnalyzerResult(SmartPtr<RkAiqFullParamsProxy>& results, bool 
     return ret;
 }
 
+XCamReturn
+RkAiqManager::applyAnalyzerExpResult(SmartPtr<RkAiqExpParamsProxy>& results)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    cam3aResultList results_list;
+
+    if (results.ptr()) {
+        results->setType(RESULT_TYPE_EXPOSURE_PARAM);
+        results_list.push_back(results);
+    }
+
+    mCamHw->applyAnalyzerResult(results_list);
+
+    return ret;
+}
+
 void
 RkAiqManager::rkAiqCalcDone(SmartPtr<RkAiqFullParamsProxy> &results)
 {
@@ -1045,6 +1047,16 @@ RkAiqManager::rkAiqCalcDone(SmartPtr<RkAiqFullParamsProxy> &results)
 #else
     applyAnalyzerResult(results);
 #endif
+    EXIT_XCORE_FUNCTION();
+}
+
+void
+RkAiqManager::rkAiqCalcExpDone(SmartPtr<RkAiqExpParamsProxy> &results)
+{
+    ENTER_XCORE_FUNCTION();
+
+    applyAnalyzerExpResult(results);
+
     EXIT_XCORE_FUNCTION();
 }
 
@@ -1356,6 +1368,8 @@ void RkAiqManager::unsetTuningCalibDb(bool isNeedFreeCalib)
 XCamReturn RkAiqManager::setVicapStreamMode(int on, bool isSingleMode)
 {
     SmartPtr<CamHwIsp20> camHwIsp20 = mCamHw.dynamic_cast_ptr<CamHwIsp20>();
+    mIsAovMode = !on;
+    mRkAiqAnalyzer->setAovMode(!on);
     return camHwIsp20->setVicapStreamMode(on, isSingleMode);
 }
 

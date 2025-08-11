@@ -22,7 +22,7 @@
 #include "RkAiqAeHandler.h"
 #include "aiq_core.h"
 #include "RkAiqGlobalParamsManager_c.h"
-#include "rk_aiq_uapi_af_int.h"
+#include "af/rk_aiq_uapi_af_int.h"
 
 static void _handlerAf_deinit(AiqAlgoHandler_t* pHdl) {
     AiqAlgoHandler_deinit(pHdl);
@@ -158,6 +158,19 @@ static XCamReturn _handlerAf_processing(AiqAlgoHandler_t* pAlgoHandler) {
         af_proc_int->xcam_pdaf_stats = (rk_aiq_isp_pdaf_stats_t*)shared->pdafStatsBuf->_data;
     else
         af_proc_int->xcam_pdaf_stats = NULL;
+
+//#define ZOOM_MOVE_DEBUG
+#ifdef ZOOM_MOVE_DEBUG
+    int zoom_index = 0;
+
+    if (getValueFromFile("/data/.zoom_pos", &zoom_index) == true) {
+        if (pAfHdl->mLastZoomIndex != zoom_index) {
+            AiqAlgoHandlerAf_setZoomIndex(pAfHdl, zoom_index);
+            AiqAlgoHandlerAf_endZoomChg(pAfHdl);
+            pAfHdl->mLastZoomIndex = zoom_index;
+        }
+    }
+#endif
 
     ret = AiqAlgoHandler_processing(pAlgoHandler);
     if (ret < 0) {

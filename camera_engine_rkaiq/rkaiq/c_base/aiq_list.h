@@ -64,6 +64,8 @@ AiqListItem_t* aiqList_erase_item_locked(AiqList_t* list, AiqListItem_t* item);
 int aiqList_foreach(AiqList_t* list, aiqList_cb cb, void* args);
 void aiqList_reset(AiqList_t* list);
 int aiqList_size(AiqList_t* list);
+int aiqList_num(AiqList_t* list);
+bool aiqList_empty(AiqList_t* list);
 void aiqList_dump(AiqList_t* list);
 
 #define AIQ_LIST_FOREACH(pList, pItem, rm)         \

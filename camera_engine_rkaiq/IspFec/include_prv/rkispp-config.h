@@ -112,23 +112,22 @@ typedef unsigned long long u64;
 #define TNR_BUF_IDXFD_NUM       64
 
 /************VIDIOC_PRIVATE*************/
-#define RKISPP_CMD_GET_FECBUF_INFO  \
-    _IOR('V', BASE_VIDIOC_PRIVATE + 0, struct rkispp_fecbuf_info)
+#define RKISPP_CMD_SET_INIT_MODULE _IOW('V', BASE_VIDIOC_PRIVATE + 0, int)
 
-#define RKISPP_CMD_SET_FECBUF_SIZE  \
-    _IOW('V', BASE_VIDIOC_PRIVATE + 1, struct rkispp_fecbuf_size)
+#define RKISPP_CMD_GET_FECBUF_INFO _IOR('V', BASE_VIDIOC_PRIVATE + 1, struct rkispp_fecbuf_info)
 
-#define RKISPP_CMD_FEC_IN_OUT \
-    _IOW('V', BASE_VIDIOC_PRIVATE + 10, struct rkispp_fec_in_out)
+#define RKISPP_CMD_SET_FECBUF_SIZE _IOW('V', BASE_VIDIOC_PRIVATE + 2, struct rkispp_fecbuf_size)
 
-#define RKISPP_CMD_TRIGGER_YNRRUN       \
-    _IOW('V', BASE_VIDIOC_PRIVATE + 11, struct rkispp_tnr_inf)
+#define RKISPP_CMD_TRIGGER_MODE _IOW('V', BASE_VIDIOC_PRIVATE + 3, struct rkispp_trigger_mode)
 
-#define RKISPP_CMD_GET_TNRBUF_FD \
-    _IOR('V', BASE_VIDIOC_PRIVATE + 12, struct rkispp_buf_idxfd)
+#define RKISPP_CMD_GET_TNRBUF_FD _IOR('V', BASE_VIDIOC_PRIVATE + 4, struct rkispp_buf_idxfd)
 
-#define RKISPP_CMD_TRIGGER_MODE     \
-    _IOW('V', BASE_VIDIOC_PRIVATE + 13, struct rkispp_trigger_mode)
+#define RKISPP_CMD_GET_NRBUF_FD _IOR('V', BASE_VIDIOC_PRIVATE + 5, struct rkispp_buf_idxfd)
+
+/**independent fec video**/
+#define RKISPP_CMD_FEC_IN_OUT  _IOW('V', BASE_VIDIOC_PRIVATE + 10, struct rkispp_fec_in_out)
+#define RKISPP_CMD_FEC_BUF_ADD _IOW('V', BASE_VIDIOC_PRIVATE + 11, int)
+#define RKISPP_CMD_FEC_BUF_DEL _IOW('V', BASE_VIDIOC_PRIVATE + 12, int)
 
 /************EVENT_PRIVATE**************/
 #define RKISPP_V4L2_EVENT_TNR_COMPLETE  \

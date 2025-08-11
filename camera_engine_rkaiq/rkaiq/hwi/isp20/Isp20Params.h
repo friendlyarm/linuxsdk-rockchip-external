@@ -299,6 +299,11 @@ protected:
 #endif
 #if defined(ISP_HW_V30) || defined(ISP_HW_V21)
     struct isp21_awb_gain_cfg mLatestWbGainCfg;
+#if defined(ISP_HW_V30)
+    struct isp3x_lsc_cfg mLatestLscCfg;
+#else
+    struct isp2x_lsc_cfg mLatestLscCfg;
+#endif
 #endif
     float mLatestIspDgain;
     void getCommonCvtInfo(cam3aResultList &results, bool use_aiisp);

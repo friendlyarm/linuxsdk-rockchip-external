@@ -172,7 +172,7 @@ typedef struct rk_aiq_ae_meas_params_s {
     rawaelite_meas_cfg_t rawae0;
     rawaebig_meas_cfg_t rawae3;
 #endif
-#if ISP_HW_V39 || ISP_HW_V33
+#if ISP_HW_V39 || ISP_HW_V33 || ISP_HW_V35
     rawaebig_meas_cfg_t rawae0;
     rawaebig_meas_cfg_t rawae3;
 #endif
@@ -208,7 +208,7 @@ typedef struct rk_aiq_hist_meas_params_s {
     rawhistlite_cfg_t rawhist0;
     rawhistbig_cfg_t rawhist3;
 #endif
-#if ISP_HW_V39 || ISP_HW_V33
+#if ISP_HW_V39 || ISP_HW_V33 || ISP_HW_V35
     rawhistbig_cfg_t rawhist0;
     rawhistbig_cfg_t rawhist3;
 #endif

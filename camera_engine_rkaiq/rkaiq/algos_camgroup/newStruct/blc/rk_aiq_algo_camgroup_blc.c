@@ -36,7 +36,7 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
     RkAiqAlgoCamGroupProcOut* procResParaGroup = (RkAiqAlgoCamGroupProcOut*)outparams;
     BlcContext_t* pBlcCtx = (BlcContext_t *)inparams->ctx;
     blc_api_attrib_t* blc_attrib = pBlcCtx->blc_attrib;
-    blc_param_t* blc_param = procResParaGroup->camgroupParmasArray[0]->ablc.blc;
+    blc_param_t* blc_param = (blc_param_t*)procResParaGroup->camgroupParmasArray[0]->ablc.blc;
 
     if (procParaGroup->gcom.com.u.proc.is_attrib_update) {
         pBlcCtx->isReCal_ = true;
@@ -54,6 +54,11 @@ processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams)
     if(delta_iso > ABLC_RECALCULATE_DELTE_ISO) {
         pBlcCtx->isReCal_ = true;
     }
+#if defined(ISP_HW_V33) || defined(ISP_HW_V35)
+    if (!pBlcCtx->aeIsConverged && procParaGroup->camgroupParmasArray[0]->aec._aeProcRes.IsConverged)
+        pBlcCtx->isReCal_ = true;
+    pBlcCtx->aeIsConverged = procParaGroup->camgroupParmasArray[0]->aec._aeProcRes.IsConverged;
+#endif
 
     if (pBlcCtx->isReCal_) {
         BlcSelectParam(pBlcCtx, blc_param, iso);

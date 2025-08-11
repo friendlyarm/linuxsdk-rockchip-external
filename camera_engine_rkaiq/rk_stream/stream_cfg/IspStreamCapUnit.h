@@ -19,6 +19,7 @@
 
 #include <map>
 #include <v4l2_device.h>
+#include "RawStreamCapUnit.h"
 #include "xcam_thread.h"
 #include "smartptr.h"
 #include "safe_list.h"
@@ -27,7 +28,6 @@
 #include "xcam_log.h"
 #include "Stream.h"
 #include "rkrawstream_user_api.h"
-#include "RawStreamCapUnit.h"
 #include "IspStreamCapUnit.h"
 #include "MediaInfo.h"
 

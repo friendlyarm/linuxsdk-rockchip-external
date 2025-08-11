@@ -172,6 +172,14 @@ static const char* Cam3aResultType2Str[RESULT_TYPE_MAX_PARAM] = {
     [RESULT_TYPE_TRANS_PARAM]    = "TRANS",
     [RESULT_TYPE_LDC_PARAM]      = "LDC",
     [RESULT_TYPE_AESTATS_PARAM]  = "AEC",
+    [RESULT_TYPE_HISTEQ_PARAM]   = "HISTEQ",
+    [RESULT_TYPE_ENH_PARAM]      = "ENH",
+    [RESULT_TYPE_TEXEST_PARAM]   = "TEXEST",
+    [RESULT_TYPE_HSV_PARAM]      = "HSV",
+    [RESULT_TYPE_POSTISP_PARAM]  = "POSTISP",
+    [RESULT_TYPE_AIBNR_PARAM]    = "AIBNR",
+    [RESULT_TYPE_AMTD_PARAM]     = "AMTD",
+    [RESULT_TYPE_AIRMS_PARAM]    = "AIRMS",
 };
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop

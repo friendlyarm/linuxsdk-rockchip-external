@@ -563,4 +563,55 @@ XCamReturn RkAiqCamGroupAeHandleInt::getAecStatsCfg(Uapi_AecStatsCfg_t* pAecStat
     return ret;
 }
 
+XCamReturn RkAiqCamGroupAeHandleInt::setFrameHdrAttr(Uapi_FrameHdrAttr_t FrameHdrAttr) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    mCfgMutex.lock();
+    bool isChanged = false;
+    if (FrameHdrAttr.sync.sync_mode == RK_AIQ_UAPI_MODE_ASYNC && \
+            memcmp(&mNewFrameHdrAttr, &FrameHdrAttr, sizeof(FrameHdrAttr)))
+        isChanged = true;
+    else if (FrameHdrAttr.sync.sync_mode != RK_AIQ_UAPI_MODE_ASYNC && \
+             memcmp(&mCurFrameHdrAttr, &FrameHdrAttr, sizeof(FrameHdrAttr)))
+        isChanged = true;
+
+    // if something changed
+    if (isChanged) {
+        mNewFrameHdrAttr = FrameHdrAttr;
+        updateFrameHdrAttr  = true;
+        waitSignal(FrameHdrAttr.sync.sync_mode);
+    }
+
+    mCfgMutex.unlock();
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn RkAiqCamGroupAeHandleInt::getFrameHdrAttr(Uapi_FrameHdrAttr_t* pFrameHdrAttr) {
+    ENTER_ANALYZER_FUNCTION();
+
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    if (pFrameHdrAttr->sync.sync_mode == RK_AIQ_UAPI_MODE_SYNC) {
+        mCfgMutex.lock();
+        rk_aiq_uapi_ae_getFrameHdrAttr(mAlgoCtx, pFrameHdrAttr, true);
+        pFrameHdrAttr->sync.done = true;
+        mCfgMutex.unlock();
+    } else {
+        if (updateFrameHdrAttr) {
+            memcpy(pFrameHdrAttr, &mNewFrameHdrAttr, sizeof(mNewFrameHdrAttr));
+            pFrameHdrAttr->sync.done = false;
+        } else {
+            rk_aiq_uapi_ae_getFrameHdrAttr(mAlgoCtx, pFrameHdrAttr, true);
+            pFrameHdrAttr->sync.sync_mode = mNewFrameHdrAttr.sync.sync_mode;
+            pFrameHdrAttr->sync.done      = true;
+        }
+    }
+
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
 }  // namespace RkCam

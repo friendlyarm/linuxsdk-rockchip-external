@@ -17,7 +17,6 @@ set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "")
 if (ARCH STREQUAL "arm")
     add_compile_options(
         -march=armv7-a
@@ -29,15 +28,16 @@ if (ARCH STREQUAL "aarch64")
         -march=armv8-a
         )
 endif()
-endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     if (ARCH STREQUAL "arm")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mthumb -mthumb-interwork")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mthumb -mthumb-interwork")
+        #if (${CMAKE_C_COMPILER_VERSION} VERSION_LESS "12.4.0")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mthumb -mthumb-interwork")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mthumb -mthumb-interwork")
+        #endif()
     endif()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
     execute_process(
         COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
     if (NOT (GCC_VERSION VERSION_GREATER 8.3 OR GCC_VERSION VERSION_EQUAL 8.3))
@@ -84,7 +84,11 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_compile_options(-Wno-unused-but-set-variable
                             -Wno-unused-variable
                             -Wno-unused-label
-                            -Wno-implicit-const-int-float-conversion)
+                            -Wno-implicit-const-int-float-conversion
+                            -Wno-gnu-variable-sized-type-not-at-end
+                            -Wno-unused-value
+                            -Wno-constant-conversion
+                            -Wno-tautological-constant-out-of-range-compare)
 
     endif()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
@@ -103,6 +107,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         -Wno-psabi
         -Wno-unused
         -Wno-unused-result
+        -Wno-sign-compare
         )
     if (GCC_VERSION VERSION_GREATER 9 OR GCC_VERSION VERSION_EQUAL 9)
         add_compile_options(

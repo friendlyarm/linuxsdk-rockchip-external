@@ -76,11 +76,20 @@
 
 #endif
 
+#include "common/rk_aiq_offline_raw.h"
 #include "common/rk_aiq_types_v20.h"
 #include "common/rk_aiq_types_v21.h"
 #include "common/rk_aiq_types_v3x.h" /*< v3x types */
 #include "common/rk_aiq_types_v32.h"
 #include "common/rk_aiq_types_v39.h"
+
+#if ISP_HW_V39
+#include "isp/rk_aiq_stats_awb39.h"
+#elif ISP_HW_V33
+#include "isp/rk_aiq_stats_awb33.h"
+#elif ISP_HW_V35
+#include "isp/rk_aiq_stats_awb35.h"
+#endif
 
 #define ANR_NO_SEPERATE_MARCO (0)
 
@@ -371,6 +380,8 @@ typedef struct {
     int32_t focus_maximum;
     int32_t zoom_minimum;
     int32_t zoom_maximum;
+    int32_t zoom1_minimum;
+    int32_t zoom1_maximum;
 } rk_aiq_lens_descriptor;
 
 typedef struct {
@@ -403,6 +414,12 @@ typedef struct {
     int max_pos;
 } rk_aiq_af_focusrange;
 
+#define AIBNR_MODEL_PATH_LEN             256
+typedef struct RkAiqAibnrModelInfo_s {
+    char model_file[RK_AIQ_ISO_STEP_MAX][AIBNR_MODEL_PATH_LEN];
+    float quant_val[RK_AIQ_ISO_STEP_MAX];
+} RkAiqAibnrModelInfo_t;
+
 // sensor
 typedef struct {
     unsigned short line_periods_vertical_blanking;
@@ -429,6 +446,7 @@ typedef struct {
     struct rkmodule_af_inf *otp_af;
     struct rkmodule_pdaf_inf *otp_pdaf;
     u8 compr_bit;
+    enum rkmodule_bayer_mode bayer_mode;
 } rk_aiq_exposure_sensor_descriptor;
 
 // exposure
@@ -479,24 +497,24 @@ typedef struct {
 typedef struct {
     uint32_t frame_id;
     union {
-        rk_aiq_isp_aec_stats_t aec_stats;
-        RKAiqAecStatsV25_t     aec_stats_v25;
+        rk_aiq_isp_aec_stats_t aec_stats; /* rv1106 ... */
+        RKAiqAecStatsV25_t     aec_stats_v25; /* rv1103b rk3576 */
     };
     bool bValid_aec_stats;
     int awb_hw_ver;
     union {
         rk_aiq_awb_stat_res_v200_t awb_stats_v200;
-        rk_aiq_awb_stat_res2_v201_t awb_stats_v21;
-        rk_aiq_isp_awb_stats2_v3x_t awb_stats_v3x;
-        rk_aiq_isp_awb_stats_v32_t awb_stats_v32;
-        awbStats_stats_priv_t awb_stats_v39;
+        rk_aiq_awb_stat_res2_v201_t awb_stats_v21; /* rk356x */
+        rk_aiq_isp_awb_stats2_v3x_t awb_stats_v3x; /* rk3588 */
+        rk_aiq_isp_awb_stats_v32_t awb_stats_v32; /* rv1106, rk3562 */
+        awbStats_stats_priv_t awb_stats_v39; /* rv1103b rk3576 */
     };
     bool bValid_awb_stats;
     int af_hw_ver;
     union {
         rk_aiq_isp_af_stats_t  af_stats;
-        rk_aiq_isp_af_stats_v3x_t af_stats_v3x;
-        afStats_stats_t afStats_stats;
+        rk_aiq_isp_af_stats_v3x_t af_stats_v3x; /* rk3588 */
+        afStats_stats_t afStats_stats; /* rk3576 */
     };
     bool bValid_af_stats;
 } rk_aiq_isp_stats_t;
@@ -655,7 +673,27 @@ typedef enum rk_isp_stream_mode_e {
 
 typedef struct {
     struct rkmodule_awb_inf otp_awb;
+    struct rkmodule_lsc_inf otp_lsc;
 } rk_aiq_user_otp_info_t;
+
+typedef enum {
+    // CIS/ISP: param  RAW: raw tream
+    RK_AIQ_CONTROL_DEFAULT,
+    RK_AIQ_CONTROL_CIS_ISP_PARAM = 1,
+    RK_AIQ_CONTROL_CIS_ISP_PARAM_AND_RAW,
+    RK_AIQ_CONTROL_ISP_PARAM_AND_RAW,
+    RK_AIQ_CONTROL_ISP_PARAM_ONLY,
+} rk_aiq_control_mode_t;
+
+typedef struct rk_aiq_ispParamOnlyCrtl_info_s {
+    rk_aiq_frame_info_t first_exp_info;
+    rk_aiq_frame_info_t second_exp_info;
+} rk_aiq_ispParamOnlyCrtl_info_t;
+
+typedef struct rk_aiq_control_preinit_s {
+    rk_aiq_control_mode_t mode;
+    rk_aiq_ispParamOnlyCrtl_info_t isp_param_only_info;
+} rk_aiq_control_preinit_t;
 
 typedef enum {
     RK_ISP_RKRAWSTREAM_MODE_INVALID = 0,
@@ -669,36 +707,6 @@ typedef struct {
     rk_aiq_format_t format;
     rk_aiq_rkrawstream_mode_t mode;
 } rk_aiq_rkrawstream_info_t;
-
-typedef struct {
-    char wr_mode;
-    char rd_mode;
-    uint16_t wr_linecnt;
-    uint16_t rd_linecnt;
-} __attribute__((packed)) rk_aiq_aiisp_cfg_t;
-
-typedef struct rkisp_bay3dbuf_info_s {
-    int iir_fd;
-    int iir_size;
-    union {
-        struct {
-            int cur_fd;
-            int cur_size;
-            int ds_fd;
-            int ds_size;
-        } v30;
-        struct {
-            int ds_fd;
-            int ds_size;
-        } v32;
-        struct {
-            int gain_fd;
-            int gain_size;
-            int aiisp_fd;
-            int aiisp_size;
-        } v39;
-    } u;
-} __attribute__((packed)) rkisp_bay3dbuf_info_t;
 
 #define RK_AIQ_CAM_GROUP_MAX_CAMS (8)
 

@@ -7,6 +7,10 @@ set (AE_SRC
     rk_aiq_ae_algo_pid.c
     rk_aiq_uapi_ae_int.c
     rk_aiq_ae_algo_iris.c
-    )
+   )
+
+if (RKAIQ_HAVE_DUMPSYS)
+    set(AE_SRC ${AE_SRC} rk_aiq_ae_algo_info.c)
+endif()
 
 dec_algo(ae rk_aiq_algo_ae_itf.c ${AE_SRC})

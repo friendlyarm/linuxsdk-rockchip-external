@@ -32,7 +32,9 @@
 #include "uAPI2/rk_aiq_user_api2_ae.h"
 #include "uAPI2/rk_aiq_user_ae_thread_v25_itf.h"
 #include "isp/rk_aiq_stats_aeStats25.h"
-
+#include "uAPI2/rk_aiq_user_api2_custom2_awb.h"
+#include "isp/awb_head2.h"
+#include "uAPI2/rk_aiq_user_api2_awb_v3.h"
 #include "isp/rk_aiq_stats_af33.h"
 #include "uAPI2/rk_aiq_user_api2_af.h"
 
@@ -66,8 +68,6 @@
 #include "uAPI2/rk_aiq_user_api2_hsv.h"
 #include "isp/rk_aiq_isp_cac30.h"
 #include "uAPI2/rk_aiq_user_api2_cac.h"
-#include "isp/rk_aiq_isp_ldch22.h"
-#include "uAPI2/rk_aiq_user_api2_ldch.h"
 #include "isp/rk_aiq_isp_csm21.h"
 #include "uAPI2/rk_aiq_user_api2_csm.h"
 #include "isp/rk_aiq_isp_merge22.h"
@@ -86,6 +86,12 @@
 #include "uAPI2/rk_aiq_user_api2_ccm.h"
 #include "isp/rk_aiq_isp_texEst40.h"
 #include "uAPI2/rk_aiq_user_api2_texEst.h"
-#include "isp/awb_head2.h"
-#include "uAPI2/rk_aiq_user_api2_awb_v3.h"
+#include "isp/rk_aiq_isp_stats_v33.h"
+#include "uAPI2/rk_aiq_user_api2_stats.h"
+#include "isp/rk_aiq_isp_ldc22.h"
+#include "uAPI2/rk_aiq_user_api2_ldc.h"
+
+#include "uAPI2/rk_aiq_user_api2_postisp.h"
+#include "uAPI2/rk_aiq_user_api2_amtd.h"
+
 #endif

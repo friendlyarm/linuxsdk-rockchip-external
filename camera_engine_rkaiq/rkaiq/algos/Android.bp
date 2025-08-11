@@ -26,7 +26,6 @@ cc_defaults {
         "-Wno-extern-c-compat",
         "-fno-strict-aliasing",
         "-frtti",
-        "-DGENMESH_ONLINE"
     ],
 
     cppflags: [
@@ -51,7 +50,6 @@ cc_defaults {
         "-Wno-extern-c-compat",
         "-Wno-missing-braces",
         "-Wno-missing-field-initializers",
-        "-DGENMESH_ONLINE"
     ],
 
     include_dirs: [
@@ -77,6 +75,9 @@ cc_defaults {
         "external/camera_engine_rkaiq/algos_camgroup",
         "external/camera_engine_rkaiq/c_base",
         "external/camera_engine_rkaiq/modules",
+        "external/camera_engine_rkaiq/dumpcam_server/include",
+        "external/camera_engine_rkaiq/dumpcam_server/info/include",
+        "external/camera_engine_rkaiq/dumpcam_server/ipcs/include",
     ],
 }
 
@@ -86,6 +87,7 @@ subdirs = [
     "algos/af",
     "algos/asd",
     "algos/afd",
+    "algos/amtd",
     "algos/newStruct",
 ]
 

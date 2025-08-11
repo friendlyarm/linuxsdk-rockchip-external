@@ -265,6 +265,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescAorb = {
     .pre_process  = ORBPreProcess,
     .processing   = ORBProcessing,
     .post_process = ORBPostProcess,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

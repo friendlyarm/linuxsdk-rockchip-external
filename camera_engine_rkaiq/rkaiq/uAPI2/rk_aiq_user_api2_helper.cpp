@@ -161,6 +161,7 @@ __RKAIQUAPI_CALLER(aie_attrib_t);
 __RKAIQUAPI_CALLER(acp_attrib_t);
 __RKAIQUAPI_CALLER(camgroup_uapi_t);
 #if USE_NEWSTRUCT
+__RKAIQUAPI_CALLER(awb_api_attrib_t);
 __RKAIQUAPI_CALLER(ae_param_t);
 __RKAIQUAPI_CALLER(ae_api_expSwAttr_t);
 __RKAIQUAPI_CALLER(ae_queryInfo_t);
@@ -190,8 +191,6 @@ __RKAIQUAPI_CALLER(gic_api_attrib_t);
 __RKAIQUAPI_CALLER(gic_status_t);
 __RKAIQUAPI_CALLER(cac_api_attrib_t);
 __RKAIQUAPI_CALLER(cac_status_t);
-__RKAIQUAPI_CALLER(ldch_api_attrib_t);
-__RKAIQUAPI_CALLER(ldch_status_t);
 __RKAIQUAPI_CALLER(csm_api_attrib_t);
 __RKAIQUAPI_CALLER(csm_status_t);
 __RKAIQUAPI_CALLER(mge_api_attrib_t);
@@ -254,11 +253,13 @@ __rkaiq_uapi_common_call(void *desc, void *sys_ctx, cJSON *cmd_js, cJSON **ret_j
 		}
 		ret = RkCam_cJSONUtils_ApplyPatches(old_json, cmd_js);
 		if (0 != ret) {
+            RkCam_cJSON_Delete(old_json);
 			XCAM_LOG_ERROR("%s apply patch failed %d!", __func__, ret);
 			return -1;
 		}
 		memset(real_obj, 0, sizeof(real_obj));
 		ret = j2s_json_to_struct(&ctx, old_json, type_name, real_obj);
+        RkCam_cJSON_Delete(old_json);
 		j2s_deinit(&ctx);
 		if (ret) return -1;
 		if (!uapi_desc->arg_set) return -1;
@@ -397,6 +398,19 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
     __RKAIQUAPI_DESC_DEF("/uapi/0/measure_info/wb_log/info/awb_strategy_result",
                          rk_tool_awb_strategy_result_t, NULL,
                          rk_aiq_user_api2_awb_getStrategyResult),
+#if defined(ISP_HW_V20) || defined(ISP_HW_V21)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/measure_info/af_hwstats", uapi_af_v20stats_t,
+                         NULL, rk_aiq_uapi_get_af_stats),
+#elif defined(ISP_HW_V30) || defined(ISP_HW_V32)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/measure_info/af_hwstats", uapi_af_v30stats_t,
+                         NULL, rk_aiq_uapi_get_af_v3xstats),
+#elif defined(ISP_HW_V32_LITE)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/measure_info/af_hwstats", uapi_af_v32litestats_t,
+                         NULL, rk_aiq_uapi_get_af_v32litestats),
+#elif defined(ISP_HW_V39) || defined(ISP_HW_V35)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/measure_info/af_hwstats", afStats_stats_t,
+                         NULL, rk_aiq_uapi_get_af_newstats),
+#endif
 
     __RKAIQUAPI_DESC_DEF("/uapi/0/accm_uapi/mode", uapi_wb_mode_t, rk_aiq_set_tool_accm_mode,
                          rk_aiq_get_accm_mode),
@@ -463,6 +477,8 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
 
 
 #if USE_NEWSTRUCT
+    __RKAIQUAPI_DESC_DEF("/uapi/0/awb_uapi/attr", awb_api_attrib_t, rk_aiq_user_api2_awb_SetAttrib,
+                         rk_aiq_user_api2_awb_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/ae_uapi/attr", ae_param_t, rk_aiq_user_api2_ae_setAttr, rk_aiq_user_api2_ae_getAttr),
     __RKAIQUAPI_DESC_DEF("/uapi/0/ae_uapi/expSwAttr", ae_api_expSwAttr_t, rk_aiq_user_api2_ae_setExpSwAttr, rk_aiq_user_api2_ae_getExpSwAttr),
     __RKAIQUAPI_DESC_DEF("/uapi/0/ae_uapi/queryExpInfo", ae_queryInfo_t, NULL, rk_aiq_user_api2_ae_queryExpResInfo),
@@ -492,10 +508,6 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
     __RKAIQUAPI_DESC_DEF("/uapi/0/gic_uapi/info", gic_status_t, NULL, rk_aiq_user_api2_gic_QueryStatus),
     __RKAIQUAPI_DESC_DEF("/uapi/0/cac_uapi/attr", cac_api_attrib_t, rk_aiq_user_api2_cac_SetAttrib, rk_aiq_user_api2_cac_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/cac_uapi/info", cac_status_t, NULL, rk_aiq_user_api2_cac_QueryStatus),
-#if RKAIQ_HAVE_LDCH_V21
-    __RKAIQUAPI_DESC_DEF("/uapi/0/ldch_uapi/attr", ldch_api_attrib_t, rk_aiq_user_api2_ldch_SetAttrib, rk_aiq_user_api2_ldch_GetAttrib),
-    __RKAIQUAPI_DESC_DEF("/uapi/0/ldch_uapi/info", ldch_status_t, NULL, rk_aiq_user_api2_ldch_QueryStatus),
-#endif
     __RKAIQUAPI_DESC_DEF("/uapi/0/csm_uapi/attr", csm_api_attrib_t, rk_aiq_user_api2_csm_SetAttrib, rk_aiq_user_api2_csm_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/csm_uapi/info", csm_status_t, NULL, rk_aiq_user_api2_csm_QueryStatus),
     __RKAIQUAPI_DESC_DEF("/uapi/0/mge_uapi/attr", mge_api_attrib_t, rk_aiq_user_api2_merge_SetAttrib, rk_aiq_user_api2_merge_GetAttrib),
@@ -517,7 +529,24 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
     __RKAIQUAPI_DESC_DEF("/uapi/0/lut3d_uapi/attr", lut3d_api_attrib_t, rk_aiq_user_api2_3dlut_SetAttrib, rk_aiq_user_api2_3dlut_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/lut3d_uapi/info", lut3d_status_t, NULL, rk_aiq_user_api2_3dlut_QueryStatus),
 #endif
+
+#if defined(ISP_HW_V20) || defined(ISP_HW_V21)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/af_uapi/attr", CalibDbV2_AF_Tuning_Para_t, rk_aiq_user_api2_af_SetCalib, rk_aiq_user_api2_af_GetCalib),
+#endif
+#if defined(ISP_HW_V30)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/af_uapi/attr", CalibDbV2_AFV30_Tuning_Para_t, rk_aiq_user_api2_af_SetCalib, rk_aiq_user_api2_af_GetCalib),
+#endif
+#if defined(ISP_HW_V32)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/af_uapi/attr", CalibDbV2_AFV31_Tuning_Para_t, rk_aiq_user_api2_af_SetCalib, rk_aiq_user_api2_af_GetCalib),
+#endif
+#if defined(ISP_HW_V32_LITE)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/af_uapi/attr", CalibDbV2_AFV32_Tuning_Para_t, rk_aiq_user_api2_af_SetCalib, rk_aiq_user_api2_af_GetCalib),
+#endif
+#if defined(ISP_HW_V39)
+    __RKAIQUAPI_DESC_DEF("/uapi/0/af_uapi/attr", CalibDbV2_AFV33_t, rk_aiq_user_api2_af_SetCalib, rk_aiq_user_api2_af_GetCalib),
+#endif
 };
+
 /***********************END OF CUSTOM AREA**************************/
 
 char* rkaiq_uapi_rpc_response(const char* cmd_path, cJSON* root_js,

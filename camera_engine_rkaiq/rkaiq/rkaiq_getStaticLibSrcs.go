@@ -2,10 +2,63 @@ package rkaiqdefaults
 
 import (
     // "fmt"
+    "strings"
 )
 
 func rkaiq_getStaticLibSrcs(name string, macros_map map[string]bool) []string {
     var srcs []string
+
+    if (strings.Compare(name, "librkaiq_awb") == 0) {
+        srcs = srcs[len(srcs):]
+        flag0 := macros_map["RKAIQ_HAVE_AWB_V20"]
+        flag1 := macros_map["RKAIQ_HAVE_AWB_V21"]
+        flag2 := macros_map["RKAIQ_HAVE_AWB_V32"]
+        flag3 := macros_map["RKAIQ_HAVE_AWB_V32LT"]
+        flag4 := macros_map["RKAIQ_HAVE_AWB_V39"]
+        if flag0 || flag1 || flag2 || flag3 || flag4 {
+            srcs = append(srcs, "color_space_convert.c")
+            srcs = append(srcs, "fixfloat.c")
+            srcs = append(srcs, "rk_aiq_algo_awb_itf.c")
+            srcs = append(srcs, "rk_aiq_awb_algo_com2.c")
+            srcs = append(srcs, "rk_aiq_uapi_awb_int.c")
+
+            if flag0 {
+                srcs = append(srcs, "rk_aiq_awb_algo_v200.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_sgc.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_com1.c")
+                srcs = append(srcs, "rk_aiq_uapi_awb_int.c")
+            }
+            if flag1 {
+                srcs = append(srcs, "rk_aiq_awb_algo_v201.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_sgc.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_com1.c")
+                srcs = append(srcs, "rk_aiq_uapiv2_awb_int.c")
+            }
+            if flag2 || flag3 {
+                srcs = append(srcs, "rk_aiq_awb_algo_v32.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_sgc.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_com1.c")
+                srcs = append(srcs, "rk_aiq_uapiv2_awb_int.c")
+            }
+            if flag4 {
+                srcs = append(srcs, "rk_aiq_awb_algo_v39.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_sgc2.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_com3.c")
+                srcs = append(srcs, "rk_aiq_uapiv3_awb_int.c")
+                srcs = append(srcs, "rk_aiq_awb_algo_scenedet.c")
+            }
+        }
+        // fmt.Printf("%s srcs:", name, srcs)
+        // fmt.Printf("\n")
+        return srcs
+    }
+
+    useNewstruct := macros_map["RKAIQ_NEWSTRUCT_TEST"]
+    if useNewstruct {
+        srcs = rkaiq_getNewStructStaticLibSrcs(name, macros_map)
+        return srcs
+    }
+
     switch name {
     case "librkaiq_agic":
         {
@@ -752,49 +805,6 @@ func rkaiq_getStaticLibSrcs(name string, macros_map map[string]bool) []string {
             break
         }
 
-    case "librkaiq_awb":
-        {
-            srcs = srcs[len(srcs):]
-            flag0 := macros_map["RKAIQ_HAVE_AWB_V20"]
-            flag1 := macros_map["RKAIQ_HAVE_AWB_V21"]
-            flag2 := macros_map["RKAIQ_HAVE_AWB_V32"]
-            flag3 := macros_map["RKAIQ_HAVE_AWB_V32LT"]
-            flag4 := macros_map["RKAIQ_HAVE_AWB_V39"]
-            if flag0 || flag1 || flag2 || flag3 || flag4 {
-                srcs = append(srcs, "color_space_convert.c")
-                srcs = append(srcs, "fixfloat.c")
-                srcs = append(srcs, "rk_aiq_algo_awb_itf.c")
-                srcs = append(srcs, "rk_aiq_awb_algo_com2.c")
-
-
-                if flag0 {
-                    srcs = append(srcs, "rk_aiq_awb_algo_v200.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_sgc.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_com1.c")
-                    srcs = append(srcs, "rk_aiq_uapi_awb_int.c")
-                }
-                if flag1 {
-                    srcs = append(srcs, "rk_aiq_awb_algo_v201.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_sgc.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_com1.c")
-                    srcs = append(srcs, "rk_aiq_uapiv2_awb_int.c")
-                }
-                if flag2 || flag3 {
-                    srcs = append(srcs, "rk_aiq_awb_algo_v32.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_sgc.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_com1.c")
-                    srcs = append(srcs, "rk_aiq_uapiv2_awb_int.c")
-                }
-                if flag4 {
-                    srcs = append(srcs, "rk_aiq_awb_algo_v39.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_sgc2.c")
-                    srcs = append(srcs, "rk_aiq_awb_algo_com3.c")
-                    srcs = append(srcs, "rk_aiq_uapiv3_awb_int.c")
-                }
-            }
-            break
-        }
-
     case "librkaiq_afd":
         {
             srcs = srcs[len(srcs):]
@@ -831,10 +841,6 @@ func rkaiq_getStaticLibSrcs(name string, macros_map map[string]bool) []string {
         }
         break
     default:
-        useNewstruct := macros_map["RKAIQ_NEWSTRUCT_TEST"]
-        if useNewstruct {
-            srcs = rkaiq_getNewStructStaticLibSrcs(name, macros_map)
-        }
         break
     }
 
@@ -857,11 +863,19 @@ func rkaiq_getCamgroupStaticLibSrcs(macros_map map[string]bool) []string {
         srcs = append(srcs, "newStruct/3dlut/rk_aiq_algo_camgroup_3dlut.c")
         srcs = append(srcs, "newStruct/gamma/rk_aiq_algo_camgroup_gamma.c")
         srcs = append(srcs, "newStruct/drc/rk_aiq_algo_camgroup_drc.c")
-        srcs = append(srcs, "newStruct/dehaze/rk_aiq_algo_camgroup_dehaze.c")
         srcs = append(srcs, "newStruct/dpc/rk_aiq_algo_camgroup_dpc.c")
         srcs = append(srcs, "newStruct/merge/rk_aiq_algo_camgroup_merge.c")
         srcs = append(srcs, "newStruct/ccm/rk_aiq_algo_camgroup_ccm.c")
         srcs = append(srcs, "newStruct/lsc/rk_aiq_algo_camgroup_lsc.c")
+        srcs = append(srcs, "newStruct/histeq/rk_aiq_algo_camgroup_histeq.c")
+        flag1 = macros_map["RKAIQ_HAVE_DEHAZE"]
+        if (flag1) {
+            srcs = append(srcs, "newStruct/dehaze/rk_aiq_algo_camgroup_dehaze.c")
+        }
+        flag1 = macros_map["RKAIQ_HAVE_ENHANCE"]
+        if (flag1) {
+            srcs = append(srcs, "newStruct/enh/rk_aiq_algo_camgroup_enh.c")
+        }
     } else {
         // misc
         srcs = append(srcs, "misc/rk_aiq_algo_camgroup_alsc_itf.cpp")
@@ -1018,11 +1032,16 @@ func rkaiq_getNewStructStaticLibSrcs(name string, macros_map map[string]bool) []
 
     var srcs []string
 
+    dumpsys := macros_map["RKAIQ_HAVE_DUMPSYS"]
+
     switch name {
     case "librkaiq_3dlut":
         flag0 := macros_map["RKAIQ_HAVE_3DLUT_V1"]
         if flag0 {
             srcs = append(srcs, "3dlut/algo_3dlut.c")
+        }
+        if (len(srcs) != 0 && dumpsys) {
+            srcs = append(srcs, "3dlut/algo_3dlut_info.c")
         }
         break
 
@@ -1058,6 +1077,9 @@ func rkaiq_getNewStructStaticLibSrcs(name string, macros_map map[string]bool) []
         flag2 := macros_map["RKAIQ_HAVE_CCM_V3"]
         if flag0 || flag1 || flag2 {
             srcs = append(srcs, "ccm/algo_ccm.c")
+        }
+        if (len(srcs) != 0 && dumpsys) {
+            srcs = append(srcs, "ccm/algo_ccm_info.c")
         }
         break
 
@@ -1127,7 +1149,8 @@ func rkaiq_getNewStructStaticLibSrcs(name string, macros_map map[string]bool) []
         flag2 := macros_map["RKAIQ_HAVE_DRC_V12"]
         flag3 := macros_map["RKAIQ_HAVE_DRC_V12_LITE"]
         flag4 := macros_map["RKAIQ_HAVE_DRC_V20"]
-        if flag0 || flag1 || flag2 || flag3 || flag4 {
+        flag5 := macros_map["RKAIQ_HAVE_DRC_V21"]
+        if flag0 || flag1 || flag2 || flag3 || flag4 || flag5 {
             srcs = append(srcs, "drc/algo_drc.c")
         }
         break
@@ -1177,13 +1200,17 @@ func rkaiq_getNewStructStaticLibSrcs(name string, macros_map map[string]bool) []
         if flag0 || flag1 || flag2 {
             srcs = append(srcs, "lsc/algo_lsc.c")
         }
+        if (len(srcs) != 0 && dumpsys) {
+            srcs = append(srcs, "lsc/algo_lsc_info.c")
+        }
         break
 
     case "librkaiq_merge":
         flag0 := macros_map["RKAIQ_HAVE_MERGE_V10"]
         flag1 := macros_map["RKAIQ_HAVE_MERGE_V11"]
         flag2 := macros_map["RKAIQ_HAVE_MERGE_V12"]
-        if flag0 || flag1 || flag2 {
+        flag3 := macros_map["RKAIQ_HAVE_MERGE_V13"]
+        if flag0 || flag1 || flag2 || flag3 {
             srcs = append(srcs, "merge/algo_merge.c")
         }
         break
@@ -1219,8 +1246,86 @@ func rkaiq_getNewStructStaticLibSrcs(name string, macros_map map[string]bool) []
         }
         break
 
-    default:
+    case "librkaiq_histeq":
+        flag0 := macros_map["RKAIQ_HAVE_DEHAZE_V14"]
+        flag1 := macros_map["RKAIQ_HAVE_HISTEQ_V10"]
+        if flag0 || flag1 {
+            srcs = append(srcs, "histeq/algo_histeq.c")
+        }
         break
+
+    case "librkaiq_aldc":
+        {
+            flag0 := macros_map["RKAIQ_HAVE_LDCH_V22"]
+            flag1 := macros_map["RKAIQ_HAVE_LDCV_V22"]
+            if flag0 {
+                srcs = append(srcs, "ldc/algo_ldc.c")
+                srcs = append(srcs, "ldc/ldc_algo_adaptor.c")
+                srcs = append(srcs, "ldc/ldc_gen_mesh.c")
+                srcs = append(srcs, "ldc/ldc_ldch_adaptee.c")
+                srcs = append(srcs, "ldc/ldc_lut_buffer.c")
+                if flag1 {
+                    srcs = append(srcs, "ldc/ldc_ldcv_adaptee.c")
+                }
+            }
+            if (len(srcs) != 0 && dumpsys) {
+                srcs = append(srcs, "ldc/algo_ldc_info.c")
+            }
+            break
+        }
+
+    case "librkaiq_camgroup_misc":
+        {
+            srcs = srcs[len(srcs):]
+            flag0 := macros_map["RKAIQ_ENABLE_CAMGROUP"]
+            if flag0 {
+                srcs = rkaiq_getCamgroupStaticLibSrcs(macros_map);
+            }
+        }
+        break
+
+    default:
+        // fmt.Printf("%s can't find srcs files\n", name)
+        break
+    }
+
+    if (dumpsys) {
+        switch name {
+        case "librkaiq_dumpcam_server":
+            {
+                srcs = append(srcs, "rk_aiq_registry.c")
+            }
+            break
+        case "librkaiq_ipcs":
+            {
+                srcs = append(srcs, "ipcs/c_rk_ipcs_request.c")
+                srcs = append(srcs, "ipcs/c_rk_ipcs_response.c")
+                srcs = append(srcs, "ipcs/c_rk_ipcs_service.c")
+                srcs = append(srcs, "ipcs/sock/c_rk_ipcs_sock_server.c")
+            }
+            break
+
+        case "librkaiq_info":
+            {
+                srcs = append(srcs, "info/rk_info_utils.c")
+                srcs = append(srcs, "info/c_rk_info_service_control.c")
+                srcs = append(srcs, "info/rk_cmd_service_control.c")
+                srcs = append(srcs, "info/st_string.c")
+            }
+            break
+
+        case "librkaiq_cjson":
+            {
+                srcs = append(srcs, "third-party/cjson/c_RTJsonParser.c")
+            }
+            break
+
+        case "librkaiq_argparse":
+            {
+                srcs = append(srcs, "third-party/argparse/argparse.c")
+            }
+            break
+        }
     }
 
     // fmt.Printf("%s srcs:", name, srcs)

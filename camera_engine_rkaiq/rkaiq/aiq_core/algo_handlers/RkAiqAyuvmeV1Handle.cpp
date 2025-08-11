@@ -206,8 +206,14 @@ XCamReturn RkAiqAyuvmeV1HandleInt::prepare() {
     ayuvme_config_int->stAyuvmeConfig.rawWidth  = sharedCom->snsDes.isp_acq_width;
     ayuvme_config_int->stAyuvmeConfig.rawHeight = sharedCom->snsDes.isp_acq_height;
 
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.lock();
+#endif
     RkAiqAlgoDescription* des = (RkAiqAlgoDescription*)mDes;
     ret                       = des->prepare(mConfig);
+#ifdef DISABLE_HANDLE_ATTRIB
+    mCfgMutex.unlock();
+#endif
     RKAIQCORE_CHECK_RET(ret, "ayuvme algo prepare failed");
 
     EXIT_ANALYZER_FUNCTION();

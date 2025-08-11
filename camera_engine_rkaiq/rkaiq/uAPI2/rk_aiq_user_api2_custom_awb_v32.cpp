@@ -234,6 +234,7 @@ void _customAwbRes2rkAwbRes( RkAiqAlgoProcResAwb* rkAwbProcRes,
 
     rkAwbProcRes->awbConverged = customAwbProcRes->IsConverged;
     memcpy(rkAwbProcRes->awb_gain_algo, &customAwbProcRes->awb_gain_algo, sizeof(rk_aiq_wb_gain_t));
+    rkAwbProcRes->awb_gain_algo_golden = customAwbProcRes->awb_gain_algo;
     rkAwbProcRes->awb_smooth_factor = customAwbProcRes->awb_smooth_factor;
     *rkAwbProcRes->awb_hw32_para=  awbHwConfig;
 }

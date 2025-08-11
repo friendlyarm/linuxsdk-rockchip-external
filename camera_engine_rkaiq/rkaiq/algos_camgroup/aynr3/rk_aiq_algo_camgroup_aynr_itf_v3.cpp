@@ -277,6 +277,7 @@ RkAiqAlgoDescription g_RkIspAlgoDescCamgroupAynrV3 = {
     .pre_process = NULL,
     .processing = groupAynrV3Processing,
     .post_process = NULL,
+    .dump = NULL,
 };
 
 RKAIQ_END_DECLARE

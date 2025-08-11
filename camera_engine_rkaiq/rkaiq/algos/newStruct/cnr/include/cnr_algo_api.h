@@ -8,6 +8,8 @@
 #include "isp/rk_aiq_isp_cnr34.h"
 #elif RKAIQ_HAVE_CNR_V35
 #include "isp/rk_aiq_isp_cnr35.h"
+#elif RKAIQ_HAVE_CNR_V36
+#include "isp/rk_aiq_isp_cnr36.h"
 #else
 #error "wrong cnr hw version !"
 #endif
