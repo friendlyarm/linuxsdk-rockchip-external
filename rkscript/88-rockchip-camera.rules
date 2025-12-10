@@ -1,1 +1,15 @@
-ACTION=="add", SUBSYSTEM=="video4linux", ENV{ID_V4L_PRODUCT}=="*_mainpath", SYMLINK+="video-camera0"
+SUBSYSTEM!="video4linux", GOTO="rkisp_link_end"
+ACTION!="add", GOTO="rkisp_link_end"
+
+# rk3588
+ENV{ID_PATH}=="platform-rkisp0-*" ENV{ID_V4L_PRODUCT}=="*_mainpath", SYMLINK+="video-camera0", GOTO="rkisp_link_end"
+ENV{ID_PATH}=="platform-rkisp1-*" ENV{ID_V4L_PRODUCT}=="*_mainpath", SYMLINK+="video-camera1", GOTO="rkisp_link_end"
+
+# rk3576
+ENV{ID_PATH}=="platform-rkisp-vir0" ENV{ID_V4L_PRODUCT}=="*_mainpath", SYMLINK+="video-camera0", GOTO="rkisp_link_end"
+ENV{ID_PATH}=="platform-rkisp-vir1" ENV{ID_V4L_PRODUCT}=="*_mainpath", SYMLINK+="video-camera1", GOTO="rkisp_link_end"
+
+# others
+ENV{ID_V4L_PRODUCT}=="*_mainpath", SYMLINK+="video-camera0"
+
+LABEL="rkisp_link_end"
