@@ -24,6 +24,7 @@
 #include "aiq_v4l2_device.h"
 #include "common/rk-camera-module.h"
 #include "hwi_c/aiq_camHw.h"
+#include "iq_parser_v2/cis_head.h"
 #include "rk_aiq.h"
 #include "rk_aiq_offline_raw.h"
 #include "rk_aiq_types_priv_c.h"
@@ -142,10 +143,16 @@ struct AiqSensorHw_s {
     bool mIsSingleMode;
     int mCamPhyId;
     int32_t dcg_mode;
+    AiqCamHwBase_t* _mCamHw;
 #if RKAIQ_HAVE_DUMPSYS
     // dump info
     rk_aiq_exposure_sensor_descriptor desc;
 #endif
+
+    uint32_t userVts;
+
+    calibdb_cis_blc_t cis_blc;
+    int32_t mCisHdrMode;
 
     // export api
     XCamReturn (*setExposureParams)(AiqSensorHw_t* pBaseSns, AiqAecExpInfoWrapper_t* expPar);
@@ -176,13 +183,31 @@ struct AiqSensorHw_s {
                                         int mode);
     XCamReturn (*set_pause_flag)(AiqSensorHw_t* pSnsHw, bool mode, uint32_t frameId,
                                  bool isSingleMode);
+    XCamReturn (*set_exposure_mode)(AiqSensorHw_t* pBaseSns, uint32_t mode);
+
+    // set scene_cis parameters
+    XCamReturn (*set_regSetting)(AiqSensorHw_t* pBaseSns, calibdb_cis_reg_setting_t* regSetting);
+    XCamReturn (*set_blc)(AiqSensorHw_t* pBaseSns, calibdb_cis_blc_t* blc);
+    XCamReturn (*set_hdr)(AiqSensorHw_t* pBaseSns, calibdb_cis_hdr_t* hdr);
+    XCamReturn (*set_qbcRmsc)(AiqSensorHw_t* pBaseSns, calibdb_cis_qbc_rmsc_t* qbcRmsc);
+    XCamReturn (*set_cmpsOut)(AiqSensorHw_t* pBaseSns, calibdb_cis_cmps_out_t* cmpsOut);
 };
+
+#define AiqSensorHw_setCamHw(pSnsHw, pCamHw) \
+    pSnsHw->_mCamHw = pCamHw
 
 void AiqSensorHw_init(AiqSensorHw_t* pSnsHw, const char* name, int cid);
 void AiqSensorHw_deinit(AiqSensorHw_t* pSnsHw);
 
 XCamReturn _SensorHw_stop(AiqSensorHw_t* pSnsHw);
 void AiqSensorHw_clean(AiqSensorHw_t* pSnsHw);
+XCamReturn AiqSensorHw_getHdrComprCurve(AiqSensorHw_t* pSnsHw, RkAiqHdrCompr_t* compr);
+
+#define AiqSensorHw_setUserVts(pSnsHw, vts) \
+    (pSnsHw)->userVts = vts
+
+#define AiqSensorHw_getUserVts(pSnsHw) \
+    pSnsHw->userVts
 
 RKAIQ_END_DECLARE
 

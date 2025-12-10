@@ -16,10 +16,12 @@
  */
 
 #include "RkAiqManager_c.h"
+
 #include "hwi_c/aiq_fake_camhw.h"
-#include "hwi_c/isp39/aiq_CamHwIsp39.h"
 #include "hwi_c/isp33/aiq_CamHwIsp33.h"
 #include "hwi_c/isp35/aiq_CamHwIsp35.h"
+#include "hwi_c/isp39/aiq_CamHwIsp39.h"
+#include "iq_parser_v2/cis_head.h"
 
 #define RKAIQMNG_CHECK_RET(ret, format, ...) \
     if (ret) { \
@@ -33,6 +35,73 @@ extern sensor_info_share_t g_rk1608_share_inf;
 static int __dump_mods(void* self, st_string* result, int argc, void* argv[]);
 static int __dump_raw(void* self, st_string* result, int argc, void* argv[]);
 #endif
+
+static void printSenceCisPara(AiqManager_t* pAiqManager) {
+    calibdb_cis_reg_setting_t* cis_reg = (calibdb_cis_reg_setting_t*)(CALIBDBV2_GET_MODULE_PTR(
+        pAiqManager->mCalibDbV2, CisRegSetting));
+    if (cis_reg) {
+        LOGD_ANALYZER("=== CIS Register Configuration ===");
+        LOGD_ANALYZER("  Setting ID : 0x%04x", cis_reg->hw_cisCfg_setting_id);
+        LOGD_ANALYZER("  DS Mode    : %d", cis_reg->hw_cisCfg_ds_mode);
+        LOGD_ANALYZER("  RegCtrl Num: %d", cis_reg->regCtrl_num);
+
+        for (int i = 0; i < cis_reg->regCtrl_num; i++) {
+            LOGD_ANALYZER("    RegCtrl[%2d] -> Addr: 0x%04x, Val: 0x%04x", i,
+                          cis_reg->regCtrl[i].regAddr, cis_reg->regCtrl[i].regVal);
+        }
+        LOGD_ANALYZER("===================================\n");
+    }
+
+    calibdb_cis_blc_t* cis_blc =
+        (calibdb_cis_blc_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, CisBlc));
+    if (cis_blc) {
+        LOGD_ANALYZER("=== CIS Black Level Correction (BLC) ===");
+        LOGD_ANALYZER("  Enable               : %d", cis_blc->en);
+        LOGD_ANALYZER("  BlkLevel             : %d", cis_blc->sta.hw_cisCfg_blkLevel_val);
+        LOGD_ANALYZER("  BkDg Switch Enable   : %d", cis_blc->sta.bkDg.hw_cisCfg_bkdgSw_en);
+        LOGD_ANALYZER("  DgBk → BkDg Threshold: %d", cis_blc->sta.bkDg.hw_cisCfg_dgBk2BkDg_thred);
+        LOGD_ANALYZER("  BkDg → DgBk Threshold: %d", cis_blc->sta.bkDg.hw_cisCfg_bkDg2DgBk_thred);
+        LOGD_ANALYZER("========================================\n");
+    }
+
+    calibdb_cis_hdr_t* cis_hdr =
+        (calibdb_cis_hdr_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, CisHdr));
+    if (cis_hdr) {
+        LOGD_ANALYZER("=== CIS HDR Configuration ===");
+        LOGD_ANALYZER("  HDR MGE Mode     : %d", cis_hdr->sta.hw_cisCfg_hdrMge_mode);
+        LOGD_ANALYZER("  CIS HDR Mode     : %d", cis_hdr->sta.hw_cisCfg_cisHdr_mode);
+        LOGD_ANALYZER("  RegCtrl Count    : %d", cis_hdr->sta.regCtrl_num);
+
+        for (int i = 0; i < cis_hdr->sta.regCtrl_num; i++) {
+            LOGD_ANALYZER("    RegCtrl[%2d] -> Addr: 0x%04x, Val: 0x%04x", i,
+                          cis_hdr->sta.regCtrl[i].regAddr, cis_hdr->sta.regCtrl[i].regVal);
+        }
+        LOGD_ANALYZER("=============================\n");
+    }
+
+    calibdb_cis_qbc_rmsc_t* cis_qbcrmsc =
+        (calibdb_cis_qbc_rmsc_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, CisQbcRmsc));
+    if (cis_qbcrmsc) {
+        LOGD_ANALYZER("=== CIS QBC RMSC Configuration ===");
+        LOGD_ANALYZER("  Enable        : %d", cis_qbcrmsc->en);
+        LOGD_ANALYZER("  RegCtrl Num   : %d", cis_qbcrmsc->sta.regCtrl_num);
+
+        for (int i = 0; i < cis_qbcrmsc->sta.regCtrl_num; i++) {
+            LOGD_ANALYZER("    RegCtrl[%2d] -> Addr: 0x%04x, Val: 0x%04x", i,
+                          cis_qbcrmsc->sta.regCtrl[i].regAddr, cis_qbcrmsc->sta.regCtrl[i].regVal);
+        }
+        LOGD_ANALYZER("====================================\n");
+    }
+
+    calibdb_cis_cmps_out_t* cis_cmpsout =
+        (calibdb_cis_cmps_out_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, CisCmpsOut));
+    if (cis_cmpsout) {
+        LOGD_ANALYZER("=== CIS CMPS_OUT Configuration ===");
+        LOGD_ANALYZER("  Enable      : %d", cis_cmpsout->en);
+        LOGD_ANALYZER("  CMPS Mode   : %d", cis_cmpsout->sta.hw_cisCfgCmps_mode);
+        LOGD_ANALYZER("===================================\n");
+    }
+}
 
 static XCamReturn hwResCb(void* pCtx, AiqHwEvt_t* hwres)
 {
@@ -139,6 +208,10 @@ typedef rkisp_isp2x_stat_buffer rkisp_isp_stat_buffer;
         }
 		AiqCamHw_notify_sof(pAiqManager->mCamHw, hwres);
 
+#if RKAIQ_HAVE_AIBNR
+        AibnrManager_notify_sof(&pAiqManager->mAibnrManager);
+#endif
+
 		Aiqisp20Evt_t hw_evt;
 		AiqCamHw_make_ispHwEvt(pAiqManager->mCamHw,
 				&hw_evt, hwres->frame_id, V4L2_EVENT_FRAME_SYNC,
@@ -161,9 +234,13 @@ typedef rkisp_isp2x_stat_buffer rkisp_isp_stat_buffer;
     else if (hwres->type == ISP_POLL_AIISP) {
 #if RKAIQ_HAVE_AIBNR
         AiqHwAinnEvt_t *ainnEvt = (AiqHwAinnEvt_t *)hwres;
-
         AibnrManager_hdlEvent(&pAiqManager->mAibnrManager, ainnEvt);
-#else
+#endif
+#if RKAIQ_HAVE_AIYNR
+        AiqHwAinnEvt_t *ainnEvt1 = (AiqHwAinnEvt_t *)hwres;
+        AiynrManager_hdlEvent(&pAiqManager->mAiynrManager, ainnEvt1);
+#endif
+#if !defined(RKAIQ_HAVE_AIBNR) && !defined(RKAIQ_HAVE_AIYNR)
         AiqHwAiispEvt_t* aiisp_data = (AiqHwAiispEvt_t *)hwres;
         if (pAiqManager->mAiispCtx.mAiispEvtcb) {
             rk_aiq_aiisp_t aiisp_evt;
@@ -199,6 +276,11 @@ typedef rkisp_isp2x_stat_buffer rkisp_isp_stat_buffer;
     }
     else if (hwres->type == ISP_POLL_RKNN_DONE) {
         AibnrManager_hdlEvent(&pAiqManager->mAibnrManager, (AiqHwAinnEvt_t *)hwres);
+    }
+#endif
+#if RKAIQ_HAVE_AIYNR
+    else if (hwres->type == ISP_POLL_AIYNR_DONE) {
+        AiynrManager_hdlEvent(&pAiqManager->mAiynrManager, (AiqHwAinnEvt_t *)hwres);
     }
 #endif
     else if (hwres->type == ISP_POLL_TX) {
@@ -481,6 +563,7 @@ XCamReturn AiqManager_applyAnalyzerResult(AiqManager_t* pAiqManager, AiqFullPara
 #if RKAIQ_HAVE_BAYERTNR
 #if USE_NEWSTRUCT
     APPLY_ANALYZER_RESULT(Btnr, TNR);
+    APPLY_ANALYZER_RESULT(Btnr, TNR2);
 #else
     APPLY_ANALYZER_RESULT(Tnr, TNR);
 #endif
@@ -500,6 +583,9 @@ XCamReturn AiqManager_applyAnalyzerResult(AiqManager_t* pAiqManager, AiqFullPara
 #endif
 #if RKAIQ_HAVE_AIBNR
     APPLY_ANALYZER_RESULT(Aibnr, AIBNR);
+#endif
+#if RKAIQ_HAVE_AIYNR
+    APPLY_ANALYZER_RESULT(Aiynr, AIYNR);
 #endif
 
 	ret = AiqCamHw_applyAnalyzerResultList(pAiqManager->mCamHw, pAiqManager->mParamsList);
@@ -678,16 +764,20 @@ XCamReturn AiqManager_init(AiqManager_t* pAiqManager, const char* sns_ent_name, 
 		LOGE_ANALYZER("init %s error", paramsListCfg._name);
 
 #if RKAIQ_HAVE_DUMPSYS
-        pAiqManager->dump_mods = __dump_mods;
-        pAiqManager->dump_raw = __dump_raw;
+    pAiqManager->dump_mods = __dump_mods;
+    pAiqManager->dump_raw = __dump_raw;
 #endif
 
 #if RKAIQ_HAVE_AIBNR
-    AibnrManager_init(&pAiqManager->mAibnrManager);
+    AibnrManager_init(pAiqManager, &pAiqManager->mAibnrManager);
 #endif
+#if RKAIQ_HAVE_AIYNR
+    AiynrManager_init(&pAiqManager->mAiynrManager);
+#endif
+
     RknnManager_init(&pAiqManager->mRknnManager);
 
-        return ret;
+    return ret;
 }
 
 XCamReturn AiqManager_prepare(AiqManager_t* pAiqManager, uint32_t width, uint32_t height, rk_aiq_working_mode_t mode)
@@ -715,20 +805,80 @@ XCamReturn AiqManager_prepare(AiqManager_t* pAiqManager, uint32_t width, uint32_
     }
 #endif
 
+#if RKAIQ_HAVE_AIYNR
+    bool mNewAiynrEn =
+        GlobalParamsManager_get_SingleModuleEn(&pAiqManager->mGlobalParamsManager, RESULT_TYPE_AIYNR_PARAM);
+    if (mNewAiynrEn != pAiqManager->mLastAiynrEn) {
+        pAiqManager->mLastAiynrEn = mNewAiynrEn;
+        int delayCnt = pAiqManager->mLastAiynrEn ? ISP_PARAMS_AIYNR_EFFECT_DELAY_CNT : ISP_PARAMS_EFFECT_DELAY_CNT;
+        AiqCore_reinitForNewStatsDelay(pAiqManager->mRkAiqAnalyzer, delayCnt);
+        AiqCamHw_setAiynrDelayCnt(pAiqManager->mCamHw, delayCnt);
+    }
+#endif
+
+    CalibDb_Sensor_ParaV2_t* sensor_calib =
+        (CalibDb_Sensor_ParaV2_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, sensor_calib));
+
     int working_mode_hw = RK_AIQ_WORKING_MODE_NORMAL;
     if (mode == RK_AIQ_WORKING_MODE_NORMAL) {
         working_mode_hw = mode;
     } else {
-        if (mode == RK_AIQ_WORKING_MODE_ISP_HDR2)
-            working_mode_hw = RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR;
-        else if (mode == RK_AIQ_WORKING_MODE_ISP_HDR3)
-            working_mode_hw = RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR;
-        else
-            LOGE_ANALYZER("Not supported HDR mode !");
+        /**
+         * 1. Check if scene_cis is enabled.
+         * 2. Otherwise, use the old configuration method.
+         */
+        calibdb_cis_hdr_t* cis_hdr =
+            (calibdb_cis_hdr_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, CisHdr));
+        if (cis_hdr) {
+            if (mode == RK_AIQ_WORKING_MODE_ISP_HDR2) {
+                if (RK_AIQ_HDR_IS_HDR2(cis_hdr->sta.hw_cisCfg_hdrMge_mode))
+                    working_mode_hw = cis_hdr->sta.hw_cisCfg_hdrMge_mode;
+                else
+                    LOGE_ANALYZER("HDR mode mismatch: expected 0x%x/0x%x, got 0x%x from calibdb!",
+                                  RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR, RK_AIQ_ISP_HDR_MODE_2_LINE_HDR,
+                                  cis_hdr->sta.hw_cisCfg_hdrMge_mode);
+            } else if (mode == RK_AIQ_WORKING_MODE_ISP_HDR3) {
+                if (RK_AIQ_HDR_IS_HDR3(cis_hdr->sta.hw_cisCfg_hdrMge_mode))
+                    working_mode_hw = cis_hdr->sta.hw_cisCfg_hdrMge_mode;
+                else
+                    LOGE_ANALYZER("HDR mode mismatch: expected 0x%x/0x%x, got 0x%x from calibdb!",
+                                  RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR, RK_AIQ_ISP_HDR_MODE_3_LINE_HDR,
+                                  cis_hdr->sta.hw_cisCfg_hdrMge_mode);
+            } else {
+                LOGE_ANALYZER("Not supported HDR mode 0x%x!", mode);
+            }
+
+            pAiqManager->mCisHdrMode = cis_hdr->sta.hw_cisCfg_cisHdr_mode;
+        } else {
+            if (mode == RK_AIQ_WORKING_MODE_ISP_HDR2) {
+                working_mode_hw = RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR;
+            } else if (mode == RK_AIQ_WORKING_MODE_ISP_HDR3) {
+                working_mode_hw = RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR;
+            } else {
+                LOGE_ANALYZER("Not supported HDR mode 0x%x!", mode);
+            }
+
+            pAiqManager->mCisHdrMode = sensor_calib->CISHdrSet.line_mode;
+        }
+
+        pAiqManager->mHdrMergeMode = working_mode_hw;
+
+        LOGK_ANALYZER("CisHdrMode: %d, working_mode_hw: 0x%x", pAiqManager->mCisHdrMode,
+                      working_mode_hw);
     }
+
+    printSenceCisPara(pAiqManager);
+
     AiqCamHw_setCalib(pAiqManager->mCamHw, pAiqManager->mCalibDbV2);
-    CalibDb_Sensor_ParaV2_t* sensor_calib =
-        (CalibDb_Sensor_ParaV2_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, sensor_calib));
+
+#if RKAIQ_HAVE_MEMC
+    if (AiqCamHw_getMemcNeededDelay(pAiqManager->mCamHw)) {
+        // MEMC delay 1 frame more than noraml mode
+        int delayCnt = 3;
+        AiqCore_reinitForNewStatsDelay(pAiqManager->mRkAiqAnalyzer, delayCnt);
+        AiqCamHw_setAibnrDelayCnt(pAiqManager->mCamHw, delayCnt);
+    }
+#endif
 
 #ifdef RKAIQ_ENABLE_CAMGROUP
     AiqCamHw_setGroupMode(pAiqManager->mCamHw, pAiqManager->mCamGroupCoreManager ? true : false, pAiqManager->mIsMain);
@@ -769,6 +919,14 @@ XCamReturn AiqManager_prepare(AiqManager_t* pAiqManager, uint32_t width, uint32_
     RKAIQMNG_CHECK_RET(ret, "analyzer prepare error %d", ret);
 #if RKAIQ_HAVE_AIBNR
     AibnrManager_prepare(&pAiqManager->mAibnrManager,
+                        pAiqManager->mCamHw,
+                        pAiqManager->mCalibDbV2,
+                        sensor_des.isp_acq_width,
+                        sensor_des.isp_acq_height);
+#endif
+#if RKAIQ_HAVE_AIYNR
+    pAiqManager->mAiynrManager.is_aiynr_enable = pAiqManager->mCamHw->_aiynr_en;
+    AiynrManager_prepare(&pAiqManager->mAiynrManager,
                         pAiqManager->mCamHw,
                         pAiqManager->mCalibDbV2,
                         sensor_des.isp_acq_width,
@@ -823,6 +981,10 @@ XCamReturn AiqManager_start(AiqManager_t* pAiqManager)
     AibnrManager_start(&pAiqManager->mAibnrManager);
     RKAIQMNG_CHECK_RET(ret, "AibnrManager start error %d", ret);
 #endif
+#if RKAIQ_HAVE_AIYNR
+    AiynrManager_start(&pAiqManager->mAiynrManager);
+    RKAIQMNG_CHECK_RET(ret, "AiynrManager start error %d", ret);
+#endif
     RknnManager_start(&pAiqManager->mRknnManager);
     RKAIQMNG_CHECK_RET(ret, "RknnManager start error %d", ret);
 
@@ -854,6 +1016,10 @@ XCamReturn AiqManager_stop(AiqManager_t* pAiqManager, bool keep_ext_hw_st)
 #if RKAIQ_HAVE_AIBNR
     AibnrManager_stop(&pAiqManager->mAibnrManager);
     RKAIQMNG_CHECK_RET(ret, "AibnrManager stop error %d", ret);
+#endif
+#if RKAIQ_HAVE_AIYNR
+    AiynrManager_stop(&pAiqManager->mAiynrManager);
+    RKAIQMNG_CHECK_RET(ret, "AiynrManager stop error %d", ret);
 #endif
     RknnManager_stop(&pAiqManager->mRknnManager);
     RKAIQMNG_CHECK_RET(ret, "RknnManager stop error %d", ret);
@@ -905,6 +1071,9 @@ XCamReturn AiqManager_deinit(AiqManager_t* pAiqManager)
 #if RKAIQ_HAVE_AIBNR
     AibnrManager_deinit(&pAiqManager->mAibnrManager);
 #endif
+#if RKAIQ_HAVE_AIYNR
+    AiynrManager_deinit(&pAiqManager->mAiynrManager);
+#endif
     RknnManager_deinit(&pAiqManager->mRknnManager);
 
     pAiqManager->_state = AIQ_STATE_INVALID;
@@ -927,10 +1096,30 @@ XCamReturn AiqManager_updateCalibDb(AiqManager_t* pAiqManager, const CamCalibDbV
 {
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
+    if (pAiqManager->mWorkingMode != RK_AIQ_WORKING_MODE_NORMAL) {
+        calibdb_cis_hdr_t* cis_hdr =
+            (calibdb_cis_hdr_t*)(CALIBDBV2_GET_MODULE_PTR(pAiqManager->mCalibDbV2, CisHdr));
+        if (cis_hdr) {
+            if (pAiqManager->mHdrMergeMode != cis_hdr->sta.hw_cisCfg_hdrMge_mode ||
+                pAiqManager->mCisHdrMode != cis_hdr->sta.hw_cisCfg_cisHdr_mode) {
+                if (pAiqManager->_state != AIQ_STATE_STOPED &&
+                    pAiqManager->_state != AIQ_STATE_INITED) {
+                    LOGE_ANALYZER("CisHdrMode changed from %d to %d, not support now",
+                                  pAiqManager->mCisHdrMode, cis_hdr->sta.hw_cisCfg_hdrMge_mode);
+                    XCAM_ASSERT(0);
+                    return XCAM_RETURN_ERROR_FAILED;
+                }
+            }
+        }
+    }
+
     *pAiqManager->mCalibDbV2 = *(CamCalibDbV2Context_t*)newCalibDb;
     AiqCamHw_setCalib(pAiqManager->mCamHw, newCalibDb);
 #if RKAIQ_HAVE_AIBNR
     AibnrManager_setCalib(&pAiqManager->mAibnrManager, pAiqManager->mCalibDbV2);
+#endif
+#if RKAIQ_HAVE_AIYNR
+    AiynrManager_setCalib(&pAiqManager->mAiynrManager, pAiqManager->mCalibDbV2);
 #endif
 
     ret = AiqCore_setCalib(pAiqManager->mRkAiqAnalyzer, pAiqManager->mCalibDbV2);
@@ -1063,6 +1252,10 @@ XCamReturn AiqManager_calibTuning(AiqManager_t* pAiqManager, CamCalibDbV2Context
 #if RKAIQ_HAVE_AIBNR
     AibnrManager_setCalib(&pAiqManager->mAibnrManager, aiqCalib);
 #endif
+#if RKAIQ_HAVE_AIYNR
+    AiynrManager_setCalib(&pAiqManager->mAiynrManager, aiqCalib);
+#endif
+
     ret = AiqCore_setCalib(pAiqManager->mRkAiqAnalyzer, aiqCalib);
 
 	AiqCore_calibTuning(pAiqManager->mRkAiqAnalyzer, aiqCalib, change_list);
@@ -1085,6 +1278,11 @@ XCamReturn AiqManager_setVicapStreamMode(AiqManager_t* pAiqManager, int on, bool
 {
     AiqCore_setAovMode(pAiqManager->mRkAiqAnalyzer, !on);
     return AiqCamHw_setVicapStreamMode(pAiqManager->mCamHw, on, isSingleMode);
+}
+
+void AiqManager_pushImuData(AiqManager_t* pAiqManager, AiqImuData_t *data)
+{
+    AiqCamHw_pushImuData(pAiqManager->mCamHw, data);
 }
 
 #if RKAIQ_HAVE_DUMPSYS
@@ -1157,6 +1355,20 @@ static int __dump_raw(void* self, st_string* result, int argc, void* argv[]) {
 
         if (mgr->mCamHw->mAiRmsProcUnit)
             ret = AiqAiRmsStreamProcUnit_dumpRaw(mgr->mCamHw->mAiRmsProcUnit, dump_num);
+        if (ret)
+            aiq_string_printf(result, "set dump raw flag failed\n");
+        else
+            aiq_string_printf(result, "set dump raw flag success\n");
+
+        aiq_string_printf(result, "\n");
+    }
+#endif
+
+#if RKAIQ_HAVE_AIYNR
+    if (!strcmp(argv[1], "aiynr")) {
+        int dump_num = atoi(argv[2]);
+
+        ret = AiynrManager_dumpRaw(&mgr->mAiynrManager, dump_num);
         if (ret)
             aiq_string_printf(result, "set dump raw flag failed\n");
         else

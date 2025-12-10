@@ -339,7 +339,7 @@ void cvt_isp_params_dump_rawawb_attr(AiqIspParamsCvt_t* self, st_string* result)
     aiq_string_printf(result, buffer);
     aiq_string_printf(result, "\n\n");
 
-
+    cvt_isp_params_dump_wbgain_attr(self, result);
 }
 
 void cvt_isp_params_dump_dpc_attr(AiqIspParamsCvt_t* self, st_string* result) {
@@ -1367,6 +1367,85 @@ void cvt_isp_params_dump_aibnr_attr(AiqIspParamsCvt_t* self, st_string* result)
 #endif
 }
 
+void cvt_isp_params_dump_aiynr_attr(AiqIspParamsCvt_t* self, st_string* result)
+{
+    char buffer[MAX_LINE_LENGTH] = {0};
+
+#if defined(ISP_HW_V35)
+    struct isp35_isp_params_cfg* params = self->mCvtedIsp35Prams;
+    struct isp35_ai_cfg *ai_cfg = &params->others.ai_cfg;
+
+    aiq_info_dump_title(result, "aipre hwi params");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d", "AIPRE_CTRL",
+             ai_cfg->aipre_luma2gain_dis, ai_cfg->aipre_narmap_inv);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d%-13d", "AIPRE_NL_PRE",
+             ai_cfg->aipre_scale, ai_cfg->aipre_zp,
+             ai_cfg->aipre_black_lvl);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d%-13d", "AIPRE_GAIN",
+             ai_cfg->aipre_gain_alpha, ai_cfg->aipre_global_gain,
+             ai_cfg->aipre_gain_ratio);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d%-13d", "AIPRE_NOISE0",
+             ai_cfg->aipre_noise_mot_offset, ai_cfg->aipre_noise_mot_gain,
+             ai_cfg->aipre_noise_luma_offset);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d%-13d", "AIPRE_NOISE1",
+             ai_cfg->aipre_noise_luma_gain, ai_cfg->aipre_noise_luma_clip,
+             ai_cfg->aipre_noise_luma_static);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d", "AIPRE_NOISE2",
+             ai_cfg->aipre_nar_manual, ai_cfg->aipre_nar_manual_alpha);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    for (int i = 0; i < ISP35_AI_SIGMA_NUM; i+=3) {
+        memset(buffer, 0, MAX_LINE_LENGTH);
+        snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d%-13d", "AIPRE_SIGMA",
+                 ai_cfg->aipre_sigma_y[i], ai_cfg->aipre_sigma_y[i+1],
+                 ai_cfg->aipre_sigma_y[i+2]);
+        aiq_string_printf(result, buffer);
+        aiq_string_printf(result, "\n");
+
+    }
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d%-13d%-13d%-13d", "VPSL_PYR",
+             ai_cfg->pyr_yraw_mode, ai_cfg->pyr_sigma_en, ai_cfg->pyr_yraw_sel,
+             ai_cfg->pyr_gain_leftshift, ai_cfg->pyr_blacklvl_sig);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    for (int i = 0; i < ISP35_VPSL_SIGMA_NUM; i+=9) {
+        memset(buffer, 0, MAX_LINE_LENGTH);
+        snprintf(buffer, MAX_LINE_LENGTH, "%-15s%-13d%-13d%-13d%-13d%-13d%-13d%-13d%-13d%-13d", "VPSL_SIGMA",
+                 ai_cfg->pyr_sigma_y[i+0], ai_cfg->pyr_sigma_y[i+1],ai_cfg->pyr_sigma_y[i+2],
+                 ai_cfg->pyr_sigma_y[i+3], ai_cfg->pyr_sigma_y[i+4],ai_cfg->pyr_sigma_y[i+5],
+                 ai_cfg->pyr_sigma_y[i+6], ai_cfg->pyr_sigma_y[i+7],ai_cfg->pyr_sigma_y[i+8]);
+        aiq_string_printf(result, buffer);
+        aiq_string_printf(result, "\n");
+    }
+#endif
+}
+
 #define CVT_DUMP_INFO(_type, _func) \
     [_type] = {                     \
         .type = _type,              \
@@ -1412,6 +1491,7 @@ static const struct params_cvt_dump_info params_dump_cvts[] = {
     CVT_DUMP_INFO(RESULT_TYPE_LDC_PARAM, cvt_isp_params_dump_ldc_attr),
 #if defined(ISP_HW_V35)
     CVT_DUMP_INFO(RESULT_TYPE_AIBNR_PARAM, cvt_isp_params_dump_aibnr_attr),
+    CVT_DUMP_INFO(RESULT_TYPE_AIYNR_PARAM, cvt_isp_params_dump_aiynr_attr),
 #endif
 };
 

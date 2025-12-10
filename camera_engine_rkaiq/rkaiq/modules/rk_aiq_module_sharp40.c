@@ -62,7 +62,7 @@ static void SharpCreateKernelCoeffs(int radius, int max_radius, float rsigma, in
     for (k = 0; k < coeffNums_max; k++)
     {
         gaus_table[k] = gaus_table[k] / sumTable;
-        kernel_coeffs[k] = ROUND_F(gaus_table[k] * (1 << fix_bits));
+        kernel_coeffs[k] = FLOOR(gaus_table[k] * (1 << fix_bits));
     }
 }
 
@@ -974,7 +974,7 @@ void rk_aiq_sharp40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_
     {
         int hi_tex_threshold[9];
         for (i = 0; i < 17; i++) {
-            float ynr_lo_noise_sigma = cvtinfo->ynr_sigma[i];
+            float ynr_lo_noise_sigma = cvtinfo->ynr_sigma[i] * (1 << 3);
             float noiseSigma_scale = pdyn->dHfDetailShp.detailExtra.hw_shp_noiseThred_scale;
             int hi_tex_thred = ROUND_F(ynr_lo_noise_sigma * noiseSigma_scale / (1 << 3));
             if ((i & 1) == 0) {

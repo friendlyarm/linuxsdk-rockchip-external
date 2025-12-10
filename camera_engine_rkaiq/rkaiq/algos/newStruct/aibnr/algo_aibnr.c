@@ -37,8 +37,8 @@ static void printParam(AibnrContext_t *pAibnrCtx, aibnr_param_t* out, int iso)
     aibnr_param_calib_t *calib = &dyn->calib;
     aibnr_param_tunning_t *tunning = &dyn->tunning;
 
-    LOGD_AIBNR("algo_aibnr: working mode=%d iso=%d mean luma=%f",
-              pAibnrCtx->working_mode, pAibnrCtx->pre_iso, pAibnrCtx->mean_luma);
+    LOGD_AIBNR("algo_aibnr: working mode=%d iso=%d doAiisp_en=%d doAiisp_isoL=%d doAiisp_isoH=%d",
+              pAibnrCtx->working_mode, pAibnrCtx->pre_iso, pAibnrCtx->doAiisp_en, pAibnrCtx->doAiisp_isoL, pAibnrCtx->doAiisp_isoH);
 
     LOGD_AIBNR("sw_aiBnrC_blkPrev_offset=%f sw_aiBnrC_blkPost_offset=%f sw_aiBnrC_shotNoise_val=%f sw_aiBnrC_readNoise_val=%f sw_aiBnrC_fixedNoise_val=%f",
               calib->sw_aiBnrC_blkPrev_offset, calib->sw_aiBnrC_blkPost_offset, calib->sw_aiBnrC_shotNoise_val,
@@ -60,11 +60,11 @@ static void printParam(AibnrContext_t *pAibnrCtx, aibnr_param_t* out, int iso)
               tunning->sw_aiBnrT_noiseAddLumaClip_th, tunning->sw_aiBnrT_noiseAddLumaStatic_th,
               tunning->sw_aiBnrT_nonLinear_scale, tunning->sw_aiBnrT_nonLinear_ratio, tunning->sw_aiBnrT_nonLinear_adjust);
 
-    LOGD_AIBNR("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s sw_aiBnrT_doRknn_en=%d",
-              sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file, tunning->sw_aiBnrT_doRknn_en);
+    LOGD_AIBNR("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s",
+              sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file);
 
-    LOGD_AIBNR("sw_aiBnrT_debug_mode=%d",
-              sta->debug.sw_aiBnrT_debug_mode);
+    LOGD_AIBNR("sw_aiBnrT_debug_mode=%d sw_aiBnrT_swOnIsoIdx_thred=%d sw_aiBnrT_autoSwGap_thred=%d sw_aiBnrT_manualBnrHw_en=%d",
+              sta->debug.sw_aiBnrT_debug_mode, sta->swOn_cfg.sw_aiBnrT_autoSwOn_thred, sta->swOn_cfg.sw_aiBnrT_autoSwGap_thred, sta->swOn_cfg.sw_aiBnrT_manualBnrHw_en);
 }
 
 XCamReturn AibnrSelectParam
@@ -77,19 +77,76 @@ XCamReturn AibnrSelectParam
     aibnr_param_dyn_t *dyn = &out->dyn;
     aibnr_param_calib_t *calib = &dyn->calib;
     aibnr_param_tunning_t *tunning = &dyn->tunning;
-    int ilow = 0, ihigh = 0;
+    uint32_t *iso_list;
+    int i, ilow = 0, ihigh = 0;
     float ratio = 0.0f;
-    float mean_luma = 0.0f;
+    int doAiispIsoLIdx;
+    int doAiispIsoHIdx;
+    int doAiisp_isoL;
+    int doAiisp_isoH;
 
     if (paut == NULL || out == NULL) {
         LOGE_AIBNR("%s(%d): null pointer\n", __FUNCTION__, __LINE__);
         return XCAM_RETURN_ERROR_PARAM;
     }
 
-    pre_interp(iso, NULL, 0, &ilow, &ihigh, &ratio);
-    LOGD_AIBNR("%s: iso %d, ilow %d, ihigh %d, ratio %f", __FUNCTION__, iso, ilow, ihigh, ratio);
+    doAiispIsoHIdx = paut->sta.swOn_cfg.sw_aiBnrT_autoSwOn_thred;
+    doAiispIsoLIdx = doAiispIsoHIdx;
+    iso_list = pAibnrCtx->iso_list;
+    if (doAiispIsoHIdx == aiBnr_swOnAt_isoIdx0) {
+        doAiisp_isoL = iso_list[0];
+        doAiisp_isoH = iso_list[0];
+    } else if (doAiispIsoHIdx == aiBnr_swOnAt_isoIdxMax) {
+        doAiisp_isoL = 0x7FFFFFFF;
+        doAiisp_isoH = 0x7FFFFFFF;
+    } else {
+        doAiispIsoLIdx = doAiispIsoHIdx - (paut->sta.swOn_cfg.sw_aiBnrT_autoSwGap_thred + 1);
+        if (doAiispIsoLIdx < 0)
+            doAiispIsoLIdx = 0;
+        doAiisp_isoH = iso_list[doAiispIsoHIdx];
+        doAiisp_isoL = iso_list[doAiispIsoLIdx];
+    }
 
-    tunning->sw_aiBnrT_doRknn_en = paut->dyn[ilow].tunning.sw_aiBnrT_doRknn_en;
+    if (pAibnrCtx->doAiisp_isoL != doAiisp_isoL || pAibnrCtx->doAiisp_isoH != doAiisp_isoH) {
+        pAibnrCtx->doAiisp_force_update = true;
+        pAibnrCtx->doAiisp_isoL = doAiisp_isoL;
+        pAibnrCtx->doAiisp_isoH = doAiisp_isoH;
+    } else {
+        pAibnrCtx->doAiisp_force_update = false;
+    }
+
+    pre_interp(iso, pAibnrCtx->iso_list, AIBNR_ISO_STEP_MAX, &ilow, &ihigh, &ratio);
+    if (pAibnrCtx->doAiisp_isoL != pAibnrCtx->doAiisp_isoH) {
+        if ((iso >= pAibnrCtx->doAiisp_isoH) && !pAibnrCtx->doAiisp_en) {
+            pAibnrCtx->doAiisp_en = true;
+            LOGK_AIBNR("switch to aiisp mode, iso %d", iso);
+        } else if ((iso <= pAibnrCtx->doAiisp_isoL) && pAibnrCtx->doAiisp_en) {
+            pAibnrCtx->doAiisp_en = false;
+            LOGK_AIBNR("switch to traditional mode, iso %d", iso);
+        }
+
+        if (iso > pAibnrCtx->doAiisp_isoL && iso < pAibnrCtx->doAiisp_isoH) {
+            pAibnrCtx->fixIndex = pAibnrCtx->doAiisp_en ? doAiispIsoHIdx : doAiispIsoLIdx;
+        } else {
+            pAibnrCtx->fixIndex = -1;
+        }
+    } else {
+        if ((pAibnrCtx->doAiisp_isoH == iso_list[0]) && !pAibnrCtx->doAiisp_en) {
+            pAibnrCtx->doAiisp_en = true;
+            pAibnrCtx->fixIndex = -1;
+            LOGK_AIBNR("switch to aiisp mode, iso %d", iso);
+        } else if ((pAibnrCtx->doAiisp_isoH == 0x7FFFFFFF) && pAibnrCtx->doAiisp_en) {
+            pAibnrCtx->doAiisp_en = false;
+            pAibnrCtx->fixIndex = -1;
+            LOGK_AIBNR("switch to traditional mode, iso %d", iso);
+        }
+    }
+    LOGI_AIBNR("%s iso %d, ilow %d, ihigh %d, ratio %f, fixIndex %d, doAiisp_isoL %d, doAiisp_isoH %d, doAiisp_force_update %d, sw_aiBnrT_autoSwOn_thred %d, sw_aiBnrT_autoSwGap_thred %d",
+        __func__, iso, ilow, ihigh, ratio, pAibnrCtx->fixIndex,
+        pAibnrCtx->doAiisp_isoL, pAibnrCtx->doAiisp_isoH, pAibnrCtx->doAiisp_force_update,
+        paut->sta.swOn_cfg.sw_aiBnrT_autoSwOn_thred, paut->sta.swOn_cfg.sw_aiBnrT_autoSwGap_thred);
+
+    out->sta.swOn_cfg.sw_aiBnrT_manualBnrHw_en = pAibnrCtx->doAiisp_en;
     if (ratio < 0.5)
         strcpy(tunning->sw_aiBnrT_model_file, paut->dyn[ilow].tunning.sw_aiBnrT_model_file);
     else
@@ -197,6 +254,10 @@ static XCamReturn prepare(RkAiqAlgoCom* params)
         (aibnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(params->u.prepare.calibv2, aibnr));
     pAibnrCtx->iso_list = params->u.prepare.calibv2->sensor_info->iso_list;
     pAibnrCtx->isReCal_ = true;
+    pAibnrCtx->doAiisp_isoL = 50;
+    pAibnrCtx->doAiisp_isoH = 50;
+    pAibnrCtx->doAiisp_force_update = true;
+    pAibnrCtx->doAiisp_en = false;
 
     return result;
 }
@@ -206,24 +267,11 @@ XCamReturn Aibnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpa
     AibnrContext_t* pAibnrCtx = (AibnrContext_t *)inparams->ctx;
     aibnr_api_attrib_t* aibnr_attrib = pAibnrCtx->aibnr_attrib;
     aibnr_param_t* aibnr_res = outparams->algoRes;
-    AlgoRstShared_t* xCamAePreRes = inparams->u.proc.res_comb->ae_pre_res_c;
-
-    RkAiqAlgoPreResAe* ae_pre_res_int = NULL;
-    if (xCamAePreRes) {
-        ae_pre_res_int = (RkAiqAlgoPreResAe*)xCamAePreRes->_data;
-        if (!ae_pre_res_int) {
-            LOGW_AIBNR("ae pre result is null");
-        }
-        if (ae_pre_res_int) {
-            if (pAibnrCtx->working_mode == RK_AIQ_WORKING_MODE_NORMAL)
-                pAibnrCtx->mean_luma = ae_pre_res_int->ae_pre_res_rk.MeanLuma[0];
-            else
-                pAibnrCtx->mean_luma = ae_pre_res_int->ae_pre_res_rk.MeanLuma[1];
-        }
-    }
 
     if (aibnr_attrib->opMode != RK_AIQ_OP_MODE_AUTO) {
         LOGE_AIBNR("mode is %d, not auto mode, ignore", aibnr_attrib->opMode);
+        pAibnrCtx->fixIndex = -1;
+        pAibnrCtx->doAiisp_force_update = false;
         return XCAM_RETURN_NO_ERROR;
     }
 
@@ -233,6 +281,8 @@ XCamReturn Aibnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpa
             outparams->en = aibnr_attrib->en;
             outparams->bypass = aibnr_attrib->bypass;
         }
+        pAibnrCtx->fixIndex = -1;
+        pAibnrCtx->doAiisp_force_update = false;
         LOGD_AIBNR("AIBNR not enable, skip!");
         return XCAM_RETURN_NO_ERROR;
     }
@@ -261,6 +311,8 @@ XCamReturn Aibnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpa
         LOGD_AIBNR("AIBNR processing: iso %d, aibnr en:%d, bypass:%d", iso, outparams->en, outparams->bypass);
 
         pAibnrCtx->isReCal_ = false;
+    } else {
+        pAibnrCtx->doAiisp_force_update = false;
     }
 
     return XCAM_RETURN_NO_ERROR;
@@ -273,6 +325,15 @@ static XCamReturn processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outp
 
     LOGV_AIBNR("%s: Aibnr (exit)\n", __FUNCTION__ );
     return XCAM_RETURN_NO_ERROR;
+}
+
+int aibnr_getFixIndex(const RkAiqAlgoCom* inparams, int *index, bool *force_update)
+{
+    AibnrContext_t* pAibnrCtx = (AibnrContext_t *)inparams->ctx;
+
+    *index = pAibnrCtx->fixIndex;
+    *force_update = pAibnrCtx->doAiisp_force_update;
+    return 0;
 }
 
 #if RKAIQ_HAVE_DUMPSYS
@@ -290,9 +351,9 @@ static int dump(const RkAiqAlgoCom* self, st_string* result)
     aiq_info_dump_title(result, "aibnr status");
 
     memset(buffer, 0, MAX_LINE_LENGTH);
-    snprintf(buffer, MAX_LINE_LENGTH, "Cam%d FrmId=%d working mode=%d iso=%d mean luma=%f",
+    snprintf(buffer, MAX_LINE_LENGTH, "Cam%d FrmId=%d working mode=%d iso=%d doAiisp_en=%d doAiisp_isoL=%d doAiisp_isoH=%d",
              self->cid, self->frame_id, pAibnrCtx->working_mode, pAibnrCtx->pre_iso,
-             pAibnrCtx->mean_luma);
+             pAibnrCtx->doAiisp_en, pAibnrCtx->doAiisp_isoL, pAibnrCtx->doAiisp_isoH);
     aiq_string_printf(result, buffer);
     aiq_string_printf(result, "\n");
 
@@ -441,14 +502,26 @@ static int dump(const RkAiqAlgoCom* self, st_string* result)
     aiq_string_printf(result, "\n");
 
     memset(buffer, 0, MAX_LINE_LENGTH);
-    snprintf(buffer, MAX_LINE_LENGTH, "sw_aiBnrT_doRknn_en=%d",
-            tunning->sw_aiBnrT_doRknn_en);
+    snprintf(buffer, MAX_LINE_LENGTH, "sw_aiBnrT_debug_mode=%d",
+            sta->debug.sw_aiBnrT_debug_mode);
     aiq_string_printf(result, buffer);
     aiq_string_printf(result, "\n");
 
     memset(buffer, 0, MAX_LINE_LENGTH);
-    snprintf(buffer, MAX_LINE_LENGTH, "sw_aiBnrT_debug_mode=%d",
-            sta->debug.sw_aiBnrT_debug_mode);
+    snprintf(buffer, MAX_LINE_LENGTH, "sw_aiBnrT_autoSwOn_thred=%d",
+            sta->swOn_cfg.sw_aiBnrT_autoSwOn_thred);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "sw_aiBnrT_autoSwGap_thred=%d",
+            sta->swOn_cfg.sw_aiBnrT_autoSwGap_thred);
+    aiq_string_printf(result, buffer);
+    aiq_string_printf(result, "\n");
+
+    memset(buffer, 0, MAX_LINE_LENGTH);
+    snprintf(buffer, MAX_LINE_LENGTH, "sw_aiBnrT_manualBnrHw_en=%d",
+            sta->swOn_cfg.sw_aiBnrT_manualBnrHw_en);
     aiq_string_printf(result, buffer);
     aiq_string_printf(result, "\n");
 

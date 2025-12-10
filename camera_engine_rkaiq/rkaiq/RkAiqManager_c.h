@@ -23,6 +23,7 @@
 #include "RkAiqGlobalParamsManager_c.h"
 #include "RkAibnrManager.h"
 #include "RknnManager.h"
+#include "RkAiynrManager.h"
 
 RKAIQ_BEGIN_DECLARE
 
@@ -77,6 +78,14 @@ typedef struct AiqManager_s {
     RknnManager_t mRknnManager;
 
     bool mLastAibnrEn;
+
+#if RKAIQ_HAVE_AIYNR
+    AiynrManager_t mAiynrManager;
+    bool mLastAiynrEn;
+#endif
+
+    rk_aiq_isp_hdr_mode_t mHdrMergeMode;
+    rk_aiq_sensor_hdr_line_mode_t mCisHdrMode;
 
 #if RKAIQ_HAVE_DUMPSYS
     int (*dump_mods)(void* self, st_string* result, int argc, void* argv[]);
@@ -146,6 +155,7 @@ XCamReturn AiqManager_setVicapStreamMode(AiqManager_t* pAiqManager, int on, bool
         pAiqManager->mWorkingMode
 
 XCamReturn AiqManager_applyAnalyzerResult(AiqManager_t* pAiqManager, AiqFullParams_t* results, bool ignoreIsUpdate);
+void AiqManager_pushImuData(AiqManager_t* pAiqManager, AiqImuData_t *data);
 
 RKAIQ_END_DECLARE
 

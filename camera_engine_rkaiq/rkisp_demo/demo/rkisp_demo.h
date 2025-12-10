@@ -98,6 +98,8 @@ typedef struct _demo_context {
     int                     aovContinueCnt;
     int                     aovLoopRunCnt;
     int                     aovContinueRunCnt;
+    char                    main_scene[2][32];
+    char                    sub_scene[2][32];
 } demo_context_t;
 
 #ifndef CAM_STATIC_FPS_CALCULATION

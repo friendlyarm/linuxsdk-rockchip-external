@@ -91,7 +91,7 @@ void aiqQueue_deinit(AiqQueue_t* queue) {
 
     if (queue->_base_mem) {
         if (queue->_free_nums != queue->_item_nums) {
-            LOGE("%s: %d queue items are still in use !", queue->_name,
+            LOGW("%s: %d queue items are still in use !", queue->_name,
                  queue->_item_nums - queue->_free_nums);
         }
         free(queue->_base_mem);

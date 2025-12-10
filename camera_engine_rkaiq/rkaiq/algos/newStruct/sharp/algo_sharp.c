@@ -32,7 +32,9 @@ XCamReturn SharpSelectParam
 (
     SharpContext_t *pSharpCtx,
     sharp_param_t* out,
-    int iso)
+    int iso,
+    bool is_aibnr_autorun,
+    int aibnr_fixIndex)
 {
     sharp_param_auto_t *paut = &pSharpCtx->sharp_attrib->stAuto;
     if(paut == NULL || out == NULL) {
@@ -45,11 +47,19 @@ XCamReturn SharpSelectParam
     float ratio = 0.0f;
     uint16_t uratio;
     pre_interp(iso, pSharpCtx->iso_list, 13, &ilow, &ihigh, &ratio);
+    if (aibnr_fixIndex != -1 && is_aibnr_autorun) {
+        ratio = 0;
+        ilow = aibnr_fixIndex;
+        ihigh = aibnr_fixIndex;
+    }
     uratio = ratio * (1 << RATIO_FIXBIT);
     if (ratio > 0.5)
         inear = ihigh;
     else
         inear = ilow;
+
+    LOGD_ANR("%s ilow %d, ihigh %d, ratio %f, aibnr_fixIndex %d, is_aibnr_autorun %d",
+        __func__, ilow, ihigh,ratio, aibnr_fixIndex, is_aibnr_autorun);
 
     out->dyn.locShpStrg.texRegion_clsfBaseTex.hw_shpT_flatRegion_maxThred = interpolation_u16(
                 paut->dyn[ilow].locShpStrg.texRegion_clsfBaseTex.hw_shpT_flatRegion_maxThred, paut->dyn[ihigh].locShpStrg.texRegion_clsfBaseTex.hw_shpT_flatRegion_maxThred, uratio);
@@ -348,7 +358,9 @@ XCamReturn SharpSelectParam
 (
     SharpContext_t *pSharpCtx,
     sharp_param_t* out,
-    int iso)
+    int iso,
+    bool is_aibnr_autorun,
+    int aibnr_fixIndex)
 {
     sharp_param_auto_t *paut = &pSharpCtx->sharp_attrib->stAuto;
     if(paut == NULL || out == NULL) {
@@ -620,7 +632,9 @@ XCamReturn texEstSelectParam
 (
     SharpContext_t *pSharpCtx,
     texEst_param_t* out,
-    int iso)
+    int iso,
+    bool is_aibnr_autorun,
+    int aibnr_fixIndex)
 {
     texEst_param_auto_t *paut = &pSharpCtx->texEst_attrib->stAuto;
     if(paut == NULL || out == NULL) {
@@ -633,11 +647,19 @@ XCamReturn texEstSelectParam
     float ratio = 0.0f;
     uint16_t uratio;
     pre_interp(iso, pSharpCtx->iso_list, 13, &ilow, &ihigh, &ratio);
+    if (aibnr_fixIndex != -1 && is_aibnr_autorun) {
+        ratio = 0;
+        ilow = aibnr_fixIndex;
+        ihigh = aibnr_fixIndex;
+    }
     uratio = ratio * (1 << RATIO_FIXBIT);
     if (ratio > 0.5)
         inear = ihigh;
     else
         inear = ilow;
+
+    LOGD_ANR("%s ilow %d, ihigh %d, ratio %f, aibnr_fixIndex %d, is_aibnr_autorun %d",
+        __func__, ilow, ihigh,ratio, aibnr_fixIndex, is_aibnr_autorun);
 
     out->dyn.noiseEst.hw_texEstT_nsEstTexThd_mode = paut->dyn[inear].noiseEst.hw_texEstT_nsEstTexThd_mode;
     for (i = 0; i < 17; i++) {
@@ -900,6 +922,9 @@ XCamReturn Asharp_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outp
     SharpContext_t* pCtx = (SharpContext_t *)inparams->ctx;
     sharp_api_attrib_t* pAttrib = pCtx->sharp_attrib;
     sharp_param_t* sharp_res = outparams->algoRes;
+    bool is_aibnr_autorun = inparams->u.proc.is_aibnr_autorun;
+    int aibnr_fixIndex = inparams->u.proc.aibnr_fixIndex;
+    bool is_aibnr_force_update = inparams->u.proc.is_aibnr_force_update;
 
     if (pAttrib->opMode != RK_AIQ_OP_MODE_AUTO) {
         LOGE_ANR("mode is %d, not auto mode, ignore", pAttrib->opMode);
@@ -917,7 +942,7 @@ XCamReturn Asharp_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outp
 
     bool need_recal = pCtx->isReCal_;
     bool init = inparams->u.proc.init;
-    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init) {
+    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init || is_aibnr_force_update) {
         need_recal = true;
     }
 
@@ -935,7 +960,7 @@ XCamReturn Asharp_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outp
         SharpApplyStrength(pCtx, sharp_res);
 #endif
 #if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
-        SharpSelectParam(pCtx, sharp_res, iso);
+        SharpSelectParam(pCtx, sharp_res, iso, is_aibnr_autorun, aibnr_fixIndex);
         SharpApplyStrength(pCtx, sharp_res);
 #endif
         outparams->cfg_update = true;
@@ -955,8 +980,11 @@ XCamReturn AtexEst_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* out
     SharpContext_t* pCtx = (SharpContext_t *)inparams->ctx;
     sharp_api_attrib_t* pAttrib = pCtx->sharp_attrib;
     void* algoRes = outparams->algoRes;
+    bool is_aibnr_autorun = inparams->u.proc.is_aibnr_autorun;
+    int aibnr_fixIndex = inparams->u.proc.aibnr_fixIndex;
+
 #if defined(RKAIQ_HAVE_SHARP_V40) || defined(RKAIQ_HAVE_SHARP_V41)
-    texEstSelectParam(pCtx, algoRes, iso);
+    texEstSelectParam(pCtx, algoRes, iso, is_aibnr_autorun, aibnr_fixIndex);
 #endif
     return XCAM_RETURN_NO_ERROR;
 }

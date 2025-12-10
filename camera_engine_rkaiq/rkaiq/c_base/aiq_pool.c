@@ -120,7 +120,7 @@ void aiqPool_deinit(AiqPool_t* pool) {
 
     if (pool->_pBaseMem) {
         if (pool->_free_nums != pool->_item_nums) {
-            LOGE("%s: %d pool items are still in use !", pool->_name,
+            LOGW("%s: %d pool items are still in use !", pool->_name,
                  pool->_item_nums - pool->_free_nums);
         }
         aiq_free(pool->_pBaseMem);

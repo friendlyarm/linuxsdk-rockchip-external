@@ -109,6 +109,26 @@ static void init_withCalib(GlobalParamsManager_t* pMan)
     } else {
         LOGE("no btnr calib !");
     }
+#if defined(RKAIQ_HAVE_BAYERTNR_V42)
+    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_TNR2_PARAM];
+    btnr_calib = (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+                (void*)(pMan->mCalibDb), bayertnr2));
+    if (btnr_calib) {
+        wrap_ptr->opMode = &btnr_calib->opMode;
+        wrap_ptr->en = &btnr_calib->en;
+        wrap_ptr->bypass = &btnr_calib->bypass;
+        wrap_ptr->man_param_ptr = &btnr_calib->stMan;
+        wrap_ptr->aut_param_ptr = &btnr_calib->stAuto;
+		pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_TNR_PARAM;
+        if (btnr_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
+            btnr_calib->opMode = RK_AIQ_OP_MODE_MANUAL;
+        }
+        LOGK("Module BTNR2: opMode:%d,en:%d,bypass:%d,man_ptr:%p",
+             *wrap_ptr->opMode, *wrap_ptr->en, *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
+    } else {
+        LOGE("no btnr2 calib !");
+    }
+#endif
     wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_YNR_PARAM];
     ynr_api_attrib_t* ynr_calib = (ynr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
                 (void*)(pMan->mCalibDb), ynr));
@@ -684,6 +704,45 @@ static void init_withCalib(GlobalParamsManager_t* pMan)
         LOGE("no airms calib !");
     }
 #endif
+#if RKAIQ_HAVE_AIYNR
+    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_AIYNR_PARAM];
+    aiynr_api_attrib_t* aiynr_calib = (aiynr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+                (void*)(pMan->mCalibDb), aiynr));
+    if (aiynr_calib) {
+        wrap_ptr->opMode = &aiynr_calib->opMode;
+        wrap_ptr->en = &aiynr_calib->en;
+        wrap_ptr->bypass = &aiynr_calib->bypass;
+        wrap_ptr->man_param_ptr = &aiynr_calib->stMan;
+        wrap_ptr->aut_param_ptr = &aiynr_calib->stAuto;
+        pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_AIYNR_PARAM;
+        if (aiynr_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
+            aiynr_calib->opMode = RK_AIQ_OP_MODE_MANUAL;
+        }
+        LOGK("Module aiynr: opMode:%d,en:%d,bypass:%d,man_ptr:%p",
+             *wrap_ptr->opMode, *wrap_ptr->en, *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
+    } else {
+        LOGE("no aiynr calib !");
+    }
+#endif
+#if RKAIQ_HAVE_FPNSW
+    wrap_ptr = &pMan->mGlobalParams[RESULT_TYPE_FPNSW_PARAM];
+    fpnSw_api_attrib_t* fpnSw_calib = (fpnSw_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(
+                (void*)(pMan->mCalibDb), fpnSw));
+    if (fpnSw_calib) {
+        wrap_ptr->opMode = &fpnSw_calib->opMode;
+        wrap_ptr->en = &fpnSw_calib->en;
+        wrap_ptr->bypass = &fpnSw_calib->bypass;
+        wrap_ptr->aut_param_ptr = &fpnSw_calib->stAuto;
+        pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << RESULT_TYPE_FPNSW_PARAM;
+        if (fpnSw_calib->opMode == RK_AIQ_OP_MODE_INVALID) {
+            fpnSw_calib->opMode = RK_AIQ_OP_MODE_MANUAL;
+        }
+        LOGK("Module fpnSw: opMode:%d,en:%d,bypass:%d,man_ptr:%p",
+             *wrap_ptr->opMode, *wrap_ptr->en, *wrap_ptr->bypass, wrap_ptr->man_param_ptr);
+    } else {
+        LOGE("no fpnSw calib !");
+    }
+#endif
 #endif
     EXIT_ANALYZER_FUNCTION();
 }
@@ -1186,15 +1245,18 @@ GlobalParamsManager_set_ModuleEn(GlobalParamsManager_t* pMan, rk_aiq_module_list
                 ret |= ret2;
                 continue;
             }
-			aiqMutex_lock(&pMan->mAlgoMutex[cur_type]);
-            *pMan->mGlobalParams[cur_type].en = mod->module_ctl[i].en;
+            aiqMutex_lock(&pMan->mAlgoMutex[cur_type]);
+            if (cur_type != RESULT_TYPE_AIBNR_PARAM && cur_type != RESULT_TYPE_AIRMS_PARAM &&
+                cur_type != RESULT_TYPE_AIYNR_PARAM) {
+                *pMan->mGlobalParams[cur_type].en = mod->module_ctl[i].en;
+            }
             *pMan->mGlobalParams[cur_type].bypass = mod->module_ctl[i].bypass;
             if(mod->module_ctl[i].opMode == RK_AIQ_OP_MODE_AUTO || mod->module_ctl[i].opMode == RK_AIQ_OP_MODE_MANUAL)
                 *pMan->mGlobalParams[cur_type].opMode = mod->module_ctl[i].opMode;
             else
                 LOGE("%s invalid opMode %d", __func__ ,mod->module_ctl[i].opMode);
             pMan->mIsGlobalModulesUpdateBits |= ((uint64_t)1) << cur_type;
-			aiqMutex_unlock(&pMan->mAlgoMutex[cur_type]);
+            aiqMutex_unlock(&pMan->mAlgoMutex[cur_type]);
         }
     }
     EXIT_ANALYZER_FUNCTION();
@@ -1360,6 +1422,25 @@ XCamReturn GlobalParamsManager_checkAlgoEnableBypass(GlobalParamsManager_t* pMan
             }
         }
     }
+#if defined(ISP_HW_V35)
+    if (type == RESULT_TYPE_TNR2_PARAM) {
+        if (*pMan->mGlobalParams[type].en != *en) {
+            // aibnr can't open/close in runtime
+            if (state != AIQ_STATE_INITED && state != AIQ_STATE_STOPED) {
+                LOGE("The btnr2 doesn't support turn on/off in runtime, please use bypass instead "
+                    "or config during the initialization.");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "The Aibnr doesn't support turn on/off in runtime, please use bypass instead "
+                    "or config during the initialization.");
+                return XCAM_RETURN_ERROR_FAILED;
+            } else if (*en == true && !pMan->mGlobalParams[RESULT_TYPE_AIBNR_PARAM].en) {
+                LOGE("The btnr2 need to work with aibnr module, set btnr2.en=true, isp will working in normal mode.");
+                socket_client_setNote(pMan->_socket, IPC_RET_UAPI_ERROR,
+                    "The btnr2 need to work with aibnr module, set btnr2.en=true, isp will working in normal mode.");
+            }
+        }
+    }
+#endif
 #endif
 #if RKAIQ_HAVE_YUVME
     if (type == RESULT_TYPE_MOTION_PARAM) {

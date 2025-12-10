@@ -102,6 +102,9 @@ struct AiqStatsTranslator_s {
     AiqLensHw_t* mFocusLensHw;
     AiqLensHw_t* mIrishw;
     AiqSensorHw_t* mSensorHw;
+
+    void* _bottom_mge_af_stats;
+    void* _bottom_mge_awb_stats;
 };
 
 XCamReturn AiqStatsTranslator_init(AiqStatsTranslator_t* pStatsTrans);

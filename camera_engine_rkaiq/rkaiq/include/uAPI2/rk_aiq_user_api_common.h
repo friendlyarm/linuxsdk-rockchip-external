@@ -162,6 +162,72 @@ typedef struct rk_aiq_module_list_s {
     rk_aiq_module_ctl_t module_ctl[RESULT_TYPE_MAX_PARAM];
 } rk_aiq_module_list_t;
 
+typedef struct algo_interp_iso_info_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(type),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(camAlgoResultType),
+        M4_DEFAULT(RESULT_TYPE_INVALID),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(Reference enum types.\n
+		Freq of use: high))  */
+    camAlgoResultType type;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(interpIso),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0, 640000),
+        M4_DEFAULT(50),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(original iso.\n
+        Freq of use: high))  */
+    uint32_t interpIso;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(interpIso),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0, 640000),
+        M4_DEFAULT(50),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(interpolation iso high.\n
+        Freq of use: high))  */
+    uint32_t isoH;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(interpIso),
+        M4_TYPE(u32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0, 640000),
+        M4_DEFAULT(50),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(interpolation iso low.\n
+        Freq of use: high))  */
+    uint32_t isoL;
+} algo_interp_iso_info_t;
+
+typedef struct algo_interp_iso_list_s {
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(interp_iso),
+        M4_TYPE(struct),
+        M4_SIZE_EX(1,55),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(TODO))   */
+    algo_interp_iso_info_t isoInfo[RESULT_TYPE_MAX_PARAM];
+} algo_interp_iso_list_t;
+
 typedef enum cSpaceMode_e {
     CSPACE_MODE_BT601_FULL  = 0,
     CSPACE_MODE_BT601_LIMIT = 1,

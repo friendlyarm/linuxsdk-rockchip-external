@@ -6015,7 +6015,9 @@
 											"pdCropX":	0,
 											"pdCropY":	0,
 											"pdBaseWidth":	0,
-											"pdBaseHeight":	0
+											"pdBaseHeight":	0,
+											"pdHBinMode":	0,
+											"pdVBinMode":	0
 										}],
 									"pdResoInf_len":	1
 								},

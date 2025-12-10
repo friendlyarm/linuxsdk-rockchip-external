@@ -6018,7 +6018,9 @@
 											"pdCropX":	0,
 											"pdCropY":	0,
 											"pdBaseWidth":	508,
-											"pdBaseHeight":	760
+											"pdBaseHeight":	760,
+											"pdHBinMode":	0,
+											"pdVBinMode":	0
 										}],
 									"pdResoInf_len":	1
 								},
@@ -11820,7 +11822,9 @@
 											"pdCropX":	0,
 											"pdCropY":	0,
 											"pdBaseWidth":	508,
-											"pdBaseHeight":	760
+											"pdBaseHeight":	760,
+											"pdHBinMode":	0,
+											"pdVBinMode":	0
 										}],
 									"pdResoInf_len":	1
 								},

@@ -115,7 +115,8 @@ XCamReturn sync_raw_buf(AiqRawStreamCapUnit_t* pRawStrCapUnit, AiqV4l2Buffer_t**
                 LOGE_CAMHW_SUBM(ISP20HW_SUBM, "skip frame %d", sequence_s);
                 goto end;
             }
-        } else if (pRawStrCapUnit->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+        } else if (pRawStrCapUnit->_working_mode == RK_AIQ_WORKING_MODE_NORMAL ||
+                RK_AIQ_HDR_IS_SENSOR_BUILTIN(pRawStrCapUnit->_working_mode)) {
             aiqList_erase_item(pRawStrCapUnit->buf_list[ISP_MIPI_HDR_S], pItem_s);
             if (check_skip_frame(pRawStrCapUnit, sequence_s)) {
                 LOGW_CAMHW_SUBM(ISP20HW_SUBM, "skip frame %d", sequence_s);
@@ -161,15 +162,17 @@ XCamReturn RawStreamCapUnit_poll_buffer_ready(void* ctx, AiqHwEvt_t* evt, int de
         // multiple syncs
         if (!pRawStrCapUnit->_is_1608_stream) {
             // normal
-            if (pRawStrCapUnit->_proc_stream) {
-                AiqRawStreamProcUnit_send_sync_buf(pRawStrCapUnit->_proc_stream, buf_s, buf_m,
-                                                   buf_l);
-            }
 #if RKAIQ_HAVE_AIRMS
             if (pRawStrCapUnit->_pAirmsStream) {
                 AiqAiRmsStreamProcUnit_setVicapBuf(pRawStrCapUnit->_pAirmsStream, buf_s);
             }
+            else
 #endif
+            if (pRawStrCapUnit->_send_sync_buf_func && pRawStrCapUnit->_sw_stream_ctx) {
+                pRawStrCapUnit->_send_sync_buf_func(pRawStrCapUnit->_sw_stream_ctx, buf_s, buf_m, buf_l);
+            } else if (pRawStrCapUnit->_proc_stream) {
+                AiqRawStreamProcUnit_send_sync_buf(pRawStrCapUnit->_proc_stream, buf_s, buf_m, buf_l);
+            }
         } else {
             // 1608 mode.
             for (int idx = 0; idx < CAM_INDEX_FOR_1608; idx++) {
@@ -480,7 +483,8 @@ void AiqRawStreamCapUnit_prepare_cif_mipi(AiqRawStreamCapUnit_t* pRawStrCapUnit)
     };
 
     // _mipi_tx_devs
-    if (pRawStrCapUnit->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+    if (pRawStrCapUnit->_working_mode == RK_AIQ_WORKING_MODE_NORMAL ||
+        RK_AIQ_HDR_IS_SENSOR_BUILTIN(pRawStrCapUnit->_working_mode)) {
         // use _mipi_tx_devs[0] only
         // id0 as normal
         // do nothing
@@ -602,7 +606,7 @@ XCamReturn AiqRawStreamCapUnit_set_tx_format(AiqRawStreamCapUnit_t* pRawStrCapUn
         }
 
         if (pRawStrCapUnit->_camHw->_airms_en) {
-            int mem_mode = CSI_LVDS_MEM_WORD_HIGH_ALIGN;
+            int mem_mode = CSI_LVDS_MEM_WORD_LOW_ALIGN;
             int ret1     = pRawStrCapUnit->_dev[i]->io_control(
             pRawStrCapUnit->_dev[i], RKCIF_CMD_SET_CSI_MEMORY_MODE, &mem_mode);
         }
@@ -635,7 +639,7 @@ XCamReturn AiqRawStreamCapUnit_set_tx_format2(AiqRawStreamCapUnit_t* pRawStrCapU
         }
 
         if (pRawStrCapUnit->_camHw->_airms_en) {
-            int mem_mode = CSI_LVDS_MEM_WORD_HIGH_ALIGN;
+            int mem_mode = CSI_LVDS_MEM_WORD_LOW_ALIGN;
             int ret1     = pRawStrCapUnit->_dev[i]->io_control(
             pRawStrCapUnit->_dev[i], RKCIF_CMD_SET_CSI_MEMORY_MODE, &mem_mode);
         }
@@ -792,6 +796,14 @@ void AiqRawStreamCapUnit_setTxBufferCnt(AiqRawStreamCapUnit_t* pRawStrCapUnit, u
             AiqV4l2Device_setBufCnt(pRawStrCapUnit->_dev[i], buf_num);
         }
     }
+}
+
+XCamReturn AiqRawStreamCapUnit_setSwStreamInfo(AiqRawStreamCapUnit_t* pRawStrCapUnit, void* sw_stream_ctx, rawStream_send_sync_buf_func send_sync_buf_func)
+{
+    pRawStrCapUnit->_sw_stream_ctx = sw_stream_ctx;
+    pRawStrCapUnit->_send_sync_buf_func = send_sync_buf_func;
+
+    return XCAM_RETURN_NO_ERROR;
 }
 
 #if RKAIQ_HAVE_DUMPSYS

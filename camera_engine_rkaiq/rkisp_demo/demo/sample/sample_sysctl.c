@@ -28,6 +28,7 @@ static void sample_sysctl_usage()
     printf("Usage : \n");
     printf("\t 0) SYSCTL:         sample_pause_resume.\n");
     printf("\t 1) SYSCTL:         sample_mirror_flip.\n");
+    printf("\t 2) SYSCTL:         sample_getHdrComprCurve.\n");
     printf("\n");
     printf("\t please press the key: ");
 
@@ -57,6 +58,18 @@ static void sample_mirrflip(const rk_aiq_sys_ctx_t* ctx)
     g_mirrflip++;
     g_mirrflip %= 4;
     printf("%s done, ret: %d, flip :%d, mirror:%d\n", __func__, ret, flip, mirror);
+}
+
+static void sample_getHdrComprCurve(const rk_aiq_sys_ctx_t* ctx) {
+#ifdef USE_NEWSTRUCT
+    XCamReturn ret        = XCAM_RETURN_NO_ERROR;
+    RkAiqHdrCompr_t compr = {0};
+    ret                   = rk_aiq_uapi2_sysctl_getHdrComprCurve((rk_aiq_sys_ctx_t*)ctx, &compr);
+    if (ret != XCAM_RETURN_NO_ERROR) {
+        printf("get hdr compr curve failed, ret: %d\n", ret);
+        return;
+    }
+#endif
 }
 
 XCamReturn sample_sysctl(const void *arg)
@@ -89,6 +102,11 @@ XCamReturn sample_sysctl(const void *arg)
             case '1': {
                 printf("\t sample_mirrflip\n\n");
                 sample_mirrflip(ctx);
+                break;
+            }
+            case '2': {
+                printf("\t sample_getHdrComprCurve\n\n");
+                sample_getHdrComprCurve(ctx);
                 break;
             }
             default:

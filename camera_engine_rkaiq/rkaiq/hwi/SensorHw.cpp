@@ -558,6 +558,25 @@ SensorHw::get_dcg_ratio(rk_aiq_sensor_dcg_ratio_t* dcg_ratio)
     return 0;
 }
 
+int
+SensorHw::get_spd_ratio(rk_aiq_sensor_dcg_ratio_t* spd_ratio)
+{
+    struct rkmodule_dcg_ratio spd_ratio_drv;
+
+    if (io_control(RKMODULE_GET_DCG_RATIO, &spd_ratio_drv) < 0) {
+        //LOGD_CAMHW_SUBM(SENSOR_SUBM,"failed to get sensor spd_ratio");
+        spd_ratio->valid = false;
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    spd_ratio->valid = true;
+    spd_ratio->integer = spd_ratio_drv.integer;
+    spd_ratio->decimal = spd_ratio_drv.decimal;
+    spd_ratio->div_coeff = spd_ratio_drv.div_coeff;
+
+    return 0;
+}
+
 XCamReturn
 SensorHw::get_sensor_descriptor(rk_aiq_exposure_sensor_descriptor *sns_des)
 {
@@ -588,6 +607,9 @@ SensorHw::get_sensor_descriptor(rk_aiq_exposure_sensor_descriptor *sns_des)
         // do nothing;
     }
     if (get_dcg_ratio(&sns_des->dcg_ratio)) {
+        // do nothing;
+    }
+    if (get_spd_ratio(&sns_des->spd_ratio)) {
         // do nothing;
     }
 
@@ -852,6 +874,7 @@ SensorHw::getSensorModeData(const char* sns_ent_name,
     //add nr_switch
     sns_des.nr_switch = sensor_desc.nr_switch;
     sns_des.dcg_ratio = sensor_desc.dcg_ratio;
+    sns_des.spd_ratio = sensor_desc.spd_ratio;
 
     sns_des.sensor_output_width = sensor_desc.sensor_output_width;
     sns_des.sensor_output_height = sensor_desc.sensor_output_height;
@@ -1650,8 +1673,8 @@ SensorHw::set_pause_flag(bool isPause, uint32_t frameId, bool isSingleMode)
             LOGD_CAMHW("erase effect exp id %u, set new exp id is %u", new_exp_id, it->first);
         }
         LOGD_CAMHW_SUBM(SENSOR_SUBM, "switch to %s mode, pauseId %u, handle sof id %u, _time_delay %d",
-                                        mIsSingleMode ? "single" : "multi",
-                                        mPauseId, _frame_sequence, _time_delay);
+                        mIsSingleMode ? "single" : "multi",
+                        mPauseId, _frame_sequence, _time_delay);
     }
     _mutex.unlock();
     return XCAM_RETURN_NO_ERROR;

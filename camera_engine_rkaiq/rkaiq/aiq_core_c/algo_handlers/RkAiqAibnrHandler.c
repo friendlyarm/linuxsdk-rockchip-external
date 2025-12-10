@@ -18,6 +18,7 @@
 #include "RkAiqAibnrHandler.h"
 #include "aiq_core.h"
 #include "RkAiqGlobalParamsManager_c.h"
+#include "newStruct/aibnr/aibnr_types_prvt.h"
 
 static void _handlerAibnr_init(AiqAlgoHandler_t* pHdl) {
     ENTER_ANALYZER_FUNCTION();
@@ -67,6 +68,9 @@ static XCamReturn _handlerAibnr_processing(AiqAlgoHandler_t* pAlgoHandler) {
     }
 
     AiqAlgoHandler_do_processing_common(pAlgoHandler);
+    aibnr_getFixIndex(pAlgoHandler->mProcInParam, &sharedCom->aibnr_fixIndex, &sharedCom->is_aibnr_force_update);
+    sharedCom->is_aibnr_autorun =
+        proc_res->en && !proc_res->bypass && pAlgoHandler->mOpMode == RK_AIQ_OP_MODE_AUTO;
 
     RKAIQCORE_CHECK_RET(ret, "aibnr algo processing failed");
 

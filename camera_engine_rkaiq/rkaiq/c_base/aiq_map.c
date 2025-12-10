@@ -103,7 +103,7 @@ void aiqMap_deinit(AiqMap_t* map) {
 
     if (map->_pBaseMem) {
         if (map->_free_nums != map->_item_nums) {
-            LOGE("%s: %d map items are still in use !", map->_name,
+            LOGW("%s: %d map items are still in use !", map->_name,
                  map->_item_nums - map->_free_nums);
         }
         aiq_free(map->_pBaseMem);

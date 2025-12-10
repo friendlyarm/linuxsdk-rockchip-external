@@ -318,6 +318,10 @@ typedef struct CalibDbV2_Af_PdafResolution_s {
     unsigned short pdBaseWidth;
     // M4_NUMBER_DESC("pdBaseHeight", "u16", M4_RANGE(0, 65535), "760", M4_DIGIT(0))
     unsigned short pdBaseHeight;
+    // M4_NUMBER_DESC("pdHBinMode", "u16", M4_RANGE(0, 4), "0", M4_DIGIT(0))
+    unsigned short pdHBinMode;
+    // M4_NUMBER_DESC("pdVBinMode", "u16", M4_RANGE(0, 4), "0", M4_DIGIT(0))
+    unsigned short pdVBinMode;
 } CalibDbV2_Af_PdafResolution_t;
 
 typedef struct CalibDbV2_Af_Pdaf_s {
@@ -2298,6 +2302,32 @@ typedef struct Af_PdafResolution_s {
         M4_NOTES(Pd data height in calibration.\n
         Freq of use: high))  */
     unsigned short PdBaseHeight;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(PdHBinMode),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,4),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(9),
+        M4_NOTES(Pd bin mode.\n
+        Freq of use: high))  */
+    unsigned short PdHBinMode;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(PdVBinMode),
+        M4_TYPE(u16),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,4),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(10),
+        M4_NOTES(Pd bin mode.\n
+        Freq of use: high))  */
+    unsigned short PdVBinMode;
 } Af_PdafResolution_t;
 
 typedef struct Af_Pdaf_s {

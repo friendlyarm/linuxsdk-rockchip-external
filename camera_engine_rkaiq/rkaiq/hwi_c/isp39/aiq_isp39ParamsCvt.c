@@ -2378,7 +2378,36 @@ void convertAiqBlcToIsp39Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBas
               pCvt->isp_params.isp_cfg->others.bls_cfg.bls1_val.gb, pCvt->isp_params.isp_cfg->others.bls_cfg.bls1_val.b,
               pCvt->isp_params.isp_cfg->others.bls_cfg.isp_ob_predgain, pCvt->isp_params.isp_cfg->others.bls_cfg.isp_ob_max
              );
-
+    /*if (!pBase->en) {
+    #if ISP_HW_V35
+        struct isp35_bls_cfg* blcCfg = &pCvt->isp_params.isp_cfg->others.bls_cfg;
+    #else
+        struct isp32_bls_cfg* blcCfg = &pCvt->isp_params.isp_cfg->others.bls_cfg;
+    #endif
+            blcCfg->fixed_val.r = 0;
+            blcCfg->fixed_val.gr = 0;
+            blcCfg->fixed_val.gb = 0;
+            blcCfg->fixed_val.b = 0;
+    }*/
+    if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCvt->_working_mode)) {
+    #if ISP_HW_V35
+            struct isp35_bls_cfg* blcCfg = &pCvt->isp_params.isp_cfg->others.bls_cfg;
+    #else
+            struct isp32_bls_cfg* blcCfg = &pCvt->isp_params.isp_cfg->others.bls_cfg;
+    #endif
+            if (pBase->en) {
+                    blcCfg->bls1_en = true;
+                    blcCfg->bls1_val.r=blcCfg->fixed_val.r;
+                    blcCfg->bls1_val.gr=blcCfg->fixed_val.gr;
+                    blcCfg->bls1_val.gb=blcCfg->fixed_val.gb;
+                    blcCfg->bls1_val.b=blcCfg->fixed_val.b;
+                    blcCfg->isp_ob_offset = 0;
+                    blcCfg->fixed_val.r = 0;
+                    blcCfg->fixed_val.gr = 0;
+                    blcCfg->fixed_val.gb = 0;
+                    blcCfg->fixed_val.b = 0;
+                }
+    }
     pCvt->mLatestBlsCfg = pCvt->isp_params.isp_cfg->others.bls_cfg;
 
 }
@@ -2484,25 +2513,48 @@ void convertAiqExpIspDgainToIsp39Params(AiqIspParamsCvt_t* pCvt,
             return;
         pCvt->mLatestIspDgain = isp_dgain;
 
-        dest_cfg->gain0_red     = MIN(cfg->gain0_red * isp_dgain0 + 0.5, max_wb_gain);
-        dest_cfg->gain0_green_r = MIN(cfg->gain0_green_r * isp_dgain0 + 0.5, max_wb_gain);
-        dest_cfg->gain0_green_b = MIN(cfg->gain0_green_b * isp_dgain0 + 0.5, max_wb_gain);
-        dest_cfg->gain0_blue    = MIN(cfg->gain0_blue * isp_dgain0 + 0.5, max_wb_gain);
+        if (pCvt->mCommonCvtInfo._airms_en || RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCvt->_working_mode)) {
+            uint16_t fixedGain1x = 1 << ISP2X_WBGAIN_FIXSCALE_BIT;
+            dest_cfg->gain0_red     = MIN(fixedGain1x * isp_dgain0 + 0.5, max_wb_gain);
+            dest_cfg->gain0_green_r = MIN(fixedGain1x * isp_dgain0 + 0.5, max_wb_gain);
+            dest_cfg->gain0_green_b = MIN(fixedGain1x * isp_dgain0 + 0.5, max_wb_gain);
+            dest_cfg->gain0_blue    = MIN(fixedGain1x * isp_dgain0 + 0.5, max_wb_gain);
 
-        dest_cfg->gain1_red     = MIN(cfg->gain1_red * isp_dgain1 + 0.5, max_wb_gain);
-        dest_cfg->gain1_green_r = MIN(cfg->gain1_green_r * isp_dgain1 + 0.5, max_wb_gain);
-        dest_cfg->gain1_green_b = MIN(cfg->gain1_green_b * isp_dgain1 + 0.5, max_wb_gain);
-        dest_cfg->gain1_blue    = MIN(cfg->gain1_blue * isp_dgain1 + 0.5, max_wb_gain);
+            dest_cfg->gain1_red     = MIN(fixedGain1x * isp_dgain1 + 0.5, max_wb_gain);
+            dest_cfg->gain1_green_r = MIN(fixedGain1x * isp_dgain1 + 0.5, max_wb_gain);
+            dest_cfg->gain1_green_b = MIN(fixedGain1x * isp_dgain1 + 0.5, max_wb_gain);
+            dest_cfg->gain1_blue    = MIN(fixedGain1x * isp_dgain1 + 0.5, max_wb_gain);
 
-        dest_cfg->gain2_red     = MIN(cfg->gain2_red * isp_dgain2 + 0.5, max_wb_gain);
-        dest_cfg->gain2_green_r = MIN(cfg->gain2_green_r * isp_dgain2 + 0.5, max_wb_gain);
-        dest_cfg->gain2_green_b = MIN(cfg->gain2_green_b * isp_dgain2 + 0.5, max_wb_gain);
-        dest_cfg->gain2_blue    = MIN(cfg->gain2_blue * isp_dgain2 + 0.5, max_wb_gain);
+            dest_cfg->gain2_red     = MIN(fixedGain1x * isp_dgain2 + 0.5, max_wb_gain);
+            dest_cfg->gain2_green_r = MIN(fixedGain1x * isp_dgain2 + 0.5, max_wb_gain);
+            dest_cfg->gain2_green_b = MIN(fixedGain1x * isp_dgain2 + 0.5, max_wb_gain);
+            dest_cfg->gain2_blue    = MIN(fixedGain1x * isp_dgain2 + 0.5, max_wb_gain);
 
-        dest_cfg->awb1_gain_r  = cfg->awb1_gain_r;
-        dest_cfg->awb1_gain_gr = cfg->awb1_gain_gr;
-        dest_cfg->awb1_gain_b  = cfg->awb1_gain_b;
-        dest_cfg->awb1_gain_gb = cfg->awb1_gain_gb;
+            dest_cfg->awb1_gain_r  = fixedGain1x;
+            dest_cfg->awb1_gain_gr = fixedGain1x;
+            dest_cfg->awb1_gain_b  = fixedGain1x;
+            dest_cfg->awb1_gain_gb = fixedGain1x;
+        } else {
+            dest_cfg->gain0_red     = MIN(cfg->gain0_red * isp_dgain0 + 0.5, max_wb_gain);
+            dest_cfg->gain0_green_r = MIN(cfg->gain0_green_r * isp_dgain0 + 0.5, max_wb_gain);
+            dest_cfg->gain0_green_b = MIN(cfg->gain0_green_b * isp_dgain0 + 0.5, max_wb_gain);
+            dest_cfg->gain0_blue    = MIN(cfg->gain0_blue * isp_dgain0 + 0.5, max_wb_gain);
+
+            dest_cfg->gain1_red     = MIN(cfg->gain1_red * isp_dgain1 + 0.5, max_wb_gain);
+            dest_cfg->gain1_green_r = MIN(cfg->gain1_green_r * isp_dgain1 + 0.5, max_wb_gain);
+            dest_cfg->gain1_green_b = MIN(cfg->gain1_green_b * isp_dgain1 + 0.5, max_wb_gain);
+            dest_cfg->gain1_blue    = MIN(cfg->gain1_blue * isp_dgain1 + 0.5, max_wb_gain);
+
+            dest_cfg->gain2_red     = MIN(cfg->gain2_red * isp_dgain2 + 0.5, max_wb_gain);
+            dest_cfg->gain2_green_r = MIN(cfg->gain2_green_r * isp_dgain2 + 0.5, max_wb_gain);
+            dest_cfg->gain2_green_b = MIN(cfg->gain2_green_b * isp_dgain2 + 0.5, max_wb_gain);
+            dest_cfg->gain2_blue    = MIN(cfg->gain2_blue * isp_dgain2 + 0.5, max_wb_gain);
+
+            dest_cfg->awb1_gain_r  = cfg->awb1_gain_r;
+            dest_cfg->awb1_gain_gr = cfg->awb1_gain_gr;
+            dest_cfg->awb1_gain_b  = cfg->awb1_gain_b;
+            dest_cfg->awb1_gain_gb = cfg->awb1_gain_gb;
+        }
 
         pCvt->isp_params.isp_cfg->module_cfg_update |= ISP39_MODULE_AWB_GAIN;
     }

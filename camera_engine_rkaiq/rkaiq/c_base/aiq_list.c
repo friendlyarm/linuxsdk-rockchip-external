@@ -86,7 +86,7 @@ void aiqList_deinit(AiqList_t* list) {
 
     if (list->_pBaseMem) {
         if (list->_free_nums != list->_item_nums) {
-            LOGE("%s: %d list items are still in use !", list->_name,
+            LOGW("%s: %d list items are still in use !", list->_name,
                  list->_item_nums - list->_free_nums);
         }
         aiq_free(list->_pBaseMem);

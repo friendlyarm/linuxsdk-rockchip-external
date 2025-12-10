@@ -474,6 +474,7 @@ enum cam_thread_type_e {
     ISP_POLL_AIBNR_DONE,
     ISP_POLL_RKNN_DONE,
     ISP_POLL_AIRMS_DONE,
+    ISP_POLL_AIYNR_DONE,
     ISP_POLL_POST_MAX,
 };
 

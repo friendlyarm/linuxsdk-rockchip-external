@@ -84,7 +84,11 @@
 #include "algos/rk_aiq_api_types_aibnr.h"
 #include "isp/rk_aiq_isp_airms.h"
 #include "algos/rk_aiq_api_types_airms.h"
+#include "isp/rk_aiq_isp_aiynr.h"
+#include "algos/rk_aiq_api_types_aiynr.h"
 #include "isp/rk_aiq_isp_af33.h"
+#include "isp/rk_aiq_isp_fpnSw.h"
+#include "algos/rk_aiq_api_types_fpnSw.h"
 //#include "algos/rk_aiq_api_types_af.h"
 RKAIQ_BEGIN_DECLARE
 
@@ -139,6 +143,8 @@ typedef struct {
     lsc_calib_attrib_t lsc;
     // M4_STRUCT_DESC("bayertnr", "normal_ui_style")
     btnr_api_attrib_t bayertnr;
+    // M4_STRUCT_DESC("bayertnr2", "normal_ui_style")
+    btnr_api_attrib_t bayertnr2;
     // M4_STRUCT_DESC("texEst", "normal_ui_style")
     texEst_api_attrib_t texEst;
     // M4_STRUCT_DESC("ynr", "normal_ui_style")
@@ -167,6 +173,10 @@ typedef struct {
     aibnr_api_attrib_t aibnr;
     // M4_STRUCT_DESC("airms", "normal_ui_style")
     airms_api_attrib_t airms;
+    // M4_STRUCT_DESC("aiynr", "normal_ui_style")
+    aiynr_api_attrib_t aiynr;
+    // M4_STRUCT_DESC("fpnSw", "normal_ui_style")
+    fpnSw_api_attrib_t fpnSw;
 } CamCalibDbV2ContextIsp35_t;
 
 RKAIQ_END_DECLARE

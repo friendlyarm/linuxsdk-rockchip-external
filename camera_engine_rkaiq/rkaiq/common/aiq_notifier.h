@@ -92,6 +92,7 @@ enum aiq_notifier_match_type {
     AIQ_NOTIFIER_MATCH_TEXEST,
     AIQ_NOTIFIER_MATCH_HSV,
     AIQ_NOTIFIER_MATCH_AIBNR,
+    AIQ_NOTIFIER_MATCH_AIYNR,
     AIQ_NOTIFIER_MATCH_MODS_ALL,
 
     AIQ_NOTIFIER_MATCH_ALL,
@@ -140,6 +141,7 @@ static const char* NotifierMatchType2Str[AIQ_NOTIFIER_MATCH_ALL] = {
     [AIQ_NOTIFIER_MATCH_TEXEST]   = "texest",
     [AIQ_NOTIFIER_MATCH_HSV]      = "hsv",
     [AIQ_NOTIFIER_MATCH_AIBNR]     = "aibnr",
+    [AIQ_NOTIFIER_MATCH_AIYNR]     = "aiynr",
 };
 
 static enum aiq_notifier_match_type Cam3aResult2NotifierType[RESULT_TYPE_MAX_PARAM] = {
@@ -178,6 +180,7 @@ static enum aiq_notifier_match_type Cam3aResult2NotifierType[RESULT_TYPE_MAX_PAR
     [RESULT_TYPE_TEXEST_PARAM]   = AIQ_NOTIFIER_MATCH_TEXEST,
     [RESULT_TYPE_HSV_PARAM]      = AIQ_NOTIFIER_MATCH_HSV,
     [RESULT_TYPE_AIBNR_PARAM]      = AIQ_NOTIFIER_MATCH_AIBNR,
+    [RESULT_TYPE_AIYNR_PARAM]      = AIQ_NOTIFIER_MATCH_AIYNR,
 };
 
 #if defined(__GNUC__) && !defined(__clang__)

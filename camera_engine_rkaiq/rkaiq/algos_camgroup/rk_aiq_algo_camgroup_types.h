@@ -237,6 +237,9 @@ typedef struct rk_aiq_singlecam_3a_result_s {
 #if RKAIQ_HAVE_AIRMS
     rk_aiq_isp_airms_params_t *isp_airms_params;
 #endif
+#if RKAIQ_HAVE_AIYNR
+    rk_aiq_isp_aiynr_params_t *isp_aiynr_params;
+#endif
 
     //otp info
     struct rkmodule_awb_inf _otp_awb;

@@ -68,7 +68,7 @@ XCamReturn RknnManager_hdlEvent(RknnManager_t* pRknnManager, AiqHwAinnEvt_t *eve
     XCamReturn ret = XCAM_RETURN_NO_ERROR;
 
     // aiisp event
-    if (event->_base.type == ISP_POLL_AIBNR_DONE) {
+    if (event->_base.type == ISP_POLL_AIBNR_DONE || event->_base.type == ISP_POLL_AIYNR_DONE) {
         // call rknn run
         
     }

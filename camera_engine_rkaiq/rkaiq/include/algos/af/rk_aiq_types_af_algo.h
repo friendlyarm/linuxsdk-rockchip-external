@@ -597,6 +597,8 @@ typedef struct rk_aiq_pdaf_resolution_s {
     unsigned short pdCropY;
     unsigned short pdBaseWidth;
     unsigned short pdBaseHeight;
+    unsigned short pdHBinMode;
+    unsigned short pdVBinMode;
 } rk_aiq_pdaf_resolution_t;
 
 typedef struct {

@@ -20,6 +20,8 @@
 #define AIBNR_NPU_FEATURE_MAX_1023                   ((1 << AIBNR_NPU_FEATURE_BIT_10) - 1)
 #define AIBNR_NOISE_LIMIT_RANGE_32767                32767
 
+#if RKAIQ_HAVE_AIBNR
+
 static float nonLinear(float x, int flag, float r, float scale)
 {
     float R2 = (1 + r)*(1 + r) + r * r;
@@ -114,10 +116,6 @@ static void rk_aiq_aibnr_params_print(struct isp35_ai_cfg* ai_cfg)
     LOGD_AIBNR("aipre_gain_alpha = 0x%x", ai_cfg->aipre_gain_alpha);
     LOGD_AIBNR("aipre_global_gain = 0x%x", ai_cfg->aipre_global_gain);
     LOGD_AIBNR("aipre_gain_ratio = 0x%x", ai_cfg->aipre_gain_ratio);
-
-    for (i = 0; i < ISP35_AI_SIGMA_NUM; i++) {
-        LOGD_AIBNR("aipre_sigma_y[%d] = 0x%x", i, ai_cfg->aipre_sigma_y[i]);
-    }
 
     LOGD_AIBNR("aipre_noise_mot_offset = 0x%x", ai_cfg->aipre_noise_mot_offset);
     LOGD_AIBNR("aipre_noise_mot_gain = 0x%x", ai_cfg->aipre_noise_mot_gain);
@@ -367,7 +365,9 @@ void rk_aiq_aibnr_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_in
     ai_cfg->aipre_zp = 0;                     // 8 bits, [-128, 127]
 
     rk_aiq_aibnr_params_print(ai_cfg);
+    isp_aibnr_param->ai_cfg = *ai_cfg;
 
     return;
 }
 
+#endif

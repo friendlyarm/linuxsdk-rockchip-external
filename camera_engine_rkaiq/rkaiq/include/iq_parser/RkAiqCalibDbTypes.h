@@ -6,6 +6,8 @@
 #include "iq_parser/RkAiqCalibDbTypesIsp20.h"
 #include "iq_parser/RkAiqCalibDbTypesIsp21.h"
 
+#define VERSION_SKIP_CHECK -1
+
 #pragma pack(4)
 
 #ifndef CAMCALIBDBCONTEXT_T
@@ -151,8 +153,12 @@ calibdb_get_module_ptr(void* ctx,
                        calibdb_ctx_infos_t* info_array,
                        const char* module_name) {
     calibdb_ctx_infos_t* ctx_info = NULL;
-    int i;
-    for (i = 0; info_array[i].offset_info != NULL; i++) {
+    for (int i = 0; info_array[i].offset_info != NULL; i++) {
+        if (info_array[i].ver == VERSION_SKIP_CHECK) {
+            ctx_info = &info_array[i];
+            break;
+        }
+
         if (g_rkaiq_isp_hw_ver == info_array[i].ver) {
             ctx_info =  &info_array[i];
             break;

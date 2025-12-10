@@ -76,6 +76,9 @@ typedef struct {
 #if RKAIQ_HAVE_AIBNR
     RkAiqAibnrModelInfo_t aibnrModelInfo;
 #endif
+#if RKAIQ_HAVE_AIYNR
+    RkAiqAiynrModelInfo_t aiynrModelInfo;
+#endif
     RKAiqAecExpInfo_t *ae_exp;
     blc_res_cvt_t blc_res;
     bool use_aiisp;
@@ -116,6 +119,8 @@ typedef struct {
     uint16_t ccm_pre_Y2Alpha_fac0[ISP32_CCM_CURVE_NUM*2];
     uint8_t bayer_fmt;
     otplsc_res_cvt_t otplsc_res;
+    bool _airms_en;
+    bool _aiynr_en;
 } common_cvt_info_t;
 
 typedef struct {

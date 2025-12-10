@@ -44,6 +44,7 @@
 #include "newStruct/hsv/include/hsv_algo_api.h"
 #include "newStruct/ldc/include/ldc_algo_api.h"
 #include "newStruct/airms/include/airms_algo_api.h"
+#include "newStruct/aiynr/include/aiynr_algo_api.h"
 #if RKAIQ_HAVE_RGBIR_REMOSAIC
 #include "newStruct/rgbir/include/rgbir_algo_api.h"
 #endif
@@ -73,6 +74,7 @@ namespace RkCam {
  */
 #define ISP_PARAMS_EFFECT_DELAY_CNT 2
 #define ISP_PARAMS_AIBNR_EFFECT_DELAY_CNT 4
+#define ISP_PARAMS_AIYNR_EFFECT_DELAY_CNT 4
 
 static RkAiqGrpCondition_t aeGrpCondV3x[] = {
     [0] = {XCAM_MESSAGE_AEC_STATS_OK, ISP_PARAMS_EFFECT_DELAY_CNT},
@@ -171,6 +173,9 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 #if RKAIQ_HAVE_AWB_V39
     // { &g_RkIspAlgoDescAwb.common,           RK_AIQ_CORE_ANALYZE_AWB,    1, 2, 39,   awbGrpConds        },
 #endif
+#if RKAIQ_HAVE_AIBNR
+    { &g_RkIspAlgoDescAibnr.common,         RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, grp0Conds          },
+#endif
 #if RKAIQ_HAVE_CAC_V30
     { &g_RkIspAlgoDescCac.common,          RK_AIQ_CORE_ANALYZE_GRP0,   0, 0, 0,   grp0Conds          },
 #endif
@@ -221,6 +226,7 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
 #endif
 #if (RKAIQ_HAVE_BAYERTNR_V42)
     { &g_RkIspAlgoDescBayertnr.common,     RK_AIQ_CORE_ANALYZE_GRP0,    0, 0, 0, grp0Conds          },
+    { &g_RkIspAlgoDescBayertnr2.common,     RK_AIQ_CORE_ANALYZE_GRP0,    0, 0, 0, grp0Conds          },
 #endif
 #if (RKAIQ_HAVE_CNR_V36)
     { &g_RkIspAlgoDescCnr.common,           RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, grp0Conds          },
@@ -258,14 +264,14 @@ static struct RkAiqAlgoDesCommExt g_default_3a_des[] = {
     { &g_RkIspAlgoDescLdch.common,         RK_AIQ_CORE_ANALYZE_OTHER,  0, 0, 0,    otherGrpCondsV3x },
 #endif
 #endif
-#if RKAIQ_HAVE_AIBNR
-    { &g_RkIspAlgoDescAibnr.common,         RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, grp0Conds          },
-#endif
 #if (RKAIQ_HAVE_AMTD_V1)
     { &g_RkIspAlgoDescAmtd.common,      RK_AIQ_CORE_ANALYZE_AE,     0, 0, 0,    {grp_conds_array_info(aeGrpCondV3x)}},
 #endif
-#if RKAIQ_HAVE_AIBNR
+#if RKAIQ_HAVE_AIRMS
     { &g_RkIspAlgoDescAirms.common,         RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, grp0Conds          },
+#endif
+#if RKAIQ_HAVE_AIYNR
+    { &g_RkIspAlgoDescAiynr.common,         RK_AIQ_CORE_ANALYZE_GRP0,    0,  1,  0, grp0Conds          },
 #endif
     { NULL,                                 RK_AIQ_CORE_ANALYZE_ALL,    0, 0, 0,    {0, 0}             },
     // clang-format on

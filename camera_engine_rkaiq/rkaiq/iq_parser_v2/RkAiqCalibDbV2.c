@@ -66,6 +66,8 @@ CamCalibDbV2Context_t* calibdbV2_ctx_new() {
 
     calib_ctx->sys_cfg = aiq_mallocz(sizeof(CalibDb_SysStaticCfg_ParaV2_t));
 
+    calib_ctx->scene_cis = aiq_mallocz(sizeof(calibdb_cis_para_t));
+
     return calib_ctx;
 }
 
@@ -78,6 +80,7 @@ void calibdbV2_ctx_delete(CamCalibDbV2Context_t* calib_ctx) {
         aiq_free(calib_ctx->module_info);
     if (calib_ctx->sys_cfg)
         aiq_free(calib_ctx->sys_cfg);
+    if (calib_ctx->scene_cis) aiq_free(calib_ctx->scene_cis);
     aiq_free(calib_ctx);
 }
 
@@ -136,6 +139,7 @@ int CamCalibDbProjFree(CamCalibDbProj_t *calibproj) {
             for (int j = 0; j < main_scene->sub_scene_len; j++) {
                 CamCalibSubSceneList_t* sub_scene = main_scene->sub_scene + j;
                 CamCalibDbFreeSceneCtx(calibdbv2_get_scene_ptr(sub_scene));
+                CamCalibDbFreeSceneCtx(calibdbv2_get_scene_cis_ptr(sub_scene));
                 if (sub_scene->name)
                     calib_free(sub_scene->name);
             }
@@ -672,6 +676,7 @@ CamCalibDbToDefaultCalibDb(CamCalibDbProj_t *calibproj) {
     ctx.sensor_info = &calibproj->sensor_calib;
     ctx.module_info = &calibproj->module_calib;
     ctx.sys_cfg = &calibproj->sys_static_cfg;
+    ctx.scene_cis   = (char*)(calibdbv2_get_scene_cis_ptr(&calibproj->main_scene[0].sub_scene[0]));
 
     return ctx;
 }
@@ -972,6 +977,8 @@ RkAiqAlgoType_t CamCalibDbString2algostype(const char *str) {
 
         {"aibnr", RK_AIQ_ALGO_TYPE_AIBNR},
         {"airms", RK_AIQ_ALGO_TYPE_AIRMS},
+        {"aiynr", RK_AIQ_ALGO_TYPE_AIYNR},
+        {"bayertnr2", RK_AIQ_ALGO_TYPE_BAYERTNR2},
     };
 
     RkAiqAlgoType_t ret = RK_AIQ_ALGO_TYPE_NONE;

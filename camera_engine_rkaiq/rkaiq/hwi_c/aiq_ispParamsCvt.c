@@ -202,11 +202,13 @@ static void AiqIspParamsCvt_checkModuleEnable(AiqIspParamsCvt_t* pCvt, AiqList_t
 #endif
 }
 
-void AiqIspParamsCvt_getCommonCvtInfo(AiqIspParamsCvt_t* pCvt, AiqList_t* results, bool use_aiisp) {
+void AiqIspParamsCvt_getCommonCvtInfo(AiqIspParamsCvt_t* pCvt, AiqList_t* results, bool use_aiisp, bool _airms_en, bool _aiynr_en) {
     pCvt->mCommonCvtInfo.isGrayMode   = false;
     pCvt->mCommonCvtInfo.frameNum     = 1;
     //pCvt->mCommonCvtInfo.ae_exp = NULL;
     pCvt->mCommonCvtInfo.use_aiisp    = use_aiisp;
+    pCvt->mCommonCvtInfo._airms_en    = _airms_en;
+    pCvt->mCommonCvtInfo._aiynr_en    = _aiynr_en;
 
     aiq_params_base_t* params = NULL;
     AiqListItem_t* pItem      = aiqList_get_item(results, NULL);
@@ -262,11 +264,9 @@ void AiqIspParamsCvt_getCommonCvtInfo(AiqIspParamsCvt_t* pCvt, AiqList_t* result
 
     if (pCvt->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
         pCvt->mCommonCvtInfo.frameNum = 1;
-    } else if (pCvt->_working_mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR ||
-               pCvt->_working_mode == RK_AIQ_ISP_HDR_MODE_2_LINE_HDR) {
+    } else if (RK_AIQ_HDR_IS_HDR2(pCvt->_working_mode)) {
         pCvt->mCommonCvtInfo.frameNum = 2;
-    } else if (pCvt->_working_mode == RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR ||
-               pCvt->_working_mode == RK_AIQ_ISP_HDR_MODE_3_LINE_HDR) {
+    } else if (RK_AIQ_HDR_IS_HDR3(pCvt->_working_mode)) {
         pCvt->mCommonCvtInfo.frameNum = 3;
     }
 
@@ -332,7 +332,7 @@ void AiqIspParamsCvt_getCommonCvtInfo(AiqIspParamsCvt_t* pCvt, AiqList_t* result
 }
 
 XCamReturn AiqIspParamsCvt_merge_isp_results(AiqIspParamsCvt_t* pCvt, AiqList_t* results,
-        void* isp_cfg, bool is_multi_isp, bool use_aiisp) {
+        void* isp_cfg, bool is_multi_isp, bool use_aiisp, bool _airms_en, bool _aiynr_en) {
     if (!results) return XCAM_RETURN_ERROR_PARAM;
 
     int32_t pre_cvt_results[] = {
@@ -349,7 +349,7 @@ XCamReturn AiqIspParamsCvt_merge_isp_results(AiqIspParamsCvt_t* pCvt, AiqList_t*
     pCvt->mBlcResult = AiqIspParamsCvt_get_3a_result(pCvt, results, RESULT_TYPE_BLC_PARAM);
 
 #if USE_NEWSTRUCT
-    AiqIspParamsCvt_getCommonCvtInfo(pCvt, results, use_aiisp);
+    AiqIspParamsCvt_getCommonCvtInfo(pCvt, results, use_aiisp, _airms_en, _aiynr_en);
 #endif
 
     int pre_cvt_results_len = sizeof(pre_cvt_results) / sizeof(int32_t);
@@ -416,6 +416,8 @@ void AiqIspParamsCvt_setCalib(AiqIspParamsCvt_t* pCvt, const CamCalibDbV2Context
     btnr_api_attrib_t * btnr_attrib = (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR((void *)calibv2, bayertnr));
     btnr_cvt_info_t *btnr_info = &pCvt->mBtnrInfo;
     pCvt->btnr_attrib = btnr_attrib;
+    btnr_api_attrib_t * btnr2_attrib = (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR((void *)calibv2, bayertnr2));
+    pCvt->btnr2_attrib = btnr_attrib;
 #endif
 }
 

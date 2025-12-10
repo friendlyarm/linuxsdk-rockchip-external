@@ -2316,7 +2316,7 @@ typedef struct shp_extHfDetailExtra_Hpf_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(eHfDetail_hpf_radius0),
         M4_TYPE(enum),
-        M4_ENUM_DEF(shp_eHf_FiltRadius_mode_t),
+        M4_ENUM_DEF(shp_eHfDetial_FiltRadius_mode_t),
         M4_DEFAULT(shp_hpfFiltRadius2_mode),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -2346,7 +2346,7 @@ typedef struct shp_extHfDetailExtra_Hpf_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(eHfDetail_hpf_radius1),
         M4_TYPE(enum),
-        M4_ENUM_DEF(shp_eHf_FiltRadius_mode_t),
+        M4_ENUM_DEF(shp_eHfDetial_FiltRadius_mode_t),
         M4_DEFAULT(shp_hpfFiltRadius2_mode),
         M4_HIDE_EX(0),
         M4_RO(0),

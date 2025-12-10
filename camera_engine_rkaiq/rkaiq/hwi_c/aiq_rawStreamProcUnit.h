@@ -42,6 +42,8 @@ typedef struct AiqV4l2Buffer_s AiqV4l2Buffer_t;
 typedef struct AiqV4l2Device_s AiqV4l2Device_t;
 typedef struct rk_sensor_full_info_s rk_sensor_full_info_t;
 
+typedef XCamReturn (*rawStream_send_sync_buf_func)(void* ctx, AiqV4l2Buffer_t* buf_s, AiqV4l2Buffer_t* buf_m, AiqV4l2Buffer_t* buf_l);
+
 typedef struct AiqRawStreamProcUnit_s {
     int mCamPhyId;
     AiqV4l2Device_t* _dev[3];

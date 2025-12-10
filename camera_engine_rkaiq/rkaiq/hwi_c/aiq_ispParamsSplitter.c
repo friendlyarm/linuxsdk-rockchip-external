@@ -36,6 +36,7 @@ XCamReturn AiqIspParamsSplitter_init(AiqIspParamsSplitter_t* pSplit, int ispVer)
 
     pSplit->SplitIspParams         = NULL;
     pSplit->SplitIspParamsVertical = NULL;
+    pSplit->isp_unite_mode_        = 0;
 
     memset(&pSplit->left_isp_rect_, 0, sizeof(pSplit->bottom_left_isp_rect_));
     memset(&pSplit->right_isp_rect_, 0, sizeof(pSplit->right_isp_rect_));

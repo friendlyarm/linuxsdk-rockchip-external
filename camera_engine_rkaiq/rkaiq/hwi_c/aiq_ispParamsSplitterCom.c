@@ -150,7 +150,7 @@ static void SplitAecCalcBlockSize(struct isp2x_window* left_win, struct isp2x_wi
     }
 }
 
-static void SplitAecWin(struct isp2x_window* ori_win, struct isp2x_window* left_win,
+void SplitAecWin(struct isp2x_window* ori_win, struct isp2x_window* left_win,
                         struct isp2x_window* right_win, u8 wnd_num,
                         Splitter_Rectangle_t left_isp_rect_, Splitter_Rectangle_t right_isp_rect_,
                         WinSplitMode* mode) {
@@ -645,10 +645,10 @@ static void SplitAecSubWinVertical(u8* subwin_en, struct isp2x_window* ori_win,
     }
 }
 
-static void SplitAecWinVertical(struct isp2x_window* ori_win, struct isp2x_window* left_win,
-                                struct isp2x_window* right_win, u8 wnd_num,
-                                Splitter_Rectangle_t left_isp_rect_,
-                                Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode) {
+void SplitAecWinVertical(struct isp2x_window* ori_win, struct isp2x_window* left_win,
+                         struct isp2x_window* right_win, u8 wnd_num,
+                         Splitter_Rectangle_t left_isp_rect_,
+                         Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode) {
     // win only locate in left isp, actually stats of right isp would not be used
     if (ori_win->v_offs + ori_win->v_size <= left_isp_rect_.h) {
 #ifdef DEBUG
@@ -844,7 +844,7 @@ void AiqIspParamsSplitter_SplitAwbWinVertical(struct isp2x_window* ori_win,
         right_win->h_size = ori_win->h_size;
         right_win->v_offs = 0;
         right_win->v_size = ori_win_vsize_clip;
-    } else if (ori_win->h_offs >= right_isp_rect_.y) {
+    } else if (ori_win->v_offs >= right_isp_rect_.y) {
         LOG1_AWB("win locate in right isp\n");
 
         *mode = RIGHT_MODE;

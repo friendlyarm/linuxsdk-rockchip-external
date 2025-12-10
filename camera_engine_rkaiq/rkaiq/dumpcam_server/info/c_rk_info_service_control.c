@@ -102,6 +102,7 @@ enum dump_mod_type {
     DUMP_AIQ_MOD_TEXEST,
     DUMP_AIQ_MOD_HSV,
     DUMP_AIQ_MOD_AIBNR,
+    DUMP_AIQ_MOD_AIYNR,
     DUMP_AIQ_MOD_MAX,
 
     DUMP_AIQ_MAX,
@@ -170,6 +171,9 @@ static struct dump_mod_descr aiq_modules[] = {
 #endif
 #if RKAIQ_HAVE_AIBNR
     { DUMP_AIQ_MOD_AIBNR,        "aibnr",         { NULL, NULL }, AIQInfo_dumpIspModHelp },
+#endif
+#if RKAIQ_HAVE_AIYNR
+    { DUMP_AIQ_MOD_AIYNR,        "aiynr",         { NULL, NULL }, AIQInfo_dumpIspModHelp },
 #endif
     { DUMP_AIQ_MOD_MAX,         "max",          { NULL, NULL }, AIQInfo_dumpIspModHelp },
 

@@ -154,6 +154,7 @@ static void *ClientThreadFunc(void *p)
     ctx->sockfd = socket(AF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (ctx->sockfd <= 0) {
         LOGE_IPC("%s[%d]: create socket error: %s", strerror(errno), __func__, cid);
+        ctx->sockfd = 0;
         return NULL;
     }
     LOGI_IPC("%s[%d]: create sockfd %d...", __func__, cid, ctx->sockfd);
@@ -165,12 +166,12 @@ static void *ClientThreadFunc(void *p)
     setsockopt(ctx->sockfd, SOL_SOCKET, SO_REUSEADDR, &n, sizeof(n));
 
     if (bind(ctx->sockfd, (struct sockaddr *) &addr, alen) != 0) {
-        LOGE_IPC("bind local server socket error!");
+        LOGE_IPC("bind local server socket error: %s", strerror(errno));
         return NULL;
     }
     LOGD_IPC("bind local server socket ok ...");
     if (listen(ctx->sockfd, 2) != 0) {
-        LOGE_IPC("listen local server socket error!");
+        LOGE_IPC("listen local server socket error: %s", strerror(errno));
         return NULL;
     }
     LOGD_IPC("listen local server socket ok ...");
@@ -218,7 +219,12 @@ int socket_client_start(void *aiqctx, SocketClientCtx_t *ctx, int cid) {
         return -1;
     }
 
-    ret = pthread_create(&ctx->client_thread, NULL, ClientThreadFunc, ctx);
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+    ret = pthread_create(&ctx->client_thread, &attr, ClientThreadFunc, ctx);
+    pthread_attr_destroy(&attr);
     if (ret != 0) {
         LOGE_IPC("%s[%d]: create ipc thread error: %s", __func__, cid, strerror(ret));
         return -1;
@@ -237,6 +243,12 @@ void socket_client_exit(SocketClientCtx_t *ctx) {
         ctx->quit = true;
         ssize_t size = write(ctx->stopfd[1], &c, sizeof(c));
         pthread_join(ctx->client_thread, NULL);
+        int try_times = 300;
+        while (ctx->thread_running && try_times--) {
+            usleep(3*1000);
+        }
+        if (ctx->thread_running || try_times == 0)
+            LOGE_IPC("%s[%d]: quit timeout ", __func__, cid);
     }
 
     if (ctx->recvbuf)
@@ -321,6 +333,36 @@ static void _getEffWbGain(void* aiqctx, uint32_t fid, RkToolAwbParam_t* out)
         AIQ_REF_BASE_UNREF(&ispParams->_ref_base);
     }
 #endif
+}
+
+rk_aiq_isp_tool_hdr_compr_curve_t* socket_client_get_hdrComprCurve(void* aiqctx) {
+    rk_aiq_isp_tool_hdr_compr_curve_t* tool_compr_curve =
+        aiq_mallocz(sizeof(rk_aiq_isp_tool_hdr_compr_curve_t));
+    if (tool_compr_curve == NULL) {
+        LOGE_IPC("malloc tool_compr_curve failed");
+        return NULL;
+    }
+
+    XCamReturn ret        = XCAM_RETURN_NO_ERROR;
+    RkAiqHdrCompr_t compr = {0};
+    ret                   = rk_aiq_uapi2_sysctl_getHdrComprCurve((rk_aiq_sys_ctx_t*)aiqctx, &compr);
+    if (ret != XCAM_RETURN_NO_ERROR) {
+        LOGE_IPC("get hdr compr curve failed, ret: %d\n", ret);
+        if (tool_compr_curve) {
+            aiq_free(tool_compr_curve);
+        }
+        return NULL;
+    } else {
+        tool_compr_curve->version = 0x0100;
+        tool_compr_curve->point   = compr.point;
+        tool_compr_curve->src_bit = compr.src_bit;
+        tool_compr_curve->k_shift = compr.k_shift;
+        memcpy(tool_compr_curve->data_compr, compr.data_compr, sizeof(compr.data_compr));
+        memcpy(tool_compr_curve->data_src, compr.data_src, sizeof(compr.data_src));
+        memcpy(tool_compr_curve->slope_k, compr.slope_k, sizeof(compr.slope_k));
+    }
+
+    return tool_compr_curve;
 }
 
 rk_aiq_isp_tool_stats_t *socket_client_get_isp_statics(void* aiqctx)

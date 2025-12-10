@@ -1739,7 +1739,7 @@
 							"awbGnCalcOth":	{
 								"fstFrm_wbgain":	[2.1999, 1, 1, 2.0477],
 								"advSiteRec":	{
-									"advSiteRec_en":	1,
+									"advSiteRec_en":        0,
 									"kpRecFrm_num":	3,
 									"advSiteInfo_name":	"/tmp/avaSiteInfo",
 									"smartAdv_en":	1,

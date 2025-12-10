@@ -886,10 +886,18 @@
  *  - AIBNR: add post proc
  *  - lsc: support otp
  * - iqfiles: update isp35 iqfiles
+ * v6.0x30.5
+ * - Support dynamically enabling and disabling aibnr
+ * - should updated with isp driver:
+ *   - https://10.10.10.29/c/rk/kernel/+/263634
+ *   - https://10.10.10.29/c/rk/kernel/+/262660/3
+ * v6.0x31.0
+ * - Support btnr2, aiYnr, btnr memc, scene_cis
+ * - isp driver should be v3.1.0 
  */
 
-#define RK_AIQ_VERSION_REAL_V "v6.0x30.4"
-#define RK_AIQ_RELEASE_DATE "2025-05-26"
+#define RK_AIQ_VERSION_REAL_V "v6.0x31.0"
+#define RK_AIQ_RELEASE_DATE "2025-08-01"
 
 #define RK_AIQ_IQ_HEAD_VERSION_REAL_V "v1.0.2"
 

@@ -43,6 +43,102 @@ static int _j2s_struct_free(j2s_ctx *ctx, int struct_index, void *ptr);
 
 #define J2B_MAX_PATH_LEN (128)
 
+/* Magic value for marking invalid struct - always use 4 bytes for safety */
+#define J2S_INVALID_STRUCT_MAGIC 0xDEADBEEF
+
+/* Static string array table for special handling */
+static const char* j2s_invalid_target_names[] = {
+    // clang-format off
+    "scene_cis",
+    "cis_regSetting",
+    "cis_blc",
+    "cis_hdr",
+    "cis_qbcRmsc",
+    "cis_cmpsOut",
+    NULL /* Array terminator */
+    // clang-format on
+};
+
+/**
+ * Check if a name is in the invalid target list
+ *
+ * @name: Name to check
+ * @return: true if name is in the list, false otherwise
+ */
+static bool j2s_is_invalid_target(const char* name) {
+    if (!name) return false;
+
+    for (int i = 0; j2s_invalid_target_names[i] != NULL; i++) {
+        if (strcmp(name, j2s_invalid_target_names[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Set magic value to mark struct as invalid
+ *
+ * @ctx: J2S context
+ * @obj_index: Object index of the parent structure for size information
+ * @struct_index: Structure index
+ * @ptr: Pointer to the structure
+ */
+static void j2s_set_struct_invalid_magic(j2s_ctx* ctx, int obj_index, int struct_index, void* ptr) {
+    j2s_struct* struct_obj;
+    j2s_obj* child;
+    j2s_obj* parent_obj = NULL;
+    int child_index;
+    size_t parent_size = 0;
+
+    if (struct_index < 0 || !ptr) return;
+
+    struct_obj = &ctx->structs[struct_index];
+
+    /* Get parent object size if obj_index is valid */
+    if (obj_index >= 0 && obj_index < ctx->num_obj) {
+        parent_obj  = &ctx->objs[obj_index];
+        parent_size = parent_obj->elem_size;
+    }
+
+    /* Determine magic value size based on parent struct size */
+    size_t target_size = parent_size > 0 ? parent_size : 1; /* Default to 1 byte if no parent */
+
+    /* Walk child list and set magic value based on parent struct size */
+    for (child_index = struct_obj->child_index; child_index >= 0; child_index = child->next_index) {
+        child = &ctx->objs[child_index];
+
+        /* Set magic value for non-struct members */
+        if (child->type != J2S_TYPE_STRUCT) {
+            char* member_ptr = (char*)ptr + child->offset;
+
+            if (target_size >= 4) {
+                uint32_t* magic_ptr = (uint32_t*)member_ptr;
+                *magic_ptr          = J2S_INVALID_STRUCT_MAGIC;
+            } else if (target_size >= 2) {
+                uint16_t* magic_ptr = (uint16_t*)member_ptr;
+                *magic_ptr = (uint16_t)(J2S_INVALID_STRUCT_MAGIC & 0xFFFF); /* Use low 16 bits */
+            } else if (target_size >= 1) {
+                uint8_t* magic_ptr = (uint8_t*)member_ptr;
+                *magic_ptr = (uint8_t)(J2S_INVALID_STRUCT_MAGIC & 0xFF); /* Use low 8 bits */
+            }
+            break;
+        }
+
+        /* Set magic value to the beginning of each struct member based on parent size */
+        if (target_size >= 4) {
+            uint32_t* magic_ptr = (uint32_t*)((char*)ptr + child->offset);
+            *magic_ptr          = J2S_INVALID_STRUCT_MAGIC;
+        } else if (target_size >= 2) {
+            uint16_t* magic_ptr = (uint16_t*)((char*)ptr + child->offset);
+            *magic_ptr          = (uint16_t)(J2S_INVALID_STRUCT_MAGIC & 0xFFFF);
+        } else if (target_size >= 1) {
+            uint8_t* magic_ptr = (uint8_t*)((char*)ptr + child->offset);
+            *magic_ptr         = (uint8_t)(J2S_INVALID_STRUCT_MAGIC & 0xFF);
+        }
+    }
+}
+
 struct_map_t *struct_map_create(const char *fpath) {
   char map_file_name[J2B_MAX_PATH_LEN] = {0};
   char block_file_name[J2B_MAX_PATH_LEN] = {0};
@@ -241,7 +337,15 @@ static inline const char *j2s_enum_get_name(j2s_ctx *ctx, int enum_index,
       return enum_value->name;
   }
 
-  ERR("unknown enum value: %d for %s\n", value, enum_obj->name);
+  /*
+   * Ensures compatibility with validation of variables either marked as magic numbers or
+   * initialized to zero.
+   */
+  if (value != J2S_INVALID_STRUCT_MAGIC && value != 0)
+      ERR("unknown enum value: 0x%x for %s\n", value, enum_obj->name);
+  if (value == 0)
+      DBG("unknown enum value: 0x%x for %s\n", value, enum_obj->name);
+
 out:
   return "INVALID";
 }
@@ -1236,8 +1340,15 @@ static int _j2s_json_to_struct(j2s_ctx *ctx, cJSON *json, int struct_index,
     child = &ctx->objs[child_index];
 
     item = RkCam_cJSON_GetObjectItemCaseSensitive(root, child->name);
-    if (!item)
-      continue;
+    if (!item) {
+        if (j2s_is_invalid_target(child->name)) {
+            DBG("Set invalid magic to obj: %s from %p[%d], size: %d\n", child->name, ptr,
+                child->offset, child->elem_size);
+            j2s_set_struct_invalid_magic(ctx, child_index, child->struct_index,
+                                         (char*)ptr + child->offset);
+        }
+        continue;
+    }
 
     DBG("start child: %s (%s) from %p\n", child->name, struct_obj->name, ptr);
     ret = _j2s_json_to_obj(ctx, item, root, child_index, ptr, query);

@@ -16,6 +16,7 @@
 #ifndef ___RK_AIQ_CALIB_DB_TYPES_V2_H__
 #define ___RK_AIQ_CALIB_DB_TYPES_V2_H__
 
+#include "iq_parser_v2/cis_head.h"
 #include "iq_parser_v2/moduleinfo_head.h"
 #include "iq_parser_v2/sensorinfo_head.h"
 #include "iq_parser_v2/sys_static_cfg_head.h"
@@ -142,6 +143,7 @@ typedef struct CamCalibDbV2Context_s {
     CalibDb_SysStaticCfg_ParaV2_t* sys_cfg;
     int sys_cfg_len;
     char* calib_scene;
+    char* scene_cis;
 } CamCalibDbV2Context_t;
 
 /**
@@ -170,6 +172,7 @@ typedef struct CamCalibDbV2Tuning_s {
 #else
 #error "WRONG ISP_HW_VERSION, ONLY SUPPORT V20 AND V21 AND V30 NOW !"
 #endif
+    calibdb_cis_para_t calib_cis;
 } CamCalibDbV2Tuning_t;
 
 typedef struct CamCalibSubSceneList_s {
@@ -198,7 +201,7 @@ typedef struct CamCalibSubSceneList_s {
 #else
 #error "WRONG ISP_HW_VERSION, ONLY SUPPORT V20 AND V21 AND V30 NOW !"
 #endif
-
+    calibdb_cis_para_t scene_cis;
 } CamCalibSubSceneList_t;
 
 typedef struct CamCalibMainSceneList_s {

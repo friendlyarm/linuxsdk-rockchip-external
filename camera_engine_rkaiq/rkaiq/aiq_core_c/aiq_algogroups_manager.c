@@ -305,7 +305,11 @@ XCamReturn AiqAnalyzerGroup_init(AiqAnalyzerGroup_t* pGroup, AiqCore_t* aiqCore,
 #if RKAIQ_HAVE_DUMPSYS
     pGroup->mMsgReduceCnt = 0;
 #endif
-    if (grpConds) pGroup->mGrpConds = *grpConds;
+    if (grpConds) {
+        pGroup->mGrpConds.conds = (RkAiqGrpCondition_t*)aiq_mallocz(sizeof(RkAiqGrpCondition_t) * grpConds->size);
+        memcpy(pGroup->mGrpConds.conds, grpConds->conds, sizeof(RkAiqGrpCondition_t) * grpConds->size);
+        pGroup->mGrpConds.size = grpConds->size;
+    }
     if (!singleThrd) {
         char name[64];
         sprintf(name, "g-%x:0x%" PRIx64, pGroup->mGroupType, pGroup->mDepsFlag);
@@ -338,6 +342,10 @@ void AiqAnalyzerGroup_deinit(AiqAnalyzerGroup_t* pGroup) {
     if (pGroup->mGroupMsgMap) {
         aiqMap_deinit(pGroup->mGroupMsgMap);
         pGroup->mGroupMsgMap = NULL;
+    }
+    if (pGroup->mGrpConds.conds) {
+        aiq_free(pGroup->mGrpConds.conds);
+        pGroup->mGrpConds.conds = NULL;
     }
     EXIT_ANALYZER_FUNCTION();
 }

@@ -77,6 +77,15 @@ static XCamReturn _handlerLdc_readMeshFile(const char* file_name, const void* ad
     FILE* ofp;
     ofp = fopen(file_name, "rb");
     if (ofp != NULL) {
+        struct stat file_stat;
+        if (fstat(fileno(ofp), &file_stat) == -1) {
+            LOGE_ALDC("Failed to get size from file %s", file_name);
+            fclose(ofp);
+            return XCAM_RETURN_ERROR_FAILED;
+        }
+
+        LOGI_ALDC("%s size %" PRId64 "", file_name, file_stat.st_size);
+
         uint32_t lut_size = 0;
 #ifdef HAVE_HEADINFO
         uint16_t hpic = 0, vpic = 0, hsize = 0, vsize = 0, hstep = 0, vstep = 0;
@@ -93,18 +102,10 @@ static XCamReturn _handlerLdc_readMeshFile(const char* file_name, const void* ad
 
         lut_size = hsize * vsize * sizeof(uint16_t);
 #else
-        struct stat file_stat;
-        if (fstat(fileno(ofp), &file_stat) == -1) {
-            LOGE_ALDC("Failed to get file size");
-            fclose(ofp);
-            return XCAM_RETURN_ERROR_FAILED;
-        }
-
-        LOGI_ALDC("%s size %" PRId64 "", file_name, file_stat.st_size);
         lut_size = file_stat.st_size;
 #endif
         uint16_t* buf = (uint16_t*)addr;
-        uint16_t num  = fread((void*)addr, 1, lut_size, ofp);
+        size_t num    = fread((void*)addr, 1, lut_size, ofp);
 
         fclose(ofp);
 
@@ -114,7 +115,8 @@ static XCamReturn _handlerLdc_readMeshFile(const char* file_name, const void* ad
 
 #ifdef HAVE_HEADINFO
         if (num != lut_size) {
-            LOGE_ALDCH("mismatched the size of mesh");
+            LOGE_ALDCH("mismatched the size of mesh file %s, expected %u, read %u", file_name,
+                       lut_size, num);
             return XCAM_RETURN_ERROR_FAILED;
         }
 #endif

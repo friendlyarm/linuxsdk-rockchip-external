@@ -72,10 +72,12 @@ static int getHDRFrameNum(const rk_aiq_sys_ctx_t* ctx)
         break;
     case RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR:
     case RK_AIQ_ISP_HDR_MODE_2_LINE_HDR:
+    case RK_AIQ_ISP_HDR_MODE_2_BUILTIN:
         FrameNum = 2;
         break;
     case RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR:
     case RK_AIQ_ISP_HDR_MODE_3_LINE_HDR:
+    case RK_AIQ_ISP_HDR_MODE_3_BUILTIN:
         FrameNum = 3;
         break;
     default:
@@ -2096,5 +2098,566 @@ XCamReturn rk_aiq_uapi_setLdchCorrectLevel(const rk_aiq_sys_ctx_t* ctx, int corr
     LOGE("not support to call %s for current chip", __FUNCTION__);
     ret = XCAM_RETURN_ERROR_UNKNOWN;
 #endif
+    return ret;
+}
+
+#include "rk_aiq_uapi1_rv1126b.h"
+
+XCamReturn
+rk_aiq_user_api_ae_queryExpResInfo(const rk_aiq_sys_ctx_t* sys_ctx, Uapi_ExpQueryInfo_t* pExpResInfo)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    if (sys_ctx == NULL) {
+        ret = XCAM_RETURN_ERROR_PARAM;
+        RKAIQ_IMGPROC_CHECK_RET(ret, "param error!");
+    }
+
+    ae_api_queryInfo_t aeExpResInfo;
+    ret = rk_aiq_user_api2_ae_queryExpResInfo(sys_ctx, &aeExpResInfo);
+    if (ret != XCAM_RETURN_ERROR_PARAM) {
+        LOGE_AEC("%s maybe error", __func__);
+        return ret;
+    }
+
+    pExpResInfo->EnvChange              = aeExpResInfo.envChange;
+    pExpResInfo->Fps                    = aeExpResInfo.fps;
+    pExpResInfo->GlobalEnvLv            = aeExpResInfo.gblEnvLv;
+    pExpResInfo->HighLightROIPdf        = aeExpResInfo.hiLitROIPdf;
+    pExpResInfo->IsConverged            = aeExpResInfo.isConverged;
+    pExpResInfo->IsExpMax               = aeExpResInfo.isExpMax;
+    pExpResInfo->IsExpMin               = aeExpResInfo.isExpMin;
+    pExpResInfo->LinePeriodsPerField    = aeExpResInfo.vts;
+    pExpResInfo->LowLightROIPdf         = aeExpResInfo.loLitROIPdf;
+    pExpResInfo->OverExpROIPdf          = aeExpResInfo.oeROIPdf;
+    pExpResInfo->PixelClockFreqMHZ      = aeExpResInfo.pclk;
+    pExpResInfo->PixelPeriodsPerLine    = aeExpResInfo.hts;
+
+    // liner info
+    pExpResInfo->LinAeInfo.MeanLuma                         = aeExpResInfo.linExpInfo.meanLuma;
+    pExpResInfo->LinAeInfo.LumaDeviation                    = aeExpResInfo.linExpInfo.devLuma;
+    pExpResInfo->LinAeInfo.LinAeRange.stExpTimeRange.Max    = aeExpResInfo.linExpInfo.expRange.sw_aeT_time_max;
+    pExpResInfo->LinAeInfo.LinAeRange.stExpTimeRange.Min    = aeExpResInfo.linExpInfo.expRange.sw_aeT_time_min;
+    pExpResInfo->LinAeInfo.LinAeRange.stGainRange.Max       = aeExpResInfo.linExpInfo.expRange.sw_aeT_gain_max;
+    pExpResInfo->LinAeInfo.LinAeRange.stGainRange.Min       = aeExpResInfo.linExpInfo.expRange.sw_aeT_gain_min;
+    pExpResInfo->LinAeInfo.LinAeRange.stIspDGainRange.Max   = aeExpResInfo.linExpInfo.expRange.sw_aeT_ispDGain_max;
+    pExpResInfo->LinAeInfo.LinAeRange.stIspDGainRange.Min   = aeExpResInfo.linExpInfo.expRange.sw_aeT_ispDGain_min;
+    pExpResInfo->LinAeInfo.LinAeRange.stPIrisRange.Max      = aeExpResInfo.linExpInfo.expRange.sw_aeT_pIrisGain_max;
+    pExpResInfo->LinAeInfo.LinAeRange.stPIrisRange.Min      = aeExpResInfo.linExpInfo.expRange.sw_aeT_pIrisGain_min;
+    pExpResInfo->LinAeInfo.LinearExp.analog_gain            = aeExpResInfo.linExpInfo.expParam.analog_gain;
+    pExpResInfo->LinAeInfo.LinearExp.dcg_mode               = aeExpResInfo.linExpInfo.expParam.dcg_mode;
+    pExpResInfo->LinAeInfo.LinearExp.digital_gain           = aeExpResInfo.linExpInfo.expParam.digital_gain;
+    pExpResInfo->LinAeInfo.LinearExp.integration_time       = aeExpResInfo.linExpInfo.expParam.integration_time;
+    pExpResInfo->LinAeInfo.LinearExp.iso                    = aeExpResInfo.linExpInfo.expParam.iso;
+    pExpResInfo->LinAeInfo.LinearExp.isp_dgain              = aeExpResInfo.linExpInfo.expParam.isp_dgain;
+    pExpResInfo->LinAeInfo.LinearExp.longfrm_mode           = aeExpResInfo.linExpInfo.expParam.longfrm_mode;
+
+    // hdr info
+    pExpResInfo->HdrAeInfo.Frm0Luma                          = aeExpResInfo.hdrExpInfo.frm0Luma;
+    pExpResInfo->HdrAeInfo.Frm1Luma                          = aeExpResInfo.hdrExpInfo.frm1Luma;
+    pExpResInfo->HdrAeInfo.Frm2Luma                          = aeExpResInfo.hdrExpInfo.frm2Luma;
+    pExpResInfo->HdrAeInfo.HdrLumaDeviation[0]               = aeExpResInfo.hdrExpInfo.devLuma[0];
+    pExpResInfo->HdrAeInfo.HdrLumaDeviation[1]               = aeExpResInfo.hdrExpInfo.devLuma[1];
+    pExpResInfo->HdrAeInfo.HdrLumaDeviation[2]               = aeExpResInfo.hdrExpInfo.devLuma[2];
+    pExpResInfo->HdrAeInfo.HdrAeRange.stExpTimeRange[0].Max  = aeExpResInfo.hdrExpInfo.expRange[0].sw_aeT_time_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stExpTimeRange[1].Max  = aeExpResInfo.hdrExpInfo.expRange[1].sw_aeT_time_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stExpTimeRange[2].Max  = aeExpResInfo.hdrExpInfo.expRange[2].sw_aeT_time_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stExpTimeRange[0].Min  = aeExpResInfo.hdrExpInfo.expRange[0].sw_aeT_time_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stExpTimeRange[1].Min  = aeExpResInfo.hdrExpInfo.expRange[1].sw_aeT_time_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stExpTimeRange[2].Min  = aeExpResInfo.hdrExpInfo.expRange[2].sw_aeT_time_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stGainRange[0].Max     = aeExpResInfo.hdrExpInfo.expRange[0].sw_aeT_gain_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stGainRange[1].Max     = aeExpResInfo.hdrExpInfo.expRange[1].sw_aeT_gain_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stGainRange[2].Max     = aeExpResInfo.hdrExpInfo.expRange[2].sw_aeT_gain_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stGainRange[0].Min     = aeExpResInfo.hdrExpInfo.expRange[0].sw_aeT_gain_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stGainRange[1].Min     = aeExpResInfo.hdrExpInfo.expRange[1].sw_aeT_gain_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stGainRange[2].Min     = aeExpResInfo.hdrExpInfo.expRange[2].sw_aeT_gain_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stIspDGainRange[0].Max = aeExpResInfo.hdrExpInfo.expRange[0].sw_aeT_ispDGain_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stIspDGainRange[1].Max = aeExpResInfo.hdrExpInfo.expRange[1].sw_aeT_ispDGain_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stIspDGainRange[2].Max = aeExpResInfo.hdrExpInfo.expRange[2].sw_aeT_ispDGain_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stIspDGainRange[0].Min = aeExpResInfo.hdrExpInfo.expRange[0].sw_aeT_ispDGain_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stIspDGainRange[1].Min = aeExpResInfo.hdrExpInfo.expRange[1].sw_aeT_ispDGain_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stIspDGainRange[2].Min = aeExpResInfo.hdrExpInfo.expRange[2].sw_aeT_ispDGain_min;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stPIrisRange.Max       = aeExpResInfo.hdrExpInfo.expRange->sw_aeT_pIrisGain_max;
+    pExpResInfo->HdrAeInfo.HdrAeRange.stPIrisRange.Min       = aeExpResInfo.hdrExpInfo.expRange->sw_aeT_pIrisGain_min;
+    pExpResInfo->HdrAeInfo.HdrExp[0].analog_gain             = aeExpResInfo.hdrExpInfo.expParam[0].analog_gain;
+    pExpResInfo->HdrAeInfo.HdrExp[1].analog_gain             = aeExpResInfo.hdrExpInfo.expParam[1].analog_gain;
+    pExpResInfo->HdrAeInfo.HdrExp[2].analog_gain             = aeExpResInfo.hdrExpInfo.expParam[2].analog_gain;
+    pExpResInfo->HdrAeInfo.HdrExp[0].dcg_mode                = aeExpResInfo.hdrExpInfo.expParam[0].dcg_mode;
+    pExpResInfo->HdrAeInfo.HdrExp[1].dcg_mode                = aeExpResInfo.hdrExpInfo.expParam[1].dcg_mode;
+    pExpResInfo->HdrAeInfo.HdrExp[2].dcg_mode                = aeExpResInfo.hdrExpInfo.expParam[2].dcg_mode;
+    pExpResInfo->HdrAeInfo.HdrExp[0].digital_gain            = aeExpResInfo.hdrExpInfo.expParam[0].digital_gain;
+    pExpResInfo->HdrAeInfo.HdrExp[1].digital_gain            = aeExpResInfo.hdrExpInfo.expParam[1].digital_gain;
+    pExpResInfo->HdrAeInfo.HdrExp[2].digital_gain            = aeExpResInfo.hdrExpInfo.expParam[2].digital_gain;
+    pExpResInfo->HdrAeInfo.HdrExp[0].integration_time        = aeExpResInfo.hdrExpInfo.expParam[0].integration_time;
+    pExpResInfo->HdrAeInfo.HdrExp[1].integration_time        = aeExpResInfo.hdrExpInfo.expParam[1].integration_time;
+    pExpResInfo->HdrAeInfo.HdrExp[2].integration_time        = aeExpResInfo.hdrExpInfo.expParam[2].integration_time;
+    pExpResInfo->HdrAeInfo.HdrExp[0].iso                     = aeExpResInfo.hdrExpInfo.expParam[0].iso;
+    pExpResInfo->HdrAeInfo.HdrExp[1].iso                     = aeExpResInfo.hdrExpInfo.expParam[1].iso;
+    pExpResInfo->HdrAeInfo.HdrExp[2].iso                     = aeExpResInfo.hdrExpInfo.expParam[2].iso;
+    pExpResInfo->HdrAeInfo.HdrExp[0].isp_dgain               = aeExpResInfo.hdrExpInfo.expParam[0].isp_dgain;
+    pExpResInfo->HdrAeInfo.HdrExp[1].isp_dgain               = aeExpResInfo.hdrExpInfo.expParam[1].isp_dgain;
+    pExpResInfo->HdrAeInfo.HdrExp[2].isp_dgain               = aeExpResInfo.hdrExpInfo.expParam[2].isp_dgain;
+    pExpResInfo->HdrAeInfo.HdrExp[0].longfrm_mode            = aeExpResInfo.hdrExpInfo.expParam[0].longfrm_mode;
+    pExpResInfo->HdrAeInfo.HdrExp[1].longfrm_mode            = aeExpResInfo.hdrExpInfo.expParam[1].longfrm_mode;
+    pExpResInfo->HdrAeInfo.HdrExp[2].longfrm_mode            = aeExpResInfo.hdrExpInfo.expParam[2].longfrm_mode;
+
+    return ret;
+}
+
+XCamReturn rk_aiq_user_api_ae_setExpSwAttr(
+    const rk_aiq_sys_ctx_t* sys_ctx,
+    const Uapi_ExpSwAttr_t expSwAttr)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    CHECK_USER_API_ENABLE2(sys_ctx);
+    CHECK_USER_API_ENABLE(RK_AIQ_ALGO_TYPE_AE);
+    RKAIQ_API_SMART_LOCK(sys_ctx);
+
+    ae_api_expSwAttr_t newExpSwAttr;
+    ret = rk_aiq_user_api2_ae_getExpSwAttr(sys_ctx, &newExpSwAttr);
+
+    newExpSwAttr.commCtrl.sw_aeT_algo_en        = expSwAttr.enable;
+    newExpSwAttr.commCtrl.sw_aeT_rawStats_mode  = (ae_rawStats_mode_t)expSwAttr.RawStatsMode;
+    newExpSwAttr.commCtrl.sw_aeT_histStats_mode = (ae_histStats_mode_t)expSwAttr.HistStatsMode;
+    newExpSwAttr.commCtrl.sw_aeT_yRange_mode    = (ae_yRange_mode_t)expSwAttr.YRangeMode;
+    newExpSwAttr.commCtrl.sw_aeT_algo_interval  = expSwAttr.AecRunInterval;
+    newExpSwAttr.commCtrl.sw_aeT_opt_mode       = expSwAttr.AecOpType;
+
+    if (expSwAttr.DayWeightNum == AECV2_MAX_GRIDWEIGHT_NUM) {
+        memcpy(newExpSwAttr.commCtrl.sw_aeT_grid_wgt, expSwAttr.DayGridWeights.uCoeff, sizeof(expSwAttr.DayGridWeights.uCoeff));
+    } else {
+        LOGW("%s not support to set DayWeightNum (%d) for current chip", __FUNCTION__, expSwAttr.DayWeightNum);
+    }
+
+    // NightGridWeights/NightWeightNum/DNTrigger/DNMode/FillLightMode can't convert
+
+    // stAuto
+    if (expSwAttr.stAuto.SetAeRangeEn) {
+        LOGW("%s not support to SetAeRangeEn directly for current chip", __FUNCTION__);
+    }
+    newExpSwAttr.commCtrl.speed.sw_aeT_smooth_en              = expSwAttr.stAuto.stAeSpeed.SmoothEn;
+    newExpSwAttr.commCtrl.speed.dynDamp.sw_aeT_dynDamp_en     = expSwAttr.stAuto.stAeSpeed.DyDampEn;
+    newExpSwAttr.commCtrl.speed.sw_aeT_damp_over              = expSwAttr.stAuto.stAeSpeed.DampOver;
+    newExpSwAttr.commCtrl.speed.sw_aeT_damp_under             = expSwAttr.stAuto.stAeSpeed.DampUnder;
+    newExpSwAttr.commCtrl.speed.sw_aeT_damp_dark2Bright       = expSwAttr.stAuto.stAeSpeed.DampDark2Bright;
+    newExpSwAttr.commCtrl.speed.sw_aeT_damp_bright2Dark       = expSwAttr.stAuto.stAeSpeed.DampBright2Dark;
+
+    newExpSwAttr.commCtrl.delay.sw_aeT_delay_mode             = ae_delay_frame_mode;
+    newExpSwAttr.commCtrl.delay.sw_aeT_blackDelay_val         = expSwAttr.stAuto.BlackDelayFrame;
+    newExpSwAttr.commCtrl.delay.sw_aeT_whiteDelay_val         = expSwAttr.stAuto.WhiteDelayFrame;
+    newExpSwAttr.commCtrl.frmRate.sw_aeT_frmRate_val          = expSwAttr.stAuto.stFrmRate.FpsValue;
+    newExpSwAttr.commCtrl.frmRate.sw_aeT_frmRate_mode         = (ae_frmRate_mode_t)expSwAttr.stAuto.stFrmRate.isFpsFix;
+
+    newExpSwAttr.commCtrl.antiFlicker.sw_aeT_antiFlicker_en   = expSwAttr.stAntiFlicker.enable;
+    newExpSwAttr.commCtrl.antiFlicker.sw_aeT_antiFlicker_freq = (ae_antiFlicker_freq_t)expSwAttr.stAntiFlicker.Frequency;
+    newExpSwAttr.commCtrl.antiFlicker.sw_aeT_antiFlicker_mode = (ae_antiFlicker_mode_t)expSwAttr.stAntiFlicker.Mode;
+
+    // stManual
+    newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manGain_en         = expSwAttr.stManual.stLinMe.ManualGainEn;
+    newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manGain_val        = expSwAttr.stManual.stLinMe.GainValue;
+    newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manIspDGain_en     = expSwAttr.stManual.stLinMe.ManualIspDgainEn;
+    newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manIspDGain_val    = expSwAttr.stManual.stLinMe.IspDGainValue;
+    newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manTime_en         = expSwAttr.stManual.stLinMe.ManualTimeEn;
+    newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manTime_val        = expSwAttr.stManual.stLinMe.TimeValue;
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_en         = expSwAttr.stManual.stHdrMe.ManualGainEn;
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_val[0]     = expSwAttr.stManual.stHdrMe.GainValue.fCoeff[0];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_val[1]     = expSwAttr.stManual.stHdrMe.GainValue.fCoeff[1];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_val[2]     = expSwAttr.stManual.stHdrMe.GainValue.fCoeff[2];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_en     = expSwAttr.stManual.stHdrMe.ManualIspDgainEn;
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_val[0] = expSwAttr.stManual.stHdrMe.IspDGainValue.fCoeff[0];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_val[1] = expSwAttr.stManual.stHdrMe.IspDGainValue.fCoeff[1];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_val[2] = expSwAttr.stManual.stHdrMe.IspDGainValue.fCoeff[2];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_en         = expSwAttr.stManual.stHdrMe.ManualTimeEn;
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_val[0]     = expSwAttr.stManual.stHdrMe.TimeValue.fCoeff[0];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_val[1]     = expSwAttr.stManual.stHdrMe.TimeValue.fCoeff[1];
+    newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_val[2]     = expSwAttr.stManual.stHdrMe.TimeValue.fCoeff[2];
+
+    // advanced
+    newExpSwAttr.advanced.sw_aeT_advGridWgt_en                = expSwAttr.stAdvanced.enable;
+    newExpSwAttr.advanced.sw_aeT_advAeRange_en                = expSwAttr.stAdvanced.SetAeRangeEn;
+    memcpy(newExpSwAttr.advanced.sw_aeT_advGrid_wgt, expSwAttr.stAdvanced.GridWeights, sizeof(expSwAttr.stAdvanced.GridWeights));
+
+    newExpSwAttr.advanced.linExpRange.sw_aeT_time_max         = expSwAttr.stAdvanced.SetLinAeRange.stExpTimeRange.Max;
+    newExpSwAttr.advanced.linExpRange.sw_aeT_time_min         = expSwAttr.stAdvanced.SetLinAeRange.stExpTimeRange.Min;
+    newExpSwAttr.advanced.linExpRange.sw_aeT_gain_max         = expSwAttr.stAdvanced.SetLinAeRange.stGainRange.Max;
+    newExpSwAttr.advanced.linExpRange.sw_aeT_gain_min         = expSwAttr.stAdvanced.SetLinAeRange.stGainRange.Min;
+    newExpSwAttr.advanced.linExpRange.sw_aeT_ispDGain_max     = expSwAttr.stAdvanced.SetLinAeRange.stIspDGainRange.Max;
+    newExpSwAttr.advanced.linExpRange.sw_aeT_ispDGain_min     = expSwAttr.stAdvanced.SetLinAeRange.stIspDGainRange.Min;
+    newExpSwAttr.advanced.linExpRange.sw_aeT_pIrisGain_max    = expSwAttr.stAdvanced.SetLinAeRange.stPIrisRange.Max;
+    newExpSwAttr.advanced.linExpRange.sw_aeT_pIrisGain_min    = expSwAttr.stAdvanced.SetLinAeRange.stPIrisRange.Min;
+
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_time_max      = expSwAttr.stAdvanced.SetHdrAeRange.stExpTimeRange[0].Max;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_time_max      = expSwAttr.stAdvanced.SetHdrAeRange.stExpTimeRange[1].Max;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_time_max      = expSwAttr.stAdvanced.SetHdrAeRange.stExpTimeRange[2].Max;
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_time_min      = expSwAttr.stAdvanced.SetHdrAeRange.stExpTimeRange[0].Min;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_time_min      = expSwAttr.stAdvanced.SetHdrAeRange.stExpTimeRange[1].Min;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_time_min      = expSwAttr.stAdvanced.SetHdrAeRange.stExpTimeRange[2].Min;
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_gain_max      = expSwAttr.stAdvanced.SetHdrAeRange.stGainRange[0].Max;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_gain_max      = expSwAttr.stAdvanced.SetHdrAeRange.stGainRange[1].Max;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_gain_max      = expSwAttr.stAdvanced.SetHdrAeRange.stGainRange[2].Max;
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_gain_min      = expSwAttr.stAdvanced.SetHdrAeRange.stGainRange[0].Min;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_gain_min      = expSwAttr.stAdvanced.SetHdrAeRange.stGainRange[1].Min;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_gain_min      = expSwAttr.stAdvanced.SetHdrAeRange.stGainRange[2].Min;
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_ispDGain_max  = expSwAttr.stAdvanced.SetHdrAeRange.stIspDGainRange[0].Max;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_ispDGain_max  = expSwAttr.stAdvanced.SetHdrAeRange.stIspDGainRange[1].Max;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_ispDGain_max  = expSwAttr.stAdvanced.SetHdrAeRange.stIspDGainRange[2].Max;
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_ispDGain_min  = expSwAttr.stAdvanced.SetHdrAeRange.stIspDGainRange[0].Min;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_ispDGain_min  = expSwAttr.stAdvanced.SetHdrAeRange.stIspDGainRange[1].Min;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_ispDGain_min  = expSwAttr.stAdvanced.SetHdrAeRange.stIspDGainRange[2].Min;
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_pIrisGain_max = expSwAttr.stAdvanced.SetHdrAeRange.stPIrisRange.Max;
+    newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_pIrisGain_min = expSwAttr.stAdvanced.SetHdrAeRange.stPIrisRange.Min;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_pIrisGain_max = expSwAttr.stAdvanced.SetHdrAeRange.stPIrisRange.Max;
+    newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_pIrisGain_min = expSwAttr.stAdvanced.SetHdrAeRange.stPIrisRange.Min;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_pIrisGain_max = expSwAttr.stAdvanced.SetHdrAeRange.stPIrisRange.Max;
+    newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_pIrisGain_min = expSwAttr.stAdvanced.SetHdrAeRange.stPIrisRange.Min;
+
+    ret = rk_aiq_user_api2_ae_setExpSwAttr(sys_ctx, newExpSwAttr);
+
+    ae_api_linExpAttr_t linAttr;
+    ret = rk_aiq_user_api2_ae_getLinExpAttr(sys_ctx, &linAttr);
+
+    linAttr.initExp.sw_aeT_initTime_val     = expSwAttr.stInitExp.stLinExpInitExp.InitTimeValue;
+    linAttr.initExp.sw_aeT_initGain_val     = expSwAttr.stInitExp.stLinExpInitExp.InitGainValue;
+    linAttr.initExp.sw_aeT_initIspDGain_val = expSwAttr.stInitExp.stLinExpInitExp.InitIspDGainValue;
+
+    ret = rk_aiq_user_api2_ae_setLinExpAttr(sys_ctx, linAttr);
+
+    ae_api_hdrExpAttr_t hdrAttr;
+    ret = rk_aiq_user_api2_ae_getHdrExpAttr(sys_ctx, &hdrAttr);
+
+    hdrAttr.initExp.sw_aeT_initTime_val[0]     = expSwAttr.stInitExp.stHdrExpInitExp.InitTimeValue.fCoeff[0];
+    hdrAttr.initExp.sw_aeT_initGain_val[0]     = expSwAttr.stInitExp.stHdrExpInitExp.InitGainValue.fCoeff[0];
+    hdrAttr.initExp.sw_aeT_initIspDGain_val[0] = expSwAttr.stInitExp.stHdrExpInitExp.InitIspDGainValue.fCoeff[0];
+    hdrAttr.initExp.sw_aeT_initTime_val[1]     = expSwAttr.stInitExp.stHdrExpInitExp.InitTimeValue.fCoeff[1];
+    hdrAttr.initExp.sw_aeT_initGain_val[1]     = expSwAttr.stInitExp.stHdrExpInitExp.InitGainValue.fCoeff[1];
+    hdrAttr.initExp.sw_aeT_initIspDGain_val[1] = expSwAttr.stInitExp.stHdrExpInitExp.InitIspDGainValue.fCoeff[1];
+    hdrAttr.initExp.sw_aeT_initTime_val[2]     = expSwAttr.stInitExp.stHdrExpInitExp.InitTimeValue.fCoeff[2];
+    hdrAttr.initExp.sw_aeT_initGain_val[2]     = expSwAttr.stInitExp.stHdrExpInitExp.InitGainValue.fCoeff[2];
+    hdrAttr.initExp.sw_aeT_initIspDGain_val[2] = expSwAttr.stInitExp.stHdrExpInitExp.InitIspDGainValue.fCoeff[2];
+
+    ret = rk_aiq_user_api2_ae_setHdrExpAttr(sys_ctx, hdrAttr);
+
+    ae_api_irisAttr_t irisAttr;
+    ret = rk_aiq_user_api2_ae_getIrisAttr(sys_ctx, &irisAttr);
+
+    irisAttr.initIris.sw_aeT_initDCIrisHold_val  = expSwAttr.stInitExp.stLinExpInitExp.InitDCIrisDutyValue;
+    irisAttr.initIris.sw_aeT_initHDCIrisGain_val = expSwAttr.stInitExp.stLinExpInitExp.InitHDCIrisTargetValue;
+    irisAttr.initIris.sw_aeT_initPIrisGain_val   = expSwAttr.stInitExp.stLinExpInitExp.InitPIrisGainValue;
+
+    irisAttr.manIris.sw_aeT_manIris_en = expSwAttr.stManual.stLinMe.ManualIrisEn;
+    irisAttr.manIris.sw_aeT_manPIrisGain_val = expSwAttr.stManual.stLinMe.PIrisGainValue;
+    irisAttr.manIris.sw_aeT_manDCIrisHold_val = expSwAttr.stManual.stLinMe.DCIrisValue;
+    irisAttr.manIris.sw_aeT_manHDCIrisGain_val = expSwAttr.stManual.stLinMe.HDCIrisValue;
+
+    irisAttr.sw_aeT_iris_en   = expSwAttr.stIris.enable;
+    irisAttr.sw_aeT_iris_type = (ae_iris_type_t)expSwAttr.stIris.IrisType;
+
+    irisAttr.pIrisCtrl.sw_aeT_zeroIsMax_en  = expSwAttr.stIris.PIrisAttr.ZeroIsMax;
+    irisAttr.pIrisCtrl.sw_aeT_effcStep_val  = expSwAttr.stIris.PIrisAttr.EffcStep;
+    irisAttr.pIrisCtrl.sw_aeT_totalStep_val = expSwAttr.stIris.PIrisAttr.TotalStep;
+    memcpy(irisAttr.pIrisCtrl.sw_aeT_step2Gain_table, expSwAttr.stIris.PIrisAttr.StepTable, sizeof(expSwAttr.stIris.PIrisAttr.StepTable));
+
+    irisAttr.dcIrisCtrl.sw_aeT_dcIris_Kp     = expSwAttr.stIris.DCIrisAttr.Kp;
+    irisAttr.dcIrisCtrl.sw_aeT_dcIris_Ki     = expSwAttr.stIris.DCIrisAttr.Ki;
+    irisAttr.dcIrisCtrl.sw_aeT_dcIris_Kd     = expSwAttr.stIris.DCIrisAttr.Kd;
+    irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_min   = expSwAttr.stIris.DCIrisAttr.MinPwmDuty;
+    irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_max   = expSwAttr.stIris.DCIrisAttr.MaxPwmDuty;
+    irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_open  = expSwAttr.stIris.DCIrisAttr.OpenPwmDuty;
+    irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_close = expSwAttr.stIris.DCIrisAttr.ClosePwmDuty;
+
+    irisAttr.hdcIrisCtrl.sw_aeT_damp_over    = expSwAttr.stIris.HDCIrisAttr.DampOver;
+    irisAttr.hdcIrisCtrl.sw_aeT_damp_under   = expSwAttr.stIris.HDCIrisAttr.DampUnder;
+    irisAttr.hdcIrisCtrl.sw_aeT_zeroIsMax_en = expSwAttr.stIris.HDCIrisAttr.ZeroIsMax;
+    irisAttr.hdcIrisCtrl.sw_aeT_target_min   = expSwAttr.stIris.HDCIrisAttr.MinTarget;
+    irisAttr.hdcIrisCtrl.sw_aeT_target_max   = expSwAttr.stIris.HDCIrisAttr.MaxTarget;
+
+    irisAttr.hdcIrisCtrl.zoom2Iris.sw_aeC_zoom2Iris_len = expSwAttr.stIris.HDCIrisAttr.zoom_array_size;
+    memcpy(irisAttr.hdcIrisCtrl.zoom2Iris.sw_aeC_zoom2Iris_idx, expSwAttr.stIris.HDCIrisAttr.ZoomDot, sizeof(expSwAttr.stIris.HDCIrisAttr.ZoomDot));
+    memcpy(irisAttr.hdcIrisCtrl.zoom2Iris.sw_aeC_zoom2Iris_val, expSwAttr.stIris.HDCIrisAttr.ZoomTargetDot, sizeof(expSwAttr.stIris.HDCIrisAttr.ZoomTargetDot));
+    irisAttr.hdcIrisCtrl.iris2Gain.sw_aeC_iris2Gain_len = expSwAttr.stIris.HDCIrisAttr.iris_array_size;
+    memcpy(irisAttr.hdcIrisCtrl.iris2Gain.sw_aeC_iris2Gain_idx, expSwAttr.stIris.HDCIrisAttr.IrisTargetDot, sizeof(expSwAttr.stIris.HDCIrisAttr.IrisTargetDot));
+    memcpy(irisAttr.hdcIrisCtrl.iris2Gain.sw_aeC_iris2Gain_val, expSwAttr.stIris.HDCIrisAttr.GainDot, sizeof(expSwAttr.stIris.HDCIrisAttr.GainDot));
+
+    ret = rk_aiq_user_api2_ae_setIrisAttr(sys_ctx, irisAttr);
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn rk_aiq_user_api_ae_getExpSwAttr
+(
+    const rk_aiq_sys_ctx_t* sys_ctx,
+    Uapi_ExpSwAttr_t*        pExpSwAttr
+)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    CHECK_USER_API_ENABLE2(sys_ctx);
+    CHECK_USER_API_ENABLE(RK_AIQ_ALGO_TYPE_AE);
+    RKAIQ_API_SMART_LOCK(sys_ctx);
+
+    ae_api_expSwAttr_t newExpSwAttr;
+    ret = rk_aiq_user_api2_ae_getExpSwAttr(sys_ctx, &newExpSwAttr);
+
+    pExpSwAttr->enable           = newExpSwAttr.commCtrl.sw_aeT_algo_en;
+    pExpSwAttr->RawStatsMode     = (CalibDb_CamRawStatsMode_t)newExpSwAttr.commCtrl.sw_aeT_rawStats_mode;
+    pExpSwAttr->HistStatsMode    = (CalibDb_CamHistStatsMode_t)newExpSwAttr.commCtrl.sw_aeT_histStats_mode;
+    pExpSwAttr->YRangeMode       = (CalibDb_CamYRangeMode_t)newExpSwAttr.commCtrl.sw_aeT_yRange_mode;
+    pExpSwAttr->AecRunInterval   = newExpSwAttr.commCtrl.sw_aeT_algo_interval;
+    pExpSwAttr->AecOpType        = newExpSwAttr.commCtrl.sw_aeT_opt_mode;
+
+    pExpSwAttr->DayWeightNum = AECV2_MAX_GRIDWEIGHT_NUM;
+    memcpy(pExpSwAttr->DayGridWeights.uCoeff, newExpSwAttr.commCtrl.sw_aeT_grid_wgt, sizeof(pExpSwAttr->DayGridWeights.uCoeff));
+
+    // NightGridWeights/NightWeightNum/DNTrigger/DNMode/FillLightMode can't convert
+
+    // stAuto: get lin/hdr ae range by rk_aiq_user_api_ae_queryExpResInfo
+    pExpSwAttr->stAuto.SetAeRangeEn              = false;
+    pExpSwAttr->stAuto.stAeSpeed.SmoothEn        = newExpSwAttr.commCtrl.speed.sw_aeT_smooth_en;
+    pExpSwAttr->stAuto.stAeSpeed.DyDampEn        = newExpSwAttr.commCtrl.speed.dynDamp.sw_aeT_dynDamp_en;
+    pExpSwAttr->stAuto.stAeSpeed.DampOver        = newExpSwAttr.commCtrl.speed.sw_aeT_damp_over;
+    pExpSwAttr->stAuto.stAeSpeed.DampUnder       = newExpSwAttr.commCtrl.speed.sw_aeT_damp_under;
+    pExpSwAttr->stAuto.stAeSpeed.DampDark2Bright = newExpSwAttr.commCtrl.speed.sw_aeT_damp_dark2Bright;
+    pExpSwAttr->stAuto.stAeSpeed.DampBright2Dark = newExpSwAttr.commCtrl.speed.sw_aeT_damp_bright2Dark;
+    pExpSwAttr->stAuto.BlackDelayFrame           = newExpSwAttr.commCtrl.delay.sw_aeT_blackDelay_val;
+    pExpSwAttr->stAuto.WhiteDelayFrame           = newExpSwAttr.commCtrl.delay.sw_aeT_whiteDelay_val;
+    pExpSwAttr->stAuto.stFrmRate.FpsValue        = newExpSwAttr.commCtrl.frmRate.sw_aeT_frmRate_val;
+    pExpSwAttr->stAuto.stFrmRate.isFpsFix        = (newExpSwAttr.commCtrl.frmRate.sw_aeT_frmRate_mode == ae_frmRate_auto_mode) ? false : true;
+
+    pExpSwAttr->stAntiFlicker.enable     = newExpSwAttr.commCtrl.antiFlicker.sw_aeT_antiFlicker_en;
+    pExpSwAttr->stAntiFlicker.Frequency  = (CalibDb_FlickerFreq_t)newExpSwAttr.commCtrl.antiFlicker.sw_aeT_antiFlicker_freq;
+    pExpSwAttr->stAntiFlicker.Mode       = (CalibDb_AntiFlickerMode_t)newExpSwAttr.commCtrl.antiFlicker.sw_aeT_antiFlicker_mode;
+
+    // stManual
+    pExpSwAttr->stManual.stLinMe.ManualGainEn            = newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manGain_en;
+    pExpSwAttr->stManual.stLinMe.GainValue               = newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manGain_val;
+    pExpSwAttr->stManual.stLinMe.ManualIspDgainEn        = newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manIspDGain_en;
+    pExpSwAttr->stManual.stLinMe.IspDGainValue           = newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manIspDGain_val;
+    pExpSwAttr->stManual.stLinMe.ManualTimeEn            = newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manTime_en;
+    pExpSwAttr->stManual.stLinMe.TimeValue               = newExpSwAttr.commCtrl.meCtrl.linMe.sw_aeT_manTime_val;
+    pExpSwAttr->stManual.stHdrMe.ManualGainEn            = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_en;
+    pExpSwAttr->stManual.stHdrMe.GainValue.fCoeff[0]     = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_val[0];
+    pExpSwAttr->stManual.stHdrMe.GainValue.fCoeff[1]     = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_val[1];
+    pExpSwAttr->stManual.stHdrMe.GainValue.fCoeff[2]     = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manGain_val[2];
+    pExpSwAttr->stManual.stHdrMe.ManualIspDgainEn        = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_en;
+    pExpSwAttr->stManual.stHdrMe.IspDGainValue.fCoeff[0] = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_val[0];
+    pExpSwAttr->stManual.stHdrMe.IspDGainValue.fCoeff[1] = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_val[1];
+    pExpSwAttr->stManual.stHdrMe.IspDGainValue.fCoeff[2] = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manIspDGain_val[2];
+    pExpSwAttr->stManual.stHdrMe.ManualTimeEn            = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_en;
+    pExpSwAttr->stManual.stHdrMe.TimeValue.fCoeff[0]     = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_val[0];
+    pExpSwAttr->stManual.stHdrMe.TimeValue.fCoeff[1]     = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_val[1];
+    pExpSwAttr->stManual.stHdrMe.TimeValue.fCoeff[2]     = newExpSwAttr.commCtrl.meCtrl.hdrMe.sw_aeT_manTime_val[2];
+
+    // advanced
+    pExpSwAttr->stAdvanced.enable       = newExpSwAttr.advanced.sw_aeT_advGridWgt_en;
+    pExpSwAttr->stAdvanced.SetAeRangeEn = newExpSwAttr.advanced.sw_aeT_advAeRange_en;
+    memcpy(pExpSwAttr->stAdvanced.GridWeights, newExpSwAttr.advanced.sw_aeT_advGrid_wgt, sizeof(pExpSwAttr->stAdvanced.GridWeights));
+
+    pExpSwAttr->stAdvanced.SetLinAeRange.stExpTimeRange.Max  = newExpSwAttr.advanced.linExpRange.sw_aeT_time_max;
+    pExpSwAttr->stAdvanced.SetLinAeRange.stExpTimeRange.Min  = newExpSwAttr.advanced.linExpRange.sw_aeT_time_min;
+    pExpSwAttr->stAdvanced.SetLinAeRange.stGainRange.Max     = newExpSwAttr.advanced.linExpRange.sw_aeT_gain_max;
+    pExpSwAttr->stAdvanced.SetLinAeRange.stGainRange.Min     = newExpSwAttr.advanced.linExpRange.sw_aeT_gain_min;
+    pExpSwAttr->stAdvanced.SetLinAeRange.stIspDGainRange.Max = newExpSwAttr.advanced.linExpRange.sw_aeT_ispDGain_max;
+    pExpSwAttr->stAdvanced.SetLinAeRange.stIspDGainRange.Min = newExpSwAttr.advanced.linExpRange.sw_aeT_ispDGain_min;
+    pExpSwAttr->stAdvanced.SetLinAeRange.stPIrisRange.Max    = newExpSwAttr.advanced.linExpRange.sw_aeT_pIrisGain_max;
+    pExpSwAttr->stAdvanced.SetLinAeRange.stPIrisRange.Min    = newExpSwAttr.advanced.linExpRange.sw_aeT_pIrisGain_min;
+
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stExpTimeRange[0].Max  = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_time_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stExpTimeRange[1].Max  = newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_time_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stExpTimeRange[2].Max  = newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_time_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stExpTimeRange[0].Min  = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_time_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stExpTimeRange[1].Min  = newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_time_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stExpTimeRange[2].Min  = newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_time_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stGainRange[0].Max     = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_gain_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stGainRange[1].Max     = newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_gain_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stGainRange[2].Max     = newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_gain_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stGainRange[0].Min     = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_gain_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stGainRange[1].Min     = newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_gain_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stGainRange[2].Min     = newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_gain_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stIspDGainRange[0].Max = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_ispDGain_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stIspDGainRange[1].Max = newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_ispDGain_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stIspDGainRange[2].Max = newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_ispDGain_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stIspDGainRange[0].Min = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_ispDGain_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stIspDGainRange[1].Min = newExpSwAttr.advanced.hdrExpRange[1].sw_aeT_ispDGain_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stIspDGainRange[2].Min = newExpSwAttr.advanced.hdrExpRange[2].sw_aeT_ispDGain_min;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stPIrisRange.Max       = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_pIrisGain_max;
+    pExpSwAttr->stAdvanced.SetHdrAeRange.stPIrisRange.Min       = newExpSwAttr.advanced.hdrExpRange[0].sw_aeT_pIrisGain_min;
+
+    ae_api_linExpAttr_t linAttr;
+    ret = rk_aiq_user_api2_ae_getLinExpAttr(sys_ctx, &linAttr);
+
+    pExpSwAttr->stInitExp.stLinExpInitExp.InitTimeValue     = linAttr.initExp.sw_aeT_initTime_val;
+    pExpSwAttr->stInitExp.stLinExpInitExp.InitGainValue     = linAttr.initExp.sw_aeT_initGain_val;
+    pExpSwAttr->stInitExp.stLinExpInitExp.InitIspDGainValue = linAttr.initExp.sw_aeT_initIspDGain_val;
+
+    ae_api_hdrExpAttr_t hdrAttr;
+    ret = rk_aiq_user_api2_ae_getHdrExpAttr(sys_ctx, &hdrAttr);
+
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitTimeValue.fCoeff[0]     = hdrAttr.initExp.sw_aeT_initTime_val[0];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitGainValue.fCoeff[0]     = hdrAttr.initExp.sw_aeT_initGain_val[0];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitIspDGainValue.fCoeff[0] = hdrAttr.initExp.sw_aeT_initIspDGain_val[0];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitTimeValue.fCoeff[1]     = hdrAttr.initExp.sw_aeT_initTime_val[1];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitGainValue.fCoeff[1]     = hdrAttr.initExp.sw_aeT_initGain_val[1];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitIspDGainValue.fCoeff[1] = hdrAttr.initExp.sw_aeT_initIspDGain_val[1];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitTimeValue.fCoeff[2]     = hdrAttr.initExp.sw_aeT_initTime_val[2];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitGainValue.fCoeff[2]     = hdrAttr.initExp.sw_aeT_initGain_val[2];
+    pExpSwAttr->stInitExp.stHdrExpInitExp.InitIspDGainValue.fCoeff[2] = hdrAttr.initExp.sw_aeT_initIspDGain_val[2];
+
+    ae_api_irisAttr_t irisAttr;
+    ret = rk_aiq_user_api2_ae_getIrisAttr(sys_ctx, &irisAttr);
+
+    pExpSwAttr->stInitExp.stLinExpInitExp.InitDCIrisDutyValue    = irisAttr.initIris.sw_aeT_initDCIrisHold_val;
+    pExpSwAttr->stInitExp.stLinExpInitExp.InitHDCIrisTargetValue = irisAttr.initIris.sw_aeT_initHDCIrisGain_val;
+    pExpSwAttr->stInitExp.stLinExpInitExp.InitPIrisGainValue     = irisAttr.initIris.sw_aeT_initPIrisGain_val;
+
+    pExpSwAttr->stManual.stLinMe.ManualIrisEn   = irisAttr.manIris.sw_aeT_manIris_en;
+    pExpSwAttr->stManual.stLinMe.PIrisGainValue = irisAttr.manIris.sw_aeT_manPIrisGain_val;
+    pExpSwAttr->stManual.stLinMe.DCIrisValue    = irisAttr.manIris.sw_aeT_manDCIrisHold_val;
+    pExpSwAttr->stManual.stLinMe.HDCIrisValue   = irisAttr.manIris.sw_aeT_manHDCIrisGain_val;
+
+    pExpSwAttr->stIris.enable   = irisAttr.sw_aeT_iris_en;
+    pExpSwAttr->stIris.IrisType = (CalibDb_IrisType_t)irisAttr.sw_aeT_iris_type;
+
+    pExpSwAttr->stIris.PIrisAttr.ZeroIsMax = irisAttr.pIrisCtrl.sw_aeT_zeroIsMax_en;
+    pExpSwAttr->stIris.PIrisAttr.EffcStep  = irisAttr.pIrisCtrl.sw_aeT_effcStep_val;
+    pExpSwAttr->stIris.PIrisAttr.TotalStep = irisAttr.pIrisCtrl.sw_aeT_totalStep_val;
+    memcpy(pExpSwAttr->stIris.PIrisAttr.StepTable, irisAttr.pIrisCtrl.sw_aeT_step2Gain_table, sizeof(pExpSwAttr->stIris.PIrisAttr.StepTable));
+
+    pExpSwAttr->stIris.DCIrisAttr.Kp           = irisAttr.dcIrisCtrl.sw_aeT_dcIris_Kp;
+    pExpSwAttr->stIris.DCIrisAttr.Ki           = irisAttr.dcIrisCtrl.sw_aeT_dcIris_Ki;
+    pExpSwAttr->stIris.DCIrisAttr.Kd           = irisAttr.dcIrisCtrl.sw_aeT_dcIris_Kd;
+    pExpSwAttr->stIris.DCIrisAttr.MinPwmDuty   = irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_min;
+    pExpSwAttr->stIris.DCIrisAttr.MaxPwmDuty   = irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_max;
+    pExpSwAttr->stIris.DCIrisAttr.OpenPwmDuty  = irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_open;
+    pExpSwAttr->stIris.DCIrisAttr.ClosePwmDuty = irisAttr.dcIrisCtrl.sw_aeT_pwmDuty_close;
+
+    pExpSwAttr->stIris.HDCIrisAttr.DampOver  = irisAttr.hdcIrisCtrl.sw_aeT_damp_over;
+    pExpSwAttr->stIris.HDCIrisAttr.DampUnder = irisAttr.hdcIrisCtrl.sw_aeT_damp_under;
+    pExpSwAttr->stIris.HDCIrisAttr.ZeroIsMax = irisAttr.hdcIrisCtrl.sw_aeT_zeroIsMax_en;
+    pExpSwAttr->stIris.HDCIrisAttr.MinTarget = irisAttr.hdcIrisCtrl.sw_aeT_target_min;
+    pExpSwAttr->stIris.HDCIrisAttr.MaxTarget = irisAttr.hdcIrisCtrl.sw_aeT_target_max;
+
+    pExpSwAttr->stIris.HDCIrisAttr.zoom_array_size = irisAttr.hdcIrisCtrl.zoom2Iris.sw_aeC_zoom2Iris_len;
+    memcpy(pExpSwAttr->stIris.HDCIrisAttr.ZoomDot, irisAttr.hdcIrisCtrl.zoom2Iris.sw_aeC_zoom2Iris_idx, sizeof(pExpSwAttr->stIris.HDCIrisAttr.ZoomDot));
+    memcpy(pExpSwAttr->stIris.HDCIrisAttr.ZoomTargetDot, irisAttr.hdcIrisCtrl.zoom2Iris.sw_aeC_zoom2Iris_val, sizeof(pExpSwAttr->stIris.HDCIrisAttr.ZoomTargetDot));
+    pExpSwAttr->stIris.HDCIrisAttr.iris_array_size = irisAttr.hdcIrisCtrl.iris2Gain.sw_aeC_iris2Gain_len;
+    memcpy(pExpSwAttr->stIris.HDCIrisAttr.IrisTargetDot, irisAttr.hdcIrisCtrl.iris2Gain.sw_aeC_iris2Gain_idx, sizeof(pExpSwAttr->stIris.HDCIrisAttr.IrisTargetDot));
+    memcpy(pExpSwAttr->stIris.HDCIrisAttr.GainDot, irisAttr.hdcIrisCtrl.iris2Gain.sw_aeC_iris2Gain_val, sizeof(pExpSwAttr->stIris.HDCIrisAttr.GainDot));
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn rk_aiq_user_api_ae_setLinExpAttr(
+    const rk_aiq_sys_ctx_t* sys_ctx,
+    const Uapi_LinExpAttr_t linExpAttr)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    CHECK_USER_API_ENABLE2(sys_ctx);
+    CHECK_USER_API_ENABLE(RK_AIQ_ALGO_TYPE_AE);
+    RKAIQ_API_SMART_LOCK(sys_ctx);
+
+    ae_api_linExpAttr_t linAttr;
+    ret = rk_aiq_user_api2_ae_getLinExpAttr(sys_ctx, &linAttr);
+
+    // RawStatsEn/NightSetPoint can't convert
+
+    linAttr.sw_aeT_tolerance_in  = linExpAttr.ToleranceIn;
+    linAttr.sw_aeT_tolerance_out = linExpAttr.ToleranceOut;
+    linAttr.sw_aeT_evBias_strg   = linExpAttr.Evbias;
+    if (linExpAttr.StrategyMode <= RKAIQ_AEC_STRATEGY_MODE_LOWLIGHT_PRIOR)
+        linAttr.sw_aeT_strategy_mode = ae_strategy_lowlight_mode;
+    else
+        linAttr.sw_aeT_strategy_mode = ae_strategy_highlight_mode;
+
+    linAttr.dynSetpoint.sw_aeT_dynSetpoint_len = linExpAttr.DySetpoint[AEC_DNMODE_DAY].array_size;
+    for (int i = 0; i < linAttr.dynSetpoint.sw_aeT_dynSetpoint_len; i++) {
+        linAttr.dynSetpoint.sw_aeT_expLevel_dot[i]    = linExpAttr.DySetpoint[AEC_DNMODE_DAY].ExpValue[i];
+        linAttr.dynSetpoint.sw_aeT_dynSetpoint_dot[i] = linExpAttr.DySetpoint[AEC_DNMODE_DAY].DySetpoint[i];
+    }
+
+    if (linExpAttr.DySetPointEn == false) {
+        for (int i = 0; i < linAttr.dynSetpoint.sw_aeT_dynSetpoint_len; i++)
+            linAttr.dynSetpoint.sw_aeT_dynSetpoint_dot[i] = linExpAttr.SetPoint;
+    }
+
+    linAttr.backLightCtrl.sw_aeT_backLit_en       = (linExpAttr.BackLightConf.enable == 0) ? false : true;
+    linAttr.backLightCtrl.sw_aeT_backLitBias_strg = linExpAttr.BackLightConf.StrBias;
+    linAttr.backLightCtrl.sw_aeT_measArea_mode    = (ae_measArea_mode_t)linExpAttr.BackLightConf.MeasArea;
+    linAttr.backLightCtrl.sw_aeT_oeROILow_thred   = linExpAttr.BackLightConf.OEROILowTh;
+    linAttr.backLightCtrl.sw_aeT_lumaDist_thred   = linExpAttr.BackLightConf.LumaDistTh;
+    linAttr.backLightCtrl.sw_aeT_loLv_thred       = linExpAttr.BackLightConf.LvLowTh;
+    linAttr.backLightCtrl.sw_aeT_hiLv_thred       = linExpAttr.BackLightConf.LvHightTh;
+    memcpy(linAttr.backLightCtrl.backLitSetpoint.sw_aeT_expLevel_dot, linExpAttr.BackLightConf.ExpLevel.fCoeff, sizeof(linExpAttr.BackLightConf.ExpLevel.fCoeff));
+    memcpy(linAttr.backLightCtrl.backLitSetpoint.sw_aeT_nonOEPdfTh_dot, linExpAttr.BackLightConf.NonOEPdfTh.fCoeff, sizeof(linExpAttr.BackLightConf.NonOEPdfTh.fCoeff));
+    memcpy(linAttr.backLightCtrl.backLitSetpoint.sw_aeT_loLitPdfTh_dot, linExpAttr.BackLightConf.LowLightPdfTh.fCoeff, sizeof(linExpAttr.BackLightConf.LowLightPdfTh.fCoeff));
+    memcpy(linAttr.backLightCtrl.backLitSetpoint.sw_aeT_loLitSetpoint_dot, linExpAttr.BackLightConf.TargetLLLuma.fCoeff, sizeof(linExpAttr.BackLightConf.TargetLLLuma.fCoeff));
+    linAttr.backLightCtrl.backLitSetpoint.sw_aeT_backLitSetpoint_len = 6;
+
+    linAttr.overExpCtrl.sw_aeT_overExp_en       = (linExpAttr.OverExpCtrl.enable == 0) ? false : true;
+    linAttr.overExpCtrl.sw_aeT_overExpBias_strg = linExpAttr.OverExpCtrl.StrBias;
+    linAttr.overExpCtrl.sw_aeT_overExpWgt_max   = linExpAttr.OverExpCtrl.MaxWeight;
+    linAttr.overExpCtrl.sw_aeT_hiLit_thred      = linExpAttr.OverExpCtrl.HighLightTh;
+    linAttr.overExpCtrl.sw_aeT_loLit_thred      = linExpAttr.OverExpCtrl.LowLightTh;
+    memcpy(linAttr.overExpCtrl.overExpSetpoint.sw_aeT_oePdf_dot, linExpAttr.OverExpCtrl.OEpdf.fCoeff, sizeof(linExpAttr.OverExpCtrl.OEpdf.fCoeff));
+    memcpy(linAttr.overExpCtrl.overExpSetpoint.sw_aeT_loLitWgt_dot, linExpAttr.OverExpCtrl.LowLightWeight.fCoeff, sizeof(linExpAttr.OverExpCtrl.LowLightWeight.fCoeff));
+    memcpy(linAttr.overExpCtrl.overExpSetpoint.sw_aeT_hiLitWgt_dot, linExpAttr.OverExpCtrl.HighLightWeight.fCoeff, sizeof(linExpAttr.OverExpCtrl.HighLightWeight.fCoeff));
+    linAttr.overExpCtrl.overExpSetpoint.sw_aeT_overExpSetpoint_len = 6;
+
+    rk_aiq_user_api2_ae_setLinExpAttr(sys_ctx, linAttr);
+
+    return ret;
+}
+
+XCamReturn rk_aiq_user_api_ae_getLinExpAttr
+(
+    const rk_aiq_sys_ctx_t* sys_ctx,
+    Uapi_LinExpAttr_t* pLinExpAttr
+)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    CHECK_USER_API_ENABLE2(sys_ctx);
+    CHECK_USER_API_ENABLE(RK_AIQ_ALGO_TYPE_AE);
+    RKAIQ_API_SMART_LOCK(sys_ctx);
+
+    ae_api_linExpAttr_t linAttr;
+    ret = rk_aiq_user_api2_ae_getLinExpAttr(sys_ctx, &linAttr);
+
+    pLinExpAttr->RawStatsEn   = 1;
+    pLinExpAttr->ToleranceIn  = linAttr.sw_aeT_tolerance_in;
+    pLinExpAttr->ToleranceOut = linAttr.sw_aeT_tolerance_out;
+
+    pLinExpAttr->Evbias = linAttr.sw_aeT_evBias_strg;
+
+    if (linAttr.sw_aeT_strategy_mode <= ae_strategy_lowlight_mode)
+        pLinExpAttr->StrategyMode = RKAIQ_AEC_STRATEGY_MODE_LOWLIGHT_PRIOR;
+    else
+        pLinExpAttr->StrategyMode = RKAIQ_AEC_STRATEGY_MODE_HIGHLIGHT_PRIOR;
+
+    pLinExpAttr->SetPoint      = linAttr.dynSetpoint.sw_aeT_dynSetpoint_dot[0];
+    pLinExpAttr->NightSetPoint = linAttr.dynSetpoint.sw_aeT_dynSetpoint_dot[0];
+    pLinExpAttr->DySetPointEn  = true;
+
+    pLinExpAttr->DySetpoint[AEC_DNMODE_DAY].array_size = MIN(AEC_SETPOINT_MAX_NODES, linAttr.dynSetpoint.sw_aeT_dynSetpoint_len);
+    memcpy(pLinExpAttr->DySetpoint[AEC_DNMODE_DAY].ExpValue, linAttr.dynSetpoint.sw_aeT_expLevel_dot, pLinExpAttr->DySetpoint[AEC_DNMODE_DAY].array_size * sizeof(float));
+    memcpy(pLinExpAttr->DySetpoint[AEC_DNMODE_DAY].DySetpoint, linAttr.dynSetpoint.sw_aeT_dynSetpoint_dot, pLinExpAttr->DySetpoint[AEC_DNMODE_DAY].array_size * sizeof(float));
+
+    pLinExpAttr->BackLightConf.enable     = (linAttr.backLightCtrl.sw_aeT_backLit_en == false) ? 0 : 1;
+    pLinExpAttr->BackLightConf.StrBias    = linAttr.backLightCtrl.sw_aeT_backLitBias_strg;
+    pLinExpAttr->BackLightConf.MeasArea   = (CalibDb_AecMeasAreaMode_t)linAttr.backLightCtrl.sw_aeT_measArea_mode;
+    pLinExpAttr->BackLightConf.OEROILowTh = linAttr.backLightCtrl.sw_aeT_oeROILow_thred;
+    pLinExpAttr->BackLightConf.LumaDistTh = linAttr.backLightCtrl.sw_aeT_lumaDist_thred;
+    pLinExpAttr->BackLightConf.LvLowTh    = linAttr.backLightCtrl.sw_aeT_loLv_thred;
+    pLinExpAttr->BackLightConf.LvHightTh  = linAttr.backLightCtrl.sw_aeT_hiLv_thred;
+    memcpy(pLinExpAttr->BackLightConf.ExpLevel.fCoeff, linAttr.backLightCtrl.backLitSetpoint.sw_aeT_expLevel_dot, sizeof(pLinExpAttr->BackLightConf.ExpLevel.fCoeff));
+    memcpy(pLinExpAttr->BackLightConf.NonOEPdfTh.fCoeff, linAttr.backLightCtrl.backLitSetpoint.sw_aeT_nonOEPdfTh_dot, sizeof(pLinExpAttr->BackLightConf.NonOEPdfTh.fCoeff));
+    memcpy(pLinExpAttr->BackLightConf.LowLightPdfTh.fCoeff, linAttr.backLightCtrl.backLitSetpoint.sw_aeT_loLitPdfTh_dot, sizeof(pLinExpAttr->BackLightConf.LowLightPdfTh.fCoeff));
+    memcpy(pLinExpAttr->BackLightConf.TargetLLLuma.fCoeff, linAttr.backLightCtrl.backLitSetpoint.sw_aeT_loLitSetpoint_dot, sizeof(pLinExpAttr->BackLightConf.TargetLLLuma.fCoeff));
+
+    pLinExpAttr->OverExpCtrl.enable      = (linAttr.overExpCtrl.sw_aeT_overExp_en == false) ? 0 : 1;
+    pLinExpAttr->OverExpCtrl.StrBias     = linAttr.overExpCtrl.sw_aeT_overExpBias_strg;
+    pLinExpAttr->OverExpCtrl.MaxWeight   = linAttr.overExpCtrl.sw_aeT_overExpWgt_max;
+    pLinExpAttr->OverExpCtrl.HighLightTh = linAttr.overExpCtrl.sw_aeT_hiLit_thred;
+    pLinExpAttr->OverExpCtrl.LowLightTh  = linAttr.overExpCtrl.sw_aeT_loLit_thred;
+    memcpy(pLinExpAttr->OverExpCtrl.OEpdf.fCoeff, linAttr.overExpCtrl.overExpSetpoint.sw_aeT_oePdf_dot, sizeof(pLinExpAttr->OverExpCtrl.OEpdf.fCoeff));
+    memcpy(pLinExpAttr->OverExpCtrl.LowLightWeight.fCoeff, linAttr.overExpCtrl.overExpSetpoint.sw_aeT_loLitWgt_dot, sizeof(pLinExpAttr->OverExpCtrl.LowLightWeight.fCoeff));
+    memcpy(pLinExpAttr->OverExpCtrl.HighLightWeight.fCoeff, linAttr.overExpCtrl.overExpSetpoint.sw_aeT_hiLitWgt_dot, sizeof(pLinExpAttr->OverExpCtrl.HighLightWeight.fCoeff));
+
     return ret;
 }

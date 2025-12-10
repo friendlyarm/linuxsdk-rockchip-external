@@ -74,10 +74,12 @@ static int getHDRFrameNum(const rk_aiq_sys_ctx_t* ctx)
         break;
     case RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR:
     case RK_AIQ_ISP_HDR_MODE_2_LINE_HDR:
+    case RK_AIQ_ISP_HDR_MODE_2_BUILTIN:
         FrameNum = 2;
         break;
     case RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR:
     case RK_AIQ_ISP_HDR_MODE_3_LINE_HDR:
+    case RK_AIQ_ISP_HDR_MODE_3_BUILTIN:
         FrameNum = 3;
         break;
     default:
@@ -1008,11 +1010,23 @@ XCamReturn rk_aiq_uapi2_setFrameRate(const rk_aiq_sys_ctx_t* ctx, frameRateInfo_
         expSwAttr.commCtrl.frmRate.sw_aeT_frmRate_val  = info.fps;
     }
     ret = rk_aiq_user_api2_ae_setExpSwAttr(ctx, expSwAttr);
+
     RKAIQ_IMGPROC_CHECK_RET(ret, "set exp attr failed!\nsetFrameRate failed!");
     IMGPROC_FUNC_EXIT
     return ret;
 
 }
+
+XCamReturn rk_aiq_uapi2_setSnsVts(const rk_aiq_sys_ctx_t* ctx, uint32_t vts)
+{
+    IMGPROC_FUNC_ENTER
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    if (ctx->_camHw && ctx->_camHw->_mSensorDev)
+        AiqSensorHw_setUserVts(ctx->_camHw->_mSensorDev, vts);
+    IMGPROC_FUNC_EXIT
+    return ret;
+}
+
 /*
 *****************************
 *
@@ -1608,6 +1622,30 @@ XCamReturn rk_aiq_uapi2_setDehazeEnable(const rk_aiq_sys_ctx_t* ctx, bool on) {
     }
     ret = rk_aiq_user_api2_dehaze_SetAttrib(ctx, &attr);
     RKAIQ_IMGPROC_CHECK_RET(ret, "setDehazeEnable failed!");
+#elif RKAIQ_HAVE_HISTEQ_V10
+
+    histeq_api_attrib_t attr;
+    memset(&attr, 0, sizeof(histeq_api_attrib_t));
+    ret = rk_aiq_user_api2_histeq_GetAttrib(ctx, &attr);
+
+    if (!attr.en || attr.opMode != RK_AIQ_OP_MODE_AUTO) {
+        LOGK_AHISTEQ("%s: histeq status en %d opMode %d force histeq enable and switch to auto",
+                __func__, attr.en, attr.opMode);
+    }
+    attr.en     = true;
+    attr.opMode = RK_AIQ_OP_MODE_AUTO;
+
+    ret = rk_aiq_user_api2_histeq_SetAttrib(ctx, &attr);
+    RKAIQ_IMGPROC_CHECK_RET(ret, "setDehazeEnable failed!");
+
+    float strg;
+    bool  en;
+    rk_aiq_user_api2_histeq_GetUsrCfgStrg(ctx, &en, &strg);
+
+    en = on;
+
+    ret = rk_aiq_user_api2_histeq_SetUsrCfgStrg(ctx, en, strg);
+    RKAIQ_IMGPROC_CHECK_RET(ret, "setDehazeEnable failed!");
 #else
     LOGE("not support to call %s for current chip", __FUNCTION__);
     ret = XCAM_RETURN_ERROR_UNKNOWN;
@@ -1653,6 +1691,19 @@ XCamReturn rk_aiq_uapi2_setMDehazeStrth(const rk_aiq_sys_ctx_t* ctx, unsigned in
     ctrl.MDehazeStrth = level;
     ret = rk_aiq_user_api2_setDehazeEnhanceStrth(ctx, ctrl);
     RKAIQ_IMGPROC_CHECK_RET(ret, "setMDhzStrth failed!");
+#elif RKAIQ_HAVE_HISTEQ_V10
+    float strg;
+    bool  en;
+    rk_aiq_user_api2_histeq_GetUsrCfgStrg(ctx, &en, &strg);
+    RKAIQ_IMGPROC_CHECK_RET(ret, "getMDhzStrth failed!");
+
+    if (!en) {
+        LOGE("please enable dehaze by rk_aiq_uapi2_setDehazeEnable");
+    }
+    strg = level / 100.0f;
+
+    ret = rk_aiq_user_api2_histeq_SetUsrCfgStrg(ctx, en, strg);
+    RKAIQ_IMGPROC_CHECK_RET(ret, "setMDhzStrth failed!");
 #else
     LOGE("not support to call %s for current chip", __FUNCTION__);
     ret = XCAM_RETURN_ERROR_UNKNOWN;
@@ -1676,6 +1727,14 @@ XCamReturn rk_aiq_uapi2_getMDehazeStrth(const rk_aiq_sys_ctx_t* ctx, unsigned in
     ret = rk_aiq_user_api2_getDehazeEnhanceStrth(ctx, &ctrl);
     RKAIQ_IMGPROC_CHECK_RET(ret, "getMDhzStrth failed in get attrib!");
     *level = ctrl.MDehazeStrth;
+#elif RKAIQ_HAVE_HISTEQ_V10
+    float strg;
+    bool  en;
+    rk_aiq_user_api2_histeq_GetUsrCfgStrg(ctx, &en, &strg);
+    RKAIQ_IMGPROC_CHECK_RET(ret, "getMDhzStrth failed!");
+
+    *level = (unsigned int)(100 * strg);
+
 #else
     LOGE("not support to call %s for current chip", __FUNCTION__);
     ret = XCAM_RETURN_ERROR_UNKNOWN;

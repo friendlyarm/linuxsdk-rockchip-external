@@ -363,7 +363,9 @@ XCamReturn BtnrSelectParam
 (
     BtnrContext_t *pBtnrCtx,
     btnr_param_t* out,
-    int iso)
+    int iso,
+    bool is_aibnr_autorun,
+    int aibnr_fixIndex)
 {
     LOGD_ANR("%s(%d): enter!\n", __FUNCTION__, __LINE__);
 
@@ -379,7 +381,14 @@ XCamReturn BtnrSelectParam
     }
 
     pre_interp(iso, pBtnrCtx->iso_list, 13, &ilow, &ihigh, &ratio);
+    if (aibnr_fixIndex != -1 && is_aibnr_autorun) {
+        ilow = aibnr_fixIndex;
+        ihigh = aibnr_fixIndex;
+        ratio = 0;
+    }
     uratio = ratio * (1 << RATIO_FIXBIT);
+    LOGD_ANR("%s ilow %d, ihigh %d, ratio %f, aibnr_fixIndex %d, is_aibnr_autorun %d",
+        __func__, ilow, ihigh, ratio, aibnr_fixIndex, is_aibnr_autorun);
 
     if (ratio > 0.5)
         inear = ihigh;
@@ -719,6 +728,9 @@ XCamReturn Abtnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpa
     BtnrContext_t* pBtnrCtx = (BtnrContext_t *)inparams->ctx;
     btnr_api_attrib_t* btnr_attrib = pBtnrCtx->btnr_attrib;
     btnr_param_t* btnr_res = outparams->algoRes;
+    bool is_aibnr_autorun = inparams->u.proc.is_aibnr_autorun;
+    bool is_aibnr_force_update = inparams->u.proc.is_aibnr_force_update;
+    int aibnr_fixIndex = inparams->u.proc.aibnr_fixIndex;
 
     if (btnr_attrib->opMode != RK_AIQ_OP_MODE_AUTO) {
         LOGE_ANR("mode is %d, not auto mode, ignore", btnr_attrib->opMode);
@@ -737,7 +749,7 @@ XCamReturn Abtnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpa
     bool need_recal = pBtnrCtx->isReCal_;
 
     bool init = inparams->u.proc.init;
-    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init) {
+    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init || is_aibnr_force_update) {
         need_recal = true;
     }
 
@@ -767,7 +779,7 @@ XCamReturn Abtnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpa
         BtnrApplyStrength(pBtnrCtx, btnr_res);
 #endif
 #if defined(RKAIQ_HAVE_BAYERTNR_V41) || defined(RKAIQ_HAVE_BAYERTNR_V42)
-        BtnrSelectParam(pBtnrCtx, btnr_res, iso);
+        BtnrSelectParam(pBtnrCtx, btnr_res, iso, is_aibnr_autorun, aibnr_fixIndex);
         BtnrApplyStrength(pBtnrCtx, btnr_res);
 #endif
         outparams->cfg_update = true;
@@ -873,6 +885,51 @@ algo_bayertnr_GetStrength(RkAiqAlgoContext *ctx, float *strg, bool *strg_en)
     return XCAM_RETURN_NO_ERROR;
 }
 
+static XCamReturn
+create_context_l2(RkAiqAlgoContext **context, const AlgoCtxInstanceCfg* cfg)
+{
+    XCamReturn result = XCAM_RETURN_NO_ERROR;
+    CamCalibDbV2Context_t *pCalibDbV2 = cfg->calibv2;
+
+    BtnrContext_t* ctx = aiq_mallocz(sizeof(BtnrContext_t));
+    if (ctx == NULL) {
+        LOGE_ANR("%s create context failed!", __func__);
+        return XCAM_RETURN_ERROR_MEM;
+    }
+    ctx->btnr_attrib =
+        (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(pCalibDbV2, bayertnr2));
+
+    *context = (RkAiqAlgoContext* )ctx;
+    LOGV_ANR("%s: Btnr (exit)\n", __FUNCTION__ );
+
+    *context = (RkAiqAlgoContext*)ctx;
+    return result;
+}
+
+static XCamReturn
+prepare_l2(RkAiqAlgoCom* params)
+{
+    XCamReturn result = XCAM_RETURN_NO_ERROR;
+    BtnrContext_t* pBtnrCtx = (BtnrContext_t *)params->ctx;
+
+    if(!!(params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB )) {
+        // just update calib ptr
+        if (params->u.prepare.conf_type & RK_AIQ_ALGO_CONFTYPE_UPDATECALIB_PTR) {
+            pBtnrCtx->btnr_attrib =
+                (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(params->u.prepare.calibv2, bayertnr2));
+            pBtnrCtx->iso_list = params->u.prepare.calibv2->sensor_info->iso_list;
+            return XCAM_RETURN_NO_ERROR;
+        }
+    }
+
+    pBtnrCtx->working_mode = params->u.prepare.working_mode;
+    pBtnrCtx->btnr_attrib =
+        (btnr_api_attrib_t*)(CALIBDBV2_GET_MODULE_PTR(params->u.prepare.calibv2, bayertnr2));
+    pBtnrCtx->iso_list = params->u.prepare.calibv2->sensor_info->iso_list;
+    pBtnrCtx->isReCal_ = true;
+    return result;
+}
+
 #define RKISP_ALGO_ABAYERTNR_VERSION     "v0.0.9"
 #define RKISP_ALGO_ABAYERTNR_VENDOR      "Rockchip"
 #define RKISP_ALGO_ABAYERTNR_DESCRIPTION "Rockchip btnr algo for ISP32"
@@ -888,6 +945,22 @@ RkAiqAlgoDescription g_RkIspAlgoDescBayertnr = {
         .destroy_context = destroy_context,
     },
     .prepare = prepare,
+    .pre_process = NULL,
+    .processing = processing,
+    .post_process = NULL,
+};
+
+RkAiqAlgoDescription g_RkIspAlgoDescBayertnr2 = {
+    .common = {
+        .version = RKISP_ALGO_ABAYERTNR_VERSION,
+        .vendor  = RKISP_ALGO_ABAYERTNR_VENDOR,
+        .description = RKISP_ALGO_ABAYERTNR_DESCRIPTION,
+        .type    = RK_AIQ_ALGO_TYPE_BAYERTNR2,
+        .id      = 0,
+        .create_context  = create_context_l2,
+        .destroy_context = destroy_context,
+    },
+    .prepare = prepare_l2,
     .pre_process = NULL,
     .processing = processing,
     .post_process = NULL,

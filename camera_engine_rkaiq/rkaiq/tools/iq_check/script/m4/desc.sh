@@ -27,6 +27,10 @@ handle_struct() {
 	echo -n @desc: alias=\"$1\", type=\"struct\", ui_module=\"${2:-normal_ui_style}\", hide=\"${3:-0}\", ro=\"${4:-0}\"
 }
 
+handle_struct_v2() {
+	echo -n @desc: alias=\"$1\", type=\"struct\", ui_module=\"${2:-normal_ui_style}\", hide=\"${3:-0}\", ro=\"${4:-0}\", comp_module=\"${5}\"
+}
+
 handle_struct_list() {
 	echo -n @desc: alias=\"$1\", type=\"struct_list\", size=\"$2\", ui_module=\"${3:-normal_ui_style}\", ro=\"${4:-0}\", hide=\"${5:-0}\"
 }
@@ -97,6 +101,9 @@ case $MACRO in
 		;;
 	M4_STRUCT_DESC)
 		handle_struct "$@"
+		;;
+	M4_STRUCT_V2_DESC)
+		handle_struct_v2 "$@"
 		;;
 	M4_STRUCT_LIST_DESC)
 		handle_struct_list "$@"

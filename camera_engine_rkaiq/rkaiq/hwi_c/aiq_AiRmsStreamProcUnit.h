@@ -32,7 +32,11 @@
 #define AIRMS_CONVERT_THREAD_MSG_MAX     (6)
 #define AIRMS_INBUF_NUM                  (3)
 #define AIRMS_OUTBUF_NUM                 (3)
-#define AIRMS_DUMPBUF_DIR               "/data/airms_dump"
+#define AIRMS_DUMPBUF_DIR                "/data/airms_dump"
+#define AIRMS_MGE_THREAD_POOL_NUM        (2)
+#define AIRMS_MGE_THREAD_START_COREID    (2)
+#define AIRMS_MAX_WIDTH                  (4096)
+#define AIRMS_EXTEND_PIXEL               (16)
 
 typedef struct _AiRmsAiispBuf {
     bool dump_flg;
@@ -53,6 +57,12 @@ typedef struct _AirmsStreamParam {
     AiRmsAiispBuf *aiispInBuf;
     AiqAiRmsStreamProcUnit_t* pProcUnit;
 } AirmsStreamParam;
+
+typedef struct _AirmsMgeParam {
+    int hdlIdx;
+    AiRmsAiispBuf *aiispOutBuf;
+    AiqAiRmsStreamProcUnit_t* pProcUnit;
+} AirmsMgeParam;
 
 typedef struct AirmsStreamHelperThd_s {
     AiqThread_t* _base;
@@ -112,9 +122,15 @@ typedef struct AiqAiRmsStreamProcUnit_s {
 
     threadpool mHelpThPool;
     AirmsQuardConvertThd_t mQuardConvertThd;
+    uint16_t mCompY[33];
+    enum rkaiisp_model_mode mModelMode;
+
+    AiqCamHwBase_t* pCamHw;
+    bool is_parthdl;
+    threadpool mMgeThPool;
 } AiqAiRmsStreamProcUnit_t;
 
-XCamReturn AiqAiRmsStreamProcUnit_init(AiqAiRmsStreamProcUnit_t* pProcUnit, rk_aiq_aiisp_info_t* aiisp_info);
+XCamReturn AiqAiRmsStreamProcUnit_init(AiqCamHwBase_t* pCamHw, AiqAiRmsStreamProcUnit_t* pProcUnit, rk_aiq_aiisp_info_t* aiisp_info);
 XCamReturn AiqAiRmsStreamProcUnit_deinit(AiqAiRmsStreamProcUnit_t* pProcUnit);
 XCamReturn AiqAiRmsStreamProcUnit_prepare(AiqAiRmsStreamProcUnit_t* pProcUnit,
                                           uint32_t isp_acq_width, uint32_t isp_acq_height, char *model_file);
@@ -123,5 +139,6 @@ void AiqAiRmsStreamProcUnit_stop(AiqAiRmsStreamProcUnit_t* pProcUnit);
 void AiqAiRmsStreamProcUnit_set_devices(AiqAiRmsStreamProcUnit_t* pProcUnit, AiqRawStreamProcUnit_t* proc);
 void AiqAiRmsStreamProcUnit_setVicapBuf(AiqAiRmsStreamProcUnit_t* pProcUnit, AiqV4l2Buffer_t *vicapbuf);
 int AiqAiRmsStreamProcUnit_dumpRaw(AiqAiRmsStreamProcUnit_t* pProcUnit, int dump_raw_num);
+void AiqAiRmsStreamProcUnit_getBytesPerline(AiqAiRmsStreamProcUnit_t* pProcUnit, uint32_t width, uint32_t* bytes_perline);
 
 #endif  // _AIQ_AIRMS_STREAM_PROC_UNIT_H_

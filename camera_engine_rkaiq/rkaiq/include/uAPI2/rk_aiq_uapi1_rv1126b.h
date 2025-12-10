@@ -820,6 +820,14 @@ XCamReturn rk_aiq_uapi_setLdchEn(const rk_aiq_sys_ctx_t* ctx, bool en);
 */
 XCamReturn rk_aiq_uapi_setLdchCorrectLevel(const rk_aiq_sys_ctx_t* ctx, int correctLevel);
 
+#include "rk_aiq_uapi_ae_int_types_v2.h"
+
+XCamReturn rk_aiq_user_api_ae_setExpSwAttr(const rk_aiq_sys_ctx_t* sys_ctx, const Uapi_ExpSwAttr_t expSwAttr);
+XCamReturn rk_aiq_user_api_ae_getExpSwAttr(const rk_aiq_sys_ctx_t* sys_ctx, Uapi_ExpSwAttr_t* pExpSwAttr);
+XCamReturn rk_aiq_user_api_ae_setLinExpAttr(const rk_aiq_sys_ctx_t* sys_ctx, const Uapi_LinExpAttr_t linExpAttr);
+XCamReturn rk_aiq_user_api_ae_getLinExpAttr(const rk_aiq_sys_ctx_t* sys_ctx, Uapi_LinExpAttr_t* pLinExpAttr);
+XCamReturn rk_aiq_user_api_ae_queryExpResInfo(const rk_aiq_sys_ctx_t* sys_ctx, Uapi_ExpQueryInfo_t* pExpResInfo);
+
 RKAIQ_END_DECLARE
 
 #endif

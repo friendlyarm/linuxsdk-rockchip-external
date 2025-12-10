@@ -188,8 +188,40 @@ static void convertAiqAwbGainToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_b
     }
 
     pCvt->mLatestWbGainCfg = *cfg;
-}
 
+    if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCvt->_working_mode) || pCvt->mCommonCvtInfo._airms_en) {
+        cfg->gain0_red     = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain0_blue    = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain0_green_r = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain0_green_b = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain1_red     = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain1_blue    = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain1_green_r = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain1_green_b = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain2_red     = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain2_blue    = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain2_green_r = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        cfg->gain2_green_b = (1 << ISP2X_WBGAIN_FIXSCALE_BIT);
+        rk_aiq_wb_gain_v32_t awb_gain_1x = {1, 1, 1, 1,1};
+        ConfigWbgainBaseOnBlc(&awb_gain_1x, blc, dgain);
+        uint16_t max_wb_gain   = (1 << (ISP2X_WBGAIN_FIXSCALE_BIT + 3)) - 1;
+        uint16_t R  = (uint16_t)(0.5 + awb_gain_1x.rgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t B  = (uint16_t)(0.5 + awb_gain_1x.bgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t Gr = (uint16_t)(0.5 + awb_gain_1x.grgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        uint16_t Gb = (uint16_t)(0.5 + awb_gain_1x.gbgain * (1 << ISP2X_WBGAIN_FIXSCALE_BIT));
+        cfg->awb1_gain_r   = R > max_wb_gain ? max_wb_gain : R;
+        cfg->awb1_gain_b   = B > max_wb_gain ? max_wb_gain : B;
+        cfg->awb1_gain_gr  = Gr > max_wb_gain ? max_wb_gain : Gr;
+        cfg->awb1_gain_gb  = Gb > max_wb_gain ? max_wb_gain : Gb;
+    }
+
+    if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCvt->_working_mode)) {
+        pCvt->mLatestWbGainCfg.awb1_gain_r = cfg->awb1_gain_r;
+        pCvt->mLatestWbGainCfg.awb1_gain_b = cfg->awb1_gain_b;
+        pCvt->mLatestWbGainCfg.awb1_gain_gr = cfg->awb1_gain_gr;
+        pCvt->mLatestWbGainCfg.awb1_gain_gb = cfg->awb1_gain_gb;
+    }
+}
 
 static void WriteDataForIcCmodel(struct isp35_rawawb_meas_cfg* wpDetectPara)
 {
@@ -1017,7 +1049,7 @@ static void UvParaFixed32(const awbStats_uvRegion_t* wpRegion, unsigned short pu
     }
 }
 
-static void ConfigPreWbgain3(struct isp35_rawawb_meas_cfg* awb_cfg_v35,
+static void ConfigPreWbgain3(AiqIspParamsCvt_t* pCvt, struct isp35_rawawb_meas_cfg* awb_cfg_v35,
                              const awbStats_cfg_priv_t* awb_meas,
                              const rk_aiq_wb_gain_v32_t* awb_gain,
                              const struct rkmodule_awb_inf* otp_awb) {
@@ -1050,7 +1082,8 @@ static void ConfigPreWbgain3(struct isp35_rawawb_meas_cfg* awb_cfg_v35,
     if ((awb_gain->rgain * awb_gain->grgain * awb_gain->bgain > 0.0001) &&
             (awb_meas->com.hw_awbCfg_statsSrc_mode == awbStats_drcOut_mode ||
              (awb_gain->applyPosition == IN_AWBGAIN0 &&
-              (awb_meas->com.hw_awbCfg_statsSrc_mode == awbStats_btnrOut_mode || awb_meas->com.hw_awbCfg_statsSrc_mode == awbStats_btnrfeOut_mode)))) {
+              (awb_meas->com.hw_awbCfg_statsSrc_mode == awbStats_btnrOut_mode || awb_meas->com.hw_awbCfg_statsSrc_mode == awbStats_btnrfeOut_mode)) ||
+              pCvt->mCommonCvtInfo._airms_en)) {
         // for awb statistics after the awbgain application
         awb_cfg_v35->pre_wbgain_inv_r =
             (1 << RK_AIQ_AWB_PRE_WBGAIN_FRAC_BIT) / awb_gain->rgain * preWbgainSw[0] + 0.5;
@@ -1381,7 +1414,7 @@ static void convertAiqAwbToIsp33Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_
     awb_cfg_v35->big_x1_3 = UtlFloatToFix_S0310(bigWpRegion->rbVtx.hw_awbT_vtxX_val);
     awb_cfg_v35->big_y0_3 = UtlFloatToFix_S0310(bigWpRegion->ltVtx.hw_awbT_vtxY_val);
     awb_cfg_v35->big_y1_3 = UtlFloatToFix_S0310(bigWpRegion->rbVtx.hw_awbT_vtxY_val);
-    ConfigPreWbgain3(awb_cfg_v35, awb_meas_priv, &pCvt->awb_gain_final,
+    ConfigPreWbgain3(pCvt, awb_cfg_v35, awb_meas_priv, &pCvt->awb_gain_final,
                      &pCvt->mCommonCvtInfo.otp_awb);
     awb_cfg_v35->multiwindow_en      = awb_meas->mainWin.hw_awbCfg_nonROI_en;
     awb_cfg_v35->multiwindow0_h_offs = awb_meas->mainWin.nonROI[0].hw_awbCfg_nonROI_x;
@@ -1654,6 +1687,24 @@ static void convertAiqBtnrToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base
     pCvt->mBtnrInfo.btnr_attrib = pCvt->btnr_attrib;
     rk_aiq_btnr42_params_cvt(pBase->_data, &pCvt->isp_params, &pCvt->mCommonCvtInfo, &pCvt->mBtnrInfo, &pCvt->mergeLuma2Wgt);
 }
+
+static void convertAiqBtnr2ToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase) {
+    if (pBase->en) {
+        // bayer3dnr enable  bayer2dnr must enable at the same time
+        pCvt->isp_params.isp_cfg->module_ens |= ISP35_MODULE_BAY3D_L2;
+        pCvt->isp_params.isp_cfg->module_en_update |= ISP35_MODULE_BAY3D_L2;
+        pCvt->isp_params.isp_cfg->module_cfg_update |= ISP35_MODULE_BAY3D_L2;
+    } else {
+        // tnr can't open/close in runtime if not enable in first frame
+        pCvt->isp_params.isp_cfg->module_ens &= ~ISP35_MODULE_BAY3D_L2;
+        pCvt->isp_params.isp_cfg->module_en_update |= ISP35_MODULE_BAY3D_L2;
+        return;
+    }
+
+    pCvt->isp_params.isp_cfg->others.bay3d_l2_cfg.bypass_en = pBase->bypass;
+    pCvt->mBtnrInfo.btnr_attrib = pCvt->btnr2_attrib;
+    rk_aiq_btnr42_l2_params_cvt(pBase->_data, &pCvt->isp_params, &pCvt->mCommonCvtInfo, &pCvt->mBtnrInfo, &pCvt->mergeLuma2Wgt);
+}
 #endif
 
 #if RKAIQ_HAVE_YNR_V41
@@ -1847,6 +1898,9 @@ void convertAiqDrcToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBas
 void convertAiqAibnrToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase) {
     pCvt->mAibnrParams = (aiq_params_base_t*)pBase;
 
+    if (pCvt->mCommonCvtInfo._aiynr_en)
+        return;
+
     if (pBase->en) {
         pCvt->isp_params.isp_cfg->module_ens |= ISP35_MODULE_AI;
         pCvt->isp_params.isp_cfg->module_en_update |= ISP35_MODULE_AI;
@@ -1858,6 +1912,27 @@ void convertAiqAibnrToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pB
     }
 
     rk_aiq_aibnr_params_cvt(pBase->_data, &pCvt->isp_params, &pCvt->mCommonCvtInfo, pBase->bypass);
+}
+#endif
+
+#if RKAIQ_HAVE_AIYNR
+void convertAiqAiynrToIsp35Params(AiqIspParamsCvt_t* pCvt, aiq_params_base_t* pBase) {
+    pCvt->mAiynrParams = (aiq_params_base_t*)pBase;
+
+    if (!pCvt->mCommonCvtInfo._aiynr_en)
+        return;
+
+    if (pBase->en) {
+        pCvt->isp_params.isp_cfg->module_ens |= ISP35_MODULE_AI;
+        pCvt->isp_params.isp_cfg->module_en_update |= ISP35_MODULE_AI;
+        pCvt->isp_params.isp_cfg->module_cfg_update |= ISP35_MODULE_AI;
+    } else {
+        pCvt->isp_params.isp_cfg->module_ens &= ~ISP35_MODULE_AI;
+        pCvt->isp_params.isp_cfg->module_en_update |= ISP35_MODULE_AI;
+        return;
+    }
+
+    rk_aiq_aiynr_params_cvt(pBase->_data, &pCvt->isp_params, &pCvt->mCommonCvtInfo, pBase->bypass);
 }
 #endif
 
@@ -1885,6 +1960,7 @@ static const struct params_cvt_info_isp35 params_cvts_isp35[] = {
 #endif
 #if (RKAIQ_HAVE_BAYERTNR_V42)
     CVT_INFO(RESULT_TYPE_TNR_PARAM, convertAiqBtnrToIsp35Params),
+    CVT_INFO(RESULT_TYPE_TNR2_PARAM, convertAiqBtnr2ToIsp35Params),
 #endif
 #if RKAIQ_HAVE_YNR_V41
     CVT_INFO(RESULT_TYPE_YNR_PARAM, convertAiqYnrToIsp35Params),
@@ -1918,6 +1994,9 @@ static const struct params_cvt_info_isp35 params_cvts_isp35[] = {
 #endif
 #if RKAIQ_HAVE_AIBNR
     CVT_INFO(RESULT_TYPE_AIBNR_PARAM, convertAiqAibnrToIsp35Params),
+#endif
+#if RKAIQ_HAVE_AIYNR
+    CVT_INFO(RESULT_TYPE_AIYNR_PARAM, convertAiqAiynrToIsp35Params),
 #endif
 };
 

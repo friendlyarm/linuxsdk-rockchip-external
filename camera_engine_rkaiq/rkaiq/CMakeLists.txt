@@ -1012,6 +1012,10 @@ if (RKAIQ_HAVE_AIRMS)
     add_compile_options(-DRKAIQ_HAVE_AIRMS=1)
 endif()
 
+if (RKAIQ_HAVE_AIYNR)
+    add_compile_options(-DRKAIQ_HAVE_AIYNR=1)
+endif()
+
 set(AIQ_CORE_SRC
     ${ALGO_HANDLE_SRC}
     aiq_core/RkAiqHandle.cpp
@@ -1251,7 +1255,17 @@ set (HWI_C_SRC
     hwi_c/aiq_cifScaleStream.c
     hwi_c/aiq_aiIspLoader.c
     hwi_c/aiq_dumpRkRaw.c
-)
+    )
+
+if (RKAIQ_HAVE_MEMC)
+    list(APPEND HWI_C_SRC hwi_c/rawReprocess/RkAiqMemcManager.c)
+    add_compile_options(-DRKAIQ_HAVE_MEMC=1)
+endif()
+
+if (RKAIQ_HAVE_FPNSW)
+    list(APPEND HWI_C_SRC hwi_c/rawReprocess/aiq_fpnSwStreamProcUnit.c)
+    add_compile_options(-DRKAIQ_HAVE_FPNSW=1)
+endif()
 
 if (RKAIQ_HAVE_MULTIISP)
     list(APPEND HWI_C_SRC
@@ -1418,6 +1432,10 @@ if (RKAIQ_HAVE_AIRMS)
     list(APPEND CORE_C_SRC aiq_core_c/algo_handlers/RkAiqAirmsHandler.c)
 endif()
 
+if (RKAIQ_HAVE_AIYNR)
+    list(APPEND CORE_C_SRC aiq_core_c/algo_handlers/RkAiqAiynrHandler.c)
+endif()
+
 if (RKAIQ_ENABLE_CAMGROUP)
     list(APPEND CORE_C_SRC
 		aiq_core_c/aiq_algo_camgroup_handler.c
@@ -1447,6 +1465,7 @@ set (AIQ_C_SRC
 	RkAiqManager_c.c
 	RkAibnrManager.c
 	RknnManager.c
+	RkAiynrManager.c
 )
 if (RKAIQ_ENABLE_CAMGROUP)
     list(APPEND AIQ_C_SRC
@@ -2211,6 +2230,14 @@ target_link_libraries(rkaiq
 list(APPEND RK_AIQ_STATIC_LIB_ARS ${STATIC_LIB_PREFIX}rkaiq_airms${STATIC_LIB_SUFFIX})
 endif()
 
+if (RKAIQ_HAVE_AIYNR)
+    target_link_libraries(rkaiq
+        PRIVATE
+        rkaiq_aiynr
+        )
+    list(APPEND RK_AIQ_STATIC_LIB_ARS ${STATIC_LIB_PREFIX}rkaiq_aiynr${STATIC_LIB_SUFFIX})
+endif()
+
 if(RKAIQ_ISP_VERSION STREQUAL "33" OR RKAIQ_ISP_VERSION STREQUAL "35")
     if(RKAIQ_ISP_VERSION STREQUAL "33")
         set(AUTOBLC_LIBS_DIR ${PROJECT_SOURCE_DIR}/modules/blc_algo/isp33)
@@ -2381,6 +2408,33 @@ target_link_libraries(rkaiq
     rkaiq_asd
     )
 list(APPEND RK_AIQ_STATIC_LIB_ARS ${STATIC_LIB_PREFIX}rkaiq_asd${STATIC_LIB_SUFFIX})
+endif()
+
+if(RKAIQ_ISP_VERSION STREQUAL "35")
+set(BTNR_GYRO_MEMC_LIBS_DIR ${PROJECT_SOURCE_DIR}/hwi_c/rawReprocess/isp${RKAIQ_ISP_VERSION}/${ARCH})
+if (RKAIQ_HAVE_FPNSW)
+file(COPY ${BTNR_GYRO_MEMC_LIBS_DIR}/libfpn_correction.a DESTINATION ${LIBRARY_OUTPUT_PATH})
+add_library(fpn_correction STATIC IMPORTED GLOBAL)
+set_target_properties(fpn_correction PROPERTIES
+    IMPORTED_LOCATION "${LIBRARY_OUTPUT_PATH}/libfpn_correction.a"
+)
+target_link_libraries(rkaiq
+    PRIVATE
+    fpn_correction
+    )
+endif()
+
+if (RKAIQ_HAVE_MEMC)
+file(COPY ${BTNR_GYRO_MEMC_LIBS_DIR}/libgyro_memc.a DESTINATION ${LIBRARY_OUTPUT_PATH})
+add_library(gyro_memc STATIC IMPORTED GLOBAL)
+set_target_properties(gyro_memc PROPERTIES
+  IMPORTED_LOCATION "${LIBRARY_OUTPUT_PATH}/libgyro_memc.a"
+)
+target_link_libraries(rkaiq
+    PRIVATE
+    gyro_memc
+    )
+endif()
 endif()
 
 if (RKAIQ_HAVE_YUVME_V1)

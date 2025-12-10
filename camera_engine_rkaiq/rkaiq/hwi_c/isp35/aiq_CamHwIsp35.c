@@ -42,6 +42,7 @@ static void CamHwIsp35_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, voi
     if (!pDstEff) {
         goto out;
     }
+
     if (pCamHw->_mIspParamsCvt->mAwbParams) {
         pDstEff->awb_cfg_v35 =
             *(rk_aiq_isp_awb_meas_cfg_v33_t*)(pCamHw->_mIspParamsCvt->mAwbParams->_data);
@@ -53,8 +54,32 @@ static void CamHwIsp35_updateEffParams(AiqCamHwBase_t* pCamHw, void* params, voi
 #endif
     }
     pDstEff->meas         = pCamHw->_mIspParamsCvt->mLatestMeasCfg;
-    pDstEff->bls_cfg      = pCamHw->_mIspParamsCvt->mLatestBlsCfg;
-    pDstEff->awb_gain_cfg = pCamHw->_mIspParamsCvt->mLatestWbGainCfg;
+    if (!pCamHw->_airms_en || !pCamHw->mSnsDes.compr_bit) {
+        pDstEff->bls_cfg      = pCamHw->_mIspParamsCvt->mLatestBlsCfg;
+        pDstEff->awb_gain_cfg = pCamHw->_mIspParamsCvt->mLatestWbGainCfg;
+    } else {
+        int delta = effFrmId - pCamHw->_curIspParamsSeq;
+        aiq_isp_effect_params_t* pDstEff1 = AiqCamHw_getParamsForEffMap(pCamHw, effFrmId == 0 ? 0 : effFrmId + 1);
+        if (pDstEff1) {
+            pDstEff1->bls_cfg      = pCamHw->_mIspParamsCvt->mLatestBlsCfg;
+            pDstEff1->awb_gain_cfg = pCamHw->_mIspParamsCvt->mLatestWbGainCfg;
+        } else {
+            pDstEff->bls_cfg      = pCamHw->_mIspParamsCvt->mLatestBlsCfg;
+            pDstEff->awb_gain_cfg = pCamHw->_mIspParamsCvt->mLatestWbGainCfg;
+        }
+        if (delta > 1) {
+            if (latestIspParams) {
+                for (int i = 0; i < (delta - 1); i++) {
+                    aiq_isp_effect_params_t* pDstEff1 = AiqCamHw_getParamsForEffMap(pCamHw, effFrmId - i);
+                    if (pDstEff1) {
+                        pDstEff1->bls_cfg      = latestIspParams->bls_cfg;
+                        pDstEff1->awb_gain_cfg = latestIspParams->awb_gain_cfg;
+                    }
+                    LOGD_CAMHW_SUBM(ISP20HW_SUBM, "insert missing for id:%u", effFrmId - i);
+                }
+            }
+        }
+    }
 
 #if defined(RKAIQ_HAVE_MULTIISP)
     struct isp35_isp_params_cfg* dst_isp_params       = NULL;

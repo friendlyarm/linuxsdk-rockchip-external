@@ -57,11 +57,11 @@ static int sample_aibnr_query_status(const rk_aiq_sys_ctx_t *ctx) {
               tunning->sw_aiBnrT_noiseAddLumaClip_th, tunning->sw_aiBnrT_noiseAddLumaStatic_th,
               tunning->sw_aiBnrT_nonLinear_scale, tunning->sw_aiBnrT_nonLinear_ratio, tunning->sw_aiBnrT_nonLinear_adjust);
 
-    printf("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s sw_aiBnrT_doRknn_en=%d\n",
-              sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file, tunning->sw_aiBnrT_doRknn_en);
+    printf("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s\n",
+              sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file);
 
-    printf("sw_aiBnrT_debug_mode=%d\n",
-              sta->debug.sw_aiBnrT_debug_mode);
+    printf("sw_aiBnrT_debug_mode=%d sw_aiBnrT_autoSwOn_thred=%d sw_aiBnrT_autoSwGap_thred=%d sw_aiBnrT_manualBnrHw_en=%d\n",
+              sta->debug.sw_aiBnrT_debug_mode, sta->swOn_cfg.sw_aiBnrT_autoSwOn_thred, sta->swOn_cfg.sw_aiBnrT_autoSwGap_thred, sta->swOn_cfg.sw_aiBnrT_manualBnrHw_en);
 
     return ret;
 #else
@@ -108,11 +108,11 @@ static int sample_aibnr_get_attrib(const rk_aiq_sys_ctx_t *ctx) {
               tunning->sw_aiBnrT_noiseAddLumaClip_th, tunning->sw_aiBnrT_noiseAddLumaStatic_th,
               tunning->sw_aiBnrT_nonLinear_scale, tunning->sw_aiBnrT_nonLinear_ratio, tunning->sw_aiBnrT_nonLinear_adjust);
 
-    printf("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s sw_aiBnrT_doRknn_en=%d\n",
-              sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file, tunning->sw_aiBnrT_doRknn_en);
+    printf("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s\n",
+              sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file);
 
-    printf("sw_aiBnrT_debug_mode=%d\n",
-              sta->debug.sw_aiBnrT_debug_mode);
+    printf("sw_aiBnrT_debug_mode=%d sw_aiBnrT_autoSwOn_thred=%d sw_aiBnrT_autoSwGap_thred=%d sw_aiBnrT_manualBnrHw_en=%d\n",
+              sta->debug.sw_aiBnrT_debug_mode, sta->swOn_cfg.sw_aiBnrT_autoSwOn_thred, sta->swOn_cfg.sw_aiBnrT_autoSwGap_thred, sta->swOn_cfg.sw_aiBnrT_manualBnrHw_en);
 
     sta = &attr.stAuto.sta;
     for (int i = 0; i < AIBNR_ISO_STEP_MAX; i++) {
@@ -142,11 +142,11 @@ static int sample_aibnr_get_attrib(const rk_aiq_sys_ctx_t *ctx) {
                   tunning->sw_aiBnrT_noiseAddLumaClip_th, tunning->sw_aiBnrT_noiseAddLumaStatic_th,
                   tunning->sw_aiBnrT_nonLinear_scale, tunning->sw_aiBnrT_nonLinear_ratio, tunning->sw_aiBnrT_nonLinear_adjust);
 
-        printf("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s sw_aiBnrT_doRknn_en=%d\n",
-                  sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file, tunning->sw_aiBnrT_doRknn_en);
+        printf("sw_aiBnrCfg_model_dir=%s sw_aiBnrT_model_file=%s\n",
+                  sta->model_dir.sw_aiBnrCfg_model_dir, tunning->sw_aiBnrT_model_file);
 
-        printf("sw_aiBnrT_debug_mode=%d\n",
-                  sta->debug.sw_aiBnrT_debug_mode);
+        printf("sw_aiBnrT_debug_mode=%d sw_aiBnrT_autoSwOn_thred=%d sw_aiBnrT_autoSwGap_thred=%d sw_aiBnrT_manualBnrHw_en=%d\n",
+                  sta->debug.sw_aiBnrT_debug_mode, sta->swOn_cfg.sw_aiBnrT_autoSwOn_thred, sta->swOn_cfg.sw_aiBnrT_autoSwGap_thred, sta->swOn_cfg.sw_aiBnrT_manualBnrHw_en);
 
     }
 

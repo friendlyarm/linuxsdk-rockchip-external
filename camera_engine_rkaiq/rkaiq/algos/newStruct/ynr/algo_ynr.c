@@ -318,7 +318,9 @@ XCamReturn YnrSelectParam
 (
     YnrContext_t *pYnrCtx,
     ynr_param_t* out,
-    int iso)
+    int iso,
+    bool is_aibnr_autorun,
+    int aibnr_fixIndex)
 {
     int i = 0;
     int iso_low = 0, iso_high = 0, ilow = 0, ihigh = 0, inear = 0;
@@ -332,7 +334,14 @@ XCamReturn YnrSelectParam
     }
 
     pre_interp(iso, pYnrCtx->iso_list, 13, &ilow, &ihigh, &ratio);
+    if (aibnr_fixIndex != -1 && is_aibnr_autorun) {
+        ratio = 0;
+        ilow = aibnr_fixIndex;
+        ihigh = aibnr_fixIndex;
+    }
     uratio = ratio * (1 << RATIO_FIXBIT);
+    LOGD_ANR("%s ilow %d, ihigh %d, ratio %f, aibnr_fixIndex %d, is_aibnr_autorun %d",
+        __func__, ilow, ihigh,ratio, aibnr_fixIndex, is_aibnr_autorun);
 
     if (ratio > 0.5) {
         inear = ihigh;
@@ -643,6 +652,9 @@ XCamReturn Aynr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
     YnrContext_t* pYnrCtx = (YnrContext_t *)inparams->ctx;
     ynr_api_attrib_t* ynr_attrib = pYnrCtx->ynr_attrib;
     ynr_param_t* ynr_res = outparams->algoRes;
+    bool is_aibnr_autorun = inparams->u.proc.is_aibnr_autorun;
+    int aibnr_fixIndex = inparams->u.proc.aibnr_fixIndex;
+    bool is_aibnr_force_update = inparams->u.proc.is_aibnr_force_update;
 
     if (ynr_attrib->opMode != RK_AIQ_OP_MODE_AUTO) {
         LOGE_ANR("mode is %d, not auto mode, ignore", ynr_attrib->opMode);
@@ -660,7 +672,7 @@ XCamReturn Aynr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
     bool need_recal = pYnrCtx->isReCal_;
 
     bool init = inparams->u.proc.init;
-    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init) {
+    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init || is_aibnr_force_update) {
         need_recal = true;
         pYnrCtx->init_json = true;
     }
@@ -689,7 +701,7 @@ XCamReturn Aynr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
         YnrApplyStrength(pYnrCtx, ynr_res);
 #endif
 #if defined(RKAIQ_HAVE_YNR_V40) || defined(RKAIQ_HAVE_YNR_V41)
-        YnrSelectParam(pYnrCtx, ynr_res, iso);
+        YnrSelectParam(pYnrCtx, ynr_res, iso, is_aibnr_autorun, aibnr_fixIndex);
         YnrApplyStrength(pYnrCtx, ynr_res);
 #endif
         outparams->cfg_update = true;

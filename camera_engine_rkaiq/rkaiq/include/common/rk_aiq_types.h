@@ -420,6 +420,31 @@ typedef struct RkAiqAibnrModelInfo_s {
     float quant_val[RK_AIQ_ISO_STEP_MAX];
 } RkAiqAibnrModelInfo_t;
 
+#define AIYNR_MODEL_PATH_LEN             256
+typedef struct RkAiqAiynrModelInfo_s {
+    char model_file[RK_AIQ_ISO_STEP_MAX][AIYNR_MODEL_PATH_LEN];
+    float quant_val[RK_AIQ_ISO_STEP_MAX];
+} RkAiqAiynrModelInfo_t;
+
+/* rkmodule_hdr_compr
+ * linearised and compressed data for hdr: data_src = K * data_compr + XX
+ *
+ * src_bit: bit of src data, max 20 bit.
+ * point: linear point number, max 32 for rk3576.
+ * k_shift: left shift bit of slop amplification factor, 2^k_shift, [0 15].
+ * slope_k: K * 2^k_shift.
+ * data_src: source data.
+ * data_compr: compressed data.
+ */
+typedef struct RkAiqHdrCompr_s {
+    uint8_t point;
+    uint8_t src_bit;
+    uint8_t k_shift;
+    uint16_t data_compr[HDR_COMPR_POINT_MAX];
+    uint32_t data_src[HDR_COMPR_POINT_MAX];
+    uint32_t slope_k[HDR_COMPR_POINT_MAX];
+} RkAiqHdrCompr_t;
+
 // sensor
 typedef struct {
     unsigned short line_periods_vertical_blanking;
@@ -440,6 +465,7 @@ typedef struct {
     uint32_t isp_acq_height;
     rk_aiq_sensor_nr_switch_t nr_switch;
     rk_aiq_sensor_dcg_ratio_t dcg_ratio;
+    rk_aiq_sensor_dcg_ratio_t spd_ratio;
     rk_aiq_lens_descriptor lens_des;
     struct rkmodule_awb_inf otp_awb;
     struct rkmodule_lsc_inf *otp_lsc;

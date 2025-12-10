@@ -114,6 +114,8 @@ typedef enum RkAiqAlgoType_e {
     RK_AIQ_ALGO_TYPE_AIBNR,
     RK_AIQ_ALGO_TYPE_AMTD,
     RK_AIQ_ALGO_TYPE_AIRMS,
+    RK_AIQ_ALGO_TYPE_AIYNR,
+    RK_AIQ_ALGO_TYPE_BAYERTNR2,
     RK_AIQ_ALGO_TYPE_MAX
 } RkAiqAlgoType_t;
 
@@ -164,10 +166,13 @@ typedef struct prepare_s {
 typedef struct proc_s {
     bool init;
     int iso;
+    int aibnr_fixIndex;
     bool fill_light_on;
     bool gray_mode;
     bool is_bw_sensor;
     bool is_attrib_update;
+    bool is_aibnr_autorun;
+    bool is_aibnr_force_update;
     RKAiqAecExpInfo_t *preExp;
     RKAiqAecExpInfo_t *curExp;
     RKAiqAecExpInfo_t *nxtExp;

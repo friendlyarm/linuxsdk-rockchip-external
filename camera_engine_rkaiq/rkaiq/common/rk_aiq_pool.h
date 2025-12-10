@@ -180,6 +180,7 @@ static const char* Cam3aResultType2Str[RESULT_TYPE_MAX_PARAM] = {
     [RESULT_TYPE_AIBNR_PARAM]    = "AIBNR",
     [RESULT_TYPE_AMTD_PARAM]     = "AMTD",
     [RESULT_TYPE_AIRMS_PARAM]    = "AIRMS",
+    [RESULT_TYPE_AIYNR_PARAM]    = "AIYNR",
 };
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop

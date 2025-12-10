@@ -148,6 +148,7 @@ struct AiqIspParamsCvt_s {
     aiq_params_base_t* mAwbParams;
     aiq_params_base_t* mAfParams;
     aiq_params_base_t* mAibnrParams;
+    aiq_params_base_t* mAiynrParams;
     bool _lsc_en;
 #if defined(ISP_HW_V32) || defined(ISP_HW_V32_LITE)
     struct isp32_isp_meas_cfg mLatestMeasCfg;
@@ -178,6 +179,7 @@ struct AiqIspParamsCvt_s {
 #if (defined(ISP_HW_V39) || defined(ISP_HW_V33) || defined(ISP_HW_V35)) && (USE_NEWSTRUCT)
     btnr_cvt_info_t mBtnrInfo;
     void *btnr_attrib;
+    void *btnr2_attrib;
 #endif
     float mLatestIspDgain;
 #if defined(ISP_HW_V39) && (USE_NEWSTRUCT)
@@ -205,7 +207,7 @@ XCamReturn AiqIspParamsCvt_init(AiqIspParamsCvt_t* pCvt);
 void AiqIspParamsCvt_deinit(AiqIspParamsCvt_t* pCvt);
 void AiqAutoblc_deinit(AiqIspParamsCvt_t* pCvt);
 XCamReturn AiqIspParamsCvt_merge_isp_results(AiqIspParamsCvt_t* pCvt, AiqList_t* results,
-        void* isp_cfg, bool is_multi_isp, bool use_aiisp);
+        void* isp_cfg, bool is_multi_isp, bool use_aiisp, bool _airms_en, bool _aiynr_en);
 void AiqIspParamsCvt_setCamPhyId(AiqIspParamsCvt_t* pCvt, int phyId);
 void AiqIspParamsCvt_set_working_mode(AiqIspParamsCvt_t* pCvt, int mode);
 void AiqIspParamsCvt_setModuleStatus(AiqIspParamsCvt_t* pCvt, rk_aiq_module_id_t mId, bool en);
@@ -216,7 +218,7 @@ bool AiqIspParamsCvt_getModuleForceEn(AiqIspParamsCvt_t* pCvt, int module_id);
 void AiqIspParamsCvt_updateIspModuleForceEns(AiqIspParamsCvt_t* pCvt, u64 module_ens);
 aiq_params_base_t* AiqIspParamsCvt_get_3a_result(AiqIspParamsCvt_t* pCvt, AiqList_t* results,
         int32_t type);
-void AiqIspParamsCvt_getCommonCvtInfo(AiqIspParamsCvt_t* pCvt, AiqList_t* results, bool use_aiisp);
+void AiqIspParamsCvt_getCommonCvtInfo(AiqIspParamsCvt_t* pCvt, AiqList_t* results, bool use_aiisp, bool _airms_en, bool _aiynr_en);
 void AiqIspParamsCvt_setCalib(AiqIspParamsCvt_t* pCvt, const CamCalibDbV2Context_t* calibv2);
 void AiqIspParamsCvt_setStastDelayCnt(AiqIspParamsCvt_t* pCvt, int delayCnt);
 

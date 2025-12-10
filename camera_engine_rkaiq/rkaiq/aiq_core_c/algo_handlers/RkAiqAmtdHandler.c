@@ -25,9 +25,18 @@ static void _handlerAmtd_deinit(AiqAlgoHandler_t* pHdl) {
     AiqAlgoHandler_deinit(pHdl);
     AiqAmtdHandler_t* pAmtdHdl = (AiqAmtdHandler_t*)pHdl;
 
-    aiqPool_deinit(pAmtdHdl->mImuDataPool);
-    aiqList_deinit(pAmtdHdl->mImuDataList);
-    aiqList_deinit(pAmtdHdl->mUsedImuList);
+    if (pAmtdHdl->mImuDataPool) {
+        aiqPool_deinit(pAmtdHdl->mImuDataPool);
+        pAmtdHdl->mImuDataPool = NULL;
+    }
+    if (pAmtdHdl->mImuDataList) {
+        aiqList_deinit(pAmtdHdl->mImuDataList);
+        pAmtdHdl->mImuDataList = NULL;
+    }
+    if (pAmtdHdl->mUsedImuList) {
+        aiqList_deinit(pAmtdHdl->mUsedImuList);
+        pAmtdHdl->mUsedImuList = NULL;
+    }
 }
 
 static void _handlerAmtd_init(AiqAlgoHandler_t* pHdl) {

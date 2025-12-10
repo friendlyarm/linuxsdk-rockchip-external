@@ -73,11 +73,11 @@ static XCamReturn _handlerCac_processing(AiqAlgoHandler_t* pAlgoHandler) {
             cac_proc_int->iso = aeCurExp->LinearExp.exp_real_params.analog_gain * 50;
             LOGD_ACAC("%s:NORMAL:iso=%d,again=%f\n", __FUNCTION__, cac_proc_int->iso,
                       aeCurExp->LinearExp.exp_real_params.analog_gain);
-        } else if (sharedCom->working_mode == (int)RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR) {
+        } else if (RK_AIQ_HDR_IS_HDR2(sharedCom->working_mode)) {
             cac_proc_int->iso = aeCurExp->HdrExp[1].exp_real_params.analog_gain * 50;
             LOGD_ACAC("%s:HDR2:iso=%d,again=%f ratio %f\n", __FUNCTION__, cac_proc_int->iso,
                       aeCurExp->HdrExp[1].exp_real_params.analog_gain);
-        } else if (sharedCom->working_mode == (int)RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR) {
+        } else if (RK_AIQ_HDR_IS_HDR3(sharedCom->working_mode)) {
             cac_proc_int->iso = aeCurExp->HdrExp[2].exp_real_params.analog_gain * 50;
             LOGD_ACAC("%s:HDR3:iso=%d,again=%f\n", __FUNCTION__, cac_proc_int->iso,
                       aeCurExp->HdrExp[2].exp_real_params.analog_gain);

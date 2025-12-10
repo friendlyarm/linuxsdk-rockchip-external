@@ -390,11 +390,10 @@ typedef enum btnr_loMd_mode_e {
 } btnr_loMd_mode_t;
 
 typedef struct btnr_loMd_dyn_s {
-    bool hw_btnrT_loMd_en;
     /* M4_GENERIC_DESC(
         M4_ALIAS(hw_loDetection_mode),
         M4_TYPE(enum),
-        M4_ENUM_DEF(btnr_mdWgtMeg_mode_t),
+        M4_ENUM_DEF(btnr_loMd_mode_t),
         M4_DEFAULT(btnr_subLoMd01Mix_mode),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -1627,18 +1626,18 @@ typedef enum btnr_dbgPredgain_mode_e {
     btnr_vendorDefault_mode = 0,
     // Pregain is configured by the user
     btnr_usrConfig_mode = 1
-}btnr_dbgPredgain_mode_t;
+} btnr_dbgPredgain_mode_t;
 
 typedef struct btnr_predgainWkArd_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(sw_btnrT_predgainWkArd_en),
         M4_TYPE(bool),
-        M4_DEFAULT(0),
+        M4_DEFAULT(1),
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(1),
         M4_GROUP_CTRL(predgainWkArd_en_group),
-        M4_NOTES(The enable bit for debugging pregain\n
+        M4_NOTES(The enable bit for using dynamic/usrConfig pregain\n
         Freq of use: low))  */
     bool sw_btnrT_predgainWkArd_en;
     /* M4_GENERIC_DESC(
@@ -1649,7 +1648,7 @@ typedef struct btnr_predgainWkArd_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_GROUP(!predgainWkArd_en_group),
+        M4_GROUP(predgainWkArd_en_group),
         M4_GROUP_CTRL(dbgPredgain_mode_group),
         M4_NOTES(Reference enum types.\n
         Freq of use: low))  */
@@ -1660,7 +1659,7 @@ typedef struct btnr_predgainWkArd_s {
         M4_SIZE_EX(1,13),
         M4_RANGE_EX(0,8),
         M4_DEFAULT([1,1,1,1,1,1,1,1,1,1,1,1,1]),
-        M4_GROUP(!predgainWkArd_en_group; dbgPredgain_mode_group:btnr_usrConfig_mode),
+        M4_GROUP(predgainWkArd_en_group; dbgPredgain_mode_group:btnr_usrConfig_mode),
         M4_DIGIT_EX(3),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -1826,7 +1825,7 @@ typedef struct btnr_md_dyn_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(hw_btnr_WgtCal_mode),
         M4_TYPE(enum),
-        M4_ENUM_DEF(btnr_mdWgtOpt_mode_t),
+        M4_ENUM_DEF(btnr_md_mode_t),
         M4_DEFAULT(btnr_loAsBias_hiBySgm_mode),
         M4_HIDE_EX(0),
         M4_RO(0),

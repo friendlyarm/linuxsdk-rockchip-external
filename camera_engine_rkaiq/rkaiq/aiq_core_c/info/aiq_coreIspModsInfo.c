@@ -220,6 +220,12 @@ static int core_isp_mods_dump_aibnr(void* dumper, st_string* result, int argc, v
     return 0;
 }
 
+static int core_isp_mods_dump_aiynr(void* dumper, st_string* result, int argc, void* argv[]) {
+    CORE_DUMP_MOD_INFO(dumper, RK_AIQ_ALGO_TYPE_AIYNR, RESULT_TYPE_AIYNR_PARAM, result);
+
+    return 0;
+}
+
 static struct mod_dump_info mod_dump[] = {
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_AEC, core_isp_mods_dump_aestats),
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_AWB, core_isp_mods_dump_awb),
@@ -251,6 +257,7 @@ static struct mod_dump_info mod_dump[] = {
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_LDC, core_isp_mods_dump_ldc),
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_CAC, core_isp_mods_dump_cac),
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_AIBNR, core_isp_mods_dump_aibnr),
+    MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_AIYNR, core_isp_mods_dump_aiynr),
 };
 
 #ifndef ARRAY_SIZE

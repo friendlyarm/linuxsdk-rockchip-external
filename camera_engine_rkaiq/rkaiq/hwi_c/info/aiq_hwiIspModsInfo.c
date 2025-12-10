@@ -221,6 +221,12 @@ static int hwi_isp_mods_dump_aibnr(void* dumper, st_string* result, int argc, vo
     return 0;
 }
 
+static int hwi_isp_mods_dump_aiynr(void* dumper, st_string* result, int argc, void* argv[]) {
+    HWI_DUMP_MOD_INFO(dumper, RESULT_TYPE_AIYNR_PARAM, result);
+
+    return 0;
+}
+
 static struct mod_dump_info mod_dump[] = {
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_DEBAYER, NULL),
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_AEC, hwi_isp_mods_dump_aestats),
@@ -254,6 +260,7 @@ static struct mod_dump_info mod_dump[] = {
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_CAC, hwi_isp_mods_dump_cac),
 #if defined(ISP_HW_V35)
     MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_AIBNR, hwi_isp_mods_dump_aibnr),
+    MOD_DUMP_INFO(AIQ_NOTIFIER_MATCH_AIYNR, hwi_isp_mods_dump_aiynr),
 #endif
 };
 

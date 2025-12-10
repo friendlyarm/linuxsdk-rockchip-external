@@ -317,45 +317,74 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
         return false;
     }
 
-    /* copy the number into a temporary buffer and replace '.' with the decimal point
-     * of the current locale (for strtod)
-     * This also takes care of '\0' not necessarily being available for marking the end of the input */
-    for (i = 0; (i < (sizeof(number_c_string) - 1)) && can_access_at_index(input_buffer, i); i++)
-    {
-        switch (buffer_at_offset(input_buffer)[i])
-        {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-            case '+':
-            case '-':
-            case 'e':
-            case 'E':
-                number_c_string[i] = buffer_at_offset(input_buffer)[i];
+    /* Check for hexadecimal format (0x or 0X prefix) */
+    if (can_read(input_buffer, 3) && (buffer_at_offset(input_buffer)[0] == '0') &&
+        ((buffer_at_offset(input_buffer)[1] == 'x') ||
+         (buffer_at_offset(input_buffer)[1] == 'X'))) {
+        /* Parse hexadecimal number */
+        for (i = 0; (i < (sizeof(number_c_string) - 1)) && can_access_at_index(input_buffer, i);
+             i++) {
+            unsigned char c = buffer_at_offset(input_buffer)[i];
+            if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') ||
+                (i < 2 && (c == '0' || c == 'x' || c == 'X'))) {
+                number_c_string[i] = c;
+            } else {
                 break;
-
-            case '.':
-                number_c_string[i] = decimal_point;
-                break;
-
-            default:
-                goto loop_end;
+            }
         }
-    }
-loop_end:
-    number_c_string[i] = '\0';
+        number_c_string[i] = '\0';
 
-    number = strtod((const char*)number_c_string, (char**)&after_end);
-    if (number_c_string == after_end)
-    {
-        return false; /* parse_error */
+        /* Convert hexadecimal string to number */
+        unsigned long hex_value = strtoul((const char*)number_c_string, (char**)&after_end, 16);
+        if (number_c_string == after_end) {
+            return false; /* parse_error */
+        }
+
+        number = (double)hex_value;
+        input_buffer->offset += (size_t)(after_end - number_c_string);
+    } else {
+        /* Parse decimal number (original logic) */
+        /* copy the number into a temporary buffer and replace '.' with the decimal point
+         * of the current locale (for strtod)
+         * This also takes care of '\0' not necessarily being available for marking the end of the
+         * input */
+        for (i = 0; (i < (sizeof(number_c_string) - 1)) && can_access_at_index(input_buffer, i);
+             i++) {
+            switch (buffer_at_offset(input_buffer)[i]) {
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                case '+':
+                case '-':
+                case 'e':
+                case 'E':
+                    number_c_string[i] = buffer_at_offset(input_buffer)[i];
+                    break;
+
+                case '.':
+                    number_c_string[i] = decimal_point;
+                    break;
+
+                default:
+                    goto loop_end;
+            }
+        }
+    loop_end:
+        number_c_string[i] = '\0';
+
+        number = strtod((const char*)number_c_string, (char**)&after_end);
+        if (number_c_string == after_end) {
+            return false; /* parse_error */
+        }
+
+        input_buffer->offset += (size_t)(after_end - number_c_string);
     }
 
     item->valuedouble = number;
@@ -376,7 +405,6 @@ loop_end:
 
     item->type = cJSON_Number;
 
-    input_buffer->offset += (size_t)(after_end - number_c_string);
     return true;
 }
 
@@ -1355,6 +1383,12 @@ static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buf
     /* number */
     if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9'))))
     {
+        return parse_number(item, input_buffer);
+    }
+    /* hexadecimal number (0x prefix) */
+    if (can_read(input_buffer, 3) && (buffer_at_offset(input_buffer)[0] == '0') &&
+        ((buffer_at_offset(input_buffer)[1] == 'x') ||
+         (buffer_at_offset(input_buffer)[1] == 'X'))) {
         return parse_number(item, input_buffer);
     }
     /* array */

@@ -62,7 +62,7 @@ static void SharpCreateKernelCoeffs(int radius, int max_radius, float rsigma, in
     for (k = 0; k < coeffNums_max; k++)
     {
         gaus_table[k] = gaus_table[k] / sumTable;
-        kernel_coeffs[k] = ROUND_F(gaus_table[k] * (1 << fix_bits));
+        kernel_coeffs[k] = FLOOR(gaus_table[k] * (1 << fix_bits));
     }
 }
 

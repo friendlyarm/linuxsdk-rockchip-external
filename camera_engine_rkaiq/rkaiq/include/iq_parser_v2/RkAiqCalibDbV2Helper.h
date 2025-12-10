@@ -412,6 +412,9 @@ static calibdb_ctx_member_offset_info_t info_CamCalibDbV2ContextIsp35_t[] = {
     {"af_calib", CALIBV2_MODULE_RELATIVE_OFFSET_ISP35(af_calib)},
     {"aibnr", CALIBV2_MODULE_RELATIVE_OFFSET_ISP35(aibnr)},
     {"airms", CALIBV2_MODULE_RELATIVE_OFFSET_ISP35(airms)},
+    {"aiynr", CALIBV2_MODULE_RELATIVE_OFFSET_ISP35(aiynr)},
+    {"fpnSw", CALIBV2_MODULE_RELATIVE_OFFSET_ISP35(fpnSw)},
+    {"bayertnr2", CALIBV2_MODULE_RELATIVE_OFFSET_ISP35(bayertnr2)},
     {NULL, 0},
 };
 #endif
@@ -532,18 +535,22 @@ calibdbv2_get_scene_ptr(CamCalibSubSceneList_t* scene) {
     return NULL;
 }
 
-static inline void*
-calibdbV2_get_module_ptr(void* ctx,
-                         calibdb_ctx_infos_t* info_array,
-                         const char* module_name) {
+static inline void* calibdbV2_get_module_ptr(void* ctx, calibdb_ctx_infos_t* info_array,
+                                             const char* module_name, const char* node_name) {
     if (strcmp(module_name, "sensor_calib") == 0)
         return ((CamCalibDbV2Context_t*)ctx)->sensor_info;
     else if(strcmp(module_name, "module_calib") == 0)
         return ((CamCalibDbV2Context_t*)ctx)->module_info;
     else if(strcmp(module_name, "sys_static_cfg") == 0)
         return ((CamCalibDbV2Context_t*)ctx)->sys_cfg;
-    else
-        return calibdb_get_module_ptr(((CamCalibDbV2Context_t*)ctx)->calib_scene, info_array, module_name);
+    else {
+        CamCalibDbV2Context_t* calib_ctx = (CamCalibDbV2Context_t*)ctx;
+        if (node_name) {
+            if (strcmp(node_name, "sence_cis") == 0)
+                return calibdb_get_module_ptr(calib_ctx->scene_cis, info_array, module_name);
+        }
+        return calibdb_get_module_ptr(calib_ctx->calib_scene, info_array, module_name);
+    }
 }
 
 static inline int calibdbV2_to_tuningdb(CamCalibDbV2Tuning_t *dst,
@@ -552,6 +559,7 @@ static inline int calibdbV2_to_tuningdb(CamCalibDbV2Tuning_t *dst,
     memcpy(&dst->module_calib, src->module_info, sizeof(CalibDb_Module_ParaV2_t));
     memcpy(&dst->sys_static_cfg, src->sys_cfg,
            sizeof(CalibDb_SysStaticCfg_ParaV2_t));
+    memcpy(&dst->calib_cis, src->scene_cis, sizeof(calibdb_cis_para_t));
 #if defined(ISP_HW_V20)
     memcpy(&dst->calib_scene, src->calib_scene,
            sizeof(CamCalibDbV2ContextIsp20_t));
@@ -585,6 +593,7 @@ static inline int calibdbV2_from_tuningdb(CamCalibDbV2Context_t *dst,
     memcpy(dst->module_info, &src->module_calib, sizeof(CalibDb_Module_ParaV2_t));
     memcpy(dst->sys_cfg, &src->sys_static_cfg,
            sizeof(CalibDb_SysStaticCfg_ParaV2_t));
+    memcpy(dst->scene_cis, &src->calib_cis, sizeof(calibdb_cis_para_t));
 #if defined(ISP_HW_V20)
     memcpy(dst->calib_scene, &src->calib_scene,
            sizeof(CamCalibDbV2ContextIsp20_t));
@@ -612,6 +621,91 @@ static inline int calibdbV2_from_tuningdb(CamCalibDbV2Context_t *dst,
     return 0;
 }
 
-#define CALIBDBV2_GET_MODULE_PTR(ctx, module) \
-        calibdbV2_get_module_ptr(ctx, info_CamCalibDbV2Context_array, #module)
+/*
+ *    S C E N E    C I S
+ */
+
+#define CALIB_MODULE_RELATIVE_OFFSET_CIS(nm) CALIB_MODULE_RELATIVE_OFFSET(calibdb_cis_para_t, nm)
+
+static calibdb_ctx_member_offset_info_t info_CamCalibDbSenceCis_t[] = {
+    {"CisRegSetting", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_regSetting)},
+    {"CisBlc", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_blc)},
+    {"CisHdr", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_hdr)},
+    {"CisQbcRmsc", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_qbcRmsc)},
+    {"CisCmpsOut", CALIB_MODULE_RELATIVE_OFFSET_CIS(cis_cmpsOut)},
+    {NULL, 0},
+};
+
+static inline void* calibdbv2_get_scene_cis_ptr(CamCalibSubSceneList_t* scene) {
+    return (&scene->scene_cis);
+}
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+static calibdb_ctx_infos_t info_CamCalibDbV2SenceCis_array[] = {
+    {VERSION_SKIP_CHECK, info_CamCalibDbSenceCis_t},
+};
+#pragma GCC diagnostic pop
+
+static inline bool calibdbv2_is_ptr_valid(const void* ptr);
+
+/**
+ * @brief Get a module pointer from the CalibDB V2 context
+ * @param ctx Calibration database context pointer
+ * @param module_name Module name as string
+ * @return Pointer to the requested module, or NULL if not found
+ */
+static inline void* calibdbv2_get_module_ptr_wrapper(void* ctx, const char* module_name) {
+    void* ptr = calibdbV2_get_module_ptr(ctx, info_CamCalibDbV2Context_array, module_name, NULL);
+    if (ptr) {
+        return ptr;
+    } else {
+        // If module is "sence_cis", try to get it from the scene CIS array
+        ptr = calibdbV2_get_module_ptr(ctx, info_CamCalibDbV2SenceCis_array, module_name,
+                                       "sence_cis");
+        return calibdbv2_is_ptr_valid(ptr) ? ptr : NULL;
+    }
+}
+
+#define CALIBDBV2_GET_MODULE_PTR(ctx, module) calibdbv2_get_module_ptr_wrapper(ctx, #module)
+
+/* Magic value for checking invalid struct pointer */
+#define J2S_INVALID_STRUCT_MAGIC 0xDEADBEEF
+
+/**
+ * @brief Check if a pointer is valid (does not contain the invalid magic value)
+ * @param ptr Pointer to check
+ * @return true if pointer is valid, false if contains magic value (invalid) or NULL
+ */
+static inline bool calibdbv2_is_ptr_valid(const void* ptr) {
+    if (!ptr) return false;
+
+    /* Try to check magic value at different sizes to handle small structs */
+    const uint8_t* byte_ptr = (const uint8_t*)ptr;
+
+    /* First try 4-byte check for most common case */
+    const uint32_t* magic_ptr32 = (const uint32_t*)ptr;
+    if (*magic_ptr32 == J2S_INVALID_STRUCT_MAGIC) {
+        return false;
+    }
+
+    /* Then try 2-byte check for smaller structs */
+    const uint16_t* magic_ptr16 = (const uint16_t*)ptr;
+    uint16_t expected16         = (uint16_t)(J2S_INVALID_STRUCT_MAGIC & 0xFFFF);
+    if (*magic_ptr16 == expected16) {
+        return false;
+    }
+
+    /* Finally try 1-byte check for smallest structs */
+    uint8_t expected8 = (uint8_t)(J2S_INVALID_STRUCT_MAGIC & 0xFF);
+    if (*byte_ptr == expected8) {
+        return false;
+    }
+
+    return true;
+}
+
+/* Macro for checking if a module pointer is valid */
+#define CALIBDBV2_IS_MODULE_VALID(ptr) calibdbv2_is_ptr_valid(ptr)
+
 #endif

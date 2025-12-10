@@ -73,8 +73,8 @@ typedef struct rk_aiq_tx_info_s {
 #define MAX_ISP_LINKED_VICAP_CNT 5
 
 #define ISP_TX_BUF_NUM 4
-// xuhf : temp modify for capturing raw
 #define VIPCAP_TX_BUF_NUM      4
+#define AIRMS_VIPCAP_TX_BUF_NUM      3
 #define VIPCAP_TX_BUF_NUM_1608 6  // For mount 3 sensor, is mount 4 sensor, is 7
 
 typedef struct {
@@ -285,6 +285,13 @@ typedef struct AiqHwAiispEvt_s {
 	int gain_index;
 	int aiisp_index;
 } AiqHwAiispEvt_t;
+
+typedef struct AiqHwMemcEvt_s {
+    AiqHwEvt_t _base;
+    int32_t _height;
+    uint32_t _event_id;
+    struct rkisp_aiisp_st isp_idxbuf;
+} AiqHwMemcEvt_t;
 
 typedef struct AiqHwAinnEvt_s {
     AiqHwEvt_t _base;

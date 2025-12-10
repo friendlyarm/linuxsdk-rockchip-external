@@ -75,16 +75,16 @@ RK_VOID aiq_info_dump_value(st_string *result, string_list *valueList) {
 RK_VOID aiq_info_dump_mod_name(st_string* result, const char* name) {
     char buffer[MAX_LINE_LENGTH] = {0};
 
-    aiq_string_printf(result, "╔══════════════════════════════════════════════════════════════╗\n");
-    snprintf(buffer, MAX_LINE_LENGTH, "║  Module: %-50s  ║\n", name);
+    aiq_string_printf(result, "+====================================================================+\n");
+    snprintf(buffer, MAX_LINE_LENGTH, "|  Module: %-56s  |\n", name);
     aiq_string_printf(result, buffer);
-    aiq_string_printf(result, "╠══════════════════════════════════════════════════════════════╣\n");
+    aiq_string_printf(result, "+--------------------------------------------------------------------+\n");
 }
 
 RK_VOID aiq_info_dump_submod_name(st_string* result, const char* name) {
     char buffer[MAX_LINE_LENGTH] = {0};
 
-    snprintf(buffer, MAX_LINE_LENGTH, "║    └── Sub-module: %-42s║\n", name);
+    snprintf(buffer, MAX_LINE_LENGTH, "|    Sub-module: %-52s|\n", name);
     aiq_string_printf(result, buffer);
-    aiq_string_printf(result, "╚══════════════════════════════════════════════════════════════╝\n");
+    aiq_string_printf(result, "+====================================================================+\n");
 }

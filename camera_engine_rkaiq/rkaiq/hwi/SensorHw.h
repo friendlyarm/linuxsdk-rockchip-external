@@ -204,6 +204,7 @@ protected:
     XCamReturn setI2cDAta(pending_split_exps_t* exps);
     int get_nr_switch(rk_aiq_sensor_nr_switch_t* nr_switch);
     int get_dcg_ratio(rk_aiq_sensor_dcg_ratio_t* dcg_ratio);
+    int get_spd_ratio(rk_aiq_sensor_dcg_ratio_t* spd_ratio);
     XCamReturn _set_mirror_flip();
 
     bool mPauseFlag{false};

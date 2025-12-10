@@ -3091,6 +3091,205 @@ typedef struct btnr_outFrm_s {
 
 } btnr_outFrm_t;
 
+typedef enum btnr_swMemc_mode_e
+{
+    btnr_swMeSyncBaseImu_mode,
+    btnr_swMePredBaseImu_mode,
+    btnr_aiMeBaseImg_mode,
+} btnr_swMemc_mode_t;
+
+typedef struct btnr_swMeBaseImu_s
+{
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrT_limitAdj_deltaOB),
+        M4_TYPE(s32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(The type of conversion between the gyroscope coordinate system and the camera coordinate system.\n
+        Freq of use: low))  */
+    int sw_btnrMe_sensorAexs_mode;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_focalX_length),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(focal length of x.\n
+        Freq of use: low))  */
+    float sw_btnrMe_focalX_length;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_focalY_length),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(focal length of y.\n
+        Freq of use: low))  */
+    float sw_btnrMe_focalY_length;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerX_offset),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(x offset of the center of light.\n
+        Freq of use: low))  */
+    float sw_btnrMe_centerX_offset;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerY_offset),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(y offset of the center of light.\n
+        Freq of use: low))  */
+    float sw_btnrMe_centerY_offset;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerY_offset),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(camera mode type.\n
+        Freq of use: low))  */
+    float sw_btnrMe_cameraType_mode;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerY_offset),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,3),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT([0.0, 0.0, 0.0]),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(Distorted arrays K1, K2, K3.\n
+        Freq of use: low))  */
+    float sw_btnrMe_sensorK_offset[3];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerY_offset),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,2),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT([0.0, 0.0]),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(Distorted arrays P1, P2.\n
+        Freq of use: low))  */
+    float sw_btnrMe_sensorP_offset[2];
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerY_offset),
+        M4_TYPE(f32),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(10),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(if camera model is CMAI model, need to set xi. The small hole imaging model is set to 0\n
+        Freq of use: low))  */
+    float sw_btnrMe_sensorXi_offset;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerY_offset),
+        M4_TYPE(s16),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(vertical offset of the crop input image.\n
+        Freq of use: low))  */
+    uint16_t sw_btnrMe_vertical_offset;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnrMe_centerY_offset),
+        M4_TYPE(s16),
+        M4_SIZE_EX(1,1),
+        M4_RANGE_EX(0,65535),
+        M4_DEFAULT(0),
+        M4_DIGIT_EX(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(horizontal offset of the crop input image.\n
+        Freq of use: low))  */
+    uint16_t sw_btnrMe_horizontal_offset;
+} btnr_swMeBaseImu_t;
+
+typedef struct btnr_swMemc_static_s
+{
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnr_swMemc_en),
+        M4_TYPE(bool),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(isp hw b3dldc en, can not modify after aiq prepare.\n
+        Freq of use: low))  */
+    bool sw_btnr_swMemc_en;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnr_swMemc_bypass),
+        M4_TYPE(bool),
+        M4_DEFAULT(0),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(enable default mesh.\n
+        Freq of use: low))  */
+    bool sw_btnr_swMemc_bypass;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_btnr_swMemc_mode),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(btnr_swMemc_mode_t),
+        M4_DEFAULT(btnr_swMeSyncBaseImu_mode),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(.\n
+        Freq of use: low))  */
+    btnr_swMemc_mode_t sw_btnr_swMemc_mode;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(frmFusion),
+        M4_MARK(TNR),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(TODO))  */
+    btnr_swMeBaseImu_t swMeBaseImu;
+} btnr_swMemc_static_t;
+
 typedef struct btnr_params_static_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(hw_btnrCfg_pixDomain_mode),
@@ -3175,6 +3374,16 @@ typedef struct btnr_params_static_s {
         M4_ORDER(0),
         M4_NOTES(TODO))  */
     btnr_frmFusion_static_t frmFusion;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(swMemc),
+        M4_MARK(TNR),
+        M4_TYPE(struct),
+        M4_UI_MODULE(normal_ui_style),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(TODO))  */
+    btnr_swMemc_static_t swMemc;
 } btnr_params_static_t;
 
 typedef struct btnr_md_dyn_s {

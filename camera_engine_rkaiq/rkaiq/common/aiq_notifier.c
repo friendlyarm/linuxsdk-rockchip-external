@@ -69,6 +69,7 @@ static int aiq_notifier_subscriber_valid(struct aiq_notifier_subscriber* sub) {
         case AIQ_NOTIFIER_MATCH_TEXEST:
         case AIQ_NOTIFIER_MATCH_HSV:
         case AIQ_NOTIFIER_MATCH_AIBNR:
+        case AIQ_NOTIFIER_MATCH_AIYNR:
             break;
         default:
             printf("Invalid match type %u on %s\n", sub->match_type, sub->name);

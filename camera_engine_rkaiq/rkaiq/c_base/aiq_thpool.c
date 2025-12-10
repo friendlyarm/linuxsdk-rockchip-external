@@ -53,6 +53,9 @@
 #if defined(__linux__)
 #include <sys/prctl.h>
 #endif
+#if defined(__ANDROID__)
+#include <sys/syscall.h>
+#endif
 #if defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <pthread_np.h>
 #endif
@@ -434,11 +437,23 @@ static void* thread_do(struct thread* thread_p) {
         if (thpool_p->cpu_cores[core_idx] >= 0) {
             CPU_SET(thpool_p->cpu_cores[core_idx], &cpuset);
 
-            int ret = pthread_setaffinity_np(thread_p->pthread, sizeof(cpu_set_t), &cpuset);
+            int ret = 0;
+#if defined(__ANDROID__)
+            pid_t tid = (pid_t)syscall(__NR_gettid);
+            ret       = sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
             if (ret != 0) {
                 fprintf(stderr, "Failed to set CPU affinity for Thread (%s) to core %d: %s\n",
                         thread_name, thpool_p->cpu_cores[core_idx], strerror(ret));
             }
+#elif defined(__linux__) && defined(_GNU_SOURCE)
+            ret = pthread_setaffinity_np(thread_p->pthread, sizeof(cpu_set_t), &cpuset);
+            if (ret != 0) {
+                fprintf(stderr, "Failed to set CPU affinity for Thread (%s) to core %d: %s\n",
+                        thread_name, thpool_p->cpu_cores[core_idx], strerror(ret));
+            }
+#else
+            fprintf(stderr, "CPU affinity not supported on this platform.\n");
+#endif
         }
     }
 

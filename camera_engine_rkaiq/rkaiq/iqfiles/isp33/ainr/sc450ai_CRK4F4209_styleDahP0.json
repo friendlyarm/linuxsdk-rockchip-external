@@ -1795,7 +1795,7 @@
 							"awbGnCalcOth":	{
 								"fstFrm_wbgain":	[2.1032, 1, 1, 1.7568],
 								"advSiteRec":	{
-									"advSiteRec_en":	1,
+									"advSiteRec_en":        0,
 									"kpRecFrm_num":	3,
 									"advSiteInfo_name":	"/tmp/avaSiteInfo",
 									"smartAdv_en":	1,
@@ -7880,7 +7880,7 @@
 							}
 						},
 						"ie":	{
-							"opMode":	"RK_AIQ_OP_MODE_MANUAL",
+							"opMode":	"RK_AIQ_OP_MODE_AUTO",
 							"en":	0,
 							"bypass":	0,
 							"stAuto":	{
@@ -17944,7 +17944,7 @@
 							"awbGnCalcOth":	{
 								"fstFrm_wbgain":	[2.1032, 1, 1, 1.7568],
 								"advSiteRec":	{
-									"advSiteRec_en":	1,
+									"advSiteRec_en":        0,
 									"kpRecFrm_num":	3,
 									"advSiteInfo_name":	"/tmp/avaSiteInfo",
 									"smartAdv_en":	1,
@@ -24029,7 +24029,7 @@
 							}
 						},
 						"ie":	{
-							"opMode":	"RK_AIQ_OP_MODE_MANUAL",
+							"opMode":	"RK_AIQ_OP_MODE_AUTO",
 							"en":	1,
 							"bypass":	0,
 							"stAuto":	{
@@ -24045,7 +24045,7 @@
 						},
 						"colorAsGrey":	{
 							"param":	{
-								"enable":	0,
+								"enable":	1,
 								"skip_frame":	10
 							}
 						},
@@ -34492,7 +34492,7 @@
 							"awbGnCalcOth":	{
 								"fstFrm_wbgain":	[2.1032, 1, 1, 1.7568],
 								"advSiteRec":	{
-									"advSiteRec_en":	1,
+									"advSiteRec_en":        0,
 									"kpRecFrm_num":	3,
 									"advSiteInfo_name":	"/tmp/avaSiteInfo",
 									"smartAdv_en":	1,
@@ -40567,7 +40567,7 @@
 							}
 						},
 						"ie":	{
-							"opMode":	"RK_AIQ_OP_MODE_MANUAL",
+							"opMode":	"RK_AIQ_OP_MODE_AUTO",
 							"en":	0,
 							"bypass":	0,
 							"stAuto":	{

@@ -51,6 +51,8 @@
 #include "algo_handlers/RkAiqAibnrHandler.h"
 #include "algo_handlers/RkAiqAmtdHandler.h"
 #include "algo_handlers/RkAiqAirmsHandler.h"
+#include "algo_handlers/RkAiqAiynrHandler.h"
+#include "interpolation.h"
 
 
 typedef AiqAlgoHandler_t* (*pAiqAlgoHandler_construct)(RkAiqAlgoDesComm* des, AiqCore_t* aiqCore);
@@ -66,6 +68,7 @@ struct {
     {RK_AIQ_ALGO_TYPE_AWB, AiqAlgoHandlerAwb_constructor, AiqAlgoHandler_destructor},
     {RK_AIQ_ALGO_TYPE_ABLC, AiqAlgoHandlerBlc_constructor, AiqAlgoHandler_destructor},
     {RK_AIQ_ALGO_TYPE_AMFNR, AiqAlgoHandlerBtnr_constructor, AiqAlgoHandler_destructor},
+    {RK_AIQ_ALGO_TYPE_BAYERTNR2, AiqAlgoHandlerBtnr2_constructor, AiqAlgoHandler_destructor},
     {RK_AIQ_ALGO_TYPE_ACNR, AiqAlgoHandlerCnr_constructor, AiqAlgoHandler_destructor},
     {RK_AIQ_ALGO_TYPE_ADEBAYER, AiqAlgoHandlerDm_constructor, AiqAlgoHandler_destructor},
     {RK_AIQ_ALGO_TYPE_ADPCC, AiqAlgoHandlerDpc_constructor, AiqAlgoHandler_destructor},
@@ -115,8 +118,11 @@ struct {
 #if RKAIQ_HAVE_AMTD
     {RK_AIQ_ALGO_TYPE_AMTD, AiqAlgoHandlerAmtd_constructor, AiqAlgoHandler_destructor},
 #endif
-#if RKAIQ_HAVE_AIBNR
+#if RKAIQ_HAVE_AIRMS
     {RK_AIQ_ALGO_TYPE_AIRMS, AiqAlgoHandlerAirms_constructor, AiqAlgoHandler_destructor},
+#endif
+#if RKAIQ_HAVE_AIYNR
+    {RK_AIQ_ALGO_TYPE_AIYNR, AiqAlgoHandlerAiynr_constructor, AiqAlgoHandler_destructor},
 #endif
 
 };
@@ -155,6 +161,7 @@ XCamReturn AiqAlgoHandler_constructor(AiqAlgoHandler_t* pAlgoHandler, RkAiqAlgoD
     pAlgoHandler->deinit                  = AiqAlgoHandler_deinit;
     pAlgoHandler->postProcess             = NULL;
     pAlgoHandler->preProcess              = NULL;
+    pAlgoHandler->queryInterpIso          = AiqAlgoHandler_queryInterpIso_common;
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -292,6 +299,9 @@ XCamReturn AiqAlgoHandler_configInparamsCom(AiqAlgoHandler_t* pAlgoHandler, RkAi
         com->u.proc.curExp        = &shared->curExp;
         com->u.proc.nxtExp        = &shared->nxtExp;
         com->u.proc.res_comb      = &shared->res_comb;
+        com->u.proc.aibnr_fixIndex = sharedCom->aibnr_fixIndex;
+        com->u.proc.is_aibnr_autorun = sharedCom->is_aibnr_autorun;
+        com->u.proc.is_aibnr_force_update = sharedCom->is_aibnr_force_update;
     }
     EXIT_ANALYZER_FUNCTION();
 
@@ -553,6 +563,55 @@ AiqAlgoHandler_queryStatus_common(AiqAlgoHandler_t* pAlgoHandler,
     } else {
         ret = XCAM_RETURN_ERROR_FAILED;
         LOGE("have no status info !");
+    }
+
+    aiqMutex_unlock(&pHdl->mCfgMutex);
+    EXIT_ANALYZER_FUNCTION();
+    return ret;
+}
+
+XCamReturn AiqAlgoHandler_queryInterpIso_common(AiqAlgoHandler_t* pAlgoHandler,
+                                             uint32_t* interpIso, uint32_t* isoH, uint32_t* isoL)
+{
+    ENTER_ANALYZER_FUNCTION();
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    AiqAlgoHandler_t* pHdl = (AiqAlgoHandler_t*)pAlgoHandler;
+
+    aiqMutex_lock(&pHdl->mCfgMutex);
+
+    RkAiqAlgosGroupShared_t* shared =
+        (RkAiqAlgosGroupShared_t*)(pAlgoHandler->mAlogsGroupSharedParams);
+    RkAiqAlgosComShared_t* sharedCom = &pAlgoHandler->mAiqCore->mAlogsComSharedParams;
+
+    aiq_params_base_t* pCurBase =
+        pHdl->mAiqCore->mAiqCurParams->pParamsArray[pHdl->mResultType];
+
+    *interpIso = shared->iso;
+    if (pCurBase) {
+        if (pHdl->mOpMode == RK_AIQ_OP_MODE_MANUAL) {
+           *isoL = 0;
+           *isoH = 0;
+           aiqMutex_unlock(&pHdl->mCfgMutex);
+           return ret;
+        }
+    }
+
+    bool isFixedAlgo = (pAlgoHandler->mDes->type == RK_AIQ_ALGO_TYPE_AMFNR ||
+                       pAlgoHandler->mDes->type == RK_AIQ_ALGO_TYPE_ACNR ||
+                       pAlgoHandler->mDes->type == RK_AIQ_ALGO_TYPE_ASHARP ||
+                       pAlgoHandler->mDes->type == RK_AIQ_ALGO_TYPE_AYNR);
+
+    if (isFixedAlgo && (sharedCom->aibnr_fixIndex != -1)) {
+        *isoH = sharedCom->calibv2->sensor_info->iso_list[sharedCom->aibnr_fixIndex];
+        *isoL = *isoH;
+    } else {
+        float ratio = 0.0f;
+        int iLow = 0, iHigh = 0;
+        pre_interp(shared->iso, sharedCom->calibv2->sensor_info->iso_list, 13, &iLow, &iHigh, &ratio);
+        if (iLow != -1)
+           *isoL =  sharedCom->calibv2->sensor_info->iso_list[iLow];
+        if (iHigh != -1)
+           *isoH =  sharedCom->calibv2->sensor_info->iso_list[iHigh];
     }
 
     aiqMutex_unlock(&pHdl->mCfgMutex);

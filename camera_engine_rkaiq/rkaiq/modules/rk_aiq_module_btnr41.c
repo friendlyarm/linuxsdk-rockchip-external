@@ -1025,6 +1025,15 @@ void rk_aiq_btnr41_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
         pCfg->tnr_luma2sigma_x[i] = CLIP(pTransParams->tnr_luma_sigma_x[i], 0, 0xfff);
     }
 
+    //printf("oyyf tnr sigmax[] :");
+    if(pTransParams->isTransfBypass  || opMode == RK_AIQ_OP_MODE_MANUAL) {
+        for(i = 0; i < sigbins; i++) {
+            pCfg->tnr_luma2sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_mdSigma_curve.idx[i];
+            //printf("%d ", pCfg->tnr_luma2sigma_x[i]);
+        }
+    }
+    //printf("\n");
+
     //x_step must be 2^n
     int x_step = 0;
     for(i = 1; i < sigbins; i++) {
@@ -1039,9 +1048,6 @@ void rk_aiq_btnr41_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
         if(pTransParams->isTransfBypass || opMode == RK_AIQ_OP_MODE_MANUAL) {
             for(i = 0; i < sigbins; i++) {
                 pTransParams->tnr_luma_sigma_y[i] = pdyn->sigmaEnv.hw_btnrC_mdSigma_curve.val[i];
-                if(opMode == RK_AIQ_OP_MODE_MANUAL) {
-                    pCfg->tnr_luma2sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_mdSigma_curve.idx[i];
-                }
             }
         } else if(pTransParams->isHdrMode) {
             uint16_t shortY[sigbins];
@@ -1219,9 +1225,7 @@ void rk_aiq_btnr41_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
         if(pTransParams->isTransfBypass || opMode == RK_AIQ_OP_MODE_MANUAL) {
             for(i = 0; i < spnrsigbins; i++) {
                 pCfg->pre_spnr_luma2sigma_y[i] = CLIP((int)(pdyn->sigmaEnv.hw_btnrC_preSpNrSgm_curve.val[i]), 0, max_sig);
-                if(opMode == RK_AIQ_OP_MODE_MANUAL) {
-                    pCfg->pre_spnr_luma2sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_preSpNrSgm_curve.idx[i];
-                }
+                pCfg->pre_spnr_luma2sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_preSpNrSgm_curve.idx[i];
             }
         } else if(pTransParams->isHdrMode ) {
             uint16_t shortY[spnrsigbins];

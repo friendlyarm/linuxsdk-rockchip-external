@@ -92,6 +92,7 @@ RkAiqSceneManagerRefToScene(CamCalibDbProj_t *calibproj,
     ctx.sensor_info = &calibproj->sensor_calib;
     ctx.module_info = &calibproj->module_calib;
     ctx.sys_cfg = &calibproj->sys_static_cfg;
+    ctx.scene_cis   = calibdbv2_get_scene_cis_ptr(&sub_list[curr_sub_scene]);
 
     return ctx;
   }
@@ -213,6 +214,16 @@ static cJSON *mergeSubMultiScene(cJSON *sub_scene_list,
       if (i == 0 && skip) {
         continue;
       }
+
+      // JSON diff parameters based on main_scene[X].sub_scene[0]
+      if (!skip && i > 0) {
+          cJSON* first_sub_scene_item = RkCam_cJSON_GetArrayItem(sub_scene_list, 0);
+          if (!first_sub_scene_item)
+              XCAM_LOG_ERROR("invalid first sub scene item!\n");
+          else
+              full_param = first_sub_scene_item;
+      }
+
       new_item = RkCam_cJSON_Duplicate(full_param, 1);
       new_item = RkCam_cJSONUtils_MergePatch(new_item, temp_item);
       RkCam_cJSON_ReplaceItemInArray(sub_scene_list, i, new_item);

@@ -153,6 +153,7 @@ typedef struct AiqSensorExpInfo_s {
     rk_aiq_exposure_params_t aecExpInfo;
     Sensor_dpcc_res_t SensorDpccInfo;
     RKAiqExpI2cParam_t* exp_i2c_params;
+    uint64_t sofTime;
 } AiqSensorExpInfo_t;
 
 #define AIQ_SENSOR_EXPINFO_INIT(param) \
@@ -512,6 +513,7 @@ static const char* Cam3aResultType2Str[RESULT_TYPE_MAX_PARAM] = {
     [RESULT_TYPE_POSTISP_PARAM]  = "POSTISP",
     [RESULT_TYPE_AIBNR_PARAM]     = "AIBNR",
     [RESULT_TYPE_AIRMS_PARAM]     = "AIRMS",
+    [RESULT_TYPE_AIYNR_PARAM]     = "AIYNR",
 };
 
 static const char* AnalyzerGroupType2Str[RK_AIQ_CORE_ANALYZE_MAX] = {
@@ -546,9 +548,9 @@ typedef enum _RkAiqIspUniteMode {
 #elif defined(ISP_HW_V30)
 #define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 3840 * 2160
 #elif defined(ISP_HW_V33)
-#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 2880 * 1620 
+#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 2880 * 1620
 #elif defined(ISP_HW_V35)
-#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 2880 * 1620 
+#define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 2880 * 1620
 #else
 #define RK_AIQ_ISP_CIF_INPUT_MAX_SIZE 3840 * 2160
 #endif
@@ -567,6 +569,7 @@ typedef enum rk_aiq_drv_share_mem_type_e {
     MEM_TYPE_CAC,
     MEM_TYPE_DBG_INFO,
     MEM_TYPE_LDCV,
+    MEM_TYPE_BTNR,
 } rk_aiq_drv_share_mem_type_t;
 
 typedef void (*alloc_mem_t)(uint8_t id, void* ops_ctx, void* cfg, void** mem_ctx);
@@ -582,6 +585,7 @@ typedef struct rk_aiq_lut_share_mem_info_s {
     int32_t size;
     void* map_addr;
     void* addr;
+    void* addr1;
     int32_t fd;
     char* state;
 } rk_aiq_lut_share_mem_info_t;
@@ -590,6 +594,8 @@ typedef rk_aiq_lut_share_mem_info_t rk_aiq_ldch_share_mem_info_t;
 typedef rk_aiq_lut_share_mem_info_t rk_aiq_ldcv_share_mem_info_t;
 typedef rk_aiq_lut_share_mem_info_t rk_aiq_cac_share_mem_info_t;
 typedef rk_aiq_lut_share_mem_info_t rk_aiq_dbg_share_mem_info_t;
+typedef rk_aiq_lut_share_mem_info_t rk_aiq_cac_share_mem_info_t;
+typedef rk_aiq_lut_share_mem_info_t rk_aiq_btnr_share_mem_info_t;
 
 typedef struct rk_aiq_fec_share_mem_info_s {
     int size;
@@ -640,6 +646,8 @@ typedef enum CamThreadType_e {
     ISP_POLL_AIBNR_DONE,
     ISP_POLL_RKNN_DONE,
     ISP_POLL_AIRMS_DONE,
+    ISP_POLL_AIYNR_DONE,
+    ISP_POLL_MEMC,
     ISP_POLL_POST_MAX,
 } CamThreadType_t;
 

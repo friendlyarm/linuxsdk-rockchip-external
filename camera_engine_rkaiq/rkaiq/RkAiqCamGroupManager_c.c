@@ -439,6 +439,13 @@ static XCamReturn AiqCamGroupManager_reProcess(AiqCamGroupManager_t* pCamGrpMan,
                 (rk_aiq_isp_airms_params_t*)(aiqParams->pParamsArray[RESULT_TYPE_AIRMS_PARAM]->_data);
 #endif
 
+#if RKAIQ_HAVE_AIYNR
+            if (!aiqParams->pParamsArray[RESULT_TYPE_AIYNR_PARAM])
+                RET_FAILED();
+            scam_3a_res->isp_aiynr_params =
+                (rk_aiq_isp_aiynr_params_t*)(aiqParams->pParamsArray[RESULT_TYPE_AIYNR_PARAM]->_data);
+#endif
+
             camgroupParmasArray[vaild_cam_ind++] = scam_3a_res;
         }
     }
@@ -1142,6 +1149,9 @@ void AiqCamGroupManager_RelayAiqCoreResults(AiqCamGroupManager_t* pCamGrpMan, Ai
 #endif
 #if RKAIQ_HAVE_AIBNR
     SET_TO_CAMGROUP(Aibnr, AIBNR);
+#endif
+#if RKAIQ_HAVE_AIBNR
+    SET_TO_CAMGROUP(Aiynr, AIYNR);
 #endif
 	AiqCamGroupManager_putGroupCamResult(pCamGrpMan, camGroupRes);
 }

@@ -169,6 +169,9 @@ void message_receiver_handler(receiver_t *rec) {
     } else if (rec->cmd_id == 0x102) {
         socket_client_writeAwbIn(rec->aiqctx, (char *)rec->rxbuf);
         out_data = NULL;
+    } else if (rec->cmd_id == IPC_CMDID_GET_HDRCOMPRCURVE) {
+        out_data = (char*)socket_client_get_hdrComprCurve(rec->aiqctx);
+        if (out_data) send_len = sizeof(rk_aiq_isp_tool_hdr_compr_curve_t);
     }
 
     if (out_data) {

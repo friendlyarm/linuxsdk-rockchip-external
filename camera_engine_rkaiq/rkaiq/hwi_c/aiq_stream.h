@@ -40,6 +40,9 @@ typedef struct AiqStatsStream_s AiqStatsStream_t;
 typedef struct AiqAiIspStream_s AiqAiIspStream_t;
 typedef struct AiqAibnrIspStream_s AiqAibnrIspStream_t;
 typedef struct AiqAibnrAiispStream_s AiqAibnrAiispStream_t;
+typedef struct AiqAiynrIspStream_s AiqAiynrIspStream_t;
+typedef struct AiqAiynrAiispStream_s AiqAiynrAiispStream_t;
+typedef struct AiqMemcIirStream_s AiqMemcIirStream_t;
 
 typedef struct AiqStream_s AiqStream_t;
 typedef struct AiqPollThread_s AiqPollThread_t;
@@ -154,6 +157,48 @@ XCamReturn AiqAibnr_IspStream_init(AiqAibnrIspStream_t* pStream, AiqV4l2Device_t
 XCamReturn AiqAibnr_AiispStream_init(AiqAibnrAiispStream_t* pStream, AiqV4l2Device_t* pDev, int32_t type);
 void AiqAibnr_IspStream_deinit(AiqAibnrIspStream_t* pStream);
 void AiqAibnr_AiispStream_deinit(AiqAibnrAiispStream_t* pStream);
+#endif
+
+#if RKAIQ_HAVE_AIYNR
+typedef struct AiqAiynrIspStream_s {
+    AiqStream_t _base;
+
+    XCamReturn (*set_aiisp_linecnt)(AiqAiynrIspStream_t* pIspPartStrm, struct rkisp_aiisp_cfg aiisp_cfg);
+    XCamReturn (*start_ispbe_hdl)(AiqAiynrIspStream_t* pIspPartStrm, struct rkisp_aiisp_st *aiisp_st);
+    XCamReturn (*close_aiisp)(AiqAiynrIspStream_t* pIspPartStrm);
+    void (*start)(AiqAiynrIspStream_t* pIspPartStrm);
+    void (*stop)(AiqAiynrIspStream_t* pIspPartStrm);
+} AiqAiynrIspStream_t;
+
+typedef struct AiqAiynrAiispStream_s {
+    AiqStream_t _base;
+
+    void (*start)(AiqAiynrAiispStream_t* pStream);
+    void (*stop)(AiqAiynrAiispStream_t* pStream);
+} AiqAiynrAiispStream_t;
+
+XCamReturn AiqAiynr_IspStream_init(AiqAiynrIspStream_t* pStream, AiqV4l2Device_t* pDev, int32_t type);
+XCamReturn AiqAiynr_AiispStream_init(AiqAiynrAiispStream_t* pStream, AiqV4l2Device_t* pDev, int32_t type);
+void AiqAiynr_IspStream_deinit(AiqAiynrIspStream_t* pStream);
+void AiqAiynr_AiispStream_deinit(AiqAiynrAiispStream_t* pStream);
+#endif
+
+#if RKAIQ_HAVE_MEMC
+typedef struct AiqMemcIirStream_s {
+    AiqStream_t _base;
+    //rkisp_bay3dbuf_info_t bay3dbuf;
+    // struct rkisp_bnr_buf_info bay3dbuf;
+    void* iir_address[RKISP_BUFFER_MAX];
+
+    XCamReturn (*set_Memc_linecnt)(AiqMemcIirStream_t* pStream, struct rkisp_aiisp_cfg aiisp_cfg);
+    XCamReturn(*close_Memc)(AiqMemcIirStream_t* pStream);
+    XCamReturn(*start_Memc_hdl)(AiqMemcIirStream_t* pStream, struct rkisp_aiisp_st* aiisp_st);
+    void (*start)(AiqMemcIirStream_t* pStream);
+    void (*stop)(AiqMemcIirStream_t* pStream);
+} AiqMemcIirStream_t;
+
+XCamReturn AiqMemcIirStream_init(AiqMemcIirStream_t* pStream, AiqV4l2Device_t* pDev, int32_t type);
+void AiqMemcIirStream_deinit(AiqMemcIirStream_t* pStream);
 #endif
 
 typedef struct AiqAiIspStream_s {

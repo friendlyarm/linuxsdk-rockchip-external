@@ -122,7 +122,8 @@ static void _OnTimer(CTimer_t* pTimer) {
     AiqSensorHw_t* pSnsHw              = &pTimer->_dev->_base;
 
     ENTER_CAMHW_FUNCTION();
-    if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+    if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL ||
+        RK_AIQ_HDR_IS_SENSOR_BUILTIN(pSnsHw->_working_mode)) {
         fake_v4l2_dev = (AiqFakeV4l2Device_t*)(pTimer->_dev->_mipi_tx_dev[0]);
         (*fake_v4l2_dev->on_timer_proc)(fake_v4l2_dev);
     } else if (pSnsHw->_working_mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR ||
@@ -342,6 +343,12 @@ static XCamReturn _handle_sof(AiqSensorHw_t* pSnsHw, int64_t time, uint32_t fram
     return XCAM_RETURN_NO_ERROR;
 }
 
+static XCamReturn _SensorHw_setExpMode(AiqSensorHw_t* pSnsHw, uint32_t mode) {
+    ENTER_CAMHW_FUNCTION();
+    EXIT_CAMHW_FUNCTION();
+    return XCAM_RETURN_NO_ERROR;
+}
+
 static XCamReturn _set_working_mode(AiqSensorHw_t* pSnsHw, int mode) {
     __u32 hdr_mode = NO_HDR;
 
@@ -351,6 +358,8 @@ static XCamReturn _set_working_mode(AiqSensorHw_t* pSnsHw, int mode) {
         hdr_mode = HDR_X2;
     } else if (mode == RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR || mode == RK_AIQ_ISP_HDR_MODE_3_LINE_HDR) {
         hdr_mode = HDR_X3;
+    } else if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(mode)) {
+        hdr_mode = HDR_COMPR;
     } else {
         LOGE_CAMHW_SUBM(FAKECAM_SUBM, "failed to set hdr mode to %d", mode);
         return XCAM_RETURN_ERROR_FAILED;
@@ -457,7 +466,8 @@ static XCamReturn _enqueue_rawbuffer(AiqFakeSensorHw_t* pFakeSns, struct rk_aiq_
     AiqSensorExpInfo_t* pSnsExp        = NULL;
 
     ENTER_CAMHW_FUNCTION();
-    if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+    if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL ||
+        RK_AIQ_HDR_IS_SENSOR_BUILTIN(pSnsHw->_working_mode)) {
         max_count = 1;
     } else if (pSnsHw->_working_mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR ||
                pSnsHw->_working_mode == RK_AIQ_ISP_HDR_MODE_2_LINE_HDR) {
@@ -708,6 +718,8 @@ static XCamReturn _on_dqueue(AiqFakeSensorHw_t* pFakeSns, int dev_idx, AiqV4l2Bu
 
             switch (pSnsHw->_working_mode) {
                 case RK_AIQ_WORKING_MODE_NORMAL:
+                case RK_AIQ_ISP_HDR_MODE_2_BUILTIN:
+                case RK_AIQ_ISP_HDR_MODE_3_BUILTIN:
                     if (!buf->buf_info[0].valid) {
                         goto out;
                     }
@@ -802,6 +814,7 @@ void AiqFakeSensorHw_init(AiqFakeSensorHw_t* pFakeSnsHw, const char* name, int c
     pFakeSnsHw->on_dqueue                 = _on_dqueue;
     pFakeSnsHw->set_fake_sensor_format    = _set_fake_sensor_format;
     pFakeSnsHw->register_rawdata_callback = _register_rawdata_callback;
+    pSnsHw->set_exposure_mode     = _SensorHw_setExpMode;
 #if RKAIQ_HAVE_DUMPSYS
     pSnsHw->dump = NULL;
 #endif

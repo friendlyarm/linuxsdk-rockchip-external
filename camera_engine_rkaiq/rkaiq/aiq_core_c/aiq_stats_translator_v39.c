@@ -87,20 +87,20 @@ static void MergeAecBigWinStatsV39(
         for (int i = 0; i < ISP39_MEAN_BLK_Y_NUM; i++) {
             for (int j = 0; j < ISP39_MEAN_BLK_X_NUM; j++) {
                 if (j < ISP39_MEAN_BLK_X_NUM / 2) {
-                    out->blk_y[i].blk_x[j].r = left->blk_y[i].blk_x[2 * j].r + left->blk_y[i].blk_x[2 * j + 1].r;
-                    out->blk_y[i].blk_x[j].g = left->blk_y[i].blk_x[2 * j].g + left->blk_y[i].blk_x[2 * j + 1].g;
-                    out->blk_y[i].blk_x[j].b = left->blk_y[i].blk_x[2 * j].b + left->blk_y[i].blk_x[2 * j + 1].b;
+                    out->blk_y[i].blk_x[j].r = (left->blk_y[i].blk_x[2 * j].r + left->blk_y[i].blk_x[2 * j + 1].r) / 2;
+                    out->blk_y[i].blk_x[j].g = (left->blk_y[i].blk_x[2 * j].g + left->blk_y[i].blk_x[2 * j + 1].g) / 2;
+                    out->blk_y[i].blk_x[j].b = (left->blk_y[i].blk_x[2 * j].b + left->blk_y[i].blk_x[2 * j + 1].b) / 2;
                 } else if (j > ISP39_MEAN_BLK_X_NUM / 2) {
-                    out->blk_y[i].blk_x[j].r = right->blk_y[i].blk_x[2 * j - ISP39_MEAN_BLK_X_NUM].r +
-                                               right->blk_y[i].blk_x[2 * j + 1 - ISP39_MEAN_BLK_X_NUM].r;
-                    out->blk_y[i].blk_x[j].g = right->blk_y[i].blk_x[2 * j - ISP39_MEAN_BLK_X_NUM].g +
-                                               right->blk_y[i].blk_x[2 * j + 1 - ISP39_MEAN_BLK_X_NUM].g;
-                    out->blk_y[i].blk_x[j].b = right->blk_y[i].blk_x[2 * j - ISP39_MEAN_BLK_X_NUM].b +
-                                               right->blk_y[i].blk_x[2 * j + 1 - ISP39_MEAN_BLK_X_NUM].b;
+                    out->blk_y[i].blk_x[j].r = (right->blk_y[i].blk_x[2 * j - ISP39_MEAN_BLK_X_NUM].r +
+                                               right->blk_y[i].blk_x[2 * j + 1 - ISP39_MEAN_BLK_X_NUM].r) / 2;
+                    out->blk_y[i].blk_x[j].g = (right->blk_y[i].blk_x[2 * j - ISP39_MEAN_BLK_X_NUM].g +
+                                               right->blk_y[i].blk_x[2 * j + 1 - ISP39_MEAN_BLK_X_NUM].g) / 2;
+                    out->blk_y[i].blk_x[j].b = (right->blk_y[i].blk_x[2 * j - ISP39_MEAN_BLK_X_NUM].b +
+                                               right->blk_y[i].blk_x[2 * j + 1 - ISP39_MEAN_BLK_X_NUM].b) / 2;
                 } else {
-                    out->blk_y[i].blk_x[j].r = left->blk_y[i].blk_x[ISP39_MEAN_BLK_X_NUM - 1].r + right->blk_y[i].blk_x[0].r;
-                    out->blk_y[i].blk_x[j].g = left->blk_y[i].blk_x[ISP39_MEAN_BLK_X_NUM - 1].g + right->blk_y[i].blk_x[0].g;
-                    out->blk_y[i].blk_x[j].b = left->blk_y[i].blk_x[ISP39_MEAN_BLK_X_NUM - 1].b + right->blk_y[i].blk_x[0].b;
+                    out->blk_y[i].blk_x[j].r = (left->blk_y[i].blk_x[ISP39_MEAN_BLK_X_NUM - 1].r + right->blk_y[i].blk_x[0].r) / 2;
+                    out->blk_y[i].blk_x[j].g = (left->blk_y[i].blk_x[ISP39_MEAN_BLK_X_NUM - 1].g + right->blk_y[i].blk_x[0].g) / 2;
+                    out->blk_y[i].blk_x[j].b = (left->blk_y[i].blk_x[ISP39_MEAN_BLK_X_NUM - 1].b + right->blk_y[i].blk_x[0].b) / 2;
                 }
             }
         }

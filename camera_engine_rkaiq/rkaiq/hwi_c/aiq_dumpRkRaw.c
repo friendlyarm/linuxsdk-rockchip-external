@@ -699,8 +699,7 @@ static XCamReturn DumpRkRaw1_dumpMetadataBlock(aiq_DumpRkRaw_t* pDpRkRaw, uint32
         zoomCode  = afParams->zoomCode;
     }
 
-    if (working_mode == RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR ||
-        working_mode == RK_AIQ_ISP_HDR_MODE_3_LINE_HDR) {
+    if (RK_AIQ_HDR_IS_HDR2(working_mode)) {
 #if defined(ISP_HW_V21)
         snprintf(buffer, sizeof(buffer),
                  "frame%08d-l_m_s-gain[%08.5f_%08.5f_%08.5f]-time[%08.5f_%08.5f_%08.5f]-"
@@ -716,8 +715,7 @@ static XCamReturn DumpRkRaw1_dumpMetadataBlock(aiq_DumpRkRaw_t* pDpRkRaw, uint32
                  ispParams - <> isp_params_v21.others.awb_gain_cfg.gain0_green_b,
                  ispParams->isp_params_v21.others.awb_gain_cfg.gain0_blue, 1, focusCode, zoomCode);
 #endif
-    } else if (working_mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR ||
-               working_mode == RK_AIQ_ISP_HDR_MODE_2_LINE_HDR) {
+    } else if (RK_AIQ_HDR_IS_HDR3(working_mode)) {
 #if defined(ISP_HW_V21)
         snprintf(buffer, sizeof(buffer),
                  "frame%08d-l_s-gain[%08.5f_%08.5f]-time[%08.5f_%08.5f]-"
@@ -847,7 +845,8 @@ XCamReturn DumpRkRaw2_dumpRkRawHeader(aiq_DumpRkRaw_t* pDpRkRaw, sint32_t sequen
     else if (pDpRkRaw->ispInfo.working_mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR ||
              pDpRkRaw->ispInfo.working_mode == RK_AIQ_ISP_HDR_MODE_2_LINE_HDR)
         working_mode = 2;
-    else if (pDpRkRaw->ispInfo.working_mode == RK_AIQ_WORKING_MODE_NORMAL)
+    else if (pDpRkRaw->ispInfo.working_mode == RK_AIQ_WORKING_MODE_NORMAL ||
+            RK_AIQ_HDR_IS_SENSOR_BUILTIN(pDpRkRaw->ispInfo.working_mode))
         working_mode = 1;
 
     struct raw2Header_s rawHeader = {};
@@ -936,7 +935,8 @@ static XCamReturn DumpRkRaw2_dumpRkRawBlock(aiq_DumpRkRaw_t* pDpRkRaw, sint32_t 
     else if (pDpRkRaw->ispInfo.working_mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR ||
              pDpRkRaw->ispInfo.working_mode == RK_AIQ_ISP_HDR_MODE_2_LINE_HDR)
         rawBlockId = dev_index == 0 ? HDR_S_RAW_BLOCK_ID : HDR_M_RAW_BLOCK_ID;
-    else if (pDpRkRaw->ispInfo.working_mode == RK_AIQ_WORKING_MODE_NORMAL)
+    else if (pDpRkRaw->ispInfo.working_mode == RK_AIQ_WORKING_MODE_NORMAL ||
+            RK_AIQ_HDR_IS_SENSOR_BUILTIN(pDpRkRaw->ispInfo.working_mode))
         rawBlockId = NORMAL_RAW_BLOCK_ID;
 
     DumpRkRaw2_dumpBlockHeader(pDpRkRaw, rawBlockId, bytesused);

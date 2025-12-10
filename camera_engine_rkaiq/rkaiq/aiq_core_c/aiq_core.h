@@ -101,6 +101,8 @@ typedef struct RkAiqAlgosComShared_s {
     bool reConfig;
     bool is_bw_sensor;
     bool is_multi_sensor;
+    bool is_aibnr_autorun;
+    bool is_aibnr_force_update;
     uint32_t hardware_version;
     int iso;
     AlgoCtxInstanceCfg ctxCfigs[RK_AIQ_ALGO_TYPE_MAX];
@@ -114,6 +116,7 @@ typedef struct RkAiqAlgosComShared_s {
     int spAlignedHeight;
     int mCamPhyId;
     uint8_t hdr_mode;
+    int aibnr_fixIndex;
 } RkAiqAlgosComShared_t;
 
 // following vars shared among itself by algo handlers

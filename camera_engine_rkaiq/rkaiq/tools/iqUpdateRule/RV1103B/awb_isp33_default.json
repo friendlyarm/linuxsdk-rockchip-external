@@ -503,7 +503,9 @@
 								"extraWpRange":	{
 									"hw_awbCfg_wpExtraLs_en":	1,
 									"hw_awbCfg_wpFiltOut_en":	1,
+									"wpRegionSet_len":	7,
 									"wpRegionSet":	[{
+											"name":	"NUB0",
 											"domain":	"awbStats_uvWp_mode",
 											"mode":	"awb_wpFiltOut_mode",
 											"wpRegion":	{
@@ -522,6 +524,7 @@
 												"weight":	[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 											}
 										}, {
+											"name":	"NUB0",
 											"domain":	"awbStats_uvWp_mode",
 											"mode":	"awb_wpFiltOut_mode",
 											"wpRegion":	{
@@ -540,6 +543,7 @@
 												"weight":	[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 											}
 										}, {
+											"name":	"NUB0",
 											"domain":	"awbStats_uvWp_mode",
 											"mode":	"awb_wpFiltOut_mode",
 											"wpRegion":	{
@@ -558,6 +562,7 @@
 												"weight":	[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 											}
 										}, {
+											"name":	"NUB0",
 											"domain":	"awbStats_uvWp_mode",
 											"mode":	"awb_wpFiltOut_mode",
 											"wpRegion":	{
@@ -576,6 +581,7 @@
 												"weight":	[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 											}
 										}, {
+											"name":	"NUB0",
 											"domain":	"awbStats_uvWp_mode",
 											"mode":	"awb_wpFiltOut_mode",
 											"wpRegion":	{
@@ -594,6 +600,7 @@
 												"weight":	[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 											}
 										}, {
+											"name":	"NUB0",
 											"domain":	"awbStats_uvWp_mode",
 											"mode":	"awb_wpFiltOut_mode",
 											"wpRegion":	{
@@ -612,6 +619,7 @@
 												"weight":	[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 											}
 										}, {
+											"name":	"NUB0",
 											"domain":	"awbStats_uvWp_mode",
 											"mode":	"awb_wpFiltOut_mode",
 											"wpRegion":	{
@@ -1542,7 +1550,7 @@
 										}, {
 											"luma_val":	4,
 											"ref_wbgain":	[2.1986, 1, 1, 2.0476]
-										},  {
+										}, {
 											"luma_val":	64,
 											"ref_wbgain":	[2.1986, 1, 1, 2.0476]
 										}, {
@@ -1717,6 +1725,529 @@
 												}
 											}]
 									}],
+								"scnManager":	{
+									"gnCalc_manager":	{
+										"subScnOrder2Scalef":	{
+											"subScnOrder2Scalef_len":	7,
+											"dorder_val":	[0, 1, 2, 3, 4, 5, 6],
+											"scal_val":	[1, 1, 1, 0, 0, 0, 0]
+										},
+										"subScnProb2Scalef":	{
+											"subScnProb2Scalef_len":	7,
+											"prob_val":	[0, 0.1, 0.2, 0.5, 0.7, 0.8, 1],
+											"scal_val":	[0, 0, 0, 0.66, 1, 1, 1]
+										},
+										"tp3ScnProb2Scalef":	{
+											"tp3ScnProb2Scalef_len":	7,
+											"prob_val":	[0, 0.03, 0.05, 0.1, 0.3, 0.5, 1],
+											"scal_val":	[0, 0, 0.5, 1, 1, 1, 1]
+										},
+										"tp3ScnProb_len":	4,
+										"tp3ScnProb":	[{
+												"luma_val":	800,
+												"wpratio2prob":	{
+													"wpratio2prob_len":	7,
+													"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+													"prob_val":	[0, 0, 0.5, 0.5, 1, 1, 1]
+												}
+											}, {
+												"luma_val":	1333,
+												"wpratio2prob":	{
+													"wpratio2prob_len":	7,
+													"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+													"prob_val":	[0, 0, 0.5, 0.5, 1, 1, 1]
+												}
+											}, {
+												"luma_val":	14000,
+												"wpratio2prob":	{
+													"wpratio2prob_len":	7,
+													"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+													"prob_val":	[0, 0, 0.5, 0.5, 1, 1, 1]
+												}
+											}, {
+												"luma_val":	30000,
+												"wpratio2prob":	{
+													"wpratio2prob_len":	7,
+													"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+													"prob_val":	[0, 0, 0.5, 0.5, 1, 1, 1]
+												}
+											}]
+									},
+									"subSceneDet_len":	4,
+									"subSceneDet":	[{
+											"name":	"sky",
+											"en":	0,
+											"wgt":	1,
+											"prob_mode":	"awb_scene_prob_mul_mode",
+											"wbGnPref_mode":	"awb_scene_prf_wbgn_fixed_mode",
+											"region":	{
+												"region_len":	10,
+												"luma_val":	[0, 0.5, 2, 4, 16, 32, 64, 256, 2048, 4096],
+												"detWpRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detWpRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+											},
+											"prob_len":	5,
+											"prob":	[{
+													"luma_val":	256,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.1, 0, 0, 0, 0]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0, 0, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	500,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.1, 0, 0, 0, 0]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0, 0, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	1000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.1, 0, 0, 0, 0]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0, 0, 0.5, 0.5, 1, 1, 1]
+													}
+												}, {
+													"luma_val":	3000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.5, 1, 1, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0.5, 0.5, 0.8, 0.8, 1, 1, 1]
+													}
+												}, {
+													"luma_val":	10000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.4, 1, 1, 1, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0.7, 0.7, 0.8, 1, 1, 1, 1]
+													}
+												}],
+											"wbGnPref_len":	5,
+											"wbGnPref":	[{
+													"luma_val":	256,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	2000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	3000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	10000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	20000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}]
+										}, {
+											"name":	"trees1_grassland",
+											"en":	0,
+											"wgt":	1,
+											"prob_mode":	"awb_scene_prob_clor_mode",
+											"wbGnPref_mode":	"awb_scene_prf_wbgn_fixed_mode",
+											"region":	{
+												"region_len":	10,
+												"luma_val":	[0, 0.5, 2, 4, 16, 32, 64, 256, 2048, 4096],
+												"detWpRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detWpRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+											},
+											"prob_len":	5,
+											"prob":	[{
+													"luma_val":	256,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.5, 0.5, 0.5, 0.5]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	500,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.5, 0.5, 0.5, 0.5]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	1000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.5, 0.5, 0.5, 0.5]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.1, 0.2, 0.5, 0.8, 0.8, 0.8, 0.8]
+													}
+												}, {
+													"luma_val":	3000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.4, 0.8, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.2, 0.3, 0.5, 1, 1, 1, 1]
+													}
+												}, {
+													"luma_val":	10000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.2, 0.3, 0.4, 1, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.2, 0.4, 0.6, 1, 1, 1, 1]
+													}
+												}],
+											"wbGnPref_len":	5,
+											"wbGnPref":	[{
+													"luma_val":	256,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	2000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	3000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	10000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	20000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}]
+										}, {
+											"name":	"trees2_grassland",
+											"en":	0,
+											"wgt":	1,
+											"prob_mode":	"awb_scene_prob_clor_mode",
+											"wbGnPref_mode":	"awb_scene_prf_wbgn_fixed_mode",
+											"region":	{
+												"region_len":	10,
+												"luma_val":	[0, 0.5, 2, 4, 16, 32, 64, 256, 2048, 4096],
+												"detWpRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detWpRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+											},
+											"prob_len":	5,
+											"prob":	[{
+													"luma_val":	256,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.5, 0.5, 0.5, 0.5]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	500,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.5, 0.5, 0.5, 0.5]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	1000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.5, 0.5, 0.5, 0.5]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.1, 0.2, 0.5, 0.8, 0.8, 0.8, 0.8]
+													}
+												}, {
+													"luma_val":	3000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.2, 0.4, 0.8, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.2, 0.3, 0.5, 1, 1, 1, 1]
+													}
+												}, {
+													"luma_val":	10000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.2, 0.3, 0.4, 1, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.05, 0.15, 0.25, 0.4, 0.5, 1],
+														"prob_val":	[0.2, 0.4, 0.6, 1, 1, 1, 1]
+													}
+												}],
+											"wbGnPref_len":	5,
+											"wbGnPref":	[{
+													"luma_val":	256,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	2000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	3000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	10000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	20000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}]
+										}, {
+											"name":	"scene0",
+											"en":	0,
+											"wgt":	1,
+											"prob_mode":	"awb_scene_prob_mul_mode",
+											"wbGnPref_mode":	"awb_scene_prf_wbgn_fixed_mode",
+											"region":	{
+												"region_len":	10,
+												"luma_val":	[0, 0.5, 2, 4, 16, 32, 64, 256, 2048, 4096],
+												"detWpRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detWpRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn0_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+												"detClorRn1_idx":	[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+											},
+											"prob_len":	5,
+											"prob":	[{
+													"luma_val":	256,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.1, 0, 0, 0, 0]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0, 0, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	500,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.1, 0, 0, 0, 0]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0, 0, 0.2, 0.2, 0.2, 0.2, 0.2]
+													}
+												}, {
+													"luma_val":	1000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.1, 0, 0, 0, 0]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0, 0, 0.5, 0.5, 1, 1, 1]
+													}
+												}, {
+													"luma_val":	3000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.1, 0.5, 1, 1, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0.5, 0.5, 0.8, 0.8, 1, 1, 1]
+													}
+												}, {
+													"luma_val":	10000,
+													"wpratio2prob":	{
+														"wpratio2prob_len":	7,
+														"ratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"prob_val":	[0.1, 0.4, 1, 1, 1, 1, 1]
+													},
+													"clrratio2prob":	{
+														"clrratio2prob_len":	7,
+														"ratio_val":	[0, 0.01, 0.05, 0.15, 0.25, 0.5, 1],
+														"prob_val":	[0.7, 0.7, 0.8, 1, 1, 1, 1]
+													}
+												}],
+											"wbGnPref_len":	5,
+											"wbGnPref":	[{
+													"luma_val":	256,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	2000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	3000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	10000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}, {
+													"luma_val":	20000,
+													"wbgain":	{
+														"wbgain_len":	7,
+														"wpratio_val":	[0, 0.003, 0.005, 0.1, 0.2, 0.3, 0.5],
+														"rgain":	[1.79, 1.79, 1.79, 1.79, 1.79, 1.79, 1.79],
+														"bgain":	[1.83, 1.83, 1.83, 1.83, 1.83, 1.83, 1.83]
+													}
+												}]
+										}]
+								},
 								"wbGainDaylightClip":	{
 									"awbGnDLgtClip_en":	0,
 									"outdoor_cct_min":	5000
@@ -1771,6 +2302,26 @@
 									"df_max":	0.9,
 									"lvIIR_size":	4,
 									"lvVar_th":	0.04
+								},
+								"convSpeed":	{
+									"conv_speed_mode":	"conv_speed_mode_auto",
+									"manual_conv_speed":	0.1,
+									"initinal_conv_speed":	1,
+									"kpIntSpeedFrm_num":	3,
+									"wbAg_residual_thd":	0.1,
+									"wbBg_residual_thd":	0.3,
+									"flv_residual_thd":	32,
+									"wbgChange_rate_thd":	0.3,
+									"flvChange_rate_thd":	0.3,
+									"change_duration_thd":	32,
+									"stable_duration_thd":	20,
+									"slow_conv_speed":	0.02,
+									"typical_conv_speed":	0.08,
+									"fast_conv_speed":	0.1,
+									"gainDiff2Rate":	{
+										"max_gain_diff":	[0.01, 0.02, 0.03, 0.05, 0.1],
+										"conv_speedup_rate":	[1, 0.9, 0, 0, 0]
+									}
 								}
 							},
 							"awbGnCalcOth":	{

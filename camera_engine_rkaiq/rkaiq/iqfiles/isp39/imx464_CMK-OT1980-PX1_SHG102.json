@@ -1638,7 +1638,7 @@
 							"awbGnCalcOth":	{
 								"fstFrm_wbgain":	[1.5181, 1, 1, 1.6757],
 								"advSiteRec":	{
-									"advSiteRec_en":	1,
+									"advSiteRec_en":        0,
 									"kpRecFrm_num":	3,
 									"advSiteInfo_name":	"/tmp/avaSiteInfo",
 									"smartAdv_en":	1,
@@ -8092,7 +8092,12 @@
 									},
 									"debug":	{
 										"sw_btnrT_dbgOut_en":	0,
-										"hw_btnrT_dbgOut_mode":	"btnr_dbgOut_iirSpNr_mode"
+										"hw_btnrT_dbgOut_mode":	"btnr_dbgOut_iirSpNr_mode",
+										"predgainWkArd":        {
+												"sw_btnrT_predgainWkArd_en":    1,
+												"sw_btnrT_predgain_mode":       "btnr_vendorDefault_mode",
+												"hw_btnrT_predgain_curve":      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+										}
 									}
 								},
 								"mdDyn":	[{
@@ -9957,7 +9962,12 @@
 									},
 									"debug":	{
 										"sw_btnrT_dbgOut_en":	0,
-										"hw_btnrT_dbgOut_mode":	"btnr_dbgOut_iirSpNr_mode"
+										"hw_btnrT_dbgOut_mode":	"btnr_dbgOut_iirSpNr_mode",
+										"predgainWkArd":        {
+												"sw_btnrT_predgainWkArd_en":    1,
+												"sw_btnrT_predgain_mode":       "btnr_vendorDefault_mode",
+												"hw_btnrT_predgain_curve":      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+										}
 									}
 								},
 								"mdDyn":	{
@@ -12965,7 +12975,9 @@
 										"PdCropX":	0,
 										"PdCropY":	0,
 										"PdBaseWidth":	512,
-										"PdBaseHeight":	384
+										"PdBaseHeight":	384,
+										"PdHBinMode":	0,
+										"PdVBinMode":	0
 									}],
 								"PdResoInf_len":	1
 							},

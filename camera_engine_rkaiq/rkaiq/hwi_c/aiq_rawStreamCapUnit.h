@@ -59,6 +59,8 @@ typedef struct AiqRawStreamCapUnit_s {
     AiqV4l2SubDevice_t* _isp_core_dev;
     AiqRawStreamProcUnit_t* _proc_stream;
     AiqAiRmsStreamProcUnit_t* _pAirmsStream;
+    void* _sw_stream_ctx;
+    rawStream_send_sync_buf_func _send_sync_buf_func;
 
 #if RKAIQ_HAVE_DUMPSYS
     FrameDumpInfo_t fe;
@@ -108,6 +110,7 @@ bool check_skip_frame(AiqRawStreamCapUnit_t* pRawStrCapUnit, int32_t buf_seq);
 void AiqRawStreamCapUnit_stop_vicap_stream_only(AiqRawStreamCapUnit_t* pRawStrCapUnit);
 void AiqRawStreamCapUnit_skip_frame_and_restart_vicap_stream(AiqRawStreamCapUnit_t* pRawStrCapUnit, int skip_frm_cnt);
 void AiqRawStreamCapUnit_setTxBufferCnt(AiqRawStreamCapUnit_t* pRawStrCapUnit, uint16_t buf_num);
+XCamReturn AiqRawStreamCapUnit_setSwStreamInfo(AiqRawStreamCapUnit_t* pRawStrCapUnit, void* sw_stream_ctx, rawStream_send_sync_buf_func send_sync_buf_func);
 
 #if RKAIQ_HAVE_DUMPSYS
 int AiqRawStreamCapUnit_dump(void* dumper, st_string* result, int argc, void* argv[]);

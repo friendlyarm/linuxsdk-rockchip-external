@@ -26,6 +26,16 @@
 typedef struct AiqIspParamsSplitter_s AiqIspParamsSplitter_t;
 typedef struct Splitter_Rectangle_s Splitter_Rectangle_t;
 
+void SplitAecWin(struct isp2x_window* ori_win, struct isp2x_window* left_win,
+                 struct isp2x_window* right_win, u8 wnd_num,
+                 Splitter_Rectangle_t left_isp_rect_, Splitter_Rectangle_t right_isp_rect_,
+                 WinSplitMode* mode);
+
+void SplitAecWinVertical(struct isp2x_window* ori_win, struct isp2x_window* left_win,
+                         struct isp2x_window* right_win, u8 wnd_num,
+                         Splitter_Rectangle_t left_isp_rect_,
+                         Splitter_Rectangle_t right_isp_rect_, WinSplitMode* mode);
+
 void AiqIspParamsSplitter_SplitAecWeight(u8* ori_weight, u8* left_weight, u8* right_weight,
                                          WinSplitMode mode, u8 wnd_num);
 

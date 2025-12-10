@@ -566,6 +566,15 @@ void rk_aiq_btnr40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
         pFix->tnr_luma_sigma_x[i] = pTransParams->tnr_luma_sigma_x[i];
     }
 
+    //printf("oyyf tnr sigmax[] :");
+    if(pTransParams->isTransfBypass  || opMode == RK_AIQ_OP_MODE_MANUAL) {
+        for(i = 0; i < sigbins; i++) {
+            pFix->tnr_luma_sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_mdSigma_curve.idx[i];
+            //printf("%d ", pCfg->tnr_luma2sigma_x[i]);
+        }
+    }
+    //printf("\n");
+
     //x_step must be 2^n
     int x_step = 0;
     for(i = 1; i < sigbins; i++) {
@@ -585,9 +594,6 @@ void rk_aiq_btnr40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
         if(pTransParams->isTransfBypass || opMode == RK_AIQ_OP_MODE_MANUAL) {
             for(i = 0; i < sigbins; i++) {
                 pTransParams->tnr_luma_sigma_y[i] = pdyn->sigmaEnv.hw_btnrC_mdSigma_curve.val[i];
-                if(opMode == RK_AIQ_OP_MODE_MANUAL) {
-                    pFix->tnr_luma_sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_mdSigma_curve.idx[i];
-                }
             }
         } else if(pTransParams->isHdrMode) {
             uint16_t shortY[sigbins];
@@ -709,10 +715,8 @@ void rk_aiq_btnr40_params_cvt(void* attr, isp_params_t* isp_params, common_cvt_i
             for(i = 0; i < 16; i++) {
                 pFix->cur_spnr_luma_sigma_y[i] = CLIP((int)(pdyn->sigmaEnv.hw_btnrC_curSpNrSgm_curve.val[i] * kcoef0), 0, max_sig);
                 pFix->pre_spnr_luma_sigma_y[i] = CLIP((int)(pdyn->sigmaEnv.hw_btnrC_iirSpNrSgm_curve.val[i] * kcoef1), 0, max_sig);
-                if(opMode == RK_AIQ_OP_MODE_MANUAL) {
-                    pFix->cur_spnr_luma_sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_curSpNrSgm_curve.idx[i];
-                    pFix->pre_spnr_luma_sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_iirSpNrSgm_curve.idx[i];
-                }
+                pFix->cur_spnr_luma_sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_curSpNrSgm_curve.idx[i];
+                pFix->pre_spnr_luma_sigma_x[i] = pdyn->sigmaEnv.hw_btnrC_iirSpNrSgm_curve.idx[i];
             }
         } else if(pTransParams->isHdrMode) {
             uint16_t shortY[spnrsigbins];

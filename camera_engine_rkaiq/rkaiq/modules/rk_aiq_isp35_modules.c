@@ -36,3 +36,4 @@
 #include "blc_algo/aiq_blcLoader.c"
 #include "rk_aiq_module_rgbir10.c"
 #include "rk_aiq_module_aibnr.c"
+#include "rk_aiq_module_aiynr.c"

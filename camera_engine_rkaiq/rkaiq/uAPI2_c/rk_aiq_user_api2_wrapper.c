@@ -33,6 +33,10 @@
 #include "uAPI2/rk_aiq_user_api2_a3dlut.h"
 #include "uAPI2_c/rk_aiq_api_private_c.h"
 #include "uAPI2/rk_aiq_user_api2_stats.h"
+#include "aiq_core_c/aiq_algo_handler.h"
+#include "hwi_c/aiq_ispParamsCvt.h"
+#include "modules/rk_aiq_isp32_modules.h"
+#include "modules/rk_aiq_module_btnr_common.h"
 
 static camgroup_uapi_t last_camindex;
 
@@ -1963,6 +1967,86 @@ rk_aiq_get_ayuvme_info(const rk_aiq_sys_ctx_t *sys_ctx,
     return XCAM_RETURN_NO_ERROR;
 }
 
+XCamReturn
+rk_aiq_uapi2_query_algoInterpIsoInfo(const rk_aiq_sys_ctx_t *sys_ctx,
+                       algo_interp_iso_list_t* info)
+{
+
+    AiqAlgoHandler_t* algo_handle = NULL;
+
+    int i = 0;
+    memset(info, 0, sizeof(algo_interp_iso_list_t));
+
+#define ADD_CASE(resultT, algoT) \
+        case RESULT_TYPE_##resultT##_PARAM: { \
+            algo_handle = \
+                sys_ctx->_analyzer->mAlgoHandleMaps[RK_AIQ_ALGO_TYPE_##algoT]; \
+            break; \
+        } \
+
+
+    for (; i < RESULT_TYPE_MAX_PARAM; i++) {
+        switch (i) {
+            ADD_CASE(TNR,AMFNR)
+            ADD_CASE(YNR,AYNR)
+            ADD_CASE(CNR,ACNR)
+            ADD_CASE(SHARPEN,ASHARP)
+            ADD_CASE(AIBNR,AIBNR)
+            ADD_CASE(AEC,AE)
+            ADD_CASE(AWB,AWB)
+            ADD_CASE(AF,AF)
+            ADD_CASE(BLC,ABLC)
+            ADD_CASE(DPCC,ADPCC)
+            ADD_CASE(MERGE,AMERGE)
+            ADD_CASE(LSC,ALSC)
+            ADD_CASE(GIC,AGIC)
+            ADD_CASE(DEBAYER,ADEBAYER)
+            ADD_CASE(CCM,ACCM)
+            ADD_CASE(AGAMMA,AGAMMA)
+            ADD_CASE(HSV,AHSV)
+            ADD_CASE(LDC,ALDC)
+            ADD_CASE(CSM,ACSM)
+            ADD_CASE(CP,ACP)
+            ADD_CASE(IE,AIE)
+            ADD_CASE(CGC,ACGC)
+            ADD_CASE(DRC,ADRC)
+            ADD_CASE(CAC,ACAC)
+            ADD_CASE(ENH,AENH)
+            ADD_CASE(HISTEQ,AHISTEQ)
+            ADD_CASE(AMTD,AMTD)
+            ADD_CASE(AIRMS,AIRMS)
+            default: {
+                algo_handle =
+                    sys_ctx->_analyzer->mAlgoHandleMaps[RK_AIQ_ALGO_TYPE_AWB];
+                break;
+            }
+        }
+
+        if (algo_handle && algo_handle->queryInterpIso)
+            algo_handle->queryInterpIso(algo_handle,
+                    &info->isoInfo[i].interpIso, &info->isoInfo[i].isoH, &info->isoInfo[i].isoL);
+
+        info->isoInfo[i].type = i;
+        LOGD("resT:0x%x, interp:%d, isoL:%d, isoH:%d", i, info->isoInfo[i].interpIso, info->isoInfo[i].isoL, info->isoInfo[i].isoH);
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+#if USE_NEWSTRUCT
+XCamReturn rk_aiq_user_api2_btnr_QueryStats(const rk_aiq_sys_ctx_t* sys_ctx, btnr_stats_cp_t* stats)
+{
+    btnr_cvt_info_t *pBtnrInfo = &sys_ctx->_camHw->_mIspParamsCvt->mBtnrInfo;
+    int idx = 0;
+    for (uint8_t i = 0; i < pBtnrInfo->stats_buffer_cnt; i++) {
+        if (pBtnrInfo->mBtnrStats[i].id > pBtnrInfo->mBtnrStats[idx].id) {
+            idx = i;
+        }
+    }
+    memcpy(stats, &pBtnrInfo->mBtnrStats[idx], sizeof(btnr_stats_cp_t));
+    return XCAM_RETURN_NO_ERROR;
+}
+#endif
 
 rk_aiq_sys_ctx_t* rk_aiq_get_last_sysctx(rk_aiq_sys_ctx_t *sys_ctx) {
 #if RKAIQ_ENABLE_CAMGROUP

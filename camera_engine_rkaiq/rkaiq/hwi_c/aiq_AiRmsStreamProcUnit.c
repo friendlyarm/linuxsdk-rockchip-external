@@ -67,16 +67,25 @@ static XCamReturn dump_buffer(char *filename, uint32_t frame_id, char *virt_addr
     return XCAM_RETURN_NO_ERROR;
 }
 
-static XCamReturn airms_quad2rggb(uint16_t* pSrc, uint16_t* pDst,
-                                         int srcHgt, int srcWid, int dstHgt, int dstWid)
+static XCamReturn quad2rggb_nd_binning(
+    uint16_t* pSrc,
+    uint16_t* pDst,
+    uint8_t*  pDstDwn,
+    int srcHgt,
+    int srcWid,
+    int dstHgt,
+    int dstWid)
 {
-    LOGD_AIRMS("%s: start: pSrc %p, pDst %p, srcHgt %d, srcWid %d, dstHgt %d, dstWid %d",
-        __func__, pSrc, pDst, srcHgt, srcWid, dstHgt, dstWid);
+    int dwnHgt = dstHgt / 2;
+    int dwnWid = dstWid / 2;
 
-#ifdef NEON_OPT
+
+    LOGD_AIRMS("%s: start: pSrc %p, pDst %p, pDstDwn %p, srcHgt %d, srcWid %d, dstHgt %d, dstWid %d",
+        __func__, pSrc, pDst, pDstDwn, srcHgt, srcWid, dstHgt, dstWid);
+
     for (int i = 0; i < MIN(srcHgt, dstHgt) / 2 * 2; i += 2)
     {
-        for (int j = 0; j < MIN(srcWid, dstWid) / 32 * 32; j += 4 * 8)
+        for (int j = 0; j < MIN(srcWid, dstWid) / 16 * 16; j += 4 * 4)
         {
             /*
                 R0      R1      Ga0     Ga1             R0      Ga0     R1      Ga1
@@ -85,30 +94,44 @@ static XCamReturn airms_quad2rggb(uint16_t* pSrc, uint16_t* pDst,
                 Gb0     Gb1     B0      B1              R2      Ga2     R3      Ga3
                 Gb2     Gb3     B2      B3              Gb2     B2      Gb3     B3
             */
-            uint16x8x4_t vR0_R1_Ga0_Ga1_u16 = vld4q_u16(pSrc + (i + 0) * srcWid + j);   //  [0, 1023]
-            uint16x8x4_t vR2_R3_Ga2_Ga3_u16 = vld4q_u16(pSrc + (i + 1) * srcWid + j);
+            uint16x4x4_t vR0_R1_Ga0_Ga1_u16 = vld4_u16(pSrc + (i + 0) * srcWid + j);   //  [0, 1023]
+            uint16x4x4_t vR2_R3_Ga2_Ga3_u16 = vld4_u16(pSrc + (i + 1) * srcWid + j);
+
+            //  Binning DownSample
+            uint16x4x2_t vR_Ga_u16;
+            vR_Ga_u16.val[0] = vadd_u16(vadd_u16(vR0_R1_Ga0_Ga1_u16.val[0], vR0_R1_Ga0_Ga1_u16.val[1]), vadd_u16(vR2_R3_Ga2_Ga3_u16.val[0], vR2_R3_Ga2_Ga3_u16.val[1]));
+            vR_Ga_u16.val[1] = vadd_u16(vadd_u16(vR0_R1_Ga0_Ga1_u16.val[2], vR0_R1_Ga0_Ga1_u16.val[3]), vadd_u16(vR2_R3_Ga2_Ga3_u16.val[2], vR2_R3_Ga2_Ga3_u16.val[3]));
+
+            vR_Ga_u16.val[0] = vrshr_n_u16(vR_Ga_u16.val[0], 2 + 2);  //  mean [0, 1023] -> [0, 255]
+            vR_Ga_u16.val[1] = vrshr_n_u16(vR_Ga_u16.val[1], 2 + 2);  //  mean [0, 1023] -> [0, 255]
+
+            //  R0      R1      R2      R3      -->     R0      Ga0     R1      Ga1
+            //  Ga0     Ga1     Ga2     Ga4             R2      Ga2     R3      Ga3
+            vR_Ga_u16 = vzip_u16(vR_Ga_u16.val[0], vR_Ga_u16.val[1]);
+
+            vst1_u8(pDstDwn + (i / 2) * dwnWid + (j / 2), vqmovn_u16(vcombine_u16(vR_Ga_u16.val[0], vR_Ga_u16.val[1])));
 
             //  4 Cell Pattern to RGGB Pattern
             int offset0_i = ((i + 0) % 4 == 0 || (i + 0) % 4 == 3) ? 0 : (((i + 0) % 4 == 1) ? 1 : -1);
             int offset1_i = ((i + 1) % 4 == 0 || (i + 1) % 4 == 3) ? 0 : (((i + 1) % 4 == 1) ? 1 : -1);
 
-            uint16x8x4_t vR0_Ga0_R1_Ga1_u16;
-            vR0_Ga0_R1_Ga1_u16.val[0] = vR0_R1_Ga0_Ga1_u16.val[0];
-            vR0_Ga0_R1_Ga1_u16.val[1] = vR0_R1_Ga0_Ga1_u16.val[2];
-            vR0_Ga0_R1_Ga1_u16.val[2] = vR0_R1_Ga0_Ga1_u16.val[1];
-            vR0_Ga0_R1_Ga1_u16.val[3] = vR0_R1_Ga0_Ga1_u16.val[3];
-            vst4q_u16(pDst + ((i + 0) + offset0_i) * dstWid + j, vR0_Ga0_R1_Ga1_u16);
+            uint16x4x4_t vR0_Ga0_R1_Ga1_u16;
+            vR0_Ga0_R1_Ga1_u16.val[0] = vshl_n_u16(vR0_R1_Ga0_Ga1_u16.val[0], 6);  //  [0, 1023] -> [0, 65535]
+            vR0_Ga0_R1_Ga1_u16.val[1] = vshl_n_u16(vR0_R1_Ga0_Ga1_u16.val[2], 6);
+            vR0_Ga0_R1_Ga1_u16.val[2] = vshl_n_u16(vR0_R1_Ga0_Ga1_u16.val[1], 6);
+            vR0_Ga0_R1_Ga1_u16.val[3] = vshl_n_u16(vR0_R1_Ga0_Ga1_u16.val[3], 6);
+            vst4_u16(pDst + ((i + 0) + offset0_i) * dstWid + j, vR0_Ga0_R1_Ga1_u16);
 
-            uint16x8x4_t vR2_Ga2_R3_Ga3_u16;
-            vR2_Ga2_R3_Ga3_u16.val[0] = vR2_R3_Ga2_Ga3_u16.val[0];
-            vR2_Ga2_R3_Ga3_u16.val[1] = vR2_R3_Ga2_Ga3_u16.val[2];
-            vR2_Ga2_R3_Ga3_u16.val[2] = vR2_R3_Ga2_Ga3_u16.val[1];
-            vR2_Ga2_R3_Ga3_u16.val[3] = vR2_R3_Ga2_Ga3_u16.val[3];
-            vst4q_u16(pDst + ((i + 1) + offset1_i) * dstWid + j, vR2_Ga2_R3_Ga3_u16);
+            uint16x4x4_t vR2_Ga2_R3_Ga3_u16;
+            vR2_Ga2_R3_Ga3_u16.val[0] = vshl_n_u16(vR2_R3_Ga2_Ga3_u16.val[0], 6);  //  [0, 1023] -> [0, 65535]
+            vR2_Ga2_R3_Ga3_u16.val[1] = vshl_n_u16(vR2_R3_Ga2_Ga3_u16.val[2], 6);
+            vR2_Ga2_R3_Ga3_u16.val[2] = vshl_n_u16(vR2_R3_Ga2_Ga3_u16.val[1], 6);
+            vR2_Ga2_R3_Ga3_u16.val[3] = vshl_n_u16(vR2_R3_Ga2_Ga3_u16.val[3], 6);
+            vst4_u16(pDst + ((i + 1) + offset1_i) * dstWid + j, vR2_Ga2_R3_Ga3_u16);
         }
 
-        if(MIN(srcWid, dstWid) / 32 * 32 != MIN(srcWid, dstWid)) {
-            for (int j = MIN(srcWid, dstWid) / 32 * 32; j < MIN(srcWid, dstWid); j++)
+        if (MIN(srcWid, dstWid) / 32 * 32 != MIN(srcWid, dstWid))
+            for (int j = MIN(srcWid, dstWid) / 16 * 16; j < MIN(srcWid, dstWid); j += 2)
             {
                 int offset0_i = ((i + 0) % 4 == 0 || (i + 0) % 4 == 3) ? 0 : (((i + 0) % 4 == 1) ? 1 : -1);
                 int offset1_i = ((i + 1) % 4 == 0 || (i + 1) % 4 == 3) ? 0 : (((i + 1) % 4 == 1) ? 1 : -1);
@@ -118,52 +141,26 @@ static XCamReturn airms_quad2rggb(uint16_t* pSrc, uint16_t* pDst,
                 int dst_i0 = src_i0 + offset0_i;
                 int dst_i1 = src_i1 + offset1_i;
 
-                int src_j = -1;
-                int dst_j = j;
-                if (dst_j % 4 == 0 || dst_j % 4 == 3)
-                    src_j = dst_j;
-                else if (dst_j % 4 == 1)
-                    src_j = MIN(dst_j + 1, srcWid - 1);
-                else if (dst_j % 4 == 2)
-                    src_j = dst_j - 1;
+                int src_j0 = -1;
+                int src_j1 = -1;
+                int dst_j0 = j + 0;
+                int dst_j1 = j + 1;
 
-                pDst[dst_i0 * dstWid + dst_j] = pSrc[src_i0 * srcWid + src_j];
-                pDst[dst_i1 * dstWid + dst_j] = pSrc[src_i1 * srcWid + src_j];
+                src_j0 = (dst_j0 % 4 == 0 || dst_j0 % 4 == 3) ? dst_j0 : (dst_j0 % 4 == 1 ? MIN(dst_j0 + 1, srcWid - 1) : dst_j0 - 1);
+                src_j1 = (dst_j1 % 4 == 0 || dst_j1 % 4 == 3) ? dst_j1 : (dst_j1 % 4 == 1 ? MIN(dst_j1 + 1, srcWid - 1) : dst_j1 - 1);
+
+                uint16_t vacc = pSrc[src_i0 * srcWid + src_j0] + pSrc[src_i0 * srcWid + src_j1] + pSrc[src_i1 * srcWid + src_j0] + pSrc[src_i1 * srcWid + src_j1];
+                pDstDwn[(i / 2) * dwnWid + (j / 2)] = vacc >> (2 + 2);  //  mean [0, 1023] -> [0, 255]
+
+                pDst[dst_i0 * dstWid + dst_j0] = pSrc[src_i0 * srcWid + src_j0] << 6;  //  [0, 1023] -> [0, 65535]
+                pDst[dst_i0 * dstWid + dst_j1] = pSrc[src_i0 * srcWid + src_j1] << 6;
+                pDst[dst_i1 * dstWid + dst_j0] = pSrc[src_i1 * srcWid + src_j0] << 6;
+                pDst[dst_i1 * dstWid + dst_j1] = pSrc[src_i1 * srcWid + src_j1] << 6;
             }
-        }
     }
 
-#else
-
-    for (int i = 0; i < MIN(srcHgt, dstHgt) / 2 * 2; i += 2)
-    {
-        for (int j = 0; j < MIN(srcWid, dstWid); j++)
-        {
-            int offset0_i = ((i + 0) % 4 == 0 || (i + 0) % 4 == 3) ? 0 : (((i + 0) % 4 == 1) ? 1 : -1);
-            int offset1_i = ((i + 1) % 4 == 0 || (i + 1) % 4 == 3) ? 0 : (((i + 1) % 4 == 1) ? 1 : -1);
-
-            int src_i0 = i + 0;
-            int src_i1 = i + 1;
-            int dst_i0 = src_i0 + offset0_i;
-            int dst_i1 = src_i1 + offset1_i;
-
-            int src_j = -1;
-            int dst_j = j;
-            if (dst_j % 4 == 0 || dst_j % 4 == 3)
-                src_j = dst_j;
-            else if (dst_j % 4 == 1)
-                src_j = MIN(dst_j + 1, srcWid - 1);
-            else if (dst_j % 4 == 2)
-                src_j = dst_j - 1;
-
-            pDst[dst_i0 * dstWid + dst_j] = pSrc[src_i0 * srcWid + src_j];
-            pDst[dst_i1 * dstWid + dst_j] = pSrc[src_i1 * srcWid + src_j];
-        }
-    }
-
-#endif
-    LOGD_AIRMS("%s: end: pSrc %p, pDst %p, srcHgt %d, srcWid %d, dstHgt %d, dstWid %d",
-        __func__, pSrc, pDst, srcHgt, srcWid, dstHgt, dstWid);
+    LOGD_AIRMS("%s: end: pSrc %p, pDst %p, pDstDwn %p, srcHgt %d, srcWid %d, dstHgt %d, dstWid %d",
+        __func__, pSrc, pDst, pDstDwn, srcHgt, srcWid, dstHgt, dstWid);
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -189,22 +186,28 @@ static void AiRmsStream_quard2rggb(const AirmsStreamParam* attrib)
     int dstHgt = proc_height;
     int dstWid = CEIL_BY(proc_width, 16);
     uint16_t* pDst = (uint16_t*)aiispInBuf->virt_addr;
+    uint8_t* pDstDwn;
+    u32 bin_width, bin_height;
 
     if (!pSrc || !pDst) {
         LOGE_AIRMS("%s: input buffer is null(%p, %p)", __func__, pSrc, pDst);
         return;
     }
 
+    pDstDwn = (uint8_t*)(pDst + dstHgt * dstWid);
     srcHgt = srcHgt / AIRMS_HELP_THREAD_POOL_NUM;
     dstHgt = srcHgt;
     pSrc += srcWid * srcHgt * hdlIdx;
     pDst += dstWid * dstHgt * hdlIdx;
+    bin_width  = CEIL_BY(CEIL_DOWN(dstWid, 2), 2);
+    bin_height = CEIL_BY(CEIL_DOWN(dstHgt, 2), 2);
+    pDstDwn += bin_height * bin_width * hdlIdx;
     if (hdlIdx == AIRMS_HELP_THREAD_POOL_NUM - 1) {
         srcHgt += (pProcUnit->isp_acq_height - srcHgt * AIRMS_HELP_THREAD_POOL_NUM);
         dstHgt += (proc_height - dstHgt * AIRMS_HELP_THREAD_POOL_NUM);
     }
-    airms_quad2rggb(pSrc, pDst, srcHgt, srcWid, dstHgt, dstWid);
 
+    quad2rggb_nd_binning(pSrc, pDst, pDstDwn, srcHgt, srcWid, dstHgt, dstWid);
 
     gettimeofday(&end_time, NULL);
 
@@ -735,6 +738,7 @@ static XCamReturn airms_readModel(AiqAiRmsStreamProcUnit_t* pProcUnit, char *mod
             }
         }
 
+        pProcUnit->mModelMode = model_info.model_mode;
         *model_buf = aiq_malloc(file_size);
         if (*model_buf) {
             fseek(fp, 0, 0);
@@ -872,6 +876,53 @@ static XCamReturn airms_config_param(AiqAiRmsStreamProcUnit_t* pProcUnit)
     }
 }
 
+static void AiRmsStream_mergeAiispOut(const AirmsMgeParam* attrib)
+{
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+    ENTER_ANALYZER_FUNCTION();
+
+    struct timeval start_time, end_time;
+    unsigned long thread_id = (unsigned long)pthread_self();
+
+    gettimeofday(&start_time, NULL);
+
+    AiqAiRmsStreamProcUnit_t* pProcUnit = attrib->pProcUnit;
+    AiRmsAiispBuf *aiispOutBuf = attrib->aiispOutBuf;
+    int hdlIdx = attrib->hdlIdx;
+    int height = pProcUnit->isp_acq_height / AIRMS_HELP_THREAD_POOL_NUM;
+    int width  = pProcUnit->isp_acq_width;
+    int stride = CEIL_BY(pProcUnit->isp_acq_width, 2) + 2 * AIRMS_EXTEND_PIXEL;
+    uint16_t* pSrc = (uint16_t*)aiispOutBuf->virt_addr;
+    uint16_t* pDst = (uint16_t*)aiispOutBuf->virt_addr;
+
+    pSrc += hdlIdx * stride * height;
+    pSrc += CEIL_BY(pProcUnit->isp_acq_width, 2) / 2 + 2 * AIRMS_EXTEND_PIXEL;
+    pDst += hdlIdx * stride * height;
+    pDst += CEIL_BY(pProcUnit->isp_acq_width, 2) / 2;
+    if (hdlIdx == AIRMS_MGE_THREAD_POOL_NUM - 1) {
+        height += (pProcUnit->isp_acq_height - height * AIRMS_HELP_THREAD_POOL_NUM);
+    }
+
+    for (int i = 0; i < height; i++) {
+        memcpy(pDst, pSrc, pProcUnit->isp_acq_width / 2 * 2);
+        pSrc += stride;
+        pDst += stride;
+    }
+
+    gettimeofday(&end_time, NULL);
+
+    long seconds      = end_time.tv_sec - start_time.tv_sec;
+    long micros       = ((seconds * 1000000) + end_time.tv_usec) - start_time.tv_usec;
+    double elapsed_ms = micros / 1000.0;
+
+    LOGD_AIRMS("TID: %lu, width %d, height %d, stride %d, hdlIdx %d, elapsed_ms %.2f ms",
+        thread_id, width, height, stride, hdlIdx, elapsed_ms);
+
+    EXIT_ANALYZER_FUNCTION();
+
+    return;
+}
+
 static XCamReturn AiqAiRmsStreamProcUnit_poll_buffer_ready(void* ctx, AiqHwEvt_t* evt,
                                                           int dev_index) {
     XCAM_FAIL_RETURN(ERROR, ctx, XCAM_RETURN_ERROR_PARAM, "pAiRmsStreamProc is NULL!");
@@ -916,6 +967,37 @@ static XCamReturn AiqAiRmsStreamProcUnit_poll_buffer_ready(void* ctx, AiqHwEvt_t
     }
     aiqMutex_unlock(&pProcUnit->_device._buf_mutex);
 
+    if (pProcUnit->is_parthdl) {
+        struct dma_buf_sync sync = { 0 };
+        AirmsMgeParam mge_params;
+        bool dump_flg = false;
+
+        int64_t start_time = get_systime_us();
+
+        sync.flags = DMA_BUF_SYNC_WRITE | DMA_BUF_SYNC_START;
+        ioctl(aiispOutBuf->dma_fd, DMA_BUF_IOCTL_SYNC, &sync);
+
+        //aiqMutex_lock(&pProcUnit->mStreamMutex);
+        mge_params.aiispOutBuf = aiispOutBuf;
+        mge_params.pProcUnit = pProcUnit;
+
+        for (int n = 0; n < AIRMS_MGE_THREAD_POOL_NUM; n++) {
+            mge_params.hdlIdx = n;
+            thpool_add_work_ex(pProcUnit->mMgeThPool, (void*)AiRmsStream_mergeAiispOut, &mge_params, sizeof(mge_params));
+        }
+
+        thpool_wait(pProcUnit->mMgeThPool);
+
+        //aiqMutex_unlock(&pProcUnit->mStreamMutex);
+
+        sync.flags = DMA_BUF_SYNC_WRITE | DMA_BUF_SYNC_END;
+        ioctl(aiispOutBuf->dma_fd, DMA_BUF_IOCTL_SYNC, &sync);
+
+        int64_t end_time = get_systime_us();
+
+        LOGD_AIRMS("aiisp out buffer merge time %lld", (end_time - start_time) / 1000);
+    }
+
     if (aiispOutBuf->dump_flg) {
         uint32_t frame_id = AiqV4l2Buffer_getSequence(&aiispOutBuf->aiqV4l2Buf);
 
@@ -946,9 +1028,10 @@ static XCamReturn AiqAiRmsStreamProcUnit_poll_buffer_ready(void* ctx, AiqHwEvt_t
     return ret;
 }
 
-XCamReturn AiqAiRmsStreamProcUnit_init(AiqAiRmsStreamProcUnit_t* pProcUnit, rk_aiq_aiisp_info_t* aiisp_info) {
+XCamReturn AiqAiRmsStreamProcUnit_init(AiqCamHwBase_t* pCamHw, AiqAiRmsStreamProcUnit_t* pProcUnit, rk_aiq_aiisp_info_t* aiisp_info) {
     XCAM_FAIL_RETURN(ERROR, pProcUnit, XCAM_RETURN_ERROR_PARAM, "pAiRmsStreamProc is NULL!");
 
+    pProcUnit->pCamHw           = pCamHw;
     pProcUnit->aiisp_info       = *aiisp_info;
     pProcUnit->mAiIspDev        = NULL;
     pProcUnit->mAiIspSubDev     = NULL;
@@ -961,6 +1044,12 @@ XCamReturn AiqAiRmsStreamProcUnit_init(AiqAiRmsStreamProcUnit_t* pProcUnit, rk_a
     aiqMutex_init(&pProcUnit->mStreamMutex);
     aiqMutex_init(&pProcUnit->inbuf_mutex);
     aiqMutex_init(&pProcUnit->_device._buf_mutex);
+    for (int i = 0; i < 33; i++) {
+        float x = (float)i / (33 - 1);
+
+        x = airms_nonLinear(x, 0);
+        pProcUnit->mCompY[i] = round(x * 1023);
+    }
 
     return XCAM_RETURN_NO_ERROR;
 }
@@ -1028,6 +1117,7 @@ XCamReturn AiqAiRmsStreamProcUnit_deinit(AiqAiRmsStreamProcUnit_t* pProcUnit) {
     aiqMutex_deInit(&pProcUnit->mStreamMutex);
     aiqMutex_deInit(&pProcUnit->inbuf_mutex);
     aiqMutex_deInit(&pProcUnit->_device._buf_mutex);
+    pProcUnit->pCamHw = NULL;
     return XCAM_RETURN_NO_ERROR;
 }
 
@@ -1081,6 +1171,7 @@ static XCamReturn airms_prepareBuffer(AiqAiRmsStreamProcUnit_t* pProcUnit)
     uint32_t isp_acq_height = pProcUnit->isp_acq_height;
     struct rkaiisp_param_info param_info;
     struct rkaiisp_rmsbuf_info rmsbuf_info;
+    u32 bin_width, bin_height;
     char *virt_addr;
 
     // send paraminfo
@@ -1111,12 +1202,15 @@ static XCamReturn airms_prepareBuffer(AiqAiRmsStreamProcUnit_t* pProcUnit)
 
     pProcUnit->mRmsbufInfo = rmsbuf_info;
 
+    bin_width  = CEIL_BY(CEIL_DOWN(rmsbuf_info.image_width, 2), 2);
+    bin_height = CEIL_BY(CEIL_DOWN(rmsbuf_info.image_height, 2), 2);
+
     // push input/output buffer fd to list
     for (int i = 0; i < AIRMS_INBUF_NUM; i++) {
         pProcUnit->inbuf_tbl[i].in_used  = false;
         pProcUnit->inbuf_tbl[i].buf_idx  = i;
         pProcUnit->inbuf_tbl[i].dma_fd   = rmsbuf_info.inbuf_fd[i];
-        pProcUnit->inbuf_tbl[i].buf_size = rmsbuf_info.image_width * rmsbuf_info.image_height * 2;
+        pProcUnit->inbuf_tbl[i].buf_size = rmsbuf_info.image_width * rmsbuf_info.image_height * 2 + bin_width * bin_height;
         virt_addr = (char*)mmap(NULL, pProcUnit->inbuf_tbl[i].buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, pProcUnit->inbuf_tbl[i].dma_fd, 0);
         if (MAP_FAILED == virt_addr) {
             LOGE_AIRMS("inbuf fd %d, size %d mmap failed", pProcUnit->inbuf_tbl[i].dma_fd, pProcUnit->inbuf_tbl[i].buf_size);
@@ -1140,6 +1234,8 @@ static XCamReturn airms_prepareBuffer(AiqAiRmsStreamProcUnit_t* pProcUnit)
         pProcUnit->outbuf_tbl[i].buf_idx = i;
         pProcUnit->outbuf_tbl[i].dma_fd = rmsbuf_info.outbuf_fd[i];
         pProcUnit->outbuf_tbl[i].buf_size = rmsbuf_info.image_width * rmsbuf_info.image_height * 2;
+        if (pProcUnit->is_parthdl)
+            pProcUnit->outbuf_tbl[i].buf_size += 2 * AIRMS_EXTEND_PIXEL * rmsbuf_info.image_height * 2;
         virt_addr = (char*)mmap(NULL, pProcUnit->outbuf_tbl[i].buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, pProcUnit->outbuf_tbl[i].dma_fd, 0);
         if (MAP_FAILED == virt_addr) {
             LOGE_AIRMS("outbuf fd %d, size %d mmap failed", pProcUnit->outbuf_tbl[i].dma_fd, pProcUnit->outbuf_tbl[i].buf_size);
@@ -1212,6 +1308,10 @@ XCamReturn AiqAiRmsStreamProcUnit_prepare(AiqAiRmsStreamProcUnit_t* pProcUnit,
     pProcUnit->isp_acq_width   = isp_acq_width;
     pProcUnit->isp_acq_height  = isp_acq_height;
 
+    pProcUnit->is_parthdl = false;
+    if (isp_acq_width > AIRMS_MAX_WIDTH)
+        pProcUnit->is_parthdl = true;
+
     LOGI_AIRMS("%s: model_file %s, isp_acq_width %d, isp_acq_height %d", __func__, model_file, isp_acq_width, isp_acq_height);
     airms_prepareBuffer(pProcUnit);
     pProcUnit->mPrepareOK = true;
@@ -1261,6 +1361,15 @@ void AiqAiRmsStreamProcUnit_start(AiqAiRmsStreamProcUnit_t* pProcUnit) {
     AiRmsQuardConvertThd_init(&pProcUnit->mQuardConvertThd, pProcUnit);
     AiRmsQuardConvertThd_start(&pProcUnit->mQuardConvertThd);
 
+    for (int i = 0; i < AIRMS_MGE_THREAD_POOL_NUM; i++) {
+        cpu_cores[i] = i + AIRMS_MGE_THREAD_START_COREID;
+    }
+
+    pProcUnit->mMgeThPool = thpool_init_ex(AIRMS_MGE_THREAD_POOL_NUM,
+                AIRMS_HELP_THREAD_SCHED_POLICY,
+                AIRMS_HELP_THREAD_SCHED_PRIORITY,
+                cpu_cores, AIRMS_MGE_THREAD_POOL_NUM);
+
     // send first param to aiisp
     airms_config_param(pProcUnit);
     pProcUnit->mStartOK = true;
@@ -1275,6 +1384,7 @@ void AiqAiRmsStreamProcUnit_stop(AiqAiRmsStreamProcUnit_t* pProcUnit) {
     AiRmsQuardConvertThd_stop(&pProcUnit->mQuardConvertThd);
     AiRmsQuardConvertThd_deinit(&pProcUnit->mQuardConvertThd);
     thpool_destroy(pProcUnit->mHelpThPool);
+    thpool_destroy(pProcUnit->mMgeThPool);
     if (pProcUnit->_AiRmsStream && pProcUnit->mStartFlag) {
         pProcUnit->_AiRmsStream->stopThreadOnly(pProcUnit->_AiRmsStream);
         AiqV4l2Device_unsubscribeEvt(pProcUnit->_AiRmsStream->_dev, RKAIISP_V4L2_EVENT_AIISP_DONE);
@@ -1318,4 +1428,16 @@ int AiqAiRmsStreamProcUnit_dumpRaw(AiqAiRmsStreamProcUnit_t* pProcUnit, int dump
 
     return ret;
 }
+
+void AiqAiRmsStreamProcUnit_getBytesPerline(AiqAiRmsStreamProcUnit_t* pProcUnit, uint32_t width, uint32_t* bytes_perline)
+{
+    *bytes_perline = 0;
+    if (pProcUnit) {
+        if (width > AIRMS_MAX_WIDTH) {
+            *bytes_perline = 2 * (width + 2 * AIRMS_EXTEND_PIXEL);
+        }
+    }
+    LOGK_AIRMS("%s: bytes_perline %d", __func__, *bytes_perline);
+}
+
 

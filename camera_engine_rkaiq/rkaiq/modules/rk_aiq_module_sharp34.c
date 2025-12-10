@@ -193,11 +193,11 @@ void rk_aiq_sharp34_params_cvt(void * attr, isp_params_t* isp_params, common_cvt
             pre_bila_filter[i] = pdyn->hfExtra_preBifilt.hw_sharpT_filtSpatial_wgt[i];
         }
     }
-    tmp             = (int)ROUND_F(pre_bila_filter[0] * (1 << RK_SHARP_V34_PBFCOEFF_FIX_BITS));
+    tmp             = (int)FLOOR(pre_bila_filter[0] * (1 << RK_SHARP_V34_PBFCOEFF_FIX_BITS));
     pFix->pbf_coef0 = CLIP(tmp, 0, 127);
-    tmp             = (int)ROUND_F(pre_bila_filter[1] * (1 << RK_SHARP_V34_PBFCOEFF_FIX_BITS));
+    tmp             = (int)FLOOR(pre_bila_filter[1] * (1 << RK_SHARP_V34_PBFCOEFF_FIX_BITS));
     pFix->pbf_coef1 = CLIP(tmp, 0, 127);
-    tmp             = (int)ROUND_F(pre_bila_filter[2] * (1 << RK_SHARP_V34_PBFCOEFF_FIX_BITS));
+    tmp             = (int)FLOOR(pre_bila_filter[2] * (1 << RK_SHARP_V34_PBFCOEFF_FIX_BITS));
     pFix->pbf_coef2 = CLIP(tmp, 0, 127);
 
     sum_coeff       = pFix->pbf_coef0 + 4 * pFix->pbf_coef1 + 4 * pFix->pbf_coef2;
@@ -226,11 +226,11 @@ void rk_aiq_sharp34_params_cvt(void * attr, isp_params_t* isp_params, common_cvt
             bila_filter[i] = pdyn->hfExtra_hfBifilt.hw_sharpT_filtSpatial_wgt[i];
         }
     }
-    tmp            = (int)ROUND_F(bila_filter[0] * (1 << RK_SHARP_V34_RFCOEFF_FIX_BITS));
+    tmp            = (int)FLOOR(bila_filter[0] * (1 << RK_SHARP_V34_RFCOEFF_FIX_BITS));
     pFix->bf_coef0 = CLIP(tmp, 0, 127);
-    tmp            = (int)ROUND_F(bila_filter[1] * (1 << RK_SHARP_V34_RFCOEFF_FIX_BITS));
+    tmp            = (int)FLOOR(bila_filter[1] * (1 << RK_SHARP_V34_RFCOEFF_FIX_BITS));
     pFix->bf_coef1 = CLIP(tmp, 0, 127);
-    tmp            = (int)ROUND_F(bila_filter[2] * (1 << RK_SHARP_V34_RFCOEFF_FIX_BITS));
+    tmp            = (int)FLOOR(bila_filter[2] * (1 << RK_SHARP_V34_RFCOEFF_FIX_BITS));
     pFix->bf_coef2 = CLIP(tmp, 0, 127);
 
     sum_coeff      = pFix->bf_coef0 + 4 * pFix->bf_coef1 + 4 * pFix->bf_coef2;
@@ -272,13 +272,13 @@ void rk_aiq_sharp34_params_cvt(void * attr, isp_params_t* isp_params, common_cvt
             gaus_table_combine[k] = kernel0_ratio * gaus_table[k] / sumTable +
                                     kernel1_ratio * gaus_table1[k] / sumTable1;
             pFix->img_lpf_coeff[k] =
-                ROUND_F(gaus_table_combine[k] * (1 << RK_SHARP_V34_HBFCOEFF_FIX_BITS));
+                FLOOR(gaus_table_combine[k] * (1 << RK_SHARP_V34_HBFCOEFF_FIX_BITS));
         }
     } else {
         for (int k = 0; k < 6; k++) {
             float range_coeff        = pdyn->hfExtra_lpf.hw_sharpT_lpf_wgt[k];
             pFix->img_lpf_coeff[k] =
-                ROUND_F(range_coeff * (1 << RK_SHARP_V34_HBFCOEFF_FIX_BITS));
+                FLOOR(range_coeff * (1 << RK_SHARP_V34_HBFCOEFF_FIX_BITS));
         }
     }
     sum_coeff = pFix->img_lpf_coeff[0] + 4 * pFix->img_lpf_coeff[1] + 4 * pFix->img_lpf_coeff[2] +

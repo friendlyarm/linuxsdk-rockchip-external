@@ -190,7 +190,9 @@ XCamReturn CnrSelectParam
 (
     CnrContext_t *pCnrCtx,
     cnr_param_t* out,
-    int iso)
+    int iso,
+    bool is_aibnr_autorun,
+    int aibnr_fixIndex)
 {
     int i = 0;
     int iso_low = 0, iso_high = 0, ilow = 0, ihigh = 0, inear = 0;
@@ -204,7 +206,14 @@ XCamReturn CnrSelectParam
     }
 
     pre_interp(iso, pCnrCtx->iso_list, 13, &ilow, &ihigh, &ratio);
+    if (aibnr_fixIndex != -1 && is_aibnr_autorun) {
+        ilow = aibnr_fixIndex;
+        ihigh = aibnr_fixIndex;
+        ratio = 0;
+    }
     uratio = ratio * (1 << RATIO_FIXBIT);
+    LOGD_ANR("%s ilow %d, ihigh %d, ratio %f, aibnr_fixIndex %d, is_aibnr_autorun %d",
+        __func__, ilow, ihigh,ratio, aibnr_fixIndex, is_aibnr_autorun);
 
     if (ratio > 0.5)
         inear = ihigh;
@@ -411,6 +420,9 @@ XCamReturn Acnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
     CnrContext_t* pCnrCtx = (CnrContext_t *)inparams->ctx;
     cnr_api_attrib_t* cnr_attrib = pCnrCtx->cnr_attrib;
     cnr_param_t* cnr_res = outparams->algoRes;
+    bool is_aibnr_autorun = inparams->u.proc.is_aibnr_autorun;
+    int aibnr_fixIndex = inparams->u.proc.aibnr_fixIndex;
+    bool is_aibnr_force_update = inparams->u.proc.is_aibnr_force_update;
 
     if (cnr_attrib->opMode != RK_AIQ_OP_MODE_AUTO) {
         LOGE_ANR("mode is %d, not auto mode, ignore", cnr_attrib->opMode);
@@ -429,7 +441,7 @@ XCamReturn Acnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
     bool need_recal = pCnrCtx->isReCal_;
 
     bool init = inparams->u.proc.init;
-    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init) {
+    if (inparams->u.proc.is_attrib_update || inparams->u.proc.init || is_aibnr_force_update) {
         need_recal = true;
     }
 
@@ -446,7 +458,7 @@ XCamReturn Acnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outpar
         CnrApplyStrength(pCnrCtx, cnr_res);
 #endif
 #if defined(RKAIQ_HAVE_CNR_V35) || defined(RKAIQ_HAVE_CNR_V36)
-        CnrSelectParam(pCnrCtx, cnr_res, iso);
+        CnrSelectParam(pCnrCtx, cnr_res, iso, is_aibnr_autorun, aibnr_fixIndex);
         CnrApplyStrength(pCnrCtx, cnr_res);
 #endif
         outparams->cfg_update = true;

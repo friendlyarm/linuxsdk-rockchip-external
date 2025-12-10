@@ -1613,7 +1613,7 @@ typedef struct awb_lgtSrc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(Parameters for detecting white points in UV space \n
-        Freq of use: high))  */
+        Freq of use: low))  */
     awbStats_uvRegion_t wpDct_uvSpace;
     /* M4_GENERIC_DESC(
         M4_ALIAS(wpDct_xySpace),
@@ -1623,7 +1623,7 @@ typedef struct awb_lgtSrc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     awb_xyWpDct_t wpDct_xySpace;
 #if defined(ISP_HW_V39)
     /* M4_GENERIC_DESC(
@@ -1634,7 +1634,7 @@ typedef struct awb_lgtSrc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     awbStats_rotYuvRegion_t wpDct_rotYuvSpace;
 #endif
     /* M4_GENERIC_DESC(
@@ -1694,7 +1694,7 @@ typedef struct awb_earlAct_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(Parameters for detecting normal white points in XY space \n
-        Freq of use: high))  */
+        Freq of use: low))  */
     awbStats_xyRegion_t norWpRegion[AWBSTATS_WPDCT_LS_NUM];
     /* M4_GENERIC_DESC(
         M4_ALIAS(bigWpRegion),
@@ -1705,7 +1705,7 @@ typedef struct awb_earlAct_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(Parameters for big detecting white points in XY space \n
-        Freq of use: high))  */
+        Freq of use: low))  */
     awbStats_xyRegion_t bigWpRegion[AWBSTATS_WPDCT_LS_NUM];
 } awb_earlAct_t;
 
@@ -2251,6 +2251,7 @@ typedef struct awb_cctLutCfg_Lv_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
+        M4_UI_MODULE(grid_weight_table),
         M4_NOTES(T\n
         Freq of use: high))  */
     float rgct_lut_out[CALD_AWB_RGCT_GRID_NUM*CALD_AWB_BGCRI_GRID_NUM];
@@ -2264,6 +2265,7 @@ typedef struct awb_cctLutCfg_Lv_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
+        M4_UI_MODULE(grid_weight_table),
         M4_NOTES(T\n
         Freq of use: high))  */
     float bgcri_lut_out[CALD_AWB_RGCT_GRID_NUM*CALD_AWB_BGCRI_GRID_NUM];
@@ -2639,7 +2641,7 @@ typedef struct awb_sgc_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES())  */
+        M4_NOTES(Freq of use: low))  */
     awb_sgc_mode_e mode;
      /* M4_GENERIC_DESC(
         M4_ALIAS(colorBlock_len),
@@ -2652,7 +2654,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     int colorBlock_len;
     /* M4_GENERIC_DESC(
         M4_ALIAS(colorBlock),
@@ -2662,7 +2664,7 @@ typedef struct awb_sgc_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES(TODO))  */
+        M4_NOTES(Freq of use: low))  */
     awb_sgc_cBlk_t colorBlock[CALD_AWB_SGC_NUM_MAX];
      /* M4_GENERIC_DESC(
         M4_ALIAS(lsUsedForEstimation_len),
@@ -2675,7 +2677,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     int lsUsedForEstimation_len;
     /* M4_GENERIC_DESC(
         M4_ALIAS(lsUsedForEstimation),
@@ -2685,7 +2687,7 @@ typedef struct awb_sgc_s {
         M4_HIDE_EX(0),
         M4_RO(0),
         M4_ORDER(0),
-        M4_NOTES(TODO))  */
+        M4_NOTES(Freq of use: low))  */
     awb_sgc_lgtSrc_t lsUsedForEstimation[CALD_AWB_LS_NUM_MAX];
      /* M4_GENERIC_DESC(
         M4_ALIAS(illuEstListSize),
@@ -2698,7 +2700,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     unsigned short illuEstList_size;
      /* M4_GENERIC_DESC(
         M4_ALIAS(alpha),
@@ -2711,7 +2713,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float alpha;
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtClrGradX),
@@ -2724,7 +2726,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtClrGradX[AWB_SGC_GRAD_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtClrGradY),
@@ -2737,7 +2739,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtClrGradY[AWB_SGC_GRAD_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtDistX),
@@ -2750,7 +2752,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtDistX[AWB_SGC_DIS_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtDistCt),
@@ -2763,7 +2765,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        FFreq of use: low))  */
     float wgtDistCt[AWB_SGC_CT_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtDistHCtY),
@@ -2776,7 +2778,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtDistHCtY[AWB_SGC_DIS_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtDistMCtY),
@@ -2789,7 +2791,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtDistMCtY[AWB_SGC_DIS_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtDistLCtY),
@@ -2802,7 +2804,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtDistLCtY[AWB_SGC_DIS_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtLvX),
@@ -2815,7 +2817,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtLvX[AWB_SGC_LV_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtLvY),
@@ -2828,7 +2830,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtLvY[AWB_SGC_LV_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtWpNumthX),
@@ -2841,7 +2843,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtWpNumthX[AWB_SGC_WPNUM_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(wgtWpNumthY),
@@ -2854,7 +2856,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float wgtWpNumthY[AWB_SGC_WPNUM_GRID_NUM];
      /* M4_GENERIC_DESC(
         M4_ALIAS(illuMchPrt),
@@ -2867,7 +2869,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     int illuMchPrt;
      /* M4_GENERIC_DESC(
         M4_ALIAS(useSgcResth),
@@ -2880,7 +2882,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float useSgcResth;
      /* M4_GENERIC_DESC(
         M4_ALIAS(updateDpWbgnTh),
@@ -2893,7 +2895,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float updateDpWbgnTh;
      /* M4_GENERIC_DESC(
         M4_ALIAS(updateDpWbgnTh2),
@@ -2906,7 +2908,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float updateDpWbgnTh2;
      /* M4_GENERIC_DESC(
         M4_ALIAS(updateEstWbgnTh),
@@ -2919,7 +2921,7 @@ typedef struct awb_sgc_s {
         M4_RO(0),
         M4_ORDER(0),
         M4_NOTES(T\n
-        Freq of use: high))  */
+        Freq of use: low))  */
     float updateEstWbgnTh;
 } awb_sgc_t;
 
@@ -4289,7 +4291,7 @@ typedef struct awb_gainCalcStep_s {
         M4_ALIAS(dampFactor),
         M4_TYPE(struct),
         M4_UI_MODULE(normal_ui_style),
-        M4_HIDE_EX(0),
+        M4_HIDE_EX(1),
         M4_RO(0),
         M4_ORDER(8),
         M4_NOTES(\n

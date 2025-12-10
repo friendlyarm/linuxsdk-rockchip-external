@@ -30,11 +30,18 @@ typedef struct {
     aibnr_param_t cur_param;
     int working_mode;
     int pre_iso;
-    float mean_luma;
+
+    bool doAiisp_force_update;
+    bool doAiisp_en;
+    int doAiisp_isoL;
+    int doAiisp_isoH;
+    int fixIndex;
 
     bool isReCal_;
 } AibnrContext_t;
 
 #define DEFAULT_RECALCULATE_DELTA_ISO (0.01)
+
+int aibnr_getFixIndex(const RkAiqAlgoCom* inparams, int *index, bool *force_update);
 
 #endif

@@ -619,6 +619,19 @@ rk_aiq_uapi2_sysctl_setReadBackMode(rk_aiq_sys_ctx_t* ctx, bool on);
 XCamReturn
 rk_aiq_uapi2_setRawBufNum(rk_aiq_sys_ctx_t* ctx, uint16_t buf_num);
 
+typedef struct AiqImuData_s AiqImuData_t;
+void rk_aiq_uapi2_setImuData(const rk_aiq_sys_ctx_t* ctx, AiqImuData_t *data);
+
+/*!
+ * \brief get hdr compr curve
+ *
+ * \param[in] ctx             the context returned by \ref rk_aiq_uapi2_sysctl_init
+ * \param[out] compr          hdr compr curve
+ * \return return 0 if success
+ */
+XCamReturn rk_aiq_uapi2_sysctl_getHdrComprCurve(const rk_aiq_sys_ctx_t* ctx,
+                                                RkAiqHdrCompr_t* compr);
+
 RKAIQ_END_DECLARE
 
 #endif

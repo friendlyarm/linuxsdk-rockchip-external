@@ -40,7 +40,6 @@ static void sample_a3dlut_usage()
     printf("\t i) 3DLUT:         Set Manual attr & Async.\n");
     printf("\t j) 3DLUT:         Query A3DLUT Info.\n");
     printf("\t k) 3DLUT:         newstruct test.\n");
-    printf("\t l) hsv:         newstruct test.\n");
     printf("\n");
     printf("\t h) 3DLUT:         help.\n");
     printf("\t q) 3DLUT:         return to main sample screen.\n");
@@ -466,163 +465,6 @@ int sample_3dlut_setCalib_test(const rk_aiq_sys_ctx_t* ctx)
 }
 #endif
 
-#if USE_NEWSTRUCT && (defined(ISP_HW_V33) || defined(ISP_HW_V35))
-int sample_hsv_test(const rk_aiq_sys_ctx_t* ctx)
-{
-    // get cur mode
-    printf("+++++++ hsv module test start ++++++++\n");
-
-    hsv_api_attrib_t attr;
-    memset(&attr, 0, sizeof(attr));
-
-    rk_aiq_user_api2_hsv_GetAttrib(ctx, &attr);
-
-    printf("hsv attr: opmode:%d, en:%d, bypass:%d\n", attr.opMode, attr.en, attr.bypass);
-
-    srand(time(0));
-    int rand_num = rand() % 101;
-
-    if (rand_num <70) {
-        printf("update hsv arrrib!\n");
-        if (attr.opMode == RK_AIQ_OP_MODE_AUTO) {
-            attr.opMode = RK_AIQ_OP_MODE_MANUAL;
-        }
-        else {
-            attr.opMode = RK_AIQ_OP_MODE_AUTO;
-        }
-    }
-    else {
-        // reverse en
-        printf("reverse hsv en!\n");
-        attr.en = !attr.en;
-    }
-
-    rk_aiq_user_api2_hsv_SetAttrib(ctx, &attr);
-
-    // wait more than 2 frames
-    usleep(180 * 1000);
-
-    hsv_status_t status;
-    memset(&status, 0, sizeof(hsv_status_t));
-
-    rk_aiq_user_api2_hsv_QueryStatus(ctx, &status);
-
-    printf("hsv status: opmode:%d, en:%d, bypass:%d\n", status.opMode, status.en, status.bypass);
-
-    if (status.opMode != attr.opMode || status.en != attr.en)
-        printf("hsv test failed\n");
-    printf("-------- hsv module test done --------\n");
-
-    return 0;
-}
-
-int sample_query_hsv_status(const rk_aiq_sys_ctx_t* ctx)
-{
-    hsv_status_t info;
-    rk_aiq_user_api2_hsv_QueryStatus(ctx, &info);
-    printf("Query hsv status:\n\n");
-    printf("  opMode: %d, en: %d, bypass: %d,\n"
-           "  stMan: {\n    sta: %d, %d, %d,\n    dyn: {lut1d0={mode: %d, [%d,...,%d,...]}, lut1d1={mode: %d, [%d,...,%d,...]}, lut2d={mode: %d, [...,%d,...,%d,...]}}\n"
-           "  }\n  astatus: {illu: %s, alp: %f}\n", 
-            info.opMode, info.en, info.bypass,
-            info.stMan.sta.hw_hsvT_lut1d0_en,
-            info.stMan.sta.hw_hsvT_lut1d1_en,
-            info.stMan.sta.hw_hsvT_lut2d_en,
-            info.stMan.dyn.lut1d0.hw_hsvT_lut1d_mode,
-            info.stMan.dyn.lut1d0.hw_hsvT_lut1d_val[0],
-            info.stMan.dyn.lut1d0.hw_hsvT_lut1d_val[32],
-            info.stMan.dyn.lut1d1.hw_hsvT_lut1d_mode,
-            info.stMan.dyn.lut1d1.hw_hsvT_lut1d_val[0],
-            info.stMan.dyn.lut1d1.hw_hsvT_lut1d_val[32],
-            info.stMan.dyn.lut2d.hw_hsvT_lut2d_mode,
-            info.stMan.dyn.lut2d.hw_hsvT_lut2d_val[16],
-            info.stMan.dyn.lut2d.hw_hsvT_lut2d_val[144],
-            info.ahsvStatus.sw_hsvC_illuUsed_name,
-            info.ahsvStatus.sw_hsvT_alpha_val);
-    return 0;
-}
-
-int sample_hsv_setCalib_test(const rk_aiq_sys_ctx_t* ctx)
-{
-    XCamReturn ret = XCAM_RETURN_NO_ERROR;
-    ahsv_hsvCalib_t calib;
-    memset(&calib, 0, sizeof(ahsv_hsvCalib_t));
-    //get
-    ret = rk_aiq_user_api2_hsv_GetCalib(ctx, &calib);
-    RKAIQ_SAMPLE_CHECK_RET(ret, "Get hsv CALIB failed!");
-    printf("GetCALIB:\n\n");
-    printf("\t effect Table_len = %d\n", calib.sw_hsvCfg_tblAll_len);
-    for (int i = 0; i < calib.sw_hsvCfg_tblAll_len; i++) {
-        printf("\t %s = {lut1d0={mode: %d, [%d,...,%d,...]}, lut1d1={mode: %d, [%d,...,%d,...]}, lut2d={mode: %d, [...,%d,...,%d,...]}}, \n",
-                calib.tableAll[i].sw_hsvC_illu_name,
-                calib.tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_mode,
-                calib.tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_val[0],
-                calib.tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_val[32],
-                calib.tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_mode,
-                calib.tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_val[0],
-                calib.tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_val[32],
-                calib.tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_mode,
-                calib.tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_val[16],
-                calib.tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_val[144]);
-    }
-    //modify
-    srand(time(0));
-    int rand_num = rand() % 101;
-
-    if (rand_num <70) {
-        printf("update lsc calib!\n");
-        calib.tableAll[0].meshGain.lut1d0.hw_hsvT_lut1d_val[0] += 32;
-        calib.tableAll[0].meshGain.lut1d0.hw_hsvT_lut1d_val[32] += 32;
-        calib.tableAll[0].meshGain.lut1d1.hw_hsvT_lut1d_val[0] -= 64;
-        calib.tableAll[0].meshGain.lut1d1.hw_hsvT_lut1d_val[32] -= 64;
-        calib.tableAll[0].meshGain.lut2d.hw_hsvT_lut2d_val[16] += 64;
-        calib.tableAll[0].meshGain.lut2d.hw_hsvT_lut2d_val[144] +=64;
-
-        calib.tableAll[1].meshGain.lut1d0.hw_hsvT_lut1d_val[0] += 64;
-        calib.tableAll[1].meshGain.lut1d0.hw_hsvT_lut1d_val[32] += 64;
-        calib.tableAll[1].meshGain.lut1d1.hw_hsvT_lut1d_val[0] -= 128;
-        calib.tableAll[1].meshGain.lut1d1.hw_hsvT_lut1d_val[32] -= 128;
-        calib.tableAll[1].meshGain.lut2d.hw_hsvT_lut2d_val[16] += 10;
-        calib.tableAll[1].meshGain.lut2d.hw_hsvT_lut2d_val[144] +=10;
-    } else {
-        memcpy(&calib.tableAll[0], &calib.tableAll[calib.sw_hsvCfg_tblAll_len-1], sizeof(ahsv_tableAll_t));
-        if (calib.sw_hsvCfg_tblAll_len > 1)
-            calib.sw_hsvCfg_tblAll_len -= 1;
-    }
-
-    rk_aiq_user_api2_hsv_SetCalib(ctx, &calib);
-    
-    // wait more than 2 frames
-    usleep(90 * 1000);
-
-    ahsv_hsvCalib_t calib_new;
-    memset(&calib_new, 0, sizeof(ahsv_hsvCalib_t));
-
-    rk_aiq_user_api2_hsv_GetCalib(ctx, &calib_new);
-
-    printf("\t new table_len = %d\n", calib_new.sw_hsvCfg_tblAll_len);
-    for (int i = 0; i < calib_new.sw_hsvCfg_tblAll_len; i++) {
-        printf("\t %s = {lut1d0={mode: %d, [%d,...,%d,...]}, lut1d1={mode: %d, [%d,...,%d,...]}, lut2d={mode: %d, [...,%d,...,%d,...]}}, \n",
-                calib_new.tableAll[i].sw_hsvC_illu_name,
-                calib_new.tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_mode,
-                calib_new.tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_val[0],
-                calib_new.tableAll[i].meshGain.lut1d0.hw_hsvT_lut1d_val[32],
-                calib_new.tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_mode,
-                calib_new.tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_val[0],
-                calib_new.tableAll[i].meshGain.lut1d1.hw_hsvT_lut1d_val[32],
-                calib_new.tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_mode,
-                calib_new.tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_val[16],
-                calib_new.tableAll[i].meshGain.lut2d.hw_hsvT_lut2d_val[144]);
-    }
-    if (calib_new.sw_hsvCfg_tblAll_len != calib.sw_hsvCfg_tblAll_len || 
-        calib_new.tableAll[0].meshGain.lut1d0.hw_hsvT_lut1d_val[0] != calib.tableAll[0].meshGain.lut1d0.hw_hsvT_lut1d_val[0])
-        printf("hsv calib test failed\n");
-    printf("-------- hsv module calib test done --------\n");  
-
-    return 0;
-}
-#endif
-
 XCamReturn sample_a3dlut_module(const void* arg)
 {
     int key = -1;
@@ -732,15 +574,6 @@ XCamReturn sample_a3dlut_module(const void* arg)
             case 'l':
                 sample_query_3dlut_status(ctx);
                 sample_3dlut_setCalib_test(ctx);
-                break;
-#endif
-#if USE_NEWSTRUCT && (defined(ISP_HW_V33) || defined(ISP_HW_V35))
-            case 'm':
-                sample_hsv_test(ctx);
-                break;
-            case 'o':
-                sample_query_hsv_status(ctx);
-                sample_hsv_setCalib_test(ctx);
                 break;
 #endif
             default:

@@ -413,6 +413,14 @@ static XCamReturn newAiqParamPool(AiqCore_t* pAiqCore, int type) {
             NEW_PARAMS_POOL(RESULT_TYPE_AIRMS_PARAM, rk_aiq_isp_airms_params_t);
             break;
 #endif
+#if RKAIQ_HAVE_AIYNR
+        case RK_AIQ_ALGO_TYPE_AIYNR:
+            NEW_PARAMS_POOL(RESULT_TYPE_AIYNR_PARAM, rk_aiq_isp_aiynr_params_t);
+            break;
+#endif
+        case RK_AIQ_ALGO_TYPE_BAYERTNR2:
+            NEW_PARAMS_POOL(RESULT_TYPE_TNR2_PARAM, rk_aiq_isp_btnr_params_t);
+            break;
         default:
             break;
     }
@@ -782,6 +790,16 @@ static uint64_t getReqAlgoResMask(AiqCore_t* pAiqCore, int algoType) {
 #if RKAIQ_HAVE_AIBNR
         case RK_AIQ_ALGO_TYPE_AIBNR:
             tmp |= 1ULL << RESULT_TYPE_AIBNR_PARAM;
+            break;
+#endif
+#if RKAIQ_HAVE_AIYNR
+        case RK_AIQ_ALGO_TYPE_AIYNR:
+            tmp |= 1ULL << RESULT_TYPE_AIYNR_PARAM;
+            break;
+#endif
+#if 0
+        case RK_AIQ_ALGO_TYPE_BAYERTNR2:
+            tmp |= 1ULL << RESULT_TYPE_TNR2_PARAM;
             break;
 #endif
         default:
@@ -1746,6 +1764,14 @@ static XCamReturn getAiqParamsBuffer(AiqCore_t* pAiqCore, AiqFullParams_t* aiqPa
             NEW_PARAMS_BUFFER(AIRMS);
 #endif
             break;
+        case RK_AIQ_ALGO_TYPE_AIYNR:
+#if RKAIQ_HAVE_AIYNR
+            NEW_PARAMS_BUFFER(AIYNR);
+#endif
+            break;
+        case RK_AIQ_ALGO_TYPE_BAYERTNR2:
+            NEW_PARAMS_BUFFER(TNR2);
+            break;
         default:
             break;
     }
@@ -2001,11 +2027,9 @@ XCamReturn AiqCore_prepare(AiqCore_t * pAiqCore,
 	}
 	if (mode == RK_AIQ_WORKING_MODE_NORMAL) {
 		pAiqCore->mAlogsComSharedParams.hdr_mode = 0;
-	} else if (mode == RK_AIQ_ISP_HDR_MODE_2_FRAME_HDR ||
-			   mode == RK_AIQ_ISP_HDR_MODE_2_LINE_HDR) {
+	} else if (RK_AIQ_HDR_IS_HDR2(mode)) {
 		pAiqCore->mAlogsComSharedParams.hdr_mode = 1;
-	} else if (mode == RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR ||
-			   mode == RK_AIQ_ISP_HDR_MODE_3_LINE_HDR) {
+	} else if (RK_AIQ_HDR_IS_HDR3(mode)) {
 		pAiqCore->mAlogsComSharedParams.hdr_mode = 2;
 	}
 
@@ -2561,7 +2585,8 @@ static XCamReturn handleVicapScaleBufs(AiqCore_t* pAiqCore, aiq_VideoBuffer_t* b
         resetVicapScalbuf(pAiqCore->mVicapBufs);
     }
 
-    if (mode == RK_AIQ_WORKING_MODE_NORMAL) {
+    if (mode == RK_AIQ_WORKING_MODE_NORMAL ||
+        RK_AIQ_HDR_IS_SENSOR_BUILTIN(mode)) {
         pAiqCore->mVicapBufs->frame_id = frameId;
         if (pAiqCore->mVicapBufs->raw_s) AiqVideoBuffer_unref(pAiqCore->mVicapBufs->raw_s);
         pAiqCore->mVicapBufs->raw_s    = buffer;
@@ -3114,7 +3139,6 @@ void AiqCore_setSensorFlip(AiqCore_t* pAiqCore, bool mirror, bool flip) {
 XCamReturn AiqCore_setCalib(AiqCore_t* pAiqCore, const CamCalibDbV2Context_t* aiqCalib) {
     ENTER_ANALYZER_FUNCTION();
 
-    /* TODO: xuhf WARNING */
     pAiqCore->mAlogsComSharedParams.calibv2   = aiqCalib;
     pAiqCore->mAlogsComSharedParams.conf_type = RK_AIQ_ALGO_CONFTYPE_UPDATECALIB;
 
@@ -3170,6 +3194,8 @@ static struct iqModStrToAlgoMap_s iqModuleStrToAlgoEnumMap[] = {
 	{"ldc", RK_AIQ_ALGO_TYPE_ALDC},
     {"aibnr", RK_AIQ_ALGO_TYPE_AIBNR},
     {"airms", RK_AIQ_ALGO_TYPE_AIRMS},
+    {"aiynr", RK_AIQ_ALGO_TYPE_AIYNR},
+    {"bayertnr2", RK_AIQ_ALGO_TYPE_BAYERTNR2},
 };
 
 static void mapModStrListToEnum(AiqCore_t* pAiqCore, TuningCalib* change_name_list) {
@@ -3618,6 +3644,11 @@ static XCamReturn fixAiqParamsIsp(AiqCore_t* pAiqCore, AiqFullParams_t* aiqParam
             pYnrBase->is_update = true;
         }
     }
+
+    aiq_params_base_t* pBtnr2Base = aiqParams->pParamsArray[RESULT_TYPE_TNR2_PARAM];
+    if (pBtnr2Base && !pBtnr2Base->is_update) {
+        pBtnr2Base->is_update = true;
+    }
 #endif
 
     aiq_params_base_t* pDrcBase  = aiqParams->pParamsArray[RESULT_TYPE_DRC_PARAM];
@@ -3957,6 +3988,8 @@ static int AiqCore_algosDump(void* self, st_string* result, int argc, void* argv
             OPT_BOOLEAN('U', "hsv", &dump_args[AIQ_NOTIFIER_MATCH_HSV], "dump hsv module info",
                         NULL, 0, 0),
             OPT_BOOLEAN('V', "aibnr", &dump_args[AIQ_NOTIFIER_MATCH_AIBNR], "dump aibnr module info",
+                        NULL, 0, 0),
+            OPT_BOOLEAN('W', "aiynr", &dump_args[AIQ_NOTIFIER_MATCH_AIYNR], "dump aiynr module info",
                         NULL, 0, 0),
             OPT_BOOLEAN('\0', "help", NULL, "show this help message and exit", dbg_help_cb, 0,
                         OPT_NONEG),

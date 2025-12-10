@@ -216,6 +216,7 @@ enum TEST_CTL_TYPE {
     TEST_CTL_TYPE_REPEAT_INIT_PREPARE_START_STOP_DEINIT,
     TEST_CTL_TYPE_REPEAT_START_STOP,
     TEST_CTL_TYPE_REPEAT_PREPARE_START_STOP,
+    TEST_CTL_TYPE_REPEAT_SWITCHSCENE_PREPARE_START_STOP,
 };
 
 static struct termios oldt;
@@ -391,6 +392,132 @@ void disable_terminal_return(void)
 
     //make sure settings will be restored when program ends
     atexit(restore_terminal_settings);
+}
+
+int getsubopt(char** opt, char* const* keys, char** val) {
+    char* s = *opt;
+    int i;
+
+    *val = NULL;
+    *opt = strchr(s, ',');
+    if (*opt)
+        *(*opt)++ = 0;
+    else
+        *opt = s + strlen(s);
+
+    for (i = 0; keys[i]; i++) {
+        size_t l = strlen(keys[i]);
+        if (strncmp(keys[i], s, l)) continue;
+        if (s[l] == '=')
+            *val = s + l + 1;
+        else if (s[l])
+            continue;
+        return i;
+    }
+    return -1;
+}
+
+int parse_subopt(char** subs, const char* const* subopts, char** value) {
+    int opt = getsubopt(subs, (char* const*)(subopts), value);
+
+    if (opt == -1) {
+        fprintf(stderr, "Invalid suboptions specified\n");
+        return -1;
+    }
+    if (*value == NULL) {
+        fprintf(stderr, "No value given to suboption <%s>\n", subopts[opt]);
+        return -1;
+    }
+    return opt;
+}
+
+int parse_iq_scene_val(char* optarg, char main_scene[32], char sub_scene[32]) {
+    char *value, *subs;
+
+    subs = optarg;
+    while (*subs != '\0') {
+        static const char* subopts[] = {"main_scene", "sub_scene", NULL};
+        size_t len;
+
+        switch (parse_subopt(&subs, subopts, &value)) {
+            case 0:
+                len = strlen(value);
+                if (len == 0 || len > 32) {
+                    ERR("Invalid main_scene value: %s", value);
+                    return -1;
+                }
+                memcpy(main_scene, value, len);
+                main_scene[len] = '\0';
+                break;
+            case 1:
+                len = strlen(value);
+                if (len == 0 || len > 32) {
+                    ERR("Invalid sub_scene value: %s", value);
+                    return -1;
+                }
+                memcpy(sub_scene, value, len);
+                sub_scene[len] = '\0';
+                break;
+            default:
+                ERR("Invalid scene option: %s", value);
+                return -1;
+        }
+    }
+    return 0;
+}
+
+int parse_switch_scene_val(char* optarg, char main_scene[32], char sub_scene[32],
+                           char main_scene1[32], char sub_scene1[32]) {
+    char *value, *subs;
+
+    subs = optarg;
+    while (*subs != '\0') {
+        static const char* subopts[] = {"main_scene", "sub_scene", "main_scene1", "sub_scene1", NULL};
+        size_t len;
+
+        switch (parse_subopt(&subs, subopts, &value)) {
+            case 0:
+                len = strlen(value);
+                if (len == 0 || len > 32) {
+                    ERR("Invalid main_scene value: %s", value);
+                    return -1;
+                }
+                memcpy(main_scene, value, len);
+                main_scene[len] = '\0';
+                break;
+            case 1:
+                len = strlen(value);
+                if (len == 0 || len > 32) {
+                    ERR("Invalid sub_scene value: %s", value);
+                    return -1;
+                }
+                memcpy(sub_scene, value, len);
+                sub_scene[len] = '\0';
+                break;
+            case 2:
+                len = strlen(value);
+                if (len == 0 || len > 32) {
+                    ERR("Invalid main_scene1 value: %s", value);
+                    return -1;
+                }
+                memcpy(main_scene1, value, len);
+                main_scene1[len] = '\0';
+                break;
+            case 3:
+                len = strlen(value);
+                if (len == 0 || len > 32) {
+                    ERR("Invalid sub_scene1 value: %s", value);
+                    return -1;
+                }
+                memcpy(sub_scene1, value, len);
+                sub_scene1[len] = '\0';
+                break;
+            default:
+                ERR("Invalid scene option: %s", value);
+                return -1;
+        }
+    }
+    return 0;
 }
 
 char* get_dev_name(demo_context_t* ctx)
@@ -1972,11 +2099,13 @@ static void parse_args(int argc, char **argv, demo_context_t *ctx)
             {"aov",   no_argument,       0, '5' },
             {"aov-loop",   required_argument, 0, '6' },
             {"aov-continue",   required_argument, 0, '7' },
+            {"set-scene",   required_argument, 0, '8' },
+            {"switch-scene-loop", required_argument, 0, '9' },
             {0,          0,                 0,  0  }
         };
 
         //c = getopt_long(argc, argv, "w:h:f:i:d:o:c:ps",
-        c = getopt_long(argc, argv, "w:h:f:i:g:j:y:d:o:c:n:k:a:t:1:2:v::3456:7:mpserl",
+        c = getopt_long(argc, argv, "w:h:f:i:g:j:y:d:o:c:n:k:a:t:1:2:v::3456:7:8:9:mpserl",
                         long_options, &option_index);
         if (c == -1)
             break;
@@ -2134,6 +2263,25 @@ static void parse_args(int argc, char **argv, demo_context_t *ctx)
         case '7':
             ctx->aovContinueCnt = atoi(optarg);
             break;
+        case '8':
+            if (parse_iq_scene_val(optarg, ctx->main_scene[0], ctx->sub_scene[0]) < 0) {
+                ERR("Invalid iq scene value: %s\n", optarg);
+                exit(-1);
+            } else {
+                DBG("Set iq scene, main: %s, sub: %s\n", ctx->main_scene[0], ctx->sub_scene[0]);
+            }
+            break;
+        case '9':
+            if (parse_switch_scene_val(optarg, ctx->main_scene[0], ctx->sub_scene[0],
+                                   ctx->main_scene[1], ctx->sub_scene[1]) < 0) {
+                ERR("Invalid iq scene value: %s\n", optarg);
+                exit(-1);
+            } else {
+                DBG("Set switch scene %s:%s to %s:%s\n", ctx->main_scene[0], ctx->sub_scene[0],
+                    ctx->main_scene[1], ctx->sub_scene[1]);
+                ctx->ctl_type = TEST_CTL_TYPE_REPEAT_SWITCHSCENE_PREPARE_START_STOP;
+            }
+            break;
         case '?':
         case 'p':
             ERR("Usage: %s to capture rkisp1 frames\n"
@@ -2166,6 +2314,11 @@ static void parse_args(int argc, char **argv, demo_context_t *ctx)
                 "         --aov                              optional, use aov mode.\n"
                 "         --aov-continue, default 30         optional, sequential frame mode run count\n"
                 "         --aov-loop, default 30             optional, one frame mode run count\n"
+                "         --set-scene                        optional, main_scene=<val>,sub_scene=<val>\n"
+                "                                            main_scene and sub_scene is the name of scene in iq file\n"
+                "         --switch-scene-loop                optional, main_scene=<val>,sub_scene=<val>,main_scene1=<val>,sub_scene1=<val>"
+                "                                            main_scene and sub_scene is the name of scene in iq file\n"
+                "                                            loop switch between scene and scene1 every --count frames\n"
                 "         --sensor,  default os04a10,        optional, optional, sensor names\n",
                 argv[0]);
             exit(-1);
@@ -2722,10 +2875,12 @@ static void rkisp_routine(demo_context_t *ctx)
                 // TODO, should decide the resolution firstly,
                 // then check if the mode is supported on this
                 // resolution
-                if ((sns_info->support_fmt[i].hdr_mode == 5/*HDR_X2*/ &&
-                        work_mode == RK_AIQ_WORKING_MODE_ISP_HDR2) ||
-                        (sns_info->support_fmt[i].hdr_mode == 6/*HDR_X3*/ &&
-                        work_mode == RK_AIQ_WORKING_MODE_ISP_HDR3)) {
+                if (((sns_info->support_fmt[i].hdr_mode == 5/*HDR_X2*/ ||
+                      sns_info->support_fmt[i].hdr_mode == 7/*HDR_COMPR*/) &&
+                      work_mode == RK_AIQ_WORKING_MODE_ISP_HDR2) ||
+                    ((sns_info->support_fmt[i].hdr_mode == 6/*HDR_X3*/ ||
+                      sns_info->support_fmt[i].hdr_mode == 7/*HDR_COMPR*/) &&
+                      work_mode == RK_AIQ_WORKING_MODE_ISP_HDR3)) {
                     b_work_mode_supported = true;
                     break;
                 }
@@ -2753,10 +2908,18 @@ static void rkisp_routine(demo_context_t *ctx)
 
     if (ctx->rkaiq) {
         XCamReturn ret = XCAM_RETURN_NO_ERROR;
-        if (work_mode == RK_AIQ_WORKING_MODE_NORMAL)
-            ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, "normal", "day");
-        else
-            ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, "hdr", "day");
+        if (strlen(ctx->main_scene[0]) > 0 && strlen(ctx->sub_scene[0]) > 0) {
+            DBG("%s: set scene %s, %s\n", get_sensor_name(ctx), ctx->main_scene[0],
+                ctx->sub_scene[0]);
+            ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, ctx->main_scene[0],
+                                               ctx->sub_scene[0]);
+        } else {
+            if (work_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+                ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, "normal", "day");
+            } else {
+                ret = rk_aiq_uapi2_sysctl_preInit_scene(sns_entity_name, "hdr", "day");
+            }
+        }
         if (ret < 0)
             ERR("%s: failed to set %s scene\n",
                 get_sensor_name(ctx),
@@ -3042,10 +3205,11 @@ static void rkisp_routine(demo_context_t *ctx)
 
                 if (ctx->ctl_type != TEST_CTL_TYPE_DEFAULT) {
                     static int test_ctl_cnts = 0;
+                    int frame_count = 0;
 restart:
-                    ctx->frame_count = 60;
+                    frame_count = ctx->frame_count;
                     start_capturing(ctx);
-                    while ((ctx->frame_count-- > 0))
+                    while ((frame_count-- > 0))
                         read_frame(ctx);
                     stop_capturing(ctx);
                     printf("+++++++ TEST SYSCTL COUNTS %d ++++++++++++ \n", test_ctl_cnts++);
@@ -3070,7 +3234,7 @@ restart:
                         if (ret < 0)
                             ERR("%s: failed to set %s scene\n",
                                 get_sensor_name(ctx),
-                                work_mode == RK_AIQ_WORKING_MODE_NORMAL ? "normal" : "hdr");
+                                work_mode == RK_AIQ_WORKING_MODE_NORMAL? "normal" : "hdr");
                         ctx->aiq_ctx = rk_aiq_uapi2_sysctl_init(sns_entity_name, ctx->iqpath, NULL, NULL);
                         printf("aiq prepare .....\n");
                         XCamReturn ret = rk_aiq_uapi2_sysctl_prepare(ctx->aiq_ctx, ctx->width, ctx->height, work_mode);
@@ -3079,9 +3243,41 @@ restart:
                         XCamReturn ret = rk_aiq_uapi2_sysctl_prepare(ctx->aiq_ctx, ctx->width, ctx->height, work_mode);
                     } else if (ctx->ctl_type == TEST_CTL_TYPE_REPEAT_START_STOP) {
                         // do nothing
+                    } else if (ctx->ctl_type == TEST_CTL_TYPE_REPEAT_SWITCHSCENE_PREPARE_START_STOP) {
+                        const char* main_scene[2] = {"normal", "hdr"};
+                        const char* sub_scene[2] = {"day", "day_dcgVs"};
+                        static int scene_index = 0;  /* Track current scene index */
+                        int custom_scenes_valid;
+
+                        /* Use custom scenes if all are configured */
+                        custom_scenes_valid = (strlen(ctx->main_scene[0]) > 0 && strlen(ctx->sub_scene[0]) > 0 &&
+                                             strlen(ctx->main_scene[1]) > 0 && strlen(ctx->sub_scene[1]) > 0);
+                        if (custom_scenes_valid) {
+                            main_scene[0] = ctx->main_scene[0];
+                            sub_scene[0] = ctx->sub_scene[0];
+                            main_scene[1] = ctx->main_scene[1];
+                            sub_scene[1] = ctx->sub_scene[1];
+                        }
+
+                        /* Toggle between scenes (0 and 1) */
+                        scene_index = (scene_index + 1) % 2;
+
+                        int ret = rk_aiq_uapi2_sysctl_switch_scene(ctx->aiq_ctx, main_scene[scene_index], sub_scene[scene_index]);
+                        if (ret < 0) {
+                            ERR("Failed to switch scene to %s:%s\n", main_scene[scene_index], sub_scene[scene_index]);
+                        } else {
+                            DBG("Switch scene to %s:%s (index: %d)\n", main_scene[scene_index], sub_scene[scene_index], scene_index);
+
+                            DBG("aiq prepare .....\n");
+                            int ret = rk_aiq_uapi2_sysctl_prepare(ctx->aiq_ctx, ctx->width,
+                                                                         ctx->height, work_mode);
+                            if (ret < 0)
+                                ERR("Failed to prepare after switch scene\n");
+                        }
                     }
+
                     printf("aiq start .....\n");
-                    ret = rk_aiq_uapi2_sysctl_start(ctx->aiq_ctx );
+                    ret = rk_aiq_uapi2_sysctl_start(ctx->aiq_ctx);
                     printf("aiq restart .....\n");
                     goto restart;
                 }
@@ -3430,6 +3626,8 @@ int main(int argc, char **argv)
         .aovContinueCnt = 30,
         .aovLoopRunCnt = 0,
         .aovContinueRunCnt = 0,
+        .main_scene = {{0}, {0}},
+        .sub_scene = {{0}, {0}},
     };
     demo_context_t second_ctx;
     demo_context_t third_ctx;
@@ -3441,6 +3639,8 @@ int main(int argc, char **argv)
         main_ctx.rawBufs[i].vaddr = NULL;
 
     parse_args(argc, argv, &main_ctx);
+    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
+
 #if ISPDEMO_ENABLE_DRM
     if (main_ctx.vop) {
 
@@ -3554,8 +3754,6 @@ int main(int argc, char **argv)
     init_ispfec_bufs(&g_ispfec_cfg);
     g_ispfec_ctx = rk_ispfec_api_init(&g_ispfec_cfg);
 #endif
-
-    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
 
     mainloop(&main_ctx);
     if (main_ctx.isOrp) {

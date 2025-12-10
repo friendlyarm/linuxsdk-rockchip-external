@@ -542,6 +542,7 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
     __RKAIQUAPI_DESC_DEF("/uapi/0/dm_uapi/info", dm_status_t, NULL, rk_aiq_user_api2_dm_QueryStatus),
     __RKAIQUAPI_DESC_DEF("/uapi/0/btnr_uapi/attr", btnr_api_attrib_t, rk_aiq_user_api2_btnr_SetAttrib, rk_aiq_user_api2_btnr_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/btnr_uapi/info", btnr_status_t, NULL, rk_aiq_user_api2_btnr_QueryStatus),
+    __RKAIQUAPI_DESC_DEF("/uapi/0/btnr_uapi/stats", btnr_stats_cp_t, NULL, rk_aiq_user_api2_btnr_QueryStats),
     __RKAIQUAPI_DESC_DEF("/uapi/0/gamma_uapi/attr", gamma_api_attrib_t, rk_aiq_user_api2_gamma_SetAttrib, rk_aiq_user_api2_gamma_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/gamma_uapi/info", gamma_status_t, NULL, rk_aiq_user_api2_gamma_QueryStatus),
     __RKAIQUAPI_DESC_DEF("/uapi/0/drc_uapi/attr", drc_api_attrib_t, rk_aiq_user_api2_drc_SetAttrib, rk_aiq_user_api2_drc_GetAttrib),
@@ -582,6 +583,7 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
     __RKAIQUAPI_DESC_DEF("/uapi/0/mge_uapi/info", mge_status_t, NULL, rk_aiq_user_api2_merge_QueryStatus),
     __RKAIQUAPI_DESC_DEF("/uapi/0/ver_uapi/ver_info", rk_aiq_version_info_t, NULL, rk_aiq_uapi2_get_aiqversion_info),
     __RKAIQUAPI_DESC_DEF("/uapi/0/module_ctl_uapi/module_ctl", rk_aiq_module_list_t, rk_aiq_uapi2_sysctl_setModuleEn, rk_aiq_uapi2_sysctl_getModuleEn),
+    __RKAIQUAPI_DESC_DEF("/uapi/0/interpIso_uapi/info", algo_interp_iso_list_t, NULL, rk_aiq_uapi2_query_algoInterpIsoInfo),
     __RKAIQUAPI_DESC_DEF("/uapi/0/lsc_uapi/attr", lsc_api_attrib_t, rk_aiq_user_api2_lsc_SetAttrib, rk_aiq_user_api2_lsc_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/lsc_uapi/calibdb", alsc_lscCalib_t, rk_aiq_user_api2_lsc_setCalib_forTool, rk_aiq_user_api2_lsc_GetCalib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/lsc_uapi/info", lsc_status_t, NULL, rk_aiq_user_api2_lsc_QueryStatus),
@@ -634,6 +636,8 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
 #endif
 #if defined(ISP_HW_V35)
     __RKAIQUAPI_DESC_DEF("/uapi/0/af_uapi/attr", af_param_t, rk_aiq_user_api2_af_SetCalib, rk_aiq_user_api2_af_GetCalib),
+    __RKAIQUAPI_DESC_DEF("/uapi/0/btnr2_uapi/attr", btnr_api_attrib_t, rk_aiq_user_api2_btnr2_SetAttrib, rk_aiq_user_api2_btnr2_GetAttrib),
+    __RKAIQUAPI_DESC_DEF("/uapi/0/btnr2_uapi/info", btnr_status_t, NULL, rk_aiq_user_api2_btnr2_QueryStatus),
 #endif
 #if RKAIQ_HAVE_AIBNR
     __RKAIQUAPI_DESC_DEF("/uapi/0/aibnr_uapi/attr", aibnr_api_attrib_t, rk_aiq_user_api2_aibnr_SetAttrib, rk_aiq_user_api2_aibnr_GetAttrib),
@@ -642,6 +646,14 @@ RkAiqUapiDesc_t rkaiq_uapidesc_list[] = {
 #if RKAIQ_HAVE_AIRMS
     __RKAIQUAPI_DESC_DEF("/uapi/0/airms_uapi/attr", airms_api_attrib_t, rk_aiq_user_api2_airms_SetAttrib, rk_aiq_user_api2_airms_GetAttrib),
     __RKAIQUAPI_DESC_DEF("/uapi/0/airms_uapi/info", airms_status_t, NULL, rk_aiq_user_api2_airms_QueryStatus),
+#endif
+#if RKAIQ_HAVE_AIYNR
+    __RKAIQUAPI_DESC_DEF("/uapi/0/aiynr_uapi/attr", aiynr_api_attrib_t, rk_aiq_user_api2_aiynr_SetAttrib, rk_aiq_user_api2_aiynr_GetAttrib),
+    __RKAIQUAPI_DESC_DEF("/uapi/0/aiynr_uapi/info", aiynr_status_t, NULL, rk_aiq_user_api2_aiynr_QueryStatus),
+#endif
+#if RKAIQ_HAVE_FPNSW
+    __RKAIQUAPI_DESC_DEF("/uapi/0/fpnSw_uapi/attr", fpnSw_api_attrib_t, rk_aiq_user_api2_fpnSw_SetAttrib, rk_aiq_user_api2_fpnSw_GetAttrib),
+    __RKAIQUAPI_DESC_DEF("/uapi/0/fpnSw_uapi/info", fpnSw_status_t, NULL, rk_aiq_user_api2_fpnSw_QueryStatus),
 #endif
 };
 /***********************END OF CUSTOM AREA**************************/

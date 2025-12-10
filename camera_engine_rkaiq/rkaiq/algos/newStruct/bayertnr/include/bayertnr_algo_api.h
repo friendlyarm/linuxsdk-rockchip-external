@@ -44,6 +44,7 @@ algo_bayertnr_GetStrength(RkAiqAlgoContext *ctx, float *strg, bool *strg_en);
 XCamReturn Abtnr_processing(const RkAiqAlgoCom* inparams, RkAiqAlgoResCom* outparams, int iso);
 
 extern RkAiqAlgoDescription g_RkIspAlgoDescBayertnr;
+extern RkAiqAlgoDescription g_RkIspAlgoDescBayertnr2;
 RKAIQ_END_DECLARE
 
 #endif

@@ -42,6 +42,7 @@
 #include "uAPI2/rk_aiq_user_api2_dm.h"
 #include "isp/rk_aiq_isp_btnr42.h"
 #include "uAPI2/rk_aiq_user_api2_btnr.h"
+#include "uAPI2/rk_aiq_user_api2_btnr2.h"
 #include "isp/rk_aiq_isp_gamma21.h"
 #include "uAPI2/rk_aiq_user_api2_gamma.h"
 #include "isp/rk_aiq_isp_ynr41.h"
@@ -100,5 +101,9 @@
 #include "uAPI2/rk_aiq_user_api2_amtd.h"
 #include "isp/rk_aiq_isp_airms.h"
 #include "uAPI2/rk_aiq_user_api2_airms.h"
+#include "isp/rk_aiq_isp_aiynr.h"
+#include "uAPI2/rk_aiq_user_api2_aiynr.h"
+#include "isp/rk_aiq_isp_fpnSw.h"
+#include "uAPI2/rk_aiq_user_api2_fpnSw.h"
 
 #endif

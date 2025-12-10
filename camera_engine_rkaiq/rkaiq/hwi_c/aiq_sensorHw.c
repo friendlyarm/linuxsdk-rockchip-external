@@ -19,12 +19,13 @@
 
 #include "common/rk-camera-module.h"
 #include "iq_parser_v2/RkAiqCalibDbTypesV2.h"
+#include "aiq_CamHwBase.h"
 
 #if RKAIQ_HAVE_DUMPSYS
 #include "aiq_sensorHwInfo.h"
 #endif
 
-static uint16_t SENSORHW_DEFAULT_POOL_SIZE = 20;
+static uint16_t SENSORHW_DEFAULT_POOL_SIZE = 22;
 
 static XCamReturn SensorHw_getSensorDescriptor(AiqSensorHw_t* pBaseSns,
                                                rk_aiq_exposure_sensor_descriptor* sns_des);
@@ -661,7 +662,7 @@ static XCamReturn _SensorHw_handleSofInternal(AiqSensorHw_t* pSns, int64_t time,
                     __FUNCTION__, pSns->mCamPhyId, frameid, aiqList_size(pSns->_exp_list),
                     aiqList_size(pSns->_delayed_gain_list));
 
-    while (aiqMap_size(pSns->_effecting_exp_map) > 5) {
+    while (aiqMap_size(pSns->_effecting_exp_map) > 7) {
         pItem = aiqMap_begin(pSns->_effecting_exp_map);
         if (pItem) {
             AIQ_REF_BASE_UNREF(&(*((AiqSensorExpInfo_t**)(pItem->_pData)))->_base._ref_base);
@@ -739,6 +740,135 @@ static XCamReturn _SensorHw_setI2cDAta(AiqSensorHw_t* pSnsHw, aiq_pending_split_
     if (AiqV4l2SubDevice_ioctl(pSnsHw, RKMODULE_SET_REGISTER, &regs) < 0) {
         LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set i2c regs !");
         return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static void _SensorHw_setUserVts(AiqSensorHw_t* pBaseSns) {
+    struct v4l2_control ctrl;
+    memset(&ctrl, 0, sizeof(ctrl));
+    if (pBaseSns->userVts) {
+        ctrl.id    = V4L2_CID_EXPOSURE;
+        if (AiqV4l2SubDevice_ioctl(pBaseSns->mSd, VIDIOC_G_CTRL, &ctrl) < 0)
+            return;
+        if (ctrl.value > (int32_t)(pBaseSns->userVts)) {
+            LOGI_CAMHW_SUBM(SENSOR_SUBM, "cam%d ignore user vts:%d < exp:%d",
+                            pBaseSns->mCamPhyId, ctrl.value, ctrl.value);
+            return;
+        }
+        memset(&ctrl, 0, sizeof(ctrl));
+        rk_aiq_exposure_sensor_descriptor sensor_desc;
+        SensorHw_getSensorDescriptor(pBaseSns, &sensor_desc);
+        ctrl.id    = V4L2_CID_VBLANK;
+        ctrl.value = pBaseSns->userVts - sensor_desc.sensor_output_height;
+        LOGI_CAMHW_SUBM(SENSOR_SUBM, "cam%d use user vts:%d",
+                        pBaseSns->mCamPhyId, ctrl.value);
+
+        if (AiqV4l2SubDevice_ioctl(pBaseSns->mSd, VIDIOC_S_CTRL, &ctrl) < 0) {
+            LOGE_CAMHW_SUBM(SENSOR_SUBM, "cam%d failed to set vblank result(val: %d)",
+                            pBaseSns->mCamPhyId, ctrl.value);
+        }
+    }
+}
+
+static XCamReturn _SensorHw_updateBlcWbgain(AiqSensorHw_t* pSnsHw, uint32_t frmId) {
+    AiqCamHwBase_t* pCamHw = pSnsHw->_mCamHw;
+
+    if (pCamHw && (pCamHw->_airms_en || pCamHw->mSnsDes.compr_bit)) {
+        aiq_isp_effect_params_t* ispParams = NULL;
+        AiqCamHw_getEffectiveIspParams(pCamHw, &ispParams, frmId);
+
+        if (ispParams) {
+            struct rkmodule_blc_info blc_cfg_info;
+            xcam_mem_clear(blc_cfg_info);
+            if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_GET_BLC_INFO, &blc_cfg_info) < 0) {
+                LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to get blc_cfg_info");
+            }
+            //LOGE_CAMHW_SUBM(SENSOR_SUBM, "blc_cfg_info:%d", blc_cfg_info.bit_width);
+            struct rkmodule_wb_gain_info wbg_cfg_info;
+            xcam_mem_clear(wbg_cfg_info);
+            if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_GET_WB_GAIN_INFO, &wbg_cfg_info) < 0) {
+                LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to get wbg_cfg_info");
+            }
+            //LOGE_CAMHW_SUBM(SENSOR_SUBM, "wbg_cfg_info:%d,%d", wbg_cfg_info.coarse_bit,wbg_cfg_info.fine_bit);
+            // pDstEff->bls_cfg
+            struct rkmodule_blc_group blc;
+            xcam_mem_clear(blc);
+            blc.group_num = 4;
+            float meanBlc = 0;
+            meanBlc += ispParams->bls_cfg.bls1_val.r;
+            meanBlc += ispParams->bls_cfg.bls1_val.gr;
+            meanBlc += ispParams->bls_cfg.bls1_val.gb;
+            meanBlc += ispParams->bls_cfg.bls1_val.b;
+            meanBlc /= 4;
+            int blc_shift = 12 - blc_cfg_info.bit_width;//12bit to 10 bit
+            //LOGE_AWB("en:%d,meanBlc:%0x, blc_shift:%d", ispParams->bls_cfg.enable_auto, (__u32)meanBlc, blc_shift);
+            if(blc_shift > 0) {
+                for(int i = 0; i < blc.group_num; i++) {
+                    blc.blc_type[i] = (enum rkmodule_blc_type)i;
+                    blc.blc[i] = (__u32) (meanBlc) >> blc_shift;
+                }
+            } else {
+                for(int i = 0; i < blc.group_num; i++) {
+                    blc.blc_type[i] = (enum rkmodule_blc_type)i;
+                    blc.blc[i] = (__u32) (meanBlc) << (-blc_shift);
+                }
+            }
+            //LOGE_AWB("blc:%0x, %0x, %0x, %0x", blc.blc[0], blc.blc[1], blc.blc[2], blc.blc[3]);
+            //if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_BLC, &blc) < 0) {
+            //    LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set blc:%d", blc.group_num);
+            //}
+            // pDstEff->awb_gain_cfg
+            struct rkmodule_wb_gain_group wbgain;
+            xcam_mem_clear(wbgain);
+            wbgain.group_num = 4;
+            int wbgain_shift = 8 - wbg_cfg_info.fine_bit;//8bit to 10bit
+            if (pSnsHw->_working_mode == RK_AIQ_WORKING_MODE_NORMAL) {
+                if(wbgain_shift < 0) {
+                    for(int i = 0; i < wbgain.group_num; i++) {
+                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
+                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.awb1_gain_r << (-wbgain_shift);
+                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.awb1_gain_gr <<(-wbgain_shift);
+                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.awb1_gain_gb << (-wbgain_shift);
+                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.awb1_gain_b << (-wbgain_shift);
+                    }
+                } else {
+                    for(int i = 0; i < wbgain.group_num; i++) {
+                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
+                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.awb1_gain_r >> wbgain_shift;
+                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.awb1_gain_gr >> wbgain_shift;
+                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.awb1_gain_gb >> wbgain_shift;
+                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.awb1_gain_b >> wbgain_shift;
+                    }
+                }
+            } else {
+                if(wbgain_shift < 0) {
+                    for(int i = 0; i < wbgain.group_num; i++) {
+                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
+                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_red << (-wbgain_shift);
+                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_green_r <<(-wbgain_shift);
+                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_green_b << (-wbgain_shift);
+                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_blue << (-wbgain_shift);
+                    }
+                }else {
+                    for(int i = 0; i < wbgain.group_num; i++) {
+                        wbgain.wb_gain_type[i] = (enum rkmodule_wb_type)i;
+                        wbgain.wb_gain[i].r_gain = ispParams->awb_gain_cfg.gain0_red >> wbgain_shift;
+                        wbgain.wb_gain[i].gr_gain = ispParams->awb_gain_cfg.gain0_green_r >> wbgain_shift;
+                        wbgain.wb_gain[i].gb_gain = ispParams->awb_gain_cfg.gain0_green_b >> wbgain_shift;
+                        wbgain.wb_gain[i].b_gain = ispParams->awb_gain_cfg.gain0_blue >> wbgain_shift;
+                    }
+                }
+            }
+
+            //LOGE_AWB("wbgain:%0x, %0x, %0x, %0x", wbgain.wb_gain[0].r_gain, wbgain.wb_gain[0].gr_gain, wbgain.wb_gain[0].gb_gain, wbgain.wb_gain[0].b_gain);
+            if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_WB_GAIN, &wbgain) < 0) {
+                LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set wbgain:%d", wbgain.group_num);
+            }
+            AIQ_REF_BASE_UNREF(&ispParams->_ref_base);
+            LOGD_CAMHW_SUBM(SENSOR_SUBM, "fid:%d, set wbgain & blc", frmId);
+        }
     }
 
     return XCAM_RETURN_NO_ERROR;
@@ -851,6 +981,8 @@ XCamReturn SensorHw_handle_sof(AiqSensorHw_t* pBaseSns, int64_t time, uint32_t f
         _SensorHw_setSensorDpcc(pSns, &exp_time->SensorDpccInfo);
     }
 
+    _SensorHw_setUserVts(pSns);
+
     if (set_time) {
         aiqMutex_lock(&pSns->_mutex);
 
@@ -897,6 +1029,8 @@ XCamReturn SensorHw_handle_sof(AiqSensorHw_t* pBaseSns, int64_t time, uint32_t f
 
         aiqMutex_unlock(&pSns->_mutex);
     }
+
+    _SensorHw_updateBlcWbgain(pSns, frameid + 1);
 
     EXIT_CAMHW_FUNCTION();
     return ret;
@@ -1025,6 +1159,20 @@ static int SensorHw_getDcgRatio(AiqSensorHw_t* pBaseSns, rk_aiq_sensor_dcg_ratio
     return 0;
 }
 
+static int SensorHw_getSpdRatio(AiqSensorHw_t* pBaseSns, rk_aiq_sensor_dcg_ratio_t* spd_ratio) {
+    struct rkmodule_dcg_ratio spd_ratio_drv;
+    if (AiqV4l2SubDevice_ioctl(pBaseSns->mSd, RKMODULE_GET_SPD_RATIO, &spd_ratio_drv) < 0) {
+        LOGD_CAMHW_SUBM(SENSOR_SUBM, "failed to get sensor spd_ratio");
+        spd_ratio->valid = false;
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    spd_ratio->valid     = true;
+    spd_ratio->integer   = spd_ratio_drv.integer;
+    spd_ratio->decimal   = spd_ratio_drv.decimal;
+    spd_ratio->div_coeff = spd_ratio_drv.div_coeff;
+    return 0;
+}
+
 static int SensorHw_getNrSwitch(AiqSensorHw_t* pBaseSns, rk_aiq_sensor_nr_switch_t* nr_switch) {
     struct rkmodule_nr_switch_threshold nr_switch_drv;
 
@@ -1137,6 +1285,7 @@ XCamReturn SensorHw_getSensorModeData(AiqSensorHw_t* pBaseSns, const char* sns_e
     // add nr_switch
     sns_des->nr_switch = sensor_desc.nr_switch;
     sns_des->dcg_ratio = sensor_desc.dcg_ratio;
+    sns_des->spd_ratio = sensor_desc.spd_ratio;
 
     sns_des->sensor_output_width  = sensor_desc.sensor_output_width;
     sns_des->sensor_output_height = sensor_desc.sensor_output_height;
@@ -1177,6 +1326,9 @@ static XCamReturn SensorHw_getSensorDescriptor(AiqSensorHw_t* pBaseSns,
         // do nothing;
     }
     if (SensorHw_getDcgRatio(pBaseSns, &sns_des->dcg_ratio)) {
+        // do nothing;
+    }
+    if (SensorHw_getSpdRatio(pBaseSns, &sns_des->spd_ratio)) {
         // do nothing;
     }
     SensorHw_getBayerMode(pBaseSns, &sns_des->bayer_mode);
@@ -1426,6 +1578,36 @@ AiqSensorExpInfo_t* SensorHw_getEffectiveExpParams(AiqSensorHw_t* pSnsHw, uint32
     return pSnsExp;
 }
 
+static XCamReturn _SensorHw_getExpMode(AiqSensorHw_t* pSnsHw, uint32_t *mode) {
+    if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_GET_EXP_MODE, mode) < 0) {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to get exp mode");
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "get exposure mode: %d\n", *mode);
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn _SensorHw_setExpMode(AiqSensorHw_t* pSnsHw, uint32_t mode) {
+    uint32_t defMode = 0;
+    if (mode == -1) {
+        _SensorHw_updateBlcWbgain(pSnsHw, 0);
+        return XCAM_RETURN_NO_ERROR;
+    }
+
+    if (_SensorHw_getExpMode(pSnsHw, &defMode))
+        return XCAM_RETURN_ERROR_IOCTL;
+
+    if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_EXP_MODE, &mode) < 0) {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to set exp mode %d, use mode %d", mode, defMode);
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    pSnsHw->mCisHdrMode = mode;
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "set exposure mode: %d\n", mode);
+    return XCAM_RETURN_NO_ERROR;
+}
+
 static XCamReturn _SensorHw_set_working_mode(AiqSensorHw_t* pSnsHw, int mode) {
     struct rkmodule_hdr_cfg hdr_cfg;
     struct rkmodule_hdr_cfg hdr_cfg_get;
@@ -1438,6 +1620,8 @@ static XCamReturn _SensorHw_set_working_mode(AiqSensorHw_t* pSnsHw, int mode) {
         hdr_mode = HDR_X2;
     } else if (mode == RK_AIQ_ISP_HDR_MODE_3_FRAME_HDR || mode == RK_AIQ_ISP_HDR_MODE_3_LINE_HDR) {
         hdr_mode = HDR_X3;
+    } else if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(mode)) {
+        hdr_mode = HDR_COMPR;
     } else {
         LOGW_CAMHW_SUBM(SENSOR_SUBM, "failed to set hdr mode to %d", mode);
         return XCAM_RETURN_ERROR_FAILED;
@@ -1571,7 +1755,7 @@ XCamReturn _SensorHw_stop(AiqSensorHw_t* pSnsHw) {
 
     _SensorHw_set_sync_mode(pSnsHw, NO_SYNC_MODE);
     ret = (*v4l2_dev->stop)(v4l2_dev);
-
+    pSnsHw->userVts = 0;
     EXIT_CAMHW_FUNCTION();
     aiqMutex_unlock(&pSnsHw->_mutex);
 
@@ -1854,6 +2038,140 @@ static int _SensorHw_dump(void* dumper, st_string* result, int argc, void* argv[
 }
 #endif
 
+/*
+ *    S E T    S C E N E    C I S    P A R A M S
+ */
+
+static XCamReturn _SensorHw_set_regSetting(AiqSensorHw_t* pSnsHw,
+                                           calibdb_cis_reg_setting_t* regSetting) {
+    struct rkmodule_reg_setting reg_setting;
+    reg_setting.setting_id   = regSetting->hw_cisCfg_setting_id;
+    reg_setting.binning_mode = regSetting->hw_cisCfg_ds_mode;
+    if (regSetting->hw_cisCfg_ds_mode == cis_bayerBinning2X2_mode) {
+        reg_setting.binning_mode = BAYER_BINNING_2X2;
+    } else if (regSetting->hw_cisCfg_ds_mode == cis_bayerSkipN_mode) {
+        reg_setting.binning_mode = BAYER_SKIP_2X2;
+    } else if (regSetting->hw_cisCfg_ds_mode == cis_qbcBinning2X2_mode) {
+        reg_setting.binning_mode = QBC_BINNING_2X2;
+    } else {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "Invalid binning mode %d, set BAYER_BINNING_2X2 mode",
+                        regSetting->hw_cisCfg_ds_mode);
+        reg_setting.binning_mode = BAYER_BINNING_2X2;
+    }
+    reg_setting.reg_num = regSetting->regCtrl_num;
+    for (int i = 0; i < reg_setting.reg_num; i++) {
+        reg_setting.reg_list[i].reg_addr = regSetting->regCtrl[i].regAddr;
+        reg_setting.reg_list[i].reg_val  = regSetting->regCtrl[i].regVal;
+    }
+
+    if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_REG_SETTING, &reg_setting) < 0) {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "Failed to set reg setting for CIS");
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "Set reg setting for CIS");
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn _SensorHw_set_blc(AiqSensorHw_t* pSnsHw, calibdb_cis_blc_t* blc) {
+    memcpy(&pSnsHw->cis_blc, blc, sizeof(*blc));
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn _SensorHw_set_hdr(AiqSensorHw_t* pSnsHw, calibdb_cis_hdr_t* hdr) {
+    XCamReturn ret = XCAM_RETURN_NO_ERROR;
+
+    return ret;
+}
+
+static XCamReturn _SensorHw_set_qbcRmsc(AiqSensorHw_t* pSnsHw, calibdb_cis_qbc_rmsc_t* qbcRmsc) {
+    struct rkmodule_bayer_param qbc_rmsc;
+
+    qbc_rmsc.bayer_mode = qbcRmsc->en;
+    qbc_rmsc.reg_num    = qbcRmsc->sta.regCtrl_num;
+    for (int i = 0; i < qbc_rmsc.reg_num; i++) {
+        qbc_rmsc.reg_list[i].reg_addr = qbcRmsc->sta.regCtrl[i].regAddr;
+        qbc_rmsc.reg_list[i].reg_val  = qbcRmsc->sta.regCtrl[i].regVal;
+    }
+
+    if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_BAYER_MODE, &qbc_rmsc) < 0) {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "Failed to set qbc_rmsc for CIS");
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "Set reg setting for CIS");
+    return XCAM_RETURN_NO_ERROR;
+}
+
+static XCamReturn _SensorHw_set_cmpsOut(AiqSensorHw_t* pSnsHw, calibdb_cis_cmps_out_t* cmpsOut) {
+    if (!cmpsOut->en) {
+        LOGD_CAMHW_SUBM(SENSOR_SUBM, "cis cmpsOut is not enabled, skip setting");
+        return XCAM_RETURN_BYPASS;
+    }
+
+    uint32_t cmps_mode = 0;
+
+    if (cmpsOut->sta.hw_cisCfgCmps_mode == cis_cmpsLowBW_mode) {
+        cmps_mode = CMPS_LOW_BIT_WIDTH_MODE;
+    } else if (cmpsOut->sta.hw_cisCfgCmps_mode == cis_cmpsHighBW_mode)
+        cmps_mode = CMPS_HIGH_BIT_WIDTH_MODE;
+    else {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "Invalid cmpsOut mode %d", cmpsOut->sta.hw_cisCfgCmps_mode);
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_SET_CMPS_MODE, &cmps_mode) < 0) {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "Failed to set qbc_rmsc for CIS");
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "Set cmps mode %d for CIS", cmps_mode);
+    return XCAM_RETURN_NO_ERROR;
+}
+
+XCamReturn AiqSensorHw_getHdrComprCurve(AiqSensorHw_t* pSnsHw, RkAiqHdrCompr_t* compr) {
+    if (!compr) {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "compr is NULL");
+        return XCAM_RETURN_ERROR_PARAM;
+    }
+
+    struct rkmodule_hdr_cfg hdr_cfg = {0};
+
+    if (AiqV4l2SubDevice_ioctl(pSnsHw->mSd, RKMODULE_GET_HDR_CFG, &hdr_cfg) < 0) {
+        LOGE_CAMHW_SUBM(SENSOR_SUBM, "failed to get hdr compr curve");
+        return XCAM_RETURN_ERROR_IOCTL;
+    }
+
+    compr->point   = hdr_cfg.compr.point;
+    compr->src_bit = hdr_cfg.compr.src_bit;
+    compr->k_shift = hdr_cfg.compr.k_shift;
+    memcpy(compr->data_compr, hdr_cfg.compr.data_compr, sizeof(compr->data_compr));
+    memcpy(compr->data_src, hdr_cfg.compr.data_src, sizeof(compr->data_src));
+    memcpy(compr->slope_k, hdr_cfg.compr.slope_k, sizeof(compr->slope_k));
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "HDR compr: point %d, src_bit %d, k_shift %d", compr->point,
+                    compr->src_bit, compr->k_shift);
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "HDR data compr: %d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                    compr->data_compr[0], compr->data_compr[1], compr->data_compr[2],
+                    compr->data_compr[3], compr->data_compr[4], compr->data_compr[5],
+                    compr->data_compr[6], compr->data_compr[7], compr->data_compr[8],
+                    compr->data_compr[9]);
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "HDR data src: %d,%d,%d,%d,%d,%d,%d,%d,%d,%d", compr->data_src[0],
+                    compr->data_src[1], compr->data_src[2], compr->data_src[3], compr->data_src[4],
+                    compr->data_src[5], compr->data_src[6], compr->data_src[7], compr->data_src[8],
+                    compr->data_src[9]);
+
+    LOGD_CAMHW_SUBM(SENSOR_SUBM, "HDR  slope_k: %d,%d,%d,%d,%d,%d,%d,%d,%d,%d", compr->slope_k[0],
+                    compr->slope_k[1], compr->slope_k[2], compr->slope_k[3], compr->slope_k[4],
+                    compr->slope_k[5], compr->slope_k[6], compr->slope_k[7], compr->slope_k[8],
+                    compr->slope_k[9]);
+
+    return XCAM_RETURN_NO_ERROR;
+}
+
 void AiqSensorHw_init(AiqSensorHw_t* pSnsHw, const char* name, int cid) {
     ENTER_CAMHW_FUNCTION();
 
@@ -1867,6 +2185,7 @@ void AiqSensorHw_init(AiqSensorHw_t* pSnsHw, const char* name, int cid) {
     pSnsHw->_mirror         = 0;
     pSnsHw->_flip           = 0;
     pSnsHw->dcg_mode        = -1;
+    pSnsHw->mCisHdrMode     = 0;
 
     {
         // init pool
@@ -1956,6 +2275,14 @@ void AiqSensorHw_init(AiqSensorHw_t* pSnsHw, const char* name, int cid) {
 #if RKAIQ_HAVE_DUMPSYS
     pSnsHw->dump                  = _SensorHw_dump;
 #endif
+    pSnsHw->set_exposure_mode     = _SensorHw_setExpMode;
+
+    // set scene_cis parameters
+    pSnsHw->set_regSetting = _SensorHw_set_regSetting;
+    pSnsHw->set_blc        = _SensorHw_set_blc;
+    pSnsHw->set_hdr        = _SensorHw_set_hdr;
+    pSnsHw->set_qbcRmsc    = _SensorHw_set_qbcRmsc;
+    pSnsHw->set_cmpsOut    = _SensorHw_set_cmpsOut
 
     EXIT_CAMHW_FUNCTION();
 }

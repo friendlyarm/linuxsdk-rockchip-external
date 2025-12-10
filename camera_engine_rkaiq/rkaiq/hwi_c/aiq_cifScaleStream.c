@@ -80,7 +80,10 @@ XCamReturn AiqCifSclStream_init(AiqCifSclStream_t* pCifSclStrm, const rk_sensor_
             pCifSclStrm->_index = 3;
             break;
         default:
-            pCifSclStrm->_index = 0;
+            if (RK_AIQ_HDR_IS_SENSOR_BUILTIN(pCifSclStrm->_working_mode))
+                pCifSclStrm->_index = 1;
+            else
+                pCifSclStrm->_index = 0;
             break;
     }
 

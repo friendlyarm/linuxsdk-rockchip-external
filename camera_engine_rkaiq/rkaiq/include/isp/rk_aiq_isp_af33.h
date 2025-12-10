@@ -78,6 +78,14 @@ typedef enum pdaf_sensor_type_e {
     pdaf_sensor_type3
 } pdaf_sensor_type_t;
 
+typedef enum pdaf_binning_mode_e {
+    pdaf_binning_off,
+    pdaf_binning_mode2,
+    pdaf_binning_mode4,
+    pdaf_binning_mode8,
+    pdaf_binning_mode16
+} pdaf_binning_mode_t;
+
 typedef struct af_zoomVarStepCfg_s {
     /* M4_GENERIC_DESC(
         M4_ALIAS(sw_afT_queryZoom_idx),
@@ -981,7 +989,7 @@ typedef struct af_pdafIsoPara_s {
         M4_TYPE(u16),
         M4_SIZE_EX(1,1),
         M4_RANGE_EX(0,1023),
-        M4_DEFAULT(24),
+        M4_DEFAULT(12),
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -994,7 +1002,7 @@ typedef struct af_pdafIsoPara_s {
         M4_TYPE(u16),
         M4_SIZE_EX(1,1),
         M4_RANGE_EX(0,1023),
-        M4_DEFAULT(24),
+        M4_DEFAULT(12),
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -1007,7 +1015,7 @@ typedef struct af_pdafIsoPara_s {
         M4_TYPE(u16),
         M4_SIZE_EX(1,1),
         M4_RANGE_EX(0,1023),
-        M4_DEFAULT(12),
+        M4_DEFAULT(24),
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -1020,7 +1028,7 @@ typedef struct af_pdafIsoPara_s {
         M4_TYPE(u16),
         M4_SIZE_EX(1,1),
         M4_RANGE_EX(0,1023),
-        M4_DEFAULT(12),
+        M4_DEFAULT(24),
         M4_DIGIT_EX(0),
         M4_HIDE_EX(0),
         M4_RO(0),
@@ -1289,6 +1297,28 @@ typedef struct af_pdafResolution_s {
         M4_NOTES(Pd data height in calibration.\n
         Freq of use: high))  */
     unsigned short sw_afT_pdBase_height;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_afT_pdHBin_mode),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(pdaf_binning_mode_t),
+        M4_DEFAULT(pdaf_binning_off),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(Pdaf binning mode.\n
+        Freq of use: high))  */
+    pdaf_binning_mode_t sw_afT_pdHBin_mode;
+    /* M4_GENERIC_DESC(
+        M4_ALIAS(sw_afT_pdVBin_mode),
+        M4_TYPE(enum),
+        M4_ENUM_DEF(pdaf_binning_mode_t),
+        M4_DEFAULT(pdaf_binning_off),
+        M4_HIDE_EX(0),
+        M4_RO(0),
+        M4_ORDER(0),
+        M4_NOTES(Pdaf binning mode.\n
+        Freq of use: high))  */
+    pdaf_binning_mode_t sw_afT_pdVBin_mode;
 } af_pdafResolution_t;
 
 typedef struct af_pdafStepRatio_s {

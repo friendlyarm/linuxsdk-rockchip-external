@@ -715,13 +715,29 @@ XCamReturn AiqV4l2Device_setFmt(AiqV4l2Device_t* v4l2_dev, uint32_t width, uint3
     struct v4l2_format format;
     xcam_mem_clear(format);
 
-    format.type                = v4l2_dev->_buf_type;
-    format.fmt.pix.width       = width;
-    format.fmt.pix.height      = height;
-    format.fmt.pix.pixelformat = pixelformat;
-    format.fmt.pix.field       = field;
+    if (V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE == v4l2_dev->_buf_type ||
+        V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE == v4l2_dev->_buf_type) {
+       format.type                   = v4l2_dev->_buf_type;
+       format.fmt.pix_mp.width       = width;
+       format.fmt.pix_mp.height      = height;
+       format.fmt.pix_mp.pixelformat = pixelformat;
+       format.fmt.pix_mp.field       = field;
+       format.fmt.pix_mp.num_planes  = v4l2_dev->_mplanes_count;
 
-    if (bytes_perline != 0) format.fmt.pix.bytesperline = bytes_perline;
+       if (bytes_perline != 0) {
+           for (int i = 0; i < v4l2_dev->_mplanes_count; i++) {
+               format.fmt.pix_mp.plane_fmt[i].bytesperline = bytes_perline;
+           }
+       }
+    } else {
+       format.type                = v4l2_dev->_buf_type;
+       format.fmt.pix.width       = width;
+       format.fmt.pix.height      = height;
+       format.fmt.pix.pixelformat = pixelformat;
+       format.fmt.pix.field       = field;
+
+       if (bytes_perline != 0) format.fmt.pix.bytesperline = bytes_perline;
+    }
     return AiqV4l2Device_setV4lFmt(v4l2_dev, &format);
 }
 

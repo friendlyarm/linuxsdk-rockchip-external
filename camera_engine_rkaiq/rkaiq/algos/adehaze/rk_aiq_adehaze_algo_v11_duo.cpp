@@ -616,7 +616,7 @@ static void GetDehazeHistDuoISPSettingV11(RkAiqAdehazeProcResult_t* pProcRes,
     // deahze duo setting
     if (DuoCamera) {
         pProcRes->ProcResV11duo.soft_wr_en = FUNCTION_ENABLE;
-#if 1
+#if 0
         // support default value for kernel calc
         for (int i = 0; i < DHAZ_V11_HIST_WR_NUM; i++) {
             pProcRes->ProcResV11duo.hist_wr[i] = 16 * (i + 1);
@@ -625,26 +625,30 @@ static void GetDehazeHistDuoISPSettingV11(RkAiqAdehazeProcResult_t* pProcRes,
                                                      : pProcRes->ProcResV11duo.hist_wr[i];
         }
 #else
-        pProcRes->ProcResV11duo.adp_air_wr    = pStats->dehaze_stats_v11_duo.dhaz_adp_air_base;
-        pProcRes->ProcResV11duo.adp_gratio_wr = pStats->dehaze_stats_v11_duo.dhaz_adp_gratio;
-        pProcRes->ProcResV11duo.adp_tmax_wr   = pStats->dehaze_stats_v11_duo.dhaz_adp_tmax;
-        pProcRes->ProcResV11duo.adp_wt_wr     = pStats->dehaze_stats_v11_duo.dhaz_adp_wt;
+        if (pStats) {
+            pProcRes->ProcResV11duo.adp_air_wr    = pStats->dhaz_adp_air_base;
+            pProcRes->ProcResV11duo.adp_gratio_wr = pStats->dhaz_adp_gratio;
+            pProcRes->ProcResV11duo.adp_tmax_wr   = pStats->dhaz_adp_tmax;
+            pProcRes->ProcResV11duo.adp_wt_wr     = pStats->dhaz_adp_wt;
 
-        static int hist_wr[64];
-        if (!FrameID)
-            for (int i = 0; i < 64; i++) {
-                hist_wr[i]                         = 16 * (i + 1);
-                hist_wr[i]                         = hist_wr[i] > 1023 ? 1023 : hist_wr[i];
-                pProcRes->ProcResV11duo.hist_wr[i] = hist_wr[i];
+            static int hist_wr[64];
+            if (!FrameID)
+                for (int i = 0; i < 64; i++) {
+                    hist_wr[i]                         = 16 * (i + 1);
+                    hist_wr[i]                         = hist_wr[i] > 1023 ? 1023 : hist_wr[i];
+                    pProcRes->ProcResV11duo.hist_wr[i] = hist_wr[i];
+                }
+            else {
+                int num = MIN(FrameID + 1, pProcRes->ProcResV11duo.stab_fnum);
+                int tmp = 0;
+                for (int i = 0; i < 64; i++) {
+                    tmp = (hist_wr[i] * (num - 1) + pStats->h_rgb_iir[i]) / num;
+                    pProcRes->ProcResV11duo.hist_wr[i] = tmp;
+                    hist_wr[i]                         = tmp;
+                }
             }
-        else {
-            int num = MIN(FrameID + 1, pProcRes->ProcResV11duo.stab_fnum);
-            int tmp = 0;
-            for (int i = 0; i < 64; i++) {
-                tmp = (hist_wr[i] * (num - 1) + pStats->dehaze_stats_v11_duo.h_rgb_iir[i]) / num;
-                pProcRes->ProcResV11duo.hist_wr[i] = tmp;
-                hist_wr[i]                         = tmp;
-            }
+        } else {
+            LOGW_ADEHAZE("%s frame%d dehaze stats is NULL!\n", __func__, FrameID);
         }
 
         LOGD_ADEHAZE("%s adp_air_wr:0x%x adp_gratio_wr:0x%x adp_tmax_wr:0x%x adp_wt_wr:0x%x\n",
